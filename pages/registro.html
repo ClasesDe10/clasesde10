@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crear cuenta — ClasesDe10</title>
+<meta name="description" content="Únete a ClasesDe10. Regístrate como familia o profesor y accede a nuestra plataforma de clases particulares en Madrid.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="stylesheet" href="../css/dashboard.css">
+<style>
+body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
+       background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%); }
+.auth-card {
+  background: var(--white); border-radius: var(--radius);
+  padding: 44px; width:100%; max-width:520px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.auth-logo { text-align:center; margin-bottom:28px; }
+.auth-logo img { width:56px;height:56px;border-radius:12px;object-fit:cover; }
+.auth-logo-name { font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:900;color:var(--navy);margin-top:8px; }
+.auth-logo-name span { color:var(--gold); }
+.error-banner {
+  background:rgba(220,38,38,.07); border:1px solid rgba(220,38,38,.2);
+  border-radius:var(--radius-sm); padding:10px 14px;
+  color:var(--danger); font-size:.82rem; margin-bottom:16px; display:none;
+}
+.success-banner {
+  background:rgba(22,163,74,.07); border:1px solid rgba(22,163,74,.25);
+  border-radius:var(--radius-sm); padding:16px 14px;
+  color:var(--success); font-size:.875rem; margin-bottom:16px; display:none; text-align:center;
+}
+.rol-selector { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
+.rol-card {
+  border: 2px solid rgba(0,0,0,0.12); border-radius: var(--radius-sm);
+  padding: 16px; cursor: pointer; transition: all .18s;
+  text-align: center; position: relative;
+}
+.rol-card input[type=radio] { position:absolute; opacity:0; }
+.rol-card:hover { border-color: var(--navy); }
+.rol-card.selected { border-color: var(--navy); background: rgba(15,31,61,.04); }
+.rol-card-icon { font-size: 1.8rem; margin-bottom:6px; }
+.rol-card-label { font-weight:700; font-size:.875rem; color:var(--text-dark); }
+.rol-card-sub { font-size:.72rem; color:var(--gray-mid); margin-top:2px; }
+.pwd-strength { height:4px; border-radius:2px; margin-top:6px; background:var(--gray-soft); overflow:hidden; }
+.pwd-strength-bar { height:100%; border-radius:2px; transition:width .3s,background .3s; width:0; }
+.auth-footer { text-align:center; margin-top:20px; font-size:.82rem; color:var(--gray-mid); }
+.auth-footer a { color:var(--navy); font-weight:600; text-decoration:none; }
+.auth-footer a:hover { color:var(--gold); }
+.terms-note { font-size:.72rem; color:var(--gray-mid); text-align:center; margin-top:12px; line-height:1.5; }
+.terms-note a { color:var(--navy); }
+</style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="auth-logo">
+    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+    <div class="auth-logo-name">Clases<span>De10</span></div>
+  </div>
+
+  <div id="error-banner" class="error-banner" role="alert"></div>
+  <div id="success-banner" class="success-banner">
+    <div style="font-size:1.8rem;margin-bottom:8px">✓</div>
+    <strong>¡Cuenta creada!</strong><br>
+    Hemos enviado un email de confirmación a <span id="email-confirmado"></span>.<br>
+    Confirma tu cuenta y podrás iniciar sesión.
+  </div>
+
+  <div id="form-wrapper">
+    <h2 style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--navy);margin-bottom:6px">
+      Crear cuenta gratuita
+    </h2>
+    <p style="font-size:.82rem;color:var(--gray-mid);margin-bottom:20px">Elige cómo quieres registrarte:</p>
+
+    <div class="rol-selector">
+      <label class="rol-card selected" id="card-familia">
+        <input type="radio" name="rol" value="familia" checked>
+        <div class="rol-card-icon">👨‍👩‍👧</div>
+        <div class="rol-card-label">Soy familia</div>
+        <div class="rol-card-sub">Busco profesor para mi hijo/a</div>
+      </label>
+      <label class="rol-card" id="card-profesor">
+        <input type="radio" name="rol" value="profesor">
+        <div class="rol-card-icon">👩‍🏫</div>
+        <div class="rol-card-label">Soy profesor</div>
+        <div class="rol-card-sub">Quiero dar clases particulares</div>
+      </label>
+    </div>
+
+    <form id="form-registro" novalidate>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="nombre">Nombre <span class="required">*</span></label>
+          <input class="form-control" type="text" id="nombre" name="nombre"
+                 placeholder="Tu nombre" autocomplete="given-name" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="apellidos">Apellidos <span class="required">*</span></label>
+          <input class="form-control" type="text" id="apellidos" name="apellidos"
+                 placeholder="Tus apellidos" autocomplete="family-name" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="email">Correo electrónico <span class="required">*</span></label>
+        <input class="form-control" type="email" id="email" name="email"
+               placeholder="tu@email.com" autocomplete="email" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="telefono">Teléfono</label>
+        <input class="form-control" type="tel" id="telefono" name="telefono"
+               placeholder="600 000 000" autocomplete="tel">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Contraseña <span class="required">*</span></label>
+        <input class="form-control" type="password" id="password" name="password"
+               placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8">
+        <div class="pwd-strength"><div class="pwd-strength-bar" id="pwd-bar"></div></div>
+        <div class="form-hint">Mínimo 8 caracteres</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password2">Repetir contraseña <span class="required">*</span></label>
+        <input class="form-control" type="password" id="password2" name="password2"
+               placeholder="Repite tu contraseña" required>
+      </div>
+      <button type="submit" class="btn btn-gold btn-lg" id="btn-registro" style="width:100%;justify-content:center">
+        <span id="btn-text">Crear mi cuenta</span>
+        <span id="btn-load" style="display:none">Creando cuenta…</span>
+      </button>
+      <div class="terms-note">
+        Al registrarte aceptas nuestros <a href="/terminos.html">Términos de uso</a>
+        y la <a href="/privacidad.html">Política de privacidad</a>.
+      </div>
+    </form>
+  </div>
+
+  <div class="auth-footer">
+    ¿Ya tienes cuenta? <a href="login.html">Inicia sesión</a>
+  </div>
+  <div class="auth-footer" style="margin-top:8px">
+    <a href="/">← Volver a la web</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/analytics.js" defer></script>
+<script type="module">
+import { register } from '../js/auth.js';
+import { validarEmail, sanitize } from '../js/utils.js';
+import { trackRegistro } from '../js/analytics.js';
+
+const errorBanner    = document.getElementById('error-banner');
+const successBanner  = document.getElementById('success-banner');
+const formWrapper    = document.getElementById('form-wrapper');
+const cardFamilia    = document.getElementById('card-familia');
+const cardProfesor   = document.getElementById('card-profesor');
+const pwdBar         = document.getElementById('pwd-bar');
+let rolSeleccionado  = 'familia';
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.style.display = 'block';
+}
+function hideError() { errorBanner.style.display = 'none'; }
+
+// Selección de rol
+[cardFamilia, cardProfesor].forEach(card => {
+  card.addEventListener('click', () => {
+    cardFamilia.classList.remove('selected');
+    cardProfesor.classList.remove('selected');
+    card.classList.add('selected');
+    rolSeleccionado = card.querySelector('input').value;
+  });
+});
+
+// Indicador fortaleza contraseña
+document.getElementById('password').addEventListener('input', (e) => {
+  const v = e.target.value;
+  let puntos = 0;
+  if (v.length >= 8) puntos++;
+  if (/[A-Z]/.test(v)) puntos++;
+  if (/[0-9]/.test(v)) puntos++;
+  if (/[^A-Za-z0-9]/.test(v)) puntos++;
+  const colores = ['#dc2626','#d97706','#2563eb','#16a34a'];
+  pwdBar.style.width = `${puntos * 25}%`;
+  pwdBar.style.background = colores[puntos - 1] || '#e5e7eb';
+});
+
+document.getElementById('form-registro').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideError();
+
+  const nombre    = document.getElementById('nombre').value.trim();
+  const apellidos = document.getElementById('apellidos').value.trim();
+  const email     = document.getElementById('email').value.trim();
+  const telefono  = document.getElementById('telefono').value.trim();
+  const password  = document.getElementById('password').value;
+  const password2 = document.getElementById('password2').value;
+
+  if (!nombre || !apellidos || !email || !password) {
+    showError('Completa todos los campos obligatorios.'); return;
+  }
+  if (!validarEmail(email)) {
+    showError('Introduce un email válido.'); return;
+  }
+  if (password.length < 8) {
+    showError('La contraseña debe tener al menos 8 caracteres.'); return;
+  }
+  if (password !== password2) {
+    showError('Las contraseñas no coinciden.'); return;
+  }
+
+  const btn  = document.getElementById('btn-registro');
+  const text = document.getElementById('btn-text');
+  const load = document.getElementById('btn-load');
+  btn.disabled = true; text.style.display = 'none'; load.style.display = '';
+
+  const { data, error } = await register({ email, password, nombre, apellidos, telefono, rol: rolSeleccionado });
+
+  if (error) {
+    const msg = error.message.includes('already registered')
+      ? 'Ya existe una cuenta con este email. ¿Quieres iniciar sesión?'
+      : error.message;
+    showError(msg);
+    btn.disabled = false; text.style.display = ''; load.style.display = 'none';
+    return;
+  }
+
+  trackRegistro(rolSeleccionado);
+  formWrapper.style.display = 'none';
+  document.getElementById('email-confirmado').textContent = email;
+  successBanner.style.display = 'block';
+});
+</script>
+</body>
+</html>

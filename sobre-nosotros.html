@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sobre nosotros — ClasesDe10</title>
+<meta name="description" content="Conoce la historia y el equipo detrás de ClasesDe10. Nacimos en Madrid para conectar familias con profesores de confianza.">
+<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* STORY */
+.story-section { padding: 90px 0; background: var(--cream); }
+.story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; margin-top: 60px; }
+.story-text { display: flex; flex-direction: column; gap: 22px; }
+.story-text p { font-size: 1rem; line-height: 1.85; color: var(--text-body); }
+.story-text p strong { color: var(--navy); }
+.story-text .quote-block {
+  border-left: 4px solid var(--gold);
+  padding: 16px 24px;
+  background: var(--white);
+  border-radius: 0 12px 12px 0;
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem; font-style: italic; color: var(--navy);
+  line-height: 1.6;
+}
+
+.story-visual { display: flex; flex-direction: column; gap: 18px; }
+.sv-card {
+  background: var(--white); border-radius: 16px; padding: 24px 22px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+  display: flex; gap: 16px; align-items: center;
+  transition: transform .2s, box-shadow .2s;
+}
+.sv-card:hover { transform: translateX(6px); box-shadow: 0 8px 30px rgba(0,0,0,0.1); }
+.sv-ico {
+  width: 48px; height: 48px; flex-shrink: 0;
+  border-radius: 12px; background: var(--navy);
+  display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+}
+.sv-card h4 { font-weight: 700; font-size: .95rem; color: var(--navy); margin-bottom: 4px; }
+.sv-card p { font-size: .84rem; color: var(--gray-mid); line-height: 1.5; }
+
+/* VALUES */
+.values-section { padding: 90px 0; background: var(--white); }
+.values-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 22px; margin-top: 56px; }
+.value-card {
+  background: var(--cream); border-radius: 20px; padding: 36px 30px;
+  border-left: 4px solid var(--gold);
+  transition: transform .25s, box-shadow .25s;
+}
+.value-card:hover { transform: translateY(-5px); box-shadow: 0 14px 44px rgba(0,0,0,0.09); }
+.value-card .vi { font-size: 2rem; margin-bottom: 14px; }
+.value-card h3 { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 700; color: var(--navy); margin-bottom: 10px; }
+.value-card p { font-size: .92rem; line-height: 1.75; color: var(--gray-mid); }
+
+/* MISSION */
+.mission-section {
+  padding: 90px 0;
+  background: linear-gradient(135deg, var(--navy) 0%, #0d2952 100%);
+  text-align: center;
+}
+.mission-section h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.9rem,3.8vw,3rem);
+  font-weight: 700; color: var(--white); line-height: 1.2; margin-bottom: 22px;
+}
+.mission-section h2 em { color: var(--gold); font-style: normal; }
+.mission-section p { font-size: 1.05rem; color: rgba(255,255,255,0.65); max-width: 580px; margin: 0 auto 48px; line-height: 1.8; }
+.mission-btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+
+/* FUTURE */
+.future-section { padding: 90px 0; background: var(--gray-soft); }
+.future-list { display: flex; flex-direction: column; gap: 14px; margin-top: 56px; max-width: 680px; }
+.future-item {
+  display: flex; align-items: center; gap: 18px;
+  background: var(--white); border-radius: 14px; padding: 22px 24px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+  transition: transform .2s;
+}
+.future-item:hover { transform: translateX(6px); }
+.fi-bullet {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--gold); flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(232,160,48,0.2);
+}
+.future-item p { font-size: .97rem; color: var(--text-body); line-height: 1.6; }
+.future-item p strong { color: var(--navy); }
+
+@media (max-width:900px) {
+  .story-grid { grid-template-columns: 1fr; gap: 40px; }
+  .values-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<nav id="mainNav">
+  <a href="index.html" class="nav-logo">
+    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <span class="nav-logo-text">Clases<span>De10</span></span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="como-funciona.html">Cómo funciona</a></li>
+    <li><a href="para-padres.html">Para familias</a></li>
+    <li><a href="para-profesores.html">Para profesores</a></li>
+    <li><a href="sobre-nosotros.html" class="active">Nosotros</a></li>
+    <li><a href="contacto.html" class="nav-cta">Contactar</a></li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="como-funciona.html" onclick="closeMobile()">Cómo funciona</a>
+  <a href="para-padres.html" onclick="closeMobile()">Para familias</a>
+  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
+  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
+  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+</div>
+
+<header class="page-header">
+  <span class="section-label">Nuestra historia</span>
+  <h1>Una conexión <em>real</em> entre<br>familias y profesores</h1>
+  <p>Nacimos en Madrid con una misión clara: hacer fácil lo que debería ser fácil. Aquí te contamos por qué.</p>
+</header>
+
+<!-- STORY -->
+<section class="story-section">
+  <div class="section-inner">
+    <div class="story-grid">
+      <div class="story-text">
+        <span class="section-label">Nuestro origen</span>
+        <h2 class="section-title">Surgimos de una necesidad real</h2>
+        <p>ClasesDe10 nació en Madrid al ver de primera mano <strong>lo difícil que era para las familias encontrar profesores de confianza</strong>, y lo complicado que resultaba para muchos docentes cualificados tener visibilidad.</p>
+        <p>Las plataformas existentes cobraban comisiones abusivas, tenían procesos interminables o simplemente no ofrecían el trato humano que una familia necesita cuando busca a alguien que va a enseñar a su hijo.</p>
+        <p>Queríamos crear algo diferente: <strong>un punto de encuentro sencillo, humano y directo</strong>. Sin algoritmos fríos, sin intermediarios que se quedan con tu dinero, sin burocracia innecesaria.</p>
+        <div class="quote-block">
+          "En ClasesDe10 creemos que todo alumno merece un profesor que lo entienda."
+        </div>
+      </div>
+      <div class="story-visual">
+        <div class="sv-card reveal">
+          <div class="sv-ico">🎯</div>
+          <div><h4>Misión clara desde el día 1</h4><p>Facilitar el contacto entre familias y profesores de forma sencilla, rápida y sin costes ocultos.</p></div>
+        </div>
+        <div class="sv-card reveal">
+          <div class="sv-ico">📍</div>
+          <div><h4>Nacidos en Madrid</h4><p>Empezamos en la Comunidad de Madrid y seguimos creciendo hacia toda España, también con clases online.</p></div>
+        </div>
+        <div class="sv-card reveal">
+          <div class="sv-ico">👥</div>
+          <div><h4>Equipo con experiencia docente</h4><p>Contamos con personas con experiencia real en educación y clases particulares. Sabemos lo que necesitáis.</p></div>
+        </div>
+        <div class="sv-card reveal">
+          <div class="sv-ico">📈</div>
+          <div><h4>Crecimiento constante</h4><p>Cada semana se unen nuevos profesores y nuevas familias. La comunidad crece con cada conexión exitosa.</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VALUES -->
+<section class="values-section">
+  <div class="section-inner">
+    <span class="section-label">Lo que nos define</span>
+    <h2 class="section-title">Nuestros valores</h2>
+    <p class="section-desc">Cada decisión que tomamos está guiada por estos cuatro principios.</p>
+    <div class="values-grid">
+      <div class="value-card reveal">
+        <div class="vi">🏅</div>
+        <h3>Confianza</h3>
+        <p>Verificamos a cada profesor antes de conectarlos con familias. Las familias merecen saber que la persona que enseña a su hijo está cualificada y es de fiar.</p>
+      </div>
+      <div class="value-card reveal">
+        <div class="vi">🎯</div>
+        <h3>Personalización</h3>
+        <p>No hay dos alumnos iguales. Cada conexión que hacemos tiene en cuenta el perfil, las necesidades y el ritmo específico del alumno y del profesor.</p>
+      </div>
+      <div class="value-card reveal">
+        <div class="vi">💛</div>
+        <h3>Cercanía</h3>
+        <p>Somos personas hablando con personas. Nada de bots, nada de respuestas automáticas. Cuando nos escribes, te responde alguien de verdad.</p>
+      </div>
+      <div class="value-card reveal">
+        <div class="vi">🚀</div>
+        <h3>Mejora continua</h3>
+        <p>Escuchamos a familias y profesores para mejorar constantemente. No nos conformamos: siempre hay algo que podemos hacer mejor.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- MISSION -->
+<section class="mission-section">
+  <div class="section-inner">
+    <h2>Todo alumno merece un profesor<br><em>que lo entienda</em></h2>
+    <p>Esa frase resume todo lo que hacemos. Si compartes esta visión, únete a la comunidad ClasesDe10, ya sea como familia o como docente.</p>
+    <div class="mission-btns">
+      <a href="para-padres.html" class="btn-primary">👨‍👩‍👦 Soy padre / madre</a>
+      <a href="para-profesores.html" class="btn-ghost">🎓 Soy profesor/a</a>
+    </div>
+  </div>
+</section>
+
+<!-- FUTURE -->
+<section class="future-section">
+  <div class="section-inner">
+    <span class="section-label">Hacia dónde vamos</span>
+    <h2 class="section-title">Nuestro futuro</h2>
+    <p class="section-desc">Seguimos creciendo con una hoja de ruta clara.</p>
+    <div class="future-list">
+      <div class="future-item reveal">
+        <div class="fi-bullet"></div>
+        <p><strong>Más profesores verificados</strong> en todas las materias y niveles, con perfiles cada vez más detallados.</p>
+      </div>
+      <div class="future-item reveal">
+        <div class="fi-bullet"></div>
+        <p><strong>Mejor experiencia para familias</strong>: proceso aún más rápido y propuestas más ajustadas a cada caso.</p>
+      </div>
+      <div class="future-item reveal">
+        <div class="fi-bullet"></div>
+        <p><strong>Expansión geográfica</strong> a más ciudades españolas, manteniendo siempre el trato cercano y personalizado.</p>
+      </div>
+      <div class="future-item reveal">
+        <div class="fi-bullet"></div>
+        <p><strong>Herramientas prácticas</strong> para que familia y profesor puedan organizarse mejor desde el primer día.</p>
+      </div>
+      <div class="future-item reveal">
+        <div class="fi-bullet"></div>
+        <p><strong>Comunidad activa</strong> de docentes con recursos, orientación y apoyo mutuo.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <div class="fb-name">Clases<span>De10</span></div>
+      <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Navegación</h4>
+      <ul>
+        <li><a href="index.html">Inicio</a></li>
+        <li><a href="como-funciona.html">Cómo funciona</a></li>
+        <li><a href="para-padres.html">Para familias</a></li>
+        <li><a href="para-profesores.html">Para profesores</a></li>
+        <li><a href="sobre-nosotros.html">Sobre nosotros</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Contacto</h4>
+      <ul>
+        <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
+        <li><a href="contacto.html">Formulario de contacto</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 ClasesDe10. Todos los derechos reservados.</span>
+    <span>Hecho con ❤️ en Madrid</span>
+  </div>
+</footer>
+
+<script>
+window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
+document.getElementById('hamburger').addEventListener('click',()=>{ document.getElementById('mobileMenu').classList.toggle('open'); });
+function closeMobile(){ document.getElementById('mobileMenu').classList.remove('open'); }
+const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0.08});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>

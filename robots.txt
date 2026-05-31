@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /pages/dashboard/
+Disallow: /pages/login.html
+Disallow: /pages/registro.html
+Disallow: /pages/reset-password.html
+
+Sitemap: https://www.clasesde10.es/sitemap.xml

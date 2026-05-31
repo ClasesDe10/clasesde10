@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Para profesores — ClasesDe10</title>
+<meta name="description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
+<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* WHY JOIN */
+.why-section { padding: 90px 0; background: var(--cream); }
+.why-grid {
+  display: grid; grid-template-columns: repeat(2,1fr); gap: 22px;
+  margin-top: 56px;
+}
+.why-card {
+  background: var(--white); border-radius: 20px; padding: 36px 30px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+  transition: transform .25s, box-shadow .25s, border-color .25s;
+}
+.why-card:hover { transform: translateY(-6px); box-shadow: 0 16px 48px rgba(0,0,0,0.1); border-color: rgba(232,160,48,0.35); }
+.why-ico {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: var(--gray-soft);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; margin-bottom: 18px;
+  transition: background .2s;
+}
+.why-card:hover .why-ico { background: var(--navy); }
+.why-card h3 { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 700; color: var(--navy); margin-bottom: 10px; }
+.why-card p { font-size: .92rem; line-height: 1.75; color: var(--gray-mid); }
+
+/* COMPARE */
+.compare-section { padding: 90px 0; background: var(--white); }
+.compare-table {
+  margin-top: 56px; width: 100%; border-collapse: collapse;
+  border-radius: 16px; overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+.compare-table thead { background: var(--navy); }
+.compare-table thead th {
+  padding: 20px 24px; text-align: left;
+  font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+}
+.compare-table thead th:first-child { color: var(--white); }
+.compare-table thead th.highlight { color: var(--gold); }
+.compare-table tbody tr { border-bottom: 1px solid rgba(0,0,0,0.06); }
+.compare-table tbody tr:last-child { border-bottom: none; }
+.compare-table tbody tr:nth-child(even) { background: var(--gray-soft); }
+.compare-table td {
+  padding: 16px 24px; font-size: .92rem; color: var(--text-body);
+}
+.compare-table td:first-child { font-weight: 600; color: var(--navy); }
+.compare-table td.yes { color: var(--teal); font-weight: 700; }
+.compare-table td.no  { color: #c0392b; }
+.compare-table td.highlight { background: rgba(232,160,48,0.07); }
+
+/* PROFILE BANNER */
+.profile-banner {
+  background: linear-gradient(135deg, var(--teal) 0%, #0f4a3f 100%);
+  padding: 80px 5vw; text-align: center;
+  position: relative; overflow: hidden;
+}
+.profile-banner::before {
+  content: '';
+  position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+  width: 500px; height: 500px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.profile-banner h2 {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1.7rem,3.5vw,2.6rem);
+  font-weight: 700; color: var(--white); margin-bottom: 12px;
+}
+.profile-banner h2 span { color: var(--gold-light); }
+.profile-banner p { color: rgba(255,255,255,0.65); font-size: 1rem; margin-bottom: 36px; }
+.profile-stats {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 48px;
+  margin-bottom: 44px;
+}
+.ps-num { font-family: 'Playfair Display', serif; font-size: 2.4rem; font-weight: 700; color: var(--gold-light); }
+.ps-label { font-size: .76rem; color: rgba(255,255,255,0.55); text-transform: uppercase; letter-spacing: .06em; }
+
+/* FORM SECTION */
+.form-section {
+  padding: 90px 0;
+  background: var(--navy);
+  position: relative; overflow: hidden;
+}
+.form-section::before {
+  content: '';
+  position: absolute; bottom: -150px; left: -150px;
+  width: 450px; height: 450px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(29,122,107,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.form-section .section-title { color: var(--white); }
+.form-section .section-desc  { color: rgba(255,255,255,0.6); }
+.form-section .section-label { color: var(--gold); }
+.form-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 60px; align-items: start; margin-top: 56px; }
+.form-info { display: flex; flex-direction: column; gap: 24px; }
+.fi-item { display: flex; gap: 16px; align-items: flex-start; }
+.fi-ico {
+  width: 44px; height: 44px; flex-shrink: 0;
+  background: rgba(232,160,48,0.15); border-radius: 10px;
+  display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+}
+.fi-item h4 { font-weight: 700; color: var(--white); font-size: .95rem; margin-bottom: 4px; }
+.fi-item p { font-size: .86rem; color: rgba(255,255,255,0.55); line-height: 1.6; }
+.contact-form-card {
+  background: var(--white); border-radius: 24px; padding: 44px 40px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+}
+.cf-title { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--navy); font-weight: 700; margin-bottom: 28px; }
+.cf-form { display: flex; flex-direction: column; gap: 16px; }
+.cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cf-field { display: flex; flex-direction: column; gap: 6px; }
+.cf-field label { font-size: .76rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--navy); }
+.cf-field input,
+.cf-field select,
+.cf-field textarea {
+  border: 1.5px solid rgba(0,0,0,0.1); border-radius: 8px;
+  padding: 12px 14px; font-size: .92rem; font-family: 'DM Sans', sans-serif;
+  color: var(--text-dark); background: var(--cream);
+  transition: border-color .2s, background .2s; outline: none;
+}
+.cf-field input:focus, .cf-field select:focus, .cf-field textarea:focus { border-color: var(--teal); background: var(--white); }
+.cf-field textarea { resize: vertical; min-height: 100px; }
+.cf-submit {
+  background: var(--teal); color: var(--white);
+  font-weight: 700; font-size: 1rem; padding: 15px;
+  border: none; border-radius: 10px; cursor: pointer;
+  transition: background .2s, transform .15s; margin-top: 4px;
+}
+.cf-submit:hover { background: #165f52; transform: translateY(-1px); }
+.cf-note { font-size: .76rem; color: var(--gray-mid); text-align: center; }
+
+@media (max-width:900px) {
+  .why-grid { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; gap: 40px; }
+  .compare-table { font-size: .82rem; }
+  .compare-table td, .compare-table thead th { padding: 12px 14px; }
+}
+@media (max-width:680px) {
+  .cf-row { grid-template-columns: 1fr; }
+  .contact-form-card { padding: 32px 22px; }
+}
+</style>
+</head>
+<body>
+
+<nav id="mainNav">
+  <a href="index.html" class="nav-logo">
+    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <span class="nav-logo-text">Clases<span>De10</span></span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="como-funciona.html">Cómo funciona</a></li>
+    <li><a href="para-padres.html">Para familias</a></li>
+    <li><a href="para-profesores.html" class="active">Para profesores</a></li>
+    <li><a href="sobre-nosotros.html">Nosotros</a></li>
+    <li><a href="contacto.html" class="nav-cta">Contactar</a></li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="como-funciona.html" onclick="closeMobile()">Cómo funciona</a>
+  <a href="para-padres.html" onclick="closeMobile()">Para familias</a>
+  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
+  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
+  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+</div>
+
+<header class="page-header">
+  <span class="section-label">Para profesores</span>
+  <h1>Comparte tu vocación.<br><em>Encuentra tus alumnos.</em></h1>
+  <p>Si tienes formación y pasión por la enseñanza, ClasesDe10 te da visibilidad real y te conecta con familias que ya te están buscando.</p>
+</header>
+
+<!-- WHY JOIN -->
+<section class="why-section">
+  <div class="section-inner">
+    <span class="section-label">¿Por qué unirte?</span>
+    <h2 class="section-title">Todo lo que ganas con ClasesDe10</h2>
+    <div class="why-grid">
+      <div class="why-card reveal">
+        <div class="why-ico">📣</div>
+        <h3>Visibilidad real ante familias</h3>
+        <p>Las familias de tu zona nos buscan cada semana. Tu perfil llega a quienes realmente necesitan a alguien con tu experiencia y especialidad.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="why-ico">🗓️</div>
+        <h3>Tú decides tu horario</h3>
+        <p>Indica tu disponibilidad y filtramos las solicitudes que mejor encajan con tus horas. Sin compromisos forzados ni horarios impuestos.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="why-ico">🤝</div>
+        <h3>Contacto directo, sin intermediarios</h3>
+        <p>Te ponemos en contacto directo con la familia. Las clases son entre vosotros. Sin comisiones por clase ni plataformas que se queden con tu dinero.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="why-ico">🚀</div>
+        <h3>Registro completamente gratuito</h3>
+        <p>Unirte a la red ClasesDe10 no te cuesta nada. Solo necesitas formación, experiencia y ganas de enseñar.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="why-ico">🏠</div>
+        <h3>Online o presencial, tú decides</h3>
+        <p>Elige si prefieres dar clases online, desplazarte al domicilio del alumno o en otro espacio. La modalidad la acuerdas tú con cada familia.</p>
+      </div>
+      <div class="why-card reveal">
+        <div class="why-ico">🌱</div>
+        <h3>Comunidad en crecimiento</h3>
+        <p>Somos una plataforma en expansión con cada vez más familias activas. Cuanto antes te unas, antes empiezan a llegar los alumnos.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARE -->
+<section class="compare-section">
+  <div class="section-inner">
+    <span class="section-label">Comparativa</span>
+    <h2 class="section-title">ClasesDe10 frente a otras opciones</h2>
+    <p class="section-desc">No todas las plataformas son iguales. Aquí te mostramos por qué ClasesDe10 es diferente.</p>
+    <table class="compare-table reveal">
+      <thead>
+        <tr>
+          <th>Característica</th>
+          <th class="highlight">ClasesDe10</th>
+          <th>Otras plataformas</th>
+          <th>Buscar solo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Registro gratuito</td>
+          <td class="yes highlight">✓ Sí</td>
+          <td class="no">✗ Muchas cobran</td>
+          <td class="yes">✓ Sí</td>
+        </tr>
+        <tr>
+          <td>Sin comisión por clase</td>
+          <td class="yes highlight">✓ Sin comisión</td>
+          <td class="no">✗ 15–30% por clase</td>
+          <td class="yes">✓ Sin comisión</td>
+        </tr>
+        <tr>
+          <td>Familias verificadas</td>
+          <td class="yes highlight">✓ Contacto real</td>
+          <td>Variable</td>
+          <td class="no">✗ Sin garantía</td>
+        </tr>
+        <tr>
+          <td>Atención personalizada</td>
+          <td class="yes highlight">✓ Humana y directa</td>
+          <td class="no">✗ Solo bots</td>
+          <td class="no">✗ Sin soporte</td>
+        </tr>
+        <tr>
+          <td>Tú fijas el precio</td>
+          <td class="yes highlight">✓ Total libertad</td>
+          <td class="no">✗ Precios controlados</td>
+          <td class="yes">✓ Sí</td>
+        </tr>
+        <tr>
+          <td>Visibilidad sin pagar</td>
+          <td class="yes highlight">✓ Siempre visible</td>
+          <td class="no">✗ Paga por aparecer</td>
+          <td class="no">✗ Difícil sin red</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PROFILE BANNER -->
+<div class="profile-banner">
+  <h2>Una red de docentes que <span>crece cada semana</span></h2>
+  <p>Más familias, más solicitudes, más oportunidades para profesores como tú.</p>
+  <div class="profile-stats">
+    <div style="text-align:center"><div class="ps-num">0€</div><div class="ps-label">Coste de registro</div></div>
+    <div style="text-align:center"><div class="ps-num">0%</div><div class="ps-label">Comisión por clase</div></div>
+    <div style="text-align:center"><div class="ps-num">48h</div><div class="ps-label">Primera propuesta</div></div>
+  </div>
+  <a href="#formulario" class="btn-primary">🎓 Quiero unirme ahora</a>
+</div>
+
+<!-- FORMULARIO -->
+<section class="form-section" id="formulario">
+  <div class="section-inner">
+    <div class="form-grid">
+      <div class="form-info">
+        <span class="section-label">Únete como profesor</span>
+        <h2 class="section-title">Preséntate y<br>empieza a enseñar</h2>
+        <p class="section-desc">Rellena el formulario y en menos de 48h te contactamos con tu primera propuesta de alumno.</p>
+        <div class="fi-item">
+          <div class="fi-ico">🔐</div>
+          <div><h4>Datos protegidos</h4><p>Tu información solo se usa para conectarte con familias. Nunca se publica sin tu consentimiento.</p></div>
+        </div>
+        <div class="fi-item">
+          <div class="fi-ico">💬</div>
+          <div><h4>Te contactamos pronto</h4><p>En menos de 48 horas recibirás noticias nuestras con tu primera propuesta.</p></div>
+        </div>
+        <div class="fi-item">
+          <div class="fi-ico">🆓</div>
+          <div><h4>Sin coste ni compromiso</h4><p>El registro es gratuito y puedes rechazar cualquier propuesta que no te encaje.</p></div>
+        </div>
+      </div>
+
+      <div class="contact-form-card reveal">
+        <div class="cf-title">🎓 Unirme como profesor/a</div>
+        <div class="cf-form">
+          <div class="cf-row">
+            <div class="cf-field">
+              <label>Nombre completo</label>
+              <input type="text" placeholder="Tu nombre y apellidos">
+            </div>
+            <div class="cf-field">
+              <label>Email</label>
+              <input type="email" placeholder="tu@email.com">
+            </div>
+          </div>
+          <div class="cf-field">
+            <label>Teléfono / WhatsApp</label>
+            <input type="tel" placeholder="+34 600 000 000">
+          </div>
+          <div class="cf-field">
+            <label>Materias que impartes</label>
+            <input type="text" placeholder="Ej: Matemáticas, Física, Inglés...">
+          </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label>Niveles</label>
+              <select>
+                <option value="">Selecciona</option>
+                <option>Primaria</option>
+                <option>ESO</option>
+                <option>Bachillerato</option>
+                <option>Universidad</option>
+                <option>Idiomas adultos</option>
+                <option>Varios niveles</option>
+              </select>
+            </div>
+            <div class="cf-field">
+              <label>Modalidad</label>
+              <select>
+                <option value="">Selecciona</option>
+                <option>Presencial</option>
+                <option>Online</option>
+                <option>Ambas</option>
+              </select>
+            </div>
+          </div>
+          <div class="cf-field">
+            <label>Formación y experiencia</label>
+            <textarea placeholder="Cuéntanos tu titulación, años de experiencia y cualquier detalle relevante..."></textarea>
+          </div>
+          <div class="cf-field">
+            <label>Disponibilidad horaria</label>
+            <input type="text" placeholder="Ej: Tardes de lunes a viernes, fines de semana...">
+          </div>
+          <button class="cf-submit" id="submitBtn">Enviar mi perfil →</button>
+          <p class="cf-note">🔐 Datos confidenciales · Solo usados para conectarte con alumnos</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <div class="fb-name">Clases<span>De10</span></div>
+      <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Navegación</h4>
+      <ul>
+        <li><a href="index.html">Inicio</a></li>
+        <li><a href="como-funciona.html">Cómo funciona</a></li>
+        <li><a href="para-padres.html">Para familias</a></li>
+        <li><a href="para-profesores.html">Para profesores</a></li>
+        <li><a href="sobre-nosotros.html">Sobre nosotros</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Contacto</h4>
+      <ul>
+        <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
+        <li><a href="contacto.html">Formulario de contacto</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 ClasesDe10. Todos los derechos reservados.</span>
+    <span>Hecho con ❤️ en Madrid</span>
+  </div>
+</footer>
+
+<script>
+window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
+document.getElementById('hamburger').addEventListener('click',()=>{ document.getElementById('mobileMenu').classList.toggle('open'); });
+function closeMobile(){ document.getElementById('mobileMenu').classList.remove('open'); }
+const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0.08});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+document.getElementById('submitBtn').addEventListener('click',function(){
+  const inputs=document.querySelectorAll('.cf-form input, .cf-form select, .cf-form textarea');
+  let ok=true; inputs.forEach(i=>{ if(!i.value.trim()) ok=false; });
+  if(ok){ this.textContent='✅ Perfil enviado — ¡te contactamos pronto!'; this.style.background='#1a6b5e'; }
+  else { this.textContent='⚠️ Completa todos los campos'; this.style.background='#c0392b'; setTimeout(()=>{ this.textContent='Enviar mi perfil →'; this.style.background=''; },2200); }
+});
+</script>
+</body>
+</html>

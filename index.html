@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClasesDe10 — Conecta con los profesores que marcan la diferencia</title>
+<meta name="description" content="En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad. Primaria, ESO, Bachillerato e idiomas.">
+<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="stylesheet" href="css/style.css">
+<style>
+/* ── HERO ── */
+#hero {
+  min-height: 100vh;
+  background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: calc(var(--nav-h) + 60px) 5vw 80px;
+  position: relative; overflow: hidden;
+}
+#hero::before {
+  content: '';
+  position: absolute; top: -220px; right: -220px;
+  width: 640px; height: 640px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(232,160,48,0.11) 0%, transparent 70%);
+  pointer-events: none;
+}
+#hero::after {
+  content: '';
+  position: absolute; bottom: -160px; left: -160px;
+  width: 520px; height: 520px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(29,122,107,0.14) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(232,160,48,0.14);
+  border: 1px solid rgba(232,160,48,0.32);
+  color: var(--gold-light);
+  font-size: .76rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  padding: 6px 18px; border-radius: 100px;
+  margin-bottom: 28px;
+  animation: fadeUp .7s ease both;
+}
+.hero-badge::before { content: '●'; font-size: .5rem; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+.hero-logo-img {
+  width: 90px; height: 90px; border-radius: 20px;
+  object-fit: cover; margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
+  animation: fadeUp .6s ease both;
+}
+.hero-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(2.8rem, 6vw, 5rem);
+  font-weight: 900; line-height: 1.1; color: var(--white);
+  margin-bottom: 14px;
+  animation: fadeUp .7s .12s ease both;
+}
+.hero-title em { color: var(--gold); font-style: normal; }
+.hero-sub {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(1rem, 2.2vw, 1.45rem);
+  color: rgba(255,255,255,0.58); font-weight: 400;
+  margin-bottom: 28px;
+  animation: fadeUp .7s .22s ease both;
+}
+.hero-desc {
+  max-width: 550px; font-size: 1rem; line-height: 1.8;
+  color: rgba(255,255,255,0.7); margin-bottom: 44px;
+  animation: fadeUp .7s .32s ease both;
+}
+.hero-pills {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  margin-bottom: 44px;
+  animation: fadeUp .7s .4s ease both;
+}
+.pill {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.13);
+  color: rgba(255,255,255,0.85);
+  font-size: .82rem; padding: 6px 15px; border-radius: 100px;
+}
+.hero-btns {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 14px;
+  animation: fadeUp .7s .48s ease both;
+}
+.hero-btns .btn-primary { font-size: 1rem; padding: 16px 36px; }
+.hero-btns .btn-ghost   { font-size: 1rem; padding: 15px 32px; }
+
+.hero-stats {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 48px;
+  margin-top: 72px; padding-top: 48px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  width: 100%; max-width: 660px;
+  animation: fadeUp .7s .6s ease both;
+}
+.stat-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 2.5rem; font-weight: 700; color: var(--gold);
+}
+.stat-label { font-size: .76rem; color: rgba(255,255,255,0.5); text-transform: uppercase; letter-spacing: .06em; }
+
+.scroll-hint {
+  position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  color: rgba(255,255,255,0.35); font-size: .72rem; letter-spacing: .08em; text-transform: uppercase;
+  animation: bounce 2.8s infinite;
+}
+@keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(7px)} }
+@keyframes fadeUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── HOW IT WORKS (teaser) ── */
+.how-teaser {
+  padding: 100px 0;
+  background: var(--white);
+}
+.ht-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 24px;
+  margin-top: 56px;
+}
+.ht-card {
+  background: var(--cream); border-radius: 20px; padding: 36px 28px;
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: transform .25s, box-shadow .25s;
+  position: relative;
+}
+.ht-card:hover { transform: translateY(-6px); box-shadow: 0 14px 44px rgba(0,0,0,0.09); }
+.ht-num {
+  font-family: 'Playfair Display', serif;
+  font-size: 3.5rem; font-weight: 900;
+  color: rgba(232,160,48,0.18);
+  position: absolute; top: 16px; right: 22px; line-height: 1;
+}
+.ht-ico {
+  width: 50px; height: 50px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--navy), var(--navy-light));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.3rem; margin-bottom: 18px;
+}
+.ht-card h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem; font-weight: 700; color: var(--navy); margin-bottom: 8px;
+}
+.ht-card p { font-size: .9rem; line-height: 1.7; color: var(--gray-mid); }
+
+/* ── DUAL CTA ── */
+.dual-cta {
+  padding: 100px 0;
+  background: var(--cream);
+}
+.dual-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+  margin-top: 56px;
+}
+.cta-card {
+  border-radius: 24px; padding: 52px 44px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.cta-card.families {
+  background: linear-gradient(135deg, var(--navy), var(--navy-light));
+}
+.cta-card.teachers {
+  background: linear-gradient(135deg, var(--teal), #155e52);
+}
+.cta-card .cta-tag {
+  font-size: .73rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: rgba(255,255,255,0.55);
+}
+.cta-card h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.7rem; font-weight: 700; color: var(--white); line-height: 1.2;
+}
+.cta-card h3 span { color: var(--gold-light); }
+.cta-card p { font-size: .92rem; color: rgba(255,255,255,0.65); line-height: 1.7; }
+.cta-card ul {
+  list-style: none; display: flex; flex-direction: column; gap: 8px;
+}
+.cta-card ul li {
+  font-size: .88rem; color: rgba(255,255,255,0.78);
+  display: flex; align-items: center; gap: 8px;
+}
+.cta-card ul li::before { content: '✓'; color: var(--gold-light); font-weight: 700; }
+
+/* ── TESTIMONIOS MINI ── */
+.testi-mini {
+  padding: 100px 0;
+  background: var(--gray-soft);
+}
+.tm-grid {
+  display: grid; grid-template-columns: repeat(3,1fr); gap: 22px;
+  margin-top: 56px;
+}
+.tm-card {
+  background: var(--white); border-radius: 20px; padding: 28px;
+  border: 1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.tm-quote { font-size: 2.2rem; color: var(--gold); font-family: serif; line-height: .8; }
+.tm-text { font-size: .93rem; line-height: 1.75; color: var(--text-body); font-style: italic; flex-grow: 1; }
+.tm-stars { color: var(--gold); font-size: .9rem; }
+.tm-author { display: flex; align-items: center; gap: 12px; }
+.tm-avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--navy), var(--teal));
+  display: flex; align-items: center; justify-content: center;
+  color: var(--white); font-weight: 700; font-size: .95rem; flex-shrink: 0;
+}
+.tm-name { font-weight: 700; font-size: .88rem; color: var(--navy); }
+.tm-role { font-size: .76rem; color: var(--gray-mid); }
+
+@media (max-width: 900px) {
+  .ht-grid, .dual-grid, .tm-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .cta-card { padding: 38px 28px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="mainNav">
+  <a href="index.html" class="nav-logo">
+    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <span class="nav-logo-text">Clases<span>De10</span></span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="como-funciona.html">Cómo funciona</a></li>
+    <li><a href="para-padres.html">Para familias</a></li>
+    <li><a href="para-profesores.html">Para profesores</a></li>
+    <li><a href="sobre-nosotros.html">Nosotros</a></li>
+    <li><a href="contacto.html">Contactar</a></li>
+    <li><a href="pages/login.html" style="color:rgba(255,255,255,.7);font-size:.84rem;font-weight:500;padding:8px 14px;border-radius:6px;transition:color .2s,background .2s" onmouseover="this.style.background='rgba(255,255,255,.09)';this.style.color='#fff'" onmouseout="this.style.background='';this.style.color='rgba(255,255,255,.7)'">Acceder</a></li>
+    <li><a href="pages/registro.html" class="nav-cta">Solicitar profesor</a></li>
+  </ul>
+  <button class="hamburger" id="hamburger" aria-label="Menú móvil">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="como-funciona.html"  onclick="closeMobile()">Cómo funciona</a>
+  <a href="para-padres.html"    onclick="closeMobile()">Para familias</a>
+  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
+  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
+  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+</div>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="hero-badge">Madrid · Presencial &amp; Online</div>
+  <img class="hero-logo-img"
+       src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png"
+       alt="ClasesDe10">
+  <h1 class="hero-title">Clases particulares que<br><em>marcan la diferencia</em></h1>
+  <p class="hero-sub">Conectamos familias con profesores de confianza</p>
+  <p class="hero-desc">En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad, sin complicaciones ni intermediarios.</p>
+  <div class="hero-pills">
+    <div class="pill">✅ Primaria, ESO y Bachillerato</div>
+    <div class="pill">🌍 Idiomas</div>
+    <div class="pill">🔐 Profesores verificados</div>
+    <div class="pill">💬 Atención personalizada</div>
+  </div>
+  <div class="hero-btns">
+    <a href="para-padres.html" class="btn-primary">👨‍👩‍👦 Quiero un profesor</a>
+    <a href="para-profesores.html" class="btn-ghost">🎓 Soy profesor/a</a>
+  </div>
+  <div class="hero-stats">
+    <div style="text-align:center">
+      <div class="stat-num">100%</div>
+      <div class="stat-label">Profesores verificados</div>
+    </div>
+    <div style="text-align:center">
+      <div class="stat-num">48h</div>
+      <div class="stat-label">Respuesta garantizada</div>
+    </div>
+    <div style="text-align:center">
+      <div class="stat-num">0€</div>
+      <div class="stat-label">Coste por solicitud</div>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <span>Descubre más</span>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  </div>
+</section>
+
+<!-- HOW IT WORKS TEASER -->
+<section class="how-teaser">
+  <div class="section-inner">
+    <span class="section-label">Proceso sencillo</span>
+    <h2 class="section-title">Tres pasos, sin complicaciones</h2>
+    <p class="section-desc">Sin registros, sin cuotas, sin esperas largas. Solo conexiones reales.</p>
+    <div class="ht-grid">
+      <div class="ht-card reveal">
+        <div class="ht-num">01</div>
+        <div class="ht-ico">🙋</div>
+        <h3>Elige tu perfil</h3>
+        <p>Rellena el formulario como padre/madre o profesor/a. Menos de dos minutos.</p>
+      </div>
+      <div class="ht-card reveal">
+        <div class="ht-num">02</div>
+        <div class="ht-ico">🔍</div>
+        <h3>Buscamos la coincidencia</h3>
+        <p>Analizamos tu solicitud y encontramos la mejor opción. Respuesta en máx. 48h.</p>
+      </div>
+      <div class="ht-card reveal">
+        <div class="ht-num">03</div>
+        <div class="ht-ico">🤝</div>
+        <h3>Contacto directo</h3>
+        <p>Te enviamos los datos por email o WhatsApp. Tú decides horarios y modalidad.</p>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:44px;">
+      <a href="como-funciona.html" class="btn-secondary">Ver cómo funciona en detalle →</a>
+    </div>
+  </div>
+</section>
+
+<!-- DUAL CTA -->
+<section class="dual-cta">
+  <div class="section-inner">
+    <span class="section-label">¿Quién eres?</span>
+    <h2 class="section-title">Empieza según tu perfil</h2>
+    <div class="dual-grid">
+      <div class="cta-card families reveal">
+        <span class="cta-tag">Para familias</span>
+        <h3>Encuentra el profesor que <span>tu hijo necesita</span></h3>
+        <p>Profesores verificados, aprendizaje personalizado y atención directa por WhatsApp o email.</p>
+        <ul>
+          <li>Primaria, ESO, Bachillerato e idiomas</li>
+          <li>Presencial u online, tú eliges</li>
+          <li>Respuesta en menos de 48 horas</li>
+          <li>Sin coste por la búsqueda</li>
+        </ul>
+        <div>
+          <a href="para-padres.html" class="btn-primary">Ver más para familias</a>
+        </div>
+      </div>
+      <div class="cta-card teachers reveal">
+        <span class="cta-tag">Para profesores</span>
+        <h3>Consigue alumnos y <span>haz lo que te apasiona</span></h3>
+        <p>Te damos visibilidad real. Las familias de tu zona ya nos están buscando.</p>
+        <ul>
+          <li>Tú decides tu horario y modalidad</li>
+          <li>Contacto directo, sin comisiones</li>
+          <li>Registro completamente gratuito</li>
+          <li>Comunidad de docentes en crecimiento</li>
+        </ul>
+        <div>
+          <a href="para-profesores.html" class="btn-primary">Ver más para profesores</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TESTIMONIOS MINI -->
+<section class="testi-mini">
+  <div class="section-inner">
+    <span class="section-label">Lo que dicen</span>
+    <h2 class="section-title">Historias que nos motivan</h2>
+    <div class="tm-grid">
+      <div class="tm-card reveal">
+        <div class="tm-quote">"</div>
+        <p class="tm-text">En menos de 48 horas nos contactaron con una profesora de inglés perfecta para nuestra hija. Increíblemente sencillo.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-author">
+          <div class="tm-avatar">ML</div>
+          <div>
+            <div class="tm-name">María López</div>
+            <div class="tm-role">Madre · 1º ESO</div>
+          </div>
+        </div>
+      </div>
+      <div class="tm-card reveal">
+        <div class="tm-quote">"</div>
+        <p class="tm-text">Llevo tres años dando clases y nunca había tenido tanta demanda. Me conectan con familias reales cada semana.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-author">
+          <div class="tm-avatar">JR</div>
+          <div>
+            <div class="tm-name">Javier Ruiz</div>
+            <div class="tm-role">Profesor · Matemáticas y Física</div>
+          </div>
+        </div>
+      </div>
+      <div class="tm-card reveal">
+        <div class="tm-quote">"</div>
+        <p class="tm-text">Mi hijo suspendía química y con la profesora que nos encontraron aprobó el trimestre. El trato personalizado marca la diferencia.</p>
+        <div class="tm-stars">★★★★★</div>
+        <div class="tm-author">
+          <div class="tm-avatar">CS</div>
+          <div>
+            <div class="tm-name">Carmen Sánchez</div>
+            <div class="tm-role">Madre · 2º Bachillerato</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <div class="fb-name">Clases<span>De10</span></div>
+      <p>Conectamos familias con profesores particulares en Madrid y toda España. Aprendizaje personalizado, confianza y calidad.</p>
+    </div>
+    <div class="footer-col">
+      <h4>Navegación</h4>
+      <ul>
+        <li><a href="index.html">Inicio</a></li>
+        <li><a href="como-funciona.html">Cómo funciona</a></li>
+        <li><a href="para-padres.html">Para familias</a></li>
+        <li><a href="para-profesores.html">Para profesores</a></li>
+        <li><a href="sobre-nosotros.html">Sobre nosotros</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Contacto</h4>
+      <ul>
+        <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
+        <li><a href="contacto.html">Formulario de contacto</a></li>
+        <li><a href="para-padres.html#formulario">Soy padre/madre</a></li>
+        <li><a href="para-profesores.html#formulario">Soy profesor/a</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 ClasesDe10. Todos los derechos reservados.</span>
+    <span>Hecho con ❤️ en Madrid</span>
+  </div>
+</footer>
+
+<script>
+window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
+document.getElementById('hamburger').addEventListener('click',()=>{ document.getElementById('mobileMenu').classList.toggle('open'); });
+function closeMobile(){ document.getElementById('mobileMenu').classList.remove('open'); }
+const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+[build]
+  publish = "."
+
+# ── BLOQUEAR ARCHIVOS SENSIBLES ──────────────────────────────────
+# Impedir acceso público a migraciones SQL, scripts y docs internos
+
+[[redirects]]
+  from = "/supabase/*"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/SETUP-SUPABASE.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/clases-particulares/_gen.py"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/clases-particulares/_generar-paginas.js"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.env.example"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.gitignore"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/GUIA-HOSTALIA.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/GUIA-NETLIFY.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+# ── ALIAS DE RUTA AMIGABLES ──────────────────────────────────────
+
+[[redirects]]
+  from = "/dashboard"
+  to   = "/pages/login.html"
+  status = 302
+
+[[redirects]]
+  from = "/entrar"
+  to   = "/pages/login.html"
+  status = 301
+
+[[redirects]]
+  from = "/registro"
+  to   = "/pages/registro.html"
+  status = 301
+
+# ── HEADERS DE SEGURIDAD GLOBALES ────────────────────────────────
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options           = "DENY"
+    X-Content-Type-Options    = "nosniff"
+    X-XSS-Protection          = "1; mode=block"
+    Referrer-Policy           = "strict-origin-when-cross-origin"
+    Permissions-Policy        = "camera=(), microphone=(), geolocation=()"
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    Content-Security-Policy   = "default-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://clasesde10.wordpress.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.googletagmanager.com https://connect.facebook.net https://clarity.ms; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com; frame-ancestors 'none';"
+
+# ── NO INDEXAR DASHBOARDS ────────────────────────────────────────
+
+[[headers]]
+  for = "/pages/dashboard/*"
+  [headers.values]
+    Cache-Control  = "no-store, no-cache, must-revalidate"
+    X-Robots-Tag   = "noindex, nofollow"
+
+[[headers]]
+  for = "/pages/login.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag  = "noindex, nofollow"
+
+[[headers]]
+  for = "/pages/registro.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag  = "noindex, nofollow"
+
+# ── CACHE DE ASSETS ESTÁTICOS ────────────────────────────────────
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# ── CACHE MODERADO PARA HTML PÚBLICAS ────────────────────────────
+
+[[headers]]
+  for = "/clases-particulares/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, must-revalidate"
+
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"

@@ -1,0 +1,31 @@
+# Variables de entorno — NUNCA subir a Git
+.env
+.env.local
+.env.*.local
+
+# Dependencias
+node_modules/
+__pycache__/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Netlify
+.netlify/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporales
+*.tmp
+*.bak
+js/supabase-client.js

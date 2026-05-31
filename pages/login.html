@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iniciar sesión — ClasesDe10</title>
+<meta name="description" content="Accede a tu cuenta de ClasesDe10. Plataforma para familias, profesores y alumnos de clases particulares en Madrid.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="stylesheet" href="../css/dashboard.css">
+<style>
+body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
+       background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%); }
+.auth-card {
+  background: var(--white); border-radius: var(--radius);
+  padding: 44px; width:100%; max-width:420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.auth-logo { text-align:center; margin-bottom:32px; }
+.auth-logo img { width:64px;height:64px;border-radius:14px;object-fit:cover; }
+.auth-logo-name {
+  font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:900;
+  color:var(--navy); margin-top:10px;
+}
+.auth-logo-name span { color:var(--gold); }
+.auth-subtitle { font-size:.875rem; color:var(--gray-mid); margin-top:4px; }
+.auth-title { font-family:'Playfair Display',serif; font-size:1.3rem; font-weight:700;
+               color:var(--navy); margin-bottom:24px; }
+.auth-sep { text-align:center; color:var(--gray-mid); font-size:.78rem; margin:16px 0;
+            position:relative; }
+.auth-sep::before, .auth-sep::after {
+  content:''; position:absolute; top:50%; width:40%; height:1px; background:rgba(0,0,0,0.1); }
+.auth-sep::before { left:0; }
+.auth-sep::after { right:0; }
+.auth-footer { text-align:center; margin-top:20px; font-size:.82rem; color:var(--gray-mid); }
+.auth-footer a { color:var(--navy); font-weight:600; text-decoration:none; }
+.auth-footer a:hover { color:var(--gold); }
+.forgot-link { text-align:right; margin-top:-10px; margin-bottom:14px; }
+.forgot-link a { font-size:.78rem; color:var(--gray-mid); text-decoration:none; }
+.forgot-link a:hover { color:var(--navy); }
+.error-banner {
+  background:rgba(220,38,38,.07); border:1px solid rgba(220,38,38,.2);
+  border-radius:var(--radius-sm); padding:10px 14px;
+  color:var(--danger); font-size:.82rem; margin-bottom:16px; display:none;
+}
+.tab-btns { display:flex; gap:8px; margin-bottom:24px; }
+.tab-btn {
+  flex:1; padding:9px; border-radius:var(--radius-sm);
+  border:1.5px solid rgba(0,0,0,0.13); background:none;
+  font-family:inherit; font-size:.82rem; font-weight:600;
+  cursor:pointer; color:var(--gray-mid); transition:all .18s;
+}
+.tab-btn.active { background:var(--navy); color:white; border-color:var(--navy); }
+</style>
+</head>
+<body>
+<div class="auth-card">
+  <div class="auth-logo">
+    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+    <div class="auth-logo-name">Clases<span>De10</span></div>
+    <div class="auth-subtitle">Tu academia de confianza en Madrid</div>
+  </div>
+
+  <div id="error-banner" class="error-banner" role="alert"></div>
+
+  <div class="tab-btns">
+    <button class="tab-btn active" id="tab-login">Iniciar sesión</button>
+    <button class="tab-btn" id="tab-forgot">Recuperar acceso</button>
+  </div>
+
+  <!-- FORMULARIO LOGIN -->
+  <form id="form-login" novalidate>
+    <div class="form-group">
+      <label class="form-label" for="email">Correo electrónico <span class="required">*</span></label>
+      <input class="form-control" type="email" id="email" name="email"
+             placeholder="tu@email.com" autocomplete="email" required>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="password">Contraseña <span class="required">*</span></label>
+      <input class="form-control" type="password" id="password" name="password"
+             placeholder="••••••••" autocomplete="current-password" required>
+    </div>
+    <div class="forgot-link">
+      <a href="#" id="go-forgot">¿Olvidaste tu contraseña?</a>
+    </div>
+    <button type="submit" class="btn btn-primary btn-lg" id="btn-login" style="width:100%;justify-content:center">
+      <span id="btn-login-text">Entrar a mi cuenta</span>
+      <span id="btn-login-loading" style="display:none">Cargando…</span>
+    </button>
+  </form>
+
+  <!-- FORMULARIO RECUPERAR -->
+  <form id="form-forgot" style="display:none" novalidate>
+    <p style="font-size:.875rem;color:var(--gray-mid);margin-bottom:16px">
+      Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.
+    </p>
+    <div class="form-group">
+      <label class="form-label" for="email-forgot">Correo electrónico <span class="required">*</span></label>
+      <input class="form-control" type="email" id="email-forgot" placeholder="tu@email.com" required>
+    </div>
+    <button type="submit" class="btn btn-primary btn-lg" style="width:100%;justify-content:center">
+      Enviar enlace de recuperación
+    </button>
+  </form>
+
+  <div class="auth-sep">o</div>
+  <div class="auth-footer">
+    ¿Aún no tienes cuenta?
+    <a href="registro.html">Regístrate gratis</a>
+  </div>
+  <div class="auth-footer" style="margin-top:8px">
+    <a href="/">← Volver a la web</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/analytics.js" defer></script>
+<script type="module">
+import { login, resetPassword, redirectByRole } from '../js/auth.js';
+import { showToast, sanitize } from '../js/utils.js';
+import { trackLogin } from '../js/analytics.js';
+
+const errorBanner = document.getElementById('error-banner');
+const formLogin   = document.getElementById('form-login');
+const formForgot  = document.getElementById('form-forgot');
+const tabLogin    = document.getElementById('tab-login');
+const tabForgot   = document.getElementById('tab-forgot');
+const goForgot    = document.getElementById('go-forgot');
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.style.display = 'block';
+}
+function hideError() {
+  errorBanner.style.display = 'none';
+}
+
+function setTab(tab) {
+  if (tab === 'login') {
+    formLogin.style.display = '';
+    formForgot.style.display = 'none';
+    tabLogin.classList.add('active');
+    tabForgot.classList.remove('active');
+  } else {
+    formLogin.style.display = 'none';
+    formForgot.style.display = '';
+    tabLogin.classList.remove('active');
+    tabForgot.classList.add('active');
+  }
+  hideError();
+}
+
+tabLogin.addEventListener('click', () => setTab('login'));
+tabForgot.addEventListener('click', () => setTab('forgot'));
+goForgot.addEventListener('click', (e) => { e.preventDefault(); setTab('forgot'); });
+
+formLogin.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideError();
+
+  const email    = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const btnText  = document.getElementById('btn-login-text');
+  const btnLoad  = document.getElementById('btn-login-loading');
+  const btn      = document.getElementById('btn-login');
+
+  btnText.style.display = 'none';
+  btnLoad.style.display = '';
+  btn.disabled = true;
+
+  const { error, usuario } = await login(email, password);
+
+  if (error) {
+    const msg = error.message === 'Invalid login credentials'
+      ? 'Email o contraseña incorrectos.'
+      : error.message;
+    showError(msg);
+    btnText.style.display = '';
+    btnLoad.style.display = 'none';
+    btn.disabled = false;
+    return;
+  }
+
+  trackLogin(usuario.rol);
+  redirectByRole(usuario.rol);
+});
+
+formForgot.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideError();
+  const email = document.getElementById('email-forgot').value.trim();
+  if (!email) { showError('Introduce tu correo electrónico.'); return; }
+
+  const { error } = await resetPassword(email);
+  if (error) { showError(error.message); return; }
+
+  showToast('Email enviado', 'Revisa tu bandeja de entrada.', 'success');
+  setTab('login');
+});
+</script>
+</body>
+</html>
