@@ -6,6 +6,7 @@
 <title>Crear cuenta — ClasesDe10</title>
 <meta name="description" content="Únete a ClasesDe10. Regístrate como familia o profesor y accede a nuestra plataforma de clases particulares en Madrid.">
 <meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
 <link rel="stylesheet" href="../css/dashboard.css">
 <style>
@@ -70,7 +71,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     <h2 style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:var(--navy);margin-bottom:6px">
       Crear cuenta gratuita
     </h2>
-    <p style="font-size:.82rem;color:var(--gray-mid);margin-bottom:20px">Elige cómo quieres registrarte:</p>
+    <p id="registro-subtitle" style="font-size:.82rem;color:var(--gray-mid);margin-bottom:20px">Elige cómo quieres registrarte:</p>
 
     <div class="rol-selector">
       <label class="rol-card selected" id="card-familia">
@@ -142,7 +143,6 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="../js/analytics.js" defer></script>
 <script type="module">
 import { register } from '../js/auth.js';
 import { validarEmail, sanitize } from '../js/utils.js';
@@ -155,6 +155,14 @@ const cardFamilia    = document.getElementById('card-familia');
 const cardProfesor   = document.getElementById('card-profesor');
 const pwdBar         = document.getElementById('pwd-bar');
 let rolSeleccionado  = 'familia';
+const params = new URLSearchParams(window.location.search);
+const alumnoToken = params.get('token') || '';
+
+if (params.get('rol') === 'alumno' && alumnoToken) {
+  rolSeleccionado = 'alumno';
+  document.querySelector('.rol-selector').style.display = 'none';
+  document.getElementById('registro-subtitle').textContent = 'Crea tu acceso de alumno con la invitación recibida por tu familia.';
+}
 
 function showError(msg) {
   errorBanner.textContent = msg;
@@ -214,7 +222,15 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
   const load = document.getElementById('btn-load');
   btn.disabled = true; text.style.display = 'none'; load.style.display = '';
 
-  const { data, error } = await register({ email, password, nombre, apellidos, telefono, rol: rolSeleccionado });
+  const { data, error } = await register({
+    email,
+    password,
+    nombre,
+    apellidos,
+    telefono,
+    rol: rolSeleccionado,
+    alumno_invitacion_token: alumnoToken,
+  });
 
   if (error) {
     const msg = error.message.includes('already registered')

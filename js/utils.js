@@ -275,12 +275,6 @@ export function debounce(fn, ms = 300) {
 }
 
 // ─── BADGE HTML ──────────────────────────────────────────────────
-const BADGE_ESTADO_CLASE = {
-  programada:    'badge-info',
-  realizada:     'badge-success',
-  cancelada:     'badge-danger',
-  reprogramada:  'badge-warning',
-};
 const LABEL_ESTADO = {
   programada:    'Programada',
   realizada:     'Realizada',
@@ -296,6 +290,13 @@ const LABEL_ESTADO = {
   en_proceso:    'En proceso',
   resuelta:      'Resuelta',
   cerrada:       'Cerrada',
+  nuevo:         'Nuevo',
+  contactado:    'Contactado',
+  cerrado:       'Cerrado',
+  spam:          'Spam',
+  contacto:      'Contacto',
+  familia:       'Familia',
+  profesor:      'Profesor',
   verificado:    'Verificado',
 };
 const BADGE_MAPA = {
@@ -304,6 +305,8 @@ const BADGE_MAPA = {
   pendiente: 'badge-warning', validado: 'badge-success', rechazado: 'badge-danger',
   nueva: 'badge-info', asignada: 'badge-gold', completada: 'badge-success',
   abierta: 'badge-danger', en_proceso: 'badge-warning', resuelta: 'badge-success', cerrada: 'badge-gray',
+  nuevo: 'badge-info', contactado: 'badge-warning', cerrado: 'badge-success', spam: 'badge-danger',
+  contacto: 'badge-info', familia: 'badge-gold', profesor: 'badge-success',
   verificado: 'badge-success',
 };
 

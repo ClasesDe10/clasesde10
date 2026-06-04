@@ -20,7 +20,7 @@
   const BASE = getBase();
   const ROOT = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? `${location.protocol}//${location.host}`
-    : 'https://www.clasesde10.es';
+    : 'https://clasesde10.com';
 
   function r(path) {
     return BASE + '/' + path;
@@ -95,6 +95,9 @@
         <li><a href="${r('contacto.html')}"     style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Formulario de contacto</a></li>
         <li><a href="${r('sobre-nosotros.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Sobre nosotros</a></li>
         <li><a href="${r('pages/registro.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Registrarse gratis</a></li>
+        <li><a href="${r('terminos.html')}"     style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Términos de uso</a></li>
+        <li><a href="${r('privacidad.html')}"   style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Privacidad</a></li>
+        <li><a href="${r('cookies.html')}"      style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Cookies</a></li>
       </ul>
     </div>
   </div>
@@ -116,18 +119,11 @@
       document.body.insertBefore(navEl.firstChild, document.body.firstChild);
     }
 
-    // Inyectar footer al final del body (antes de scripts)
+    // Inyectar footer al final del body
     const footerEl = document.createElement('div');
     footerEl.innerHTML = footerHTML;
-    // Insertar antes del primer script al final, o al final del body
-    const scripts = document.querySelectorAll('body > script');
-    const insertBefore = scripts.length > 0 ? scripts[0] : null;
     while (footerEl.firstChild) {
-      if (insertBefore) {
-        document.body.insertBefore(footerEl.firstChild, insertBefore);
-      } else {
-        document.body.appendChild(footerEl.firstChild);
-      }
+      document.body.appendChild(footerEl.firstChild);
     }
 
     // ── Comportamiento nav ─────────────────────────────────────────
