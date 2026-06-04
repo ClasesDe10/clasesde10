@@ -291,6 +291,7 @@ document.getElementById('hamburger').addEventListener('click',()=>{ const m=docu
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
 document.getElementById('submitBtn').addEventListener('click', async function(){
   const nombre  = document.getElementById('con-nombre').value.trim();
   const email   = document.getElementById('con-email').value.trim();
