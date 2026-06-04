@@ -58,7 +58,7 @@
   <a href="${r('para-profesores.html')}" onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para profesores</a>
   <a href="${r('clases-particulares/')}" onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Clases particulares</a>
   <a href="${r('contacto.html')}"        onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Contactar</a>
-  <a href="${r('pages/login.html')}"     style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Acceder</a>
+  <a href="${r('pages/login.html')}"     onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Acceder</a>
   <a href="${r('pages/registro.html')}"  style="display:inline-block;margin-top:12px;background:#e8a030;color:#0f1f3d;font-weight:700;font-size:1rem;padding:14px 20px;border-radius:8px;text-align:center;text-decoration:none">Solicitar profesor gratis</a>
 </div>`;
 

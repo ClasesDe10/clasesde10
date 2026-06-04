@@ -231,8 +231,8 @@ footer {
 
 /* ── ANIMATIONS ──────────────────────────────── */
 .reveal {
-  opacity: 0; transform: translateY(28px);
-  transition: opacity .55s ease, transform .55s ease;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .35s ease, transform .35s ease;
 }
 .reveal.visible { opacity: 1; transform: translateY(0); }
 
