@@ -52,7 +52,7 @@
   </button>
 </nav>
 
-<div id="mobileMenu" style="display:none;position:fixed;top:70px;left:0;right:0;bottom:0;z-index:99;background:#0f1f3d;flex-direction:column;padding:32px 5vw;gap:6px;overflow-y:auto">
+<div id="mobileMenu" style="display:none;position:fixed;top:70px;left:0;right:0;bottom:0;z-index:300;background:#0f1f3d;flex-direction:column;padding:32px 5vw;gap:6px;overflow-y:auto">
   <a href="${r('como-funciona.html')}"   onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Cómo funciona</a>
   <a href="${r('para-padres.html')}"     onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para familias</a>
   <a href="${r('para-profesores.html')}" onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para profesores</a>
@@ -148,10 +148,9 @@
     window.addEventListener('resize', checkMobile);
 
     // Toggle menú móvil
-    if (hamburger) {
+    if (hamburger && mobileMenu) {
       hamburger.addEventListener('click', () => {
-        const isOpen = mobileMenu.style.display === 'flex';
-        mobileMenu.style.display = isOpen ? 'none' : 'flex';
+        mobileMenu.style.display = mobileMenu.style.display === 'flex' ? 'none' : 'flex';
       });
     }
 

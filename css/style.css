@@ -88,12 +88,11 @@ nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
 }
 .mobile-menu {
   display: none; position: fixed;
-  top: var(--nav-h); left: 0; right: 0; bottom: 0; z-index: 99;
+  top: var(--nav-h); left: 0; right: 0; bottom: 0; z-index: 300;
   background: var(--navy);
   flex-direction: column; padding: 32px 5vw; gap: 6px;
   overflow-y: auto;
 }
-.mobile-menu.open { display: flex; }
 .mobile-menu a {
   text-decoration: none; color: rgba(255,255,255,0.8);
   font-size: 1.05rem; font-weight: 500;
