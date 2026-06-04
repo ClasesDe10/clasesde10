@@ -1,6 +1,26 @@
 [build]
   publish = "."
 
+# ── DOMINIO CANÓNICO ─────────────────────────────────────────────
+
+[[redirects]]
+  from = "https://www.clasesde10.com/*"
+  to   = "https://clasesde10.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://clasesde10.es/*"
+  to   = "https://clasesde10.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://www.clasesde10.es/*"
+  to   = "https://clasesde10.com/:splat"
+  status = 301
+  force = true
+
 # ── BLOQUEAR ARCHIVOS SENSIBLES ──────────────────────────────────
 # Impedir acceso público a migraciones SQL, scripts y docs internos
 
@@ -112,7 +132,7 @@
 [[headers]]
   for = "/js/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    Cache-Control = "public, max-age=86400, must-revalidate"
 
 [[headers]]
   for = "/assets/*"
