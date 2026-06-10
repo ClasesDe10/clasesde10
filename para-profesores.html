@@ -420,7 +420,7 @@
   </div>
 </footer>
 
-<script>
+<script type="module">
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
@@ -448,7 +448,7 @@ document.getElementById('submitBtn').addEventListener('click', async function(){
     perfil: 'profesor',
     asunto: materias ? `Profesor: ${materias}` : 'Alta de profesor',
     mensaje: experiencia,
-    metadata: { materias, niveles, modalidad, disponibilidad },
+    metadata: { materias, niveles, modahlidad, disponibilidad },
   });
 
   if (error) {
