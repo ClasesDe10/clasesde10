@@ -39,8 +39,8 @@
     {
       "name": "Solicitar profesor",
       "short_name": "Profesor",
-      "url": "/pages/registro.html",
-      "description": "Registrarme y solicitar profesor",
+      "url": "/para-padres.html#formulario",
+      "description": "Pedir ayuda para encontrar profesor",
       "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
     },
     {

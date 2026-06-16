@@ -65,3 +65,9 @@ Fricciones:
 - 139 botones detectados.
 - Navegador movil: portada, contacto, familias, profesores y registro sin overflow, sin imagenes rotas y sin errores de consola.
 
+# Actualizacion 2026-06-16
+
+- La tarjeta de instalacion PWA se limita a contexto publico y no invade login,
+  registro ni reset de contrasena.
+- El shortcut PWA `Solicitar profesor` lleva al formulario publico de familias
+  para reducir friccion.

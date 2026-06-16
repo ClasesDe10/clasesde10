@@ -53,6 +53,9 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Creado `offline.html`.
 - Creado `js/pwa.js` para registrar service worker y mostrar tarjeta de instalacion.
 - Anadidos metadatos PWA y script `js/pwa.js` en las paginas HTML.
+- Ajustado prompt PWA para no mostrarse sobre login, registro ni reset de
+  contrasena.
+- Shortcut PWA `Solicitar profesor` apunta al formulario publico de familias.
 - Creados assets locales:
   - `assets/img/logo-192.png`
   - `assets/img/logo-512.png`

@@ -31,7 +31,12 @@
   const canShow = () =>
     !isStandalone() &&
     !dismissedRecently() &&
-    !window.location.pathname.startsWith('/pages/dashboard/');
+    !window.location.pathname.startsWith('/pages/dashboard/') &&
+    ![
+      '/pages/login.html',
+      '/pages/registro.html',
+      '/pages/reset-password.html',
+    ].includes(window.location.pathname);
 
   function injectStyles() {
     if (document.getElementById('cd10-install-styles')) return;
