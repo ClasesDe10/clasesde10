@@ -20,6 +20,10 @@ function validateLead(lead) {
   return null;
 }
 
+function isLikelySpam(lead) {
+  return Boolean(clean(lead.website_url || lead.websiteUrl, 500));
+}
+
 function cleanMetadata(metadata = {}) {
   const allowedKeys = [
     'alumno',
@@ -73,6 +77,10 @@ function getUtmMetadata() {
 }
 
 export async function submitLead(lead) {
+  if (isLikelySpam(lead)) {
+    return { data: { id: null, ok: true, spam: true }, error: null };
+  }
+
   const payload = {
     tipo: clean(lead.tipo, 30),
     nombre: clean(lead.nombre, 160),

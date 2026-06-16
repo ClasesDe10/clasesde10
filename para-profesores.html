@@ -346,6 +346,10 @@
       <div class="contact-form-card reveal">
         <div class="cf-title">🎓 Unirme como profesor/a</div>
         <form class="cf-form" id="form-profesor" method="post">
+          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+            <label for="prof-website">Website</label>
+            <input id="prof-website" name="website_url" type="text" tabindex="-1" autocomplete="off">
+          </div>
           <div class="cf-row">
             <div class="cf-field">
               <label for="prof-nombre">Nombre completo</label>
@@ -506,6 +510,7 @@ document.getElementById('form-profesor').addEventListener('submit', async functi
   const experiencia   = document.getElementById('prof-experiencia').value.trim();
   const disponibilidad = document.getElementById('prof-disponibilidad').value.trim();
   const verificacion  = document.getElementById('prof-verificacion').value.trim();
+  const website_url = document.getElementById('prof-website').value.trim();
   const defaultText = 'Enviar mi perfil →';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
   const detalles = [
@@ -517,7 +522,7 @@ document.getElementById('form-profesor').addEventListener('submit', async functi
   ].filter(Boolean).join('\n');
 
   setButtonState(button, 'loading', 'Enviando...');
-  const { error } = await submitLead({
+  const { data, error } = await submitLead({
     tipo: 'profesor',
     nombre,
     email,
@@ -525,12 +530,19 @@ document.getElementById('form-profesor').addEventListener('submit', async functi
     perfil: 'profesor',
     asunto: materias ? `Profesor: ${materias}` : 'Alta de profesor',
     mensaje: detalles,
+    website_url,
     metadata: { materias, niveles, modalidad, zona, canal, anios, tarifa, disponibilidad, verificacion, consent_privacy: true },
   });
 
   if (error) {
     setButtonState(button, 'error', error.message || 'No se pudo enviar.');
     setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
+    return;
+  }
+
+  if (data?.spam) {
+    setButtonState(button, 'success', 'Perfil enviado. Gracias.');
+    this.reset();
     return;
   }
 

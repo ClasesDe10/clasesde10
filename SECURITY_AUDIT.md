@@ -50,4 +50,6 @@ La seguridad base es razonable si Supabase RLS esta correctamente desplegado. La
 - Firestore `users`, `profesores` y `familias` ya limita campos, longitudes y
   timestamps en creacion/actualizacion propia.
 - Firestore delete protection activada.
+- Formularios publicos incorporan honeypot cliente para reducir spam basico
+  antes de escribir en Firestore.
 - PITR no activado para evitar coste no aprobado.

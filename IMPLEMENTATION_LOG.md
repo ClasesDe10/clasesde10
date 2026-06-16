@@ -63,6 +63,8 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - `contacto.html`: formulario real, telefono, canal preferido, consentimiento, estado accesible y tracking tras envio.
 - `para-padres.html`: campos de zona, canal, objetivo, frecuencia, inicio, presupuesto y disponibilidad.
 - `para-profesores.html`: campos de zona, canal, niveles, modalidad, anos, tarifa, verificacion y disponibilidad.
+- `contacto.html`, `para-padres.html`, `para-profesores.html`: honeypot
+  antispam basico sin friccion para usuarios reales.
 - `pages/registro.html`: consentimiento requerido y validacion antes de enviar.
 - `js/public-leads.js`: validacion, normalizacion y estados accesibles de boton.
 

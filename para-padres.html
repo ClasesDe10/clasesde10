@@ -274,6 +274,10 @@
       <div class="contact-form-card reveal">
         <div class="cf-title">📋 Solicitar profesor para mi hijo/a</div>
         <form class="cf-form" id="form-familia" method="post">
+          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+            <label for="pad-website">Website</label>
+            <input id="pad-website" name="website_url" type="text" tabindex="-1" autocomplete="off">
+          </div>
           <div class="cf-row">
             <div class="cf-field">
               <label for="pad-nombre">Tu nombre</label>
@@ -458,6 +462,7 @@ document.getElementById('form-familia').addEventListener('submit', async functio
   const inicio       = document.getElementById('pad-inicio').value.trim();
   const presupuesto  = document.getElementById('pad-presupuesto').value.trim();
   const disponibilidad = document.getElementById('pad-disponibilidad').value.trim();
+  const website_url = document.getElementById('pad-website').value.trim();
   const defaultText = 'Enviar solicitud →';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
   const detalles = [
@@ -469,7 +474,7 @@ document.getElementById('form-familia').addEventListener('submit', async functio
   ].filter(Boolean).join('\n');
 
   setButtonState(button, 'loading', 'Enviando...');
-  const { error } = await submitLead({
+  const { data, error } = await submitLead({
     tipo: 'familia',
     nombre,
     email,
@@ -477,12 +482,19 @@ document.getElementById('form-familia').addEventListener('submit', async functio
     perfil: 'familia',
     asunto: materia ? `Solicitud de profesor: ${materia}` : 'Solicitud de profesor',
     mensaje: detalles || materia,
+    website_url,
     metadata: { alumno, nivel, materia, modalidad, zona, canal, objetivo, frecuencia, inicio, presupuesto, consent_privacy: true },
   });
 
   if (error) {
     setButtonState(button, 'error', error.message || 'No se pudo enviar.');
     setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
+    return;
+  }
+
+  if (data?.spam) {
+    setButtonState(button, 'success', 'Solicitud enviada. Gracias.');
+    this.reset();
     return;
   }
 

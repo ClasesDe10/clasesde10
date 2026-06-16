@@ -223,6 +223,10 @@
         <div class="cf-title">Envíanos un mensaje</div>
         <p class="cf-subtitle">Para consultas generales, dudas sobre el proceso o cualquier otra pregunta.</p>
         <form class="cf-form" id="form-contacto" method="post">
+          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
+            <label for="con-website">Website</label>
+            <input id="con-website" name="website_url" type="text" tabindex="-1" autocomplete="off">
+          </div>
           <div class="cf-row">
             <div class="cf-field">
               <label for="con-nombre">Nombre</label>
@@ -333,11 +337,12 @@ document.getElementById('form-contacto').addEventListener('submit', async functi
   const perfil  = document.getElementById('con-perfil').value.trim();
   const asunto  = document.getElementById('con-asunto').value.trim();
   const mensaje = document.getElementById('con-mensaje').value.trim();
+  const website_url = document.getElementById('con-website').value.trim();
   const defaultText = 'Enviar mensaje →';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
 
   setButtonState(button, 'loading', 'Enviando...');
-  const { error } = await submitLead({
+  const { data, error } = await submitLead({
     tipo: 'contacto',
     nombre,
     email,
@@ -345,12 +350,19 @@ document.getElementById('form-contacto').addEventListener('submit', async functi
     perfil,
     asunto,
     mensaje,
+    website_url,
     metadata: { origen: 'contacto', canal, consent_privacy: true },
   });
 
   if (error) {
     setButtonState(button, 'error', error.message || 'No se pudo enviar.');
     setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
+    return;
+  }
+
+  if (data?.spam) {
+    setButtonState(button, 'success', 'Mensaje enviado. Gracias.');
+    this.reset();
     return;
   }
 

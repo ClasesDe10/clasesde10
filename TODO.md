@@ -35,6 +35,7 @@ Actualizado: 2026-06-16
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos`
 - [ ] Instalar Supabase CLI para validar migraciones y Edge Functions con runtime real.
 - [ ] Anadir antispam server-side para leads publicos: Turnstile, rate limit o Edge Function.
+- [x] Anadir honeypot cliente a formularios publicos.
 
 ## Prioridad 2 - Apps Script y Google Sheets legacy
 
