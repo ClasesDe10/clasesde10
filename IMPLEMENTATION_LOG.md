@@ -15,6 +15,8 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Creado `FIREBASE_ARCHITECTURE.md` con arquitectura objetivo Firebase.
 - Creados `firebase/firestore.rules`, `firebase/storage.rules`,
   `firebase/firestore.indexes.json` y `firebase.json`.
+- Creado `firebase/bootstrap-admin-user.mjs` para generar el primer
+  `users/{uid}` admin tras activar Firebase Auth.
 - Creado `.firebaserc` apuntando a `clasesde10-50add`.
 - Firestore `(default)` recreado en `eur3`.
 - Reglas e indices Firestore desplegados.

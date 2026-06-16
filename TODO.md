@@ -15,6 +15,7 @@ Actualizado: 2026-06-16
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
+- [x] Preparar script interno `firebase/bootstrap-admin-user.mjs`.
 - [x] Preparar adaptador frontend `js/firebase-auth.js` sin conectarlo aun a UI.
 - [ ] Definir/importar datos reales solo tras validar reglas Firebase.
 - [x] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.

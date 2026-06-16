@@ -18,8 +18,11 @@ Actualizado: 2026-06-16
 2. Crear el primer usuario admin:
    `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
 
-   Accion: crear usuario con email real. Despues copiar el `UID` y darselo a
-   Codex para crear `users/{uid}` con `role = admin`.
+   Accion: crear usuario con email real. Despues copiar el `UID`.
+
+   Con el UID, crear el perfil admin desde terminal:
+
+   `node firebase/bootstrap-admin-user.mjs <UID> <EMAIL> "Miguel"`
 
 3. Inicializar Storage:
    `https://console.firebase.google.com/u/0/project/clasesde10-50add/storage`

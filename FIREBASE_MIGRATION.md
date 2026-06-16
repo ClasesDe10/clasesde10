@@ -71,6 +71,7 @@ Archivos creados:
 - `firebase/storage.rules`
 - `firebase/firestore.indexes.json`
 - `firebase.json`
+- `firebase/bootstrap-admin-user.mjs`
 
 Decision: usar colecciones con IDs basados en `auth.uid` para `users`,
 `profesores` y `familias`. Firestore no tiene joins/RLS como Postgres; por eso
