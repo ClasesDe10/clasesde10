@@ -11,6 +11,7 @@ Actualizado: 2026-06-16
 | Firestore indexes | Desplegados |
 | Firestore delete protection | Activada |
 | Firestore PITR | Desactivado para evitar coste no aprobado |
+| Reglas Auth/perfiles | Endurecidas para `users`, `profesores` y `familias` |
 | Firebase Auth | Pendiente de inicializacion en consola |
 | Firebase Storage | Pendiente de inicializacion / posible Blaze |
 

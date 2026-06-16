@@ -45,3 +45,9 @@ La seguridad base es razonable si Supabase RLS esta correctamente desplegado. La
 - Meter antispam: Turnstile o Edge Function con rate limit por IP/email.
 - Migrar scripts inline para retirar `unsafe-inline`.
 
+# Actualizacion 2026-06-16
+
+- Firestore `users`, `profesores` y `familias` ya limita campos, longitudes y
+  timestamps en creacion/actualizacion propia.
+- Firestore delete protection activada.
+- PITR no activado para evitar coste no aprobado.

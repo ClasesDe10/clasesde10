@@ -113,6 +113,8 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Reglas Firestore desplegadas.
 - Indices Firestore desplegados.
 - Firestore delete protection activada.
+- Reglas de `users`, `profesores` y `familias` endurecidas antes de activar
+  Firebase Auth.
 - Importados 24 profesores validos/deduplicados desde Sheets.
 - Creado `importAudits/sheets_profesores_2026_06_16`.
 - Creado `importAudits/sheets_full_audit_2026_06_16` con auditoria agregada

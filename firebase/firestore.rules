@@ -85,6 +85,33 @@ service cloud.firestore {
         );
     }
 
+    function requiredString(field, minSize, maxSize) {
+      return request.resource.data[field] is string
+        && request.resource.data[field].size() >= minSize
+        && request.resource.data[field].size() <= maxSize;
+    }
+
+    function optionalString(field, maxSize) {
+      return !request.resource.data.keys().hasAny([field])
+        || request.resource.data[field] == null
+        || (
+          request.resource.data[field] is string
+          && request.resource.data[field].size() <= maxSize
+        );
+    }
+
+    function validClientTimestampsOnCreate() {
+      return request.resource.data.createdAt == request.time
+        && (
+          !request.resource.data.keys().hasAny(['updatedAt'])
+          || request.resource.data.updatedAt == request.time
+        );
+    }
+
+    function validClientUpdatedAt() {
+      return request.resource.data.updatedAt == request.time;
+    }
+
     function validPublicLeadMetadata() {
       return request.resource.data.metadata is map
           && request.resource.data.metadata.keys().hasOnly([
@@ -161,7 +188,12 @@ service cloud.firestore {
         && request.resource.data.keys().hasAll(['email', 'nombre', 'role', 'active', 'createdAt'])
         && request.resource.data.role in ['familia', 'profesor', 'alumno']
         && request.resource.data.active == true
-        && request.resource.data.email == request.auth.token.email;
+        && request.resource.data.email == request.auth.token.email
+        && requiredString('email', 3, 254)
+        && requiredString('nombre', 1, 80)
+        && optionalString('apellidos', 120)
+        && optionalString('telefono', 40)
+        && validClientTimestampsOnCreate();
     }
 
     function validUserSelfUpdate() {
@@ -171,9 +203,66 @@ service cloud.firestore {
           'telefono',
           'updatedAt'
         ])
+        && requiredString('nombre', 1, 80)
+        && optionalString('apellidos', 120)
+        && optionalString('telefono', 40)
+        && validClientUpdatedAt()
         && request.resource.data.email == resource.data.email
         && request.resource.data.role == resource.data.role
         && request.resource.data.active == resource.data.active;
+    }
+
+    function validRoleProfileCreate(uid, role) {
+      return isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'userUid',
+          'email',
+          'nombre',
+          'apellidos',
+          'telefono',
+          'active',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'userUid',
+          'email',
+          'nombre',
+          'active',
+          'status',
+          'createdAt'
+        ])
+        && request.resource.data.userUid == uid
+        && request.resource.data.email == request.auth.token.email
+        && requiredString('email', 3, 254)
+        && requiredString('nombre', 1, 80)
+        && optionalString('apellidos', 120)
+        && optionalString('telefono', 40)
+        && request.resource.data.active == true
+        && request.resource.data.status in (
+          role == 'profesor'
+            ? ['pendiente_revision']
+            : ['activo']
+        )
+        && validClientTimestampsOnCreate();
+    }
+
+    function validRoleProfileSelfUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'nombre',
+          'apellidos',
+          'telefono',
+          'updatedAt'
+        ])
+        && requiredString('nombre', 1, 80)
+        && optionalString('apellidos', 120)
+        && optionalString('telefono', 40)
+        && validClientUpdatedAt()
+        && request.resource.data.userUid == resource.data.userUid
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.status == resource.data.status;
     }
 
     function isFamilyParticipant(data) {
@@ -211,14 +300,16 @@ service cloud.firestore {
     }
 
     match /profesores/{uid} {
-      allow create: if isAdmin() || (isOwner(uid) && hasRole('profesor'));
-      allow read, update: if isAdmin() || isOwner(uid);
+      allow create: if isAdmin() || (hasRole('profesor') && validRoleProfileCreate(uid, 'profesor'));
+      allow read: if isAdmin() || isOwner(uid);
+      allow update: if isAdmin() || (isOwner(uid) && validRoleProfileSelfUpdate());
       allow delete: if isAdmin();
     }
 
     match /familias/{uid} {
-      allow create: if isAdmin() || (isOwner(uid) && hasRole('familia'));
-      allow read, update: if isAdmin() || isOwner(uid);
+      allow create: if isAdmin() || (hasRole('familia') && validRoleProfileCreate(uid, 'familia'));
+      allow read: if isAdmin() || isOwner(uid);
+      allow update: if isAdmin() || (isOwner(uid) && validRoleProfileSelfUpdate());
       allow delete: if isAdmin();
     }
 

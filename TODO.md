@@ -11,6 +11,7 @@ Actualizado: 2026-06-16
 - [ ] Crear Firebase Storage.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/storage`
 - [x] Publicar reglas `firebase/firestore.rules`.
+- [x] Endurecer reglas Firestore para perfiles antes de activar Auth.
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
