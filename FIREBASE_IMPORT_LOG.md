@@ -23,6 +23,8 @@ Destino:
 
 - Firestore `profesores`
 - Firestore `importAudits/sheets_profesores_2026_06_16`
+- Firestore `importAudits/sheets_full_audit_2026_06_16`
+- Firestore `legacyImports/sheets_export_2026_06_16`
 
 Resultado:
 
@@ -37,6 +39,15 @@ Decision: solo se importaron profesores con email valido y deduplicado. Los
 documentos quedan como `status = pendiente_revision` y `active = false` para
 que ningun dato legacy quede operativo sin revision humana.
 
+## Archivo legacy creado
+
+Se creo un paquete privado local fuera del repo y fuera del publish root:
+
+- `C:\Users\migue\Downloads\CD10\migration-private\sheets-2026-06-16`
+
+Contiene candidatos de revision para familias/alumnos y resumen de auditoria.
+No se sube a GitHub ni a Netlify porque contiene datos personales legacy.
+
 ## Datos no importados
 
 - `FAMILIAS`: contiene duplicados masivos y pocos datos de contacto reales.
@@ -46,6 +57,11 @@ que ningun dato legacy quede operativo sin revision humana.
 - `LOG PARSEO`: archivo historico, no dato operativo.
 - `MATCHING LOG`: sin confirmaciones, no apto para crear asignaciones reales.
 - `LOG WEB`: test/archivo historico.
+
+Se dejo constancia agregada en Firestore, pero no se importo PII cruda a
+colecciones vivas. Motivo: `FAMILIAS` tiene 32 emails unicos validos frente a
+5427 filas duplicadas, y `ALUMNOS` requiere reconstruir relaciones reales antes
+de crear documentos operativos.
 
 ## Pendientes bloqueados
 

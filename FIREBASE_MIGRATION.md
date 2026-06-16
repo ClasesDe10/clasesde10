@@ -114,6 +114,10 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Indices Firestore desplegados.
 - Importados 24 profesores validos/deduplicados desde Sheets.
 - Creado `importAudits/sheets_profesores_2026_06_16`.
+- Creado `importAudits/sheets_full_audit_2026_06_16` con auditoria agregada
+  completa del Excel sin PII cruda.
+- Creado `legacyImports/sheets_export_2026_06_16` con manifiesto del archivo
+  historico privado.
 - Apps Script remoto cerrado y sustituido por funciones no-op.
 - Formularios publicos migrados de Supabase a Firestore `leadsPublicos`.
 - Reglas de `leadsPublicos` validadas con lead tecnico temporal creado y borrado.

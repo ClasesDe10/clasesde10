@@ -42,7 +42,8 @@ Actualizado: 2026-06-16
 - [x] Deduplicar `PROFESORES` por email y descartar emails invalidos.
 - [x] Importar profesores validos a Firestore como inactivos/pendientes de revision.
 - [x] Apagar Apps Script remoto como sistema operativo.
-- [ ] Separar archivo historico de `LOG PARSEO`, `MATCHING LOG` y `LOG WEB`.
+- [x] Crear manifiesto Firestore y paquete privado de archivo legacy Sheets.
+- [ ] Subir archivo historico a Firebase Storage cuando Storage exista.
 - [ ] Revisar manualmente subconjunto real de `FAMILIAS` y `ALUMNOS`.
 - [ ] Decidir fecha de apagado de:
   - `procesarEmailsNuevos`

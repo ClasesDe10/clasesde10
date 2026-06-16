@@ -25,6 +25,21 @@ Archivo auditado localmente:
 | `MATCHING LOG` | 5519 | Archivo historico o ultimo match util, no log completo caliente |
 | `LOG WEB` | 3 | Descartable o archivo historico |
 
+## Auditoria agregada escrita en Firebase
+
+- Firestore `importAudits/sheets_full_audit_2026_06_16`: auditoria agregada
+  completa sin PII cruda.
+- Firestore `legacyImports/sheets_export_2026_06_16`: manifiesto del archivo
+  privado legacy.
+- Paquete privado local, no versionado y fuera del publish root:
+  `C:\Users\migue\Downloads\CD10\migration-private\sheets-2026-06-16`
+
+Artefactos privados creados:
+
+- `sheets_audit_summary.json`
+- `familias_review_candidates.csv`
+- `alumnos_review_candidates.jsonl`
+
 ## Hallazgos
 
 - `PROFESORES` es la unica hoja con volumen pequeno y valor operativo claro.
@@ -95,6 +110,9 @@ en dos capas:
 
 - Firestore `profesores`: 24 documentos importados.
 - Firestore `importAudits/sheets_profesores_2026_06_16`: auditoria creada.
+- Firestore `importAudits/sheets_full_audit_2026_06_16`: auditoria agregada
+  completa creada.
+- Firestore `legacyImports/sheets_export_2026_06_16`: manifiesto legacy creado.
 - Se omitieron 1 email invalido y 3 duplicados por email.
 - Los profesores importados quedan `active = false` y
   `status = pendiente_revision`.

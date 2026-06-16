@@ -35,6 +35,10 @@ Actualizado: 2026-06-16
   `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2Fprofesores`
 - Auditorias de importacion:
   `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FimportAudits`
+- Auditoria completa Sheets:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FimportAudits~2Fsheets_full_audit_2026_06_16`
+- Manifiesto legacy Sheets:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FlegacyImports~2Fsheets_export_2026_06_16`
 - Reglas Firestore:
   `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/rules`
 - Indices Firestore:

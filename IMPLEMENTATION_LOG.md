@@ -28,6 +28,12 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
   manteniendo login/registro productivos en Supabase hasta inicializar Auth.
 - Auditado `clasesde10-sheets-export.xlsx`; documentado en
   `SHEETS_FIREBASE_AUDIT.md` que Google Sheets no debe migrarse 1:1.
+- Creada auditoria agregada en Firestore
+  `importAudits/sheets_full_audit_2026_06_16`.
+- Creado manifiesto legacy en Firestore
+  `legacyImports/sheets_export_2026_06_16`.
+- Creado paquete privado local de revision en
+  `C:\Users\migue\Downloads\CD10\migration-private\sheets-2026-06-16`.
 
 ### Apps Script legacy
 
