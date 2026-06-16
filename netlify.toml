@@ -1,7 +1,7 @@
 [build]
   publish = "."
 
-# ── DOMINIO CANÓNICO ─────────────────────────────────────────────
+# Dominio canonico
 
 [[redirects]]
   from = "https://www.clasesde10.com/*"
@@ -21,8 +21,8 @@
   status = 301
   force = true
 
-# ── BLOQUEAR ARCHIVOS SENSIBLES ──────────────────────────────────
-# Impedir acceso público a migraciones SQL, scripts y docs internos
+# Bloquear archivos sensibles
+# Impedir acceso publico a migraciones SQL, scripts y docs internos
 
 [[redirects]]
   from = "/supabase/*"
@@ -72,7 +72,181 @@
   status = 404
   force = true
 
-# ── ALIAS DE RUTA AMIGABLES ──────────────────────────────────────
+[[redirects]]
+  from = "/ARCHITECTURE.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/AUDIT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/DECISIONS.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/TODO.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ERRORES.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/IMPLEMENTATION_LOG.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ARCHITECTURE_FULL.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/SYSTEM_MAP.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/TECHNICAL_DEBT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/SECURITY_AUDIT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/SEO_MASTERPLAN.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/UX_AUDIT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/PERFORMANCE_AUDIT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/CRITICAL_FINDINGS.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/BUSINESS_ANALYSIS.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ROADMAP_12_MONTHS.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ALTERNATIVES_ANALYSIS.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/COMPETITOR_TECH_REVIEW.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/SCALABILITY_REPORT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/BUSINESS_MODEL_REVIEW.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/AUTOMATION_MASTERPLAN.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ARCHITECTURE_V2.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ARCHITECTURE_V3.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/ARCHITECTURE_V4.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/FIVE_YEAR_ROADMAP.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/DECISION_MATRIX.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.claude/*"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.github/*"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/js/supabase-client.example.js"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+# Alias de rutas amigables
 
 [[redirects]]
   from = "/dashboard"
@@ -89,7 +263,7 @@
   to   = "/pages/registro.html"
   status = 301
 
-# ── HEADERS DE SEGURIDAD GLOBALES ────────────────────────────────
+# Headers de seguridad globales
 
 [[headers]]
   for = "/*"
@@ -100,9 +274,9 @@
     Referrer-Policy           = "strict-origin-when-cross-origin"
     Permissions-Policy        = "camera=(), microphone=(), geolocation=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
-    Content-Security-Policy   = "default-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com https://clasesde10.wordpress.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.googletagmanager.com https://connect.facebook.net https://clarity.ms; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com; frame-ancestors 'none';"
+    Content-Security-Policy   = "default-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.googletagmanager.com https://connect.facebook.net https://clarity.ms https://www.clarity.ms; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://region1.google-analytics.com https://*.clarity.ms https://www.facebook.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests;"
 
-# ── NO INDEXAR DASHBOARDS ────────────────────────────────────────
+# No indexar dashboards
 
 [[headers]]
   for = "/pages/dashboard/*"
@@ -122,7 +296,13 @@
     Cache-Control = "no-store"
     X-Robots-Tag  = "noindex, nofollow"
 
-# ── CACHE DE ASSETS ESTÁTICOS ────────────────────────────────────
+[[headers]]
+  for = "/pages/reset-password.html"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag  = "noindex, nofollow"
+
+# Cache de assets estaticos
 
 [[headers]]
   for = "/css/*"
@@ -139,7 +319,34 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# ── CACHE MODERADO PARA HTML PÚBLICAS ────────────────────────────
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+
+[[headers]]
+  for = "/service-worker.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/offline.html"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+    X-Robots-Tag  = "noindex, nofollow"
+
+[[headers]]
+  for = "/robots.txt"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+
+[[headers]]
+  for = "/sitemap.xml"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+
+# Cache moderado para HTML publicas
 
 [[headers]]
   for = "/clases-particulares/*"

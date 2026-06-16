@@ -8,15 +8,24 @@
 <meta name="description" content="En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad. Primaria, ESO, Bachillerato e idiomas.">
 <link rel="canonical" href="https://clasesde10.com/">
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="ClasesDe10 — Conecta con los profesores que marcan la diferencia">
 <meta property="og:description" content="En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad. Primaria, ESO, Bachillerato e idiomas.">
 <meta property="og:url" content="https://clasesde10.com/">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="twitter:title" content="ClasesDe10 — Conecta con los profesores que marcan la diferencia">
+<meta name="twitter:description" content="En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad. Primaria, ESO, Bachillerato e idiomas.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
 /* ── HERO ── */
@@ -230,13 +239,14 @@
   .cta-card { padding: 38px 28px; }
 }
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":["EducationalOrganization","LocalBusiness"],"@id":"https://clasesde10.com/#organization","name":"ClasesDe10","url":"https://clasesde10.com/","logo":"https://clasesde10.com/assets/img/logo-512.png","image":"https://clasesde10.com/assets/img/logo-512.png","email":"contacto.clasesde10@gmail.com","description":"En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad. Primaria, ESO, Bachillerato e idiomas.","priceRange":"€€","address":{"@type":"PostalAddress","addressLocality":"Madrid","addressRegion":"Comunidad de Madrid","addressCountry":"ES"},"areaServed":{"@type":"City","name":"Madrid"},"sameAs":[]},{"@type":"WebSite","@id":"https://clasesde10.com/#website","name":"ClasesDe10","url":"https://clasesde10.com/","inLanguage":"es-ES","publisher":{"@id":"https://clasesde10.com/#organization"}}]}</script>
 </head>
 <body>
 
 <!-- NAV -->
 <nav id="mainNav">
   <a href="index.html" class="nav-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
@@ -246,7 +256,7 @@
     <li><a href="clases-particulares/">Clases</a></li>
     <li><a href="sobre-nosotros.html">Nosotros</a></li>
     <li><a href="contacto.html">Contactar</a></li>
-    <li><a href="pages/login.html" style="color:rgba(255,255,255,.7);font-size:.84rem;font-weight:500;padding:8px 14px;border-radius:6px;transition:color .2s,background .2s" onmouseover="this.style.background='rgba(255,255,255,.09)';this.style.color='#fff'" onmouseout="this.style.background='';this.style.color='rgba(255,255,255,.7)'">Acceder</a></li>
+    <li><a href="pages/login.html" class="nav-login-link">Acceder</a></li>
     <li><a href="pages/registro.html" class="nav-cta">Solicitar profesor</a></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menú móvil">
@@ -254,22 +264,22 @@
   </button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html"  onclick="closeMobile()">Cómo funciona</a>
-  <a href="para-padres.html"    onclick="closeMobile()">Para familias</a>
-  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
-  <a href="clases-particulares/" onclick="closeMobile()">Clases particulares</a>
-  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
-  <a href="pages/login.html" onclick="closeMobile()">Acceder</a>
-  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
+  <a href="para-padres.html" data-mobile-close>Para familias</a>
+  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
+  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
+  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
+  <a href="pages/login.html" data-mobile-close>Acceder</a>
+  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
 </div>
 
 <!-- HERO -->
 <section id="hero">
   <div class="hero-badge">Madrid · Presencial &amp; Online</div>
   <img class="hero-logo-img"
-       src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png"
+       src="/assets/img/logo-192.png"
        alt="ClasesDe10">
-  <h1 class="hero-title">Clases particulares que<br><em>marcan la diferencia</em></h1>
+  <h1 class="hero-title">Clases particulares que <br><em>marcan la diferencia</em></h1>
   <p class="hero-sub">Conectamos familias con profesores de confianza</p>
   <p class="hero-desc">En ClasesDe10 unimos a familias con profesores particulares para ofrecer un aprendizaje personalizado y de calidad, sin complicaciones ni intermediarios.</p>
   <div class="hero-pills">
@@ -422,7 +432,7 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España. Aprendizaje personalizado, confianza y calidad.</p>
     </div>
@@ -459,9 +469,11 @@
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
+document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.target.closest('[data-mobile-close]')) closeMobile(); });
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

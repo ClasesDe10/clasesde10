@@ -206,7 +206,6 @@ CREATE INDEX idx_clases_alumno   ON clases(alumno_id);
 CREATE INDEX idx_clases_profesor ON clases(profesor_id);
 CREATE INDEX idx_clases_fecha    ON clases(fecha DESC);
 CREATE INDEX idx_clases_estado   ON clases(estado);
-CREATE INDEX idx_clases_mes      ON clases(date_trunc('month', fecha));
 
 -- ───────────────────────────────────────────────────────────────
 -- TABLA PAGOS
@@ -625,7 +624,7 @@ INSERT INTO configuracion (clave, valor, descripcion) VALUES
   ('comision_defecto',      '20',                          'Comisión estándar (%) de ClasesDe10'),
   ('precio_hora_minimo',    '15',                          'Tarifa mínima por hora (€)'),
   ('precio_hora_maximo',    '60',                          'Tarifa máxima por hora (€)'),
-  ('email_soporte',         'hola@clasesde10.es',          'Email de contacto soporte'),
+  ('email_soporte',         'contacto.clasesde10@gmail.com', 'Email de contacto soporte'),
   ('whatsapp_soporte',      '34600000000',                 'WhatsApp soporte'),
   ('dias_aviso_clase',      '1',                           'Días de antelación para aviso de clase'),
   ('max_docs_por_usuario',  '10',                          'Máximo documentos por usuario'),

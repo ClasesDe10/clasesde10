@@ -60,11 +60,11 @@ En Supabase → **Authentication** → **Settings**:
 ### Email
 - **Enable email confirmations:** ✅ Sí
 - **Secure email change:** ✅ Sí
-- **Site URL:** `https://www.clasesde10.es`
+- **Site URL:** `https://clasesde10.com`
 - **Redirect URLs permitidas:**
   ```
-  https://www.clasesde10.es/pages/login.html
-  https://www.clasesde10.es/pages/reset-password.html
+  https://clasesde10.com/pages/login.html
+  https://clasesde10.com/pages/reset-password.html
   http://localhost:3000/pages/login.html
   ```
 
@@ -116,7 +116,7 @@ Ejecutar en el **SQL Editor** de Supabase (tras registrarte con el email de admi
 
 UPDATE usuarios
 SET rol = 'admin'
-WHERE email = 'tu-email-admin@clasesde10.es';
+WHERE email = 'tu-email-admin@clasesde10.com';
 ```
 
 ---
@@ -164,7 +164,7 @@ Esto genera las 11 páginas de materias en Madrid.
 
 # 4. Dominio personalizado:
 # Netlify → Domain management → Add custom domain
-# → www.clasesde10.es
+# → clasesde10.com
 # → Añadir DNS en tu proveedor (registro A o CNAME)
 ```
 
@@ -228,7 +228,8 @@ CD10/web/
 ├── css/
 │   ├── style.css                 ← Estilos web pública
 │   ├── dashboard.css             ← Estilos dashboards
-│   └── shared.js                 ← Nav/footer compartido
+│   ├── style.css                 ← Estilos públicos globales
+│   └── dashboard.css             ← Estilos de paneles
 │
 ├── js/
 │   ├── supabase-client.js        ← Cliente Supabase (EDITAR con tus keys)
@@ -236,7 +237,8 @@ CD10/web/
 │   ├── utils.js                  ← Utilidades: toast, modal, fecha, CSV...
 │   ├── calendario.js             ← Componente calendario
 │   ├── analytics.js              ← GA4, Clarity, Meta Pixel
-│   └── seo-components.js         ← Schema.org, OpenGraph
+│   ├── nav.js                    ← Nav/footer compartido para páginas SEO
+│   └── pwa.js                    ← Registro PWA e instalación
 │
 ├── pages/
 │   ├── login.html                ← Login

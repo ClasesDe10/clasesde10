@@ -30,7 +30,7 @@
   const navHTML = `
 <nav id="mainNav" style="position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 5vw;height:70px;background:rgba(15,31,61,0.97);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,0.07);transition:box-shadow .3s">
   <a href="${r('index.html')}" class="nav-logo" style="display:flex;align-items:center;gap:10px;text-decoration:none">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png"
+    <img src="/assets/img/logo-192.png"
          alt="ClasesDe10" style="height:44px;width:44px;border-radius:10px;object-fit:cover">
     <span style="font-family:'Playfair Display',serif;font-size:1.35rem;font-weight:700;color:#fff">
       Clases<span style="color:#e8a030">De10</span>
@@ -53,22 +53,22 @@
 </nav>
 
 <div id="mobileMenu" style="display:none;position:fixed;top:70px;left:0;right:0;bottom:0;z-index:300;background:#0f1f3d;flex-direction:column;padding:32px 5vw;gap:6px;overflow-y:auto">
-  <a href="${r('como-funciona.html')}"   onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Cómo funciona</a>
-  <a href="${r('para-padres.html')}"     onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para familias</a>
-  <a href="${r('para-profesores.html')}" onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para profesores</a>
-  <a href="${r('clases-particulares/')}" onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Clases particulares</a>
-  <a href="${r('contacto.html')}"        onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Contactar</a>
-  <a href="${r('pages/login.html')}"     onclick="document.getElementById('mobileMenu').style.display='none'" style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Acceder</a>
+  <a href="${r('como-funciona.html')}"   data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Cómo funciona</a>
+  <a href="${r('para-padres.html')}"     data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para familias</a>
+  <a href="${r('para-profesores.html')}" data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para profesores</a>
+  <a href="${r('clases-particulares/')}" data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Clases particulares</a>
+  <a href="${r('contacto.html')}"        data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Contactar</a>
+  <a href="${r('pages/login.html')}"     data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Acceder</a>
   <a href="${r('pages/registro.html')}"  style="display:inline-block;margin-top:12px;background:#e8a030;color:#0f1f3d;font-weight:700;font-size:1rem;padding:14px 20px;border-radius:8px;text-align:center;text-decoration:none">Solicitar profesor gratis</a>
 </div>`;
 
   // ── FOOTER HTML ──────────────────────────────────────────────────
   const footerHTML = `
-<footer style="background:#0f1f3d;color:rgba(255,255,255,.7);padding:52px 5vw 0">
-  <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:40px;max-width:1100px;margin:0 auto;padding-bottom:40px">
+<footer style="background:#0f1f3d;color:rgba(255,255,255,.7);padding:52px 5vw 0;overflow-wrap:anywhere">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:40px;max-width:1100px;margin:0 auto;padding-bottom:40px">
     <div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png"
+        <img src="/assets/img/logo-192.png"
              style="width:40px;height:40px;border-radius:10px;object-fit:cover" alt="ClasesDe10">
         <span style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;color:#fff">
           Clases<span style="color:#e8a030">De10</span>
@@ -151,6 +151,11 @@
     if (hamburger && mobileMenu) {
       hamburger.addEventListener('click', () => {
         mobileMenu.style.display = mobileMenu.style.display === 'flex' ? 'none' : 'flex';
+      });
+      mobileMenu.addEventListener('click', (event) => {
+        if (event.target.closest('[data-mobile-close]')) {
+          mobileMenu.style.display = 'none';
+        }
       });
     }
 

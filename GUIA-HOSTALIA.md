@@ -1,5 +1,5 @@
 # 📋 Guía para subir ClasesDe10 a Hostalia
-## Dominio: clasesde10.es
+## Dominio: clasesde10.com
 
 ---
 
@@ -15,7 +15,7 @@ clasesde10/
 ├── contacto.html            ← Contacto
 └── css/
     ├── style.css            ← Estilos globales
-    └── shared.js            ← (referencia, no se usa directamente)
+    └── style.css            ← estilos globales
 ```
 
 ---
@@ -33,7 +33,7 @@ clasesde10/
 1. Dentro del panel, busca **"Administrador de archivos"** o **"File Manager"**.
    *(También puedes usar la sección "cPanel" → "Administrador de archivos")*
 2. Navega hasta la carpeta **`public_html`**.
-   > ⚠️ Esta es la carpeta raíz de tu dominio. Todo lo que subas aquí será accesible en clasesde10.es
+   > ⚠️ Esta es la carpeta raíz de tu dominio. Todo lo que subas aquí será accesible en clasesde10.com
 
 ---
 
@@ -48,7 +48,7 @@ clasesde10/
 1. En Hostalia, busca los datos FTP: servidor, usuario y contraseña.
    *(Panel → Hosting → FTP o "Cuentas FTP")*
 2. Conéctate con FileZilla a:
-   - **Servidor:** ftp.clasesde10.es (o el que te indique Hostalia)
+   - **Servidor:** ftp.clasesde10.com (o el que te indique Hostalia)
    - **Puerto:** 21
 3. Arrastra todos los archivos de la carpeta `clasesde10/` a `public_html/`.
 
@@ -66,13 +66,13 @@ public_html/
 ├── contacto.html
 └── css/
     ├── style.css
-    └── shared.js
+    └── style.css
 ```
-> ✅ Si abres clasesde10.es en el navegador y ves la web → ¡Todo correcto!
+> ✅ Si abres clasesde10.com en el navegador y ves la web → ¡Todo correcto!
 
 ---
 
-### PASO 5 — Apuntar el dominio clasesde10.es al hosting
+### PASO 5 — Apuntar el dominio clasesde10.com al hosting
 Si el dominio ya está registrado en Hostalia con el mismo plan, es automático.
 
 Si el dominio está en otro registrador (Dondominio, OVH, etc.):
@@ -84,7 +84,7 @@ Si el dominio está en otro registrador (Dondominio, OVH, etc.):
 
 ### PASO 6 — Activar HTTPS (SSL gratuito)
 1. En el panel de Hostalia, busca **"SSL"** o **"Certificado SSL"**.
-2. Activa el certificado **Let's Encrypt** (gratuito) para `clasesde10.es` y `www.clasesde10.es`.
+2. Activa el certificado **Let's Encrypt** (gratuito) para `clasesde10.com` y `clasesde10.com`.
 3. Una vez activo, activa la opción **"Redirigir HTTP a HTTPS"** si está disponible.
    *(Si no está disponible, se puede hacer con un archivo .htaccess — ver abajo)*
 
@@ -103,7 +103,7 @@ RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Redirigir www a sin www
 RewriteCond %{HTTP_HOST} ^www\.clasesde10\.es [NC]
-RewriteRule ^(.*)$ https://clasesde10.es/$1 [L,R=301]
+RewriteRule ^(.*)$ https://clasesde10.com/$1 [L,R=301]
 
 # Página de error 404
 ErrorDocument 404 /index.html
@@ -114,11 +114,11 @@ ErrorDocument 404 /index.html
 ## ✅ CHECKLIST FINAL
 
 - [ ] Archivos subidos a `public_html/` (no en subcarpeta)
-- [ ] `css/style.css` accesible en `clasesde10.es/css/style.css`
+- [ ] `css/style.css` accesible en `clasesde10.com/css/style.css`
 - [ ] El dominio apunta al hosting de Hostalia
 - [ ] SSL activado (https:// funciona)
 - [ ] Redirección http→https activa
-- [ ] Abre `clasesde10.es` en el navegador y se ve la web
+- [ ] Abre `clasesde10.com` en el navegador y se ve la web
 - [ ] Comprueba que los menús de navegación funcionan
 - [ ] Comprueba que se ve bien en el móvil
 
@@ -153,4 +153,4 @@ Para activarlo sin programación backend, usa **Formspree** (gratis):
 
 ---
 
-*Guía preparada para ClasesDe10 · clasesde10.es*
+*Guía preparada para ClasesDe10 · clasesde10.com*

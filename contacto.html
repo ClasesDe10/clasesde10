@@ -7,15 +7,24 @@
 <meta name="description" content="Contacta con ClasesDe10 por email, WhatsApp o formulario. Estamos aquí para ayudarte a encontrar tu profesor o tus alumnos.">
 <link rel="canonical" href="https://clasesde10.com/contacto.html">
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Contacto — ClasesDe10">
 <meta property="og:description" content="Contacta con ClasesDe10 por email, WhatsApp o formulario.">
 <meta property="og:url" content="https://clasesde10.com/contacto.html">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="twitter:title" content="Contacto — ClasesDe10">
+<meta name="twitter:description" content="Contacta con ClasesDe10 por email, WhatsApp o formulario. Estamos aquí para ayudarte a encontrar tu profesor o tus alumnos.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
 .contact-section { padding: 90px 0; background: var(--cream); }
@@ -122,12 +131,13 @@
   .contact-form-card { padding: 32px 24px; }
 }
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Contacto","item":"https://clasesde10.com/contacto.html"}]},{"@type":"ContactPage","name":"Contacto — ClasesDe10","description":"Contacta con ClasesDe10 por email, WhatsApp o formulario. Estamos aquí para ayudarte a encontrar tu profesor o tus alumnos.","url":"https://clasesde10.com/contacto.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}},{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","email":"contacto.clasesde10@gmail.com","contactPoint":{"@type":"ContactPoint","contactType":"customer support","email":"contacto.clasesde10@gmail.com","areaServed":"ES","availableLanguage":"Spanish"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
   <a href="index.html" class="nav-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
@@ -141,18 +151,18 @@
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" onclick="closeMobile()">Cómo funciona</a>
-  <a href="para-padres.html" onclick="closeMobile()">Para familias</a>
-  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
-  <a href="clases-particulares/" onclick="closeMobile()">Clases particulares</a>
-  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
-  <a href="pages/login.html" onclick="closeMobile()">Acceder</a>
-  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
+  <a href="para-padres.html" data-mobile-close>Para familias</a>
+  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
+  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
+  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
+  <a href="pages/login.html" data-mobile-close>Acceder</a>
+  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
 </div>
 
 <header class="page-header">
   <span class="section-label">Hablemos</span>
-  <h1>¿Tienes alguna pregunta?<br><em>Estamos aquí.</em></h1>
+  <h1>¿Tienes alguna pregunta? <br><em>Estamos aquí.</em></h1>
   <p>Escríbenos por email, WhatsApp o el formulario. Una persona real te responde, sin bots ni esperas largas.</p>
 </header>
 
@@ -212,20 +222,35 @@
       <div class="contact-form-card reveal">
         <div class="cf-title">Envíanos un mensaje</div>
         <p class="cf-subtitle">Para consultas generales, dudas sobre el proceso o cualquier otra pregunta.</p>
-        <div class="cf-form">
+        <form class="cf-form" id="form-contacto" method="post">
           <div class="cf-row">
             <div class="cf-field">
               <label for="con-nombre">Nombre</label>
-              <input id="con-nombre" type="text" placeholder="Tu nombre">
+              <input id="con-nombre" name="nombre" type="text" placeholder="Tu nombre" autocomplete="name" maxlength="160" required>
             </div>
             <div class="cf-field">
               <label for="con-email">Email</label>
-              <input id="con-email" type="email" placeholder="tu@email.com">
+              <input id="con-email" name="email" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
+            </div>
+          </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label for="con-telefono">Teléfono / WhatsApp</label>
+              <input id="con-telefono" name="telefono" type="tel" placeholder="+34 600 000 000" autocomplete="tel" maxlength="40">
+            </div>
+            <div class="cf-field">
+              <label for="con-canal">Canal preferido</label>
+              <select id="con-canal" name="canal">
+                <option value="">Selecciona</option>
+                <option>Email</option>
+                <option>WhatsApp</option>
+                <option>Llamada</option>
+              </select>
             </div>
           </div>
           <div class="cf-field">
             <label for="con-perfil">Eres</label>
-            <select id="con-perfil">
+            <select id="con-perfil" name="perfil">
               <option value="">Selecciona tu perfil</option>
               <option>Padre / Madre buscando profesor</option>
               <option>Profesor/a buscando alumnos</option>
@@ -234,15 +259,19 @@
           </div>
           <div class="cf-field">
             <label for="con-asunto">Asunto</label>
-            <input id="con-asunto" type="text" placeholder="¿En qué podemos ayudarte?">
+            <input id="con-asunto" name="asunto" type="text" placeholder="¿En qué podemos ayudarte?" maxlength="180" required>
           </div>
           <div class="cf-field">
             <label for="con-mensaje">Mensaje</label>
-            <textarea id="con-mensaje" placeholder="Cuéntanos tu situación: asignatura, nivel, zona, disponibilidad... Cuanto más nos cuentes, mejor podremos ayudarte."></textarea>
+            <textarea id="con-mensaje" name="mensaje" maxlength="3000" placeholder="Cuéntanos tu situación: asignatura, nivel, zona, disponibilidad... Cuanto más nos cuentes, mejor podremos ayudarte."></textarea>
           </div>
-          <button class="cf-submit" id="submitBtn">Enviar mensaje →</button>
+          <label class="cf-check" for="con-privacidad">
+            <input id="con-privacidad" name="privacidad" type="checkbox" required>
+            <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para responderme.</span>
+          </label>
+          <button class="cf-submit" id="submitBtn" type="submit">Enviar mensaje →</button>
           <p class="cf-note">🔐 Tus datos son confidenciales · Solo usados para responderte</p>
-        </div>
+        </form>
       </div>
 
     </div>
@@ -252,7 +281,7 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
@@ -289,37 +318,51 @@
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
+document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.target.closest('[data-mobile-close]')) closeMobile(); });
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
-document.getElementById('submitBtn').addEventListener('click', async function(){
+document.getElementById('form-contacto').addEventListener('submit', async function(e){
+  e.preventDefault();
+  if (!this.reportValidity()) return;
+  const button = document.getElementById('submitBtn');
   const nombre  = document.getElementById('con-nombre').value.trim();
   const email   = document.getElementById('con-email').value.trim();
+  const telefono = document.getElementById('con-telefono').value.trim();
+  const canal   = document.getElementById('con-canal').value.trim();
   const perfil  = document.getElementById('con-perfil').value.trim();
   const asunto  = document.getElementById('con-asunto').value.trim();
   const mensaje = document.getElementById('con-mensaje').value.trim();
   const defaultText = 'Enviar mensaje →';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
 
-  setButtonState(this, 'loading', 'Enviando...');
+  setButtonState(button, 'loading', 'Enviando...');
   const { error } = await submitLead({
     tipo: 'contacto',
     nombre,
     email,
+    telefono,
     perfil,
     asunto,
     mensaje,
-    metadata: { origen: 'contacto' },
+    metadata: { origen: 'contacto', canal, consent_privacy: true },
   });
 
   if (error) {
-    setButtonState(this, 'error', error.message || 'No se pudo enviar.');
-    setTimeout(() => setButtonState(this, 'idle', defaultText), 2600);
+    setButtonState(button, 'error', error.message || 'No se pudo enviar.');
+    setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
     return;
   }
 
-  setButtonState(this, 'success', '✅ Mensaje enviado — ¡gracias, te respondemos pronto!');
+  try {
+    const { trackContacto } = await import('./js/analytics.js');
+    trackContacto('contacto_publico');
+  } catch (_) {}
+
+  setButtonState(button, 'success', '✅ Mensaje enviado — ¡gracias, te respondemos pronto!');
+  this.reset();
 });
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

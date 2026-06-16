@@ -190,18 +190,26 @@ const plantilla = (p) => `<!DOCTYPE html>
 <title>Clases Particulares de ${p.titulo} en Madrid | ClasesDe10</title>
 <meta name="description" content="${p.descripcion}">
 <meta name="keywords" content="${p.keywords_meta}">
-<link rel="canonical" href="https://www.clasesde10.es/clases-particulares/${p.slug}.html">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="canonical" href="https://clasesde10.com/clases-particulares/${p.slug}.html">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Clases Particulares de ${p.titulo} en Madrid | ClasesDe10">
 <meta property="og:description" content="${p.descripcion}">
-<meta property="og:url" content="https://www.clasesde10.es/clases-particulares/${p.slug}.html">
+<meta property="og:url" content="https://clasesde10.com/clases-particulares/${p.slug}.html">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Clases Particulares de ${p.titulo} en Madrid | ClasesDe10">
 <meta name="twitter:description" content="${p.descripcion}">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <link rel="stylesheet" href="../css/style.css">
 <script type="application/ld+json">
 {
@@ -210,16 +218,16 @@ const plantilla = (p) => `<!DOCTYPE html>
     {
       "@type": "BreadcrumbList",
       "itemListElement": [
-        {"@type":"ListItem","position":1,"name":"Inicio","item":"https://www.clasesde10.es/"},
-        {"@type":"ListItem","position":2,"name":"Clases particulares","item":"https://www.clasesde10.es/clases-particulares/"},
-        {"@type":"ListItem","position":3,"name":"${p.titulo} Madrid","item":"https://www.clasesde10.es/clases-particulares/${p.slug}.html"}
+        {"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},
+        {"@type":"ListItem","position":2,"name":"Clases particulares","item":"https://clasesde10.com/clases-particulares/"},
+        {"@type":"ListItem","position":3,"name":"${p.titulo} Madrid","item":"https://clasesde10.com/clases-particulares/${p.slug}.html"}
       ]
     },
     {
       "@type": "Course",
       "name": "Clases Particulares de ${p.titulo} en Madrid",
       "description": "${p.descripcion}",
-      "provider": {"@type":"Organization","name":"ClasesDe10","url":"https://www.clasesde10.es"},
+      "provider": {"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com"},
       "inLanguage": "es",
       "offers": {
         "@type": "Offer",
@@ -269,7 +277,7 @@ const plantilla = (p) => `<!DOCTYPE html>
 </style>
 </head>
 <body>
-<script src="../css/shared.js"><\/script>
+<script src="../js/nav.js"><\/script>
 
 <section class="seo-hero">
   <nav class="seo-breadcrumb" aria-label="Ruta de navegación">
@@ -326,6 +334,7 @@ const plantilla = (p) => `<!DOCTYPE html>
 <script>
 document.querySelectorAll('.faq-q').forEach(q=>{q.addEventListener('click',()=>{const a=q.nextElementSibling;const isOpen=q.classList.contains('open');document.querySelectorAll('.faq-q').forEach(el=>{el.classList.remove('open');el.nextElementSibling.classList.remove('open')});if(!isOpen){q.classList.add('open');a.classList.add('open')}})});
 <\/script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>`;
 

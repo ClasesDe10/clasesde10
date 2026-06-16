@@ -4,9 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel Profesor — ClasesDe10</title>
+<meta name="description" content="Panel privado de profesor de ClasesDe10 para gestionar clases, calendario y documentacion.">
+<link rel="canonical" href="https://clasesde10.com/pages/dashboard/profesor.html">
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="../../css/dashboard.css">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 </head>
 <body>
 <div class="dash-layout">
@@ -14,7 +23,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <a href="/" class="sidebar-logo">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <span class="sidebar-logo-text">Clases<span>De10</span></span>
     </a>
     <div class="sidebar-user">
@@ -216,7 +225,7 @@
           <div class="card">
             <div class="card-header"><span class="card-title">Datos personales</span></div>
             <div class="card-body">
-              <form id="form-perfil" novalidate>
+    <form id="form-perfil" method="post" novalidate>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Nombre</label>
@@ -378,7 +387,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="document.getElementById('modal-registrar-clase').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-registrar-clase">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-registro">Confirmar</button>
     </div>
   </div>
@@ -413,7 +422,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="document.getElementById('modal-disponibilidad').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-disponibilidad">Cancelar</button>
       <button class="btn btn-primary" id="btn-guardar-disponibilidad">Guardar</button>
     </div>
   </div>
@@ -476,6 +485,12 @@ function irA(sec) {
 document.querySelectorAll('[data-section]').forEach(el => el.addEventListener('click', () => irA(el.dataset.section)));
 initSidebar();
 initModals();
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-close-modal]');
+  if (!btn) return;
+  document.getElementById(btn.dataset.closeModal)?.classList.remove('open');
+  document.body.style.overflow = '';
+});
 document.getElementById('btn-logout').addEventListener('click', logout);
 
 // ── INICIO ───────────────────────────────────────────────────────
@@ -531,7 +546,12 @@ async function cargarInicio() {
           <div class="clase-nombre">${sanitize(c.alumnos?.nombre)} — ${sanitize(c.materia)}</div>
           <div class="clase-materia">${formatFechaCorta(c.fecha)} ${formatHora(c.hora_inicio)}</div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="abrirRegistro('${c.id}','${sanitize(c.alumnos?.nombre||'')} ${sanitize(c.alumnos?.apellidos||'')}','${sanitize(c.materia)}','${formatFechaCorta(c.fecha)}')">Registrar</button>
+        <button class="btn btn-primary btn-sm"
+                data-action="registrar-clase"
+                data-id="${sanitize(c.id)}"
+                data-alumno="${sanitize((c.alumnos?.nombre||'') + ' ' + (c.alumnos?.apellidos||''))}"
+                data-materia="${sanitize(c.materia)}"
+                data-fecha="${formatFechaCorta(c.fecha)}">Registrar</button>
       </div>`).join('');
   }
 }
@@ -596,7 +616,12 @@ async function cargarMisClases() {
     <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.78rem">${sanitize(c.notas_profesor||'—')}</td>
     <td>
       ${c.estado === 'programada' && c.fecha < fechaHoy()
-        ? `<button class="btn btn-primary btn-sm" onclick="abrirRegistro('${c.id}','${sanitize(c.alumnos?.nombre||'')}','${sanitize(c.materia)}','${formatFechaCorta(c.fecha)}')">Registrar</button>`
+        ? `<button class="btn btn-primary btn-sm"
+                   data-action="registrar-clase"
+                   data-id="${sanitize(c.id)}"
+                   data-alumno="${sanitize(c.alumnos?.nombre||'')}"
+                   data-materia="${sanitize(c.materia)}"
+                   data-fecha="${formatFechaCorta(c.fecha)}">Registrar</button>`
         : ''}
     </td>
   </tr>`).join('');
@@ -718,8 +743,8 @@ async function cargarPerfil() {
 
   document.getElementById('niveles-check').innerHTML = NIVELES_LISTA.map(n => `
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-      <input type="checkbox" value="${n}" ${nivelesActuales.includes(n) ? 'checked' : ''}
-             onchange="toggleNivel('${n}', this.checked)"
+      <input type="checkbox" value="${sanitize(n)}" ${nivelesActuales.includes(n) ? 'checked' : ''}
+             data-nivel="${sanitize(n)}"
              style="width:18px;height:18px;accent-color:var(--navy)">
       <span style="font-size:.875rem">${n}</span>
     </label>`).join('');
@@ -729,7 +754,7 @@ function renderMaterias() {
   document.getElementById('materias-tags').innerHTML = materiasActuales.map(m => `
     <span style="display:inline-flex;align-items:center;gap:6px;background:var(--gray-soft);border-radius:100px;padding:5px 12px;font-size:.8rem;font-weight:600">
       ${sanitize(m)}
-      <button onclick="eliminarMateria('${sanitize(m)}')" style="background:none;border:none;cursor:pointer;color:var(--gray-mid);font-size:.9rem;line-height:1">×</button>
+      <button type="button" data-action="eliminar-materia" data-materia="${sanitize(m)}" style="background:none;border:none;cursor:pointer;color:var(--gray-mid);font-size:.9rem;line-height:1">×</button>
     </span>`).join('');
 }
 
@@ -742,6 +767,36 @@ window.eliminarMateria = (m) => {
   materiasActuales = materiasActuales.filter(x => x !== m);
   renderMaterias();
 };
+
+document.addEventListener('click', (e) => {
+  const registrarBtn = e.target.closest('[data-action="registrar-clase"]');
+  if (registrarBtn) {
+    window.abrirRegistro(
+      registrarBtn.dataset.id,
+      registrarBtn.dataset.alumno,
+      registrarBtn.dataset.materia,
+      registrarBtn.dataset.fecha,
+    );
+    return;
+  }
+
+  const eliminarMateriaBtn = e.target.closest('[data-action="eliminar-materia"]');
+  if (eliminarMateriaBtn) {
+    window.eliminarMateria(eliminarMateriaBtn.dataset.materia);
+    return;
+  }
+
+  const eliminarDisponibilidadBtn = e.target.closest('[data-action="eliminar-disponibilidad"]');
+  if (eliminarDisponibilidadBtn) {
+    window.eliminarDisponibilidad(eliminarDisponibilidadBtn.dataset.id);
+  }
+});
+
+document.getElementById('niveles-check').addEventListener('change', (e) => {
+  const input = e.target.closest('input[type="checkbox"][data-nivel]');
+  if (!input) return;
+  toggleNivel(input.dataset.nivel, input.checked);
+});
 
 document.getElementById('btn-add-materia').addEventListener('click', () => {
   const val = document.getElementById('nueva-materia').value.trim();
@@ -796,6 +851,8 @@ async function cargarDocumentos() {
 // Upload
 const uploadZone = document.getElementById('upload-zone');
 const docFile    = document.getElementById('doc-file');
+const UPLOAD_EXT_PERMITIDAS = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+const UPLOAD_MIME_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 
 uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
 uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
@@ -831,7 +888,11 @@ document.getElementById('btn-subir-doc').addEventListener('click', async () => {
   if (file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
 
   const tipo = document.getElementById('doc-tipo').value;
-  const ext  = file.name.split('.').pop();
+  const ext  = (file.name.split('.').pop() || '').toLowerCase();
+  if (!UPLOAD_EXT_PERMITIDAS.includes(ext) || (file.type && !UPLOAD_MIME_PERMITIDOS.includes(file.type))) {
+    showToast('Error', 'Formato no permitido. Usa PDF, JPG, PNG o WebP.', 'error');
+    return;
+  }
   const path = `documentos/${usuario.id}/${tipo}_${Date.now()}.${ext}`;
   const prog = document.getElementById('upload-progress');
   prog.textContent = 'Subiendo…';
@@ -869,7 +930,7 @@ async function cargarDisponibilidad() {
       <div style="display:flex;align-items:center;justify-content:space-between;background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px 16px">
         <strong style="width:80px">${DIAS_SEMANA[d.dia_semana]}</strong>
         <span>${formatHora(d.hora_inicio)} — ${formatHora(d.hora_fin)}</span>
-        <button class="btn btn-ghost btn-sm" onclick="eliminarDisponibilidad('${d.id}')">Eliminar</button>
+        <button class="btn btn-ghost btn-sm" data-action="eliminar-disponibilidad" data-id="${sanitize(d.id)}">Eliminar</button>
       </div>`).join('') + '</div>';
 }
 
@@ -899,5 +960,6 @@ window.eliminarDisponibilidad = async (id) => {
 // ── INIT ─────────────────────────────────────────────────────────
 cargarInicio();
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

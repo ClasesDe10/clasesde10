@@ -27,19 +27,29 @@ PLANTILLA = '''<!DOCTYPE html>
 <title>Clases Particulares de {titulo} en Madrid | ClasesDe10</title>
 <meta name="description" content="{desc}">
 <meta name="keywords" content="{km}">
-<link rel="canonical" href="https://www.clasesde10.es/clases-particulares/{slug}.html">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="canonical" href="https://clasesde10.com/clases-particulares/{slug}.html">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Clases Particulares de {titulo} en Madrid | ClasesDe10">
 <meta property="og:description" content="{desc}">
-<meta property="og:url" content="https://www.clasesde10.es/clases-particulares/{slug}.html">
+<meta property="og:url" content="https://clasesde10.com/clases-particulares/{slug}.html">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Clases Particulares de {titulo} en Madrid | ClasesDe10">
+<meta name="twitter:description" content="{desc}">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <link rel="stylesheet" href="../css/style.css">
 <script type="application/ld+json">
-{{"@context":"https://schema.org","@type":"Course","name":"Clases de {titulo} en Madrid","description":"{desc}","provider":{{"@type":"Organization","name":"ClasesDe10","url":"https://www.clasesde10.es"}},"offers":{{"@type":"Offer","price":"{precio}","priceCurrency":"EUR","availability":"https://schema.org/InStock"}}}}
+{{"@context":"https://schema.org","@type":"Course","name":"Clases de {titulo} en Madrid","description":"{desc}","provider":{{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com"}},"offers":{{"@type":"Offer","price":"{precio}","priceCurrency":"EUR","availability":"https://schema.org/InStock"}}}}
 </script>
 <style>
 .seo-hero{{background:linear-gradient(135deg,#0f1f3d 0%,#0d2952 60%,#0e3a5a 100%);padding:calc(70px + 80px) 5vw 80px;text-align:center}}
@@ -71,7 +81,7 @@ PLANTILLA = '''<!DOCTYPE html>
 </style>
 </head>
 <body>
-<script src="../css/shared.js"></script>
+<script src="../js/nav.js"></script>
 <section class="seo-hero">
   <nav class="seo-breadcrumb" aria-label="Ruta de navegación">
     <a href="/">Inicio</a> &rsaquo; <a href="/clases-particulares/">Clases particulares</a> &rsaquo; {titulo} Madrid
@@ -119,6 +129,7 @@ PLANTILLA = '''<!DOCTYPE html>
   <a href="/pages/registro.html" style="display:inline-block;background:#e8a030;color:#0f1f3d;font-weight:700;padding:15px 36px;border-radius:10px;text-decoration:none;font-size:1rem">Empezar ahora &mdash; Es gratis</a>
 </div>
 <script>document.querySelectorAll('.faq-q').forEach(function(q){q.addEventListener('click',function(){var a=q.nextElementSibling;var o=q.classList.contains('open');document.querySelectorAll('.faq-q').forEach(function(e){e.classList.remove('open');e.nextElementSibling.classList.remove('open')});if(!o){q.classList.add('open');a.classList.add('open')}})});</script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>'''
 

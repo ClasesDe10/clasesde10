@@ -7,15 +7,24 @@
 <meta name="description" content="Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.">
 <link rel="canonical" href="https://clasesde10.com/como-funciona.html">
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Cómo funciona — ClasesDe10">
 <meta property="og:description" content="Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.">
 <meta property="og:url" content="https://clasesde10.com/como-funciona.html">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="twitter:title" content="Cómo funciona — ClasesDe10">
+<meta name="twitter:description" content="Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
 .steps-section { padding: 40px 0; background: var(--cream); }
@@ -128,12 +137,13 @@
   .step-body { padding: 24px 22px; }
 }
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Cómo funciona","item":"https://clasesde10.com/como-funciona.html"}]},{"@type":"WebPage","name":"Cómo funciona — ClasesDe10","description":"Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.","url":"https://clasesde10.com/como-funciona.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
   <a href="index.html" class="nav-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
@@ -148,13 +158,13 @@
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" onclick="closeMobile()">Cómo funciona</a>
-  <a href="para-padres.html" onclick="closeMobile()">Para familias</a>
-  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
-  <a href="clases-particulares/" onclick="closeMobile()">Clases particulares</a>
-  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
-  <a href="pages/login.html" onclick="closeMobile()">Acceder</a>
-  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
+  <a href="para-padres.html" data-mobile-close>Para familias</a>
+  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
+  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
+  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
+  <a href="pages/login.html" data-mobile-close>Acceder</a>
+  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
 </div>
 
 <!-- HEADER -->
@@ -244,23 +254,23 @@
     <h2 class="section-title">Resolvemos tus dudas</h2>
     <div class="faq-list">
       <div class="faq-item reveal">
-        <button class="faq-q" onclick="toggleFaq(this)">¿Tiene algún coste para las familias? <span>+</span></button>
+        <button class="faq-q" data-faq-toggle aria-expanded="false">¿Tiene algún coste para las familias? <span>+</span></button>
         <div class="faq-a">No. El servicio de búsqueda y conexión con un profesor es completamente gratuito para las familias. El precio de las clases lo acuerdan directamente familia y profesor.</div>
       </div>
       <div class="faq-item reveal">
-        <button class="faq-q" onclick="toggleFaq(this)">¿Cómo verificáis a los profesores? <span>+</span></button>
+        <button class="faq-q" data-faq-toggle aria-expanded="false">¿Cómo verificáis a los profesores? <span>+</span></button>
         <div class="faq-a">Cada profesor que se registra pasa por una revisión de su perfil, formación y experiencia. Solo incluimos en nuestra red a docentes que han demostrado su cualificación y compromiso con la enseñanza.</div>
       </div>
       <div class="faq-item reveal">
-        <button class="faq-q" onclick="toggleFaq(this)">¿En qué zonas operáis? <span>+</span></button>
+        <button class="faq-q" data-faq-toggle aria-expanded="false">¿En qué zonas operáis? <span>+</span></button>
         <div class="faq-a">Principalmente en Madrid para clases presenciales, pero para clases online trabajamos con familias y profesores de toda España.</div>
       </div>
       <div class="faq-item reveal">
-        <button class="faq-q" onclick="toggleFaq(this)">¿Qué pasa si el profesor no encaja? <span>+</span></button>
+        <button class="faq-q" data-faq-toggle aria-expanded="false">¿Qué pasa si el profesor no encaja? <span>+</span></button>
         <div class="faq-a">Escríbenos y buscamos otra opción. Nuestro objetivo es que la conexión funcione de verdad, así que no te dejamos sin solución.</div>
       </div>
       <div class="faq-item reveal">
-        <button class="faq-q" onclick="toggleFaq(this)">¿Cuánto tiempo tarda en llegar una respuesta? <span>+</span></button>
+        <button class="faq-q" data-faq-toggle aria-expanded="false">¿Cuánto tiempo tarda en llegar una respuesta? <span>+</span></button>
         <div class="faq-a">Garantizamos respuesta en un máximo de 48 horas laborables desde que recibimos tu formulario. Habitualmente es bastante más rápido.</div>
       </div>
     </div>
@@ -282,7 +292,7 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
@@ -317,14 +327,20 @@
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
+document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.target.closest('[data-mobile-close]')) closeMobile(); });
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
 function toggleFaq(btn){
-  btn.classList.toggle('open');
+  const isOpen = btn.classList.toggle('open');
   const a = btn.nextElementSibling;
-  a.classList.toggle('open');
+  a.classList.toggle('open', isOpen);
+  btn.setAttribute('aria-expanded', String(isOpen));
+  const icon = btn.querySelector('span');
+  if (icon) icon.textContent = isOpen ? '−' : '+';
 }
+document.querySelectorAll('[data-faq-toggle]').forEach(btn=>btn.addEventListener('click',()=>toggleFaq(btn)));
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

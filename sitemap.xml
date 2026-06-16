@@ -4,138 +4,138 @@
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
-  <!-- PÃ¡ginas principales -->
+  <!-- Páginas principales -->
   <url>
     <loc>https://clasesde10.com/</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/como-funciona.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/para-padres.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/para-profesores.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/sobre-nosotros.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/contacto.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/terminos.html</loc>
-    <lastmod>2026-06-01</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/privacidad.html</loc>
-    <lastmod>2026-06-01</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/cookies.html</loc>
-    <lastmod>2026-06-01</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
-  <!-- SEO Local Madrid â€” por materia -->
+  <!-- SEO Local Madrid — por materia -->
   <url>
     <loc>https://clasesde10.com/clases-particulares/</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/matematicas-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/fisica-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/quimica-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/ingles-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/lengua-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/primaria-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/eso-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/bachillerato-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/selectividad-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.95</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/universidad-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/biologia-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
   <url>
     <loc>https://clasesde10.com/clases-particulares/historia-madrid.html</loc>
-    <lastmod>2026-06-04</lastmod>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>

@@ -1,5 +1,5 @@
 # 🚀 Guía para subir ClasesDe10 a Netlify
-## Dominio: clasesde10.es
+## Dominio: clasesde10.com
 
 ---
 
@@ -30,13 +30,13 @@ Netlify te dará una URL temporal del tipo:
 
 ---
 
-## 🌐 PASO 4 — Conectar tu dominio clasesde10.es
+## 🌐 PASO 4 — Conectar tu dominio clasesde10.com
 
 ### 4a — Añadir el dominio en Netlify
 1. En tu panel de Netlify, entra a tu sitio recién creado
 2. Ve a **Site settings → Domain management → Add custom domain**
-3. Escribe `clasesde10.es` y haz clic en **Verify** → **Add domain**
-4. Añade también `www.clasesde10.es`
+3. Escribe `clasesde10.com` y haz clic en **Verify** → **Add domain**
+4. Añade también `clasesde10.com`
 
 ---
 
@@ -49,7 +49,7 @@ dns3.p0X.nsone.net
 dns4.p0X.nsone.net
 ```
 
-Entra al panel donde tienes registrado `clasesde10.es` (Hostalia, Nominalia, Dondominio, etc.) y:
+Entra al panel donde tienes registrado `clasesde10.com` (Hostalia, Nominalia, Dondominio, etc.) y:
 1. Busca **"DNS"** o **"Nameservers"** para el dominio
 2. Cambia los nameservers actuales por los 4 de Netlify
 3. Guarda los cambios
@@ -111,7 +111,7 @@ Cuando quieras cambiar algo y volver a subir:
 
 - [ ] Carpeta subida a Netlify (arrastrar y soltar)
 - [ ] La URL temporal de Netlify funciona y se ve bien
-- [ ] Dominio `clasesde10.es` añadido en Netlify
+- [ ] Dominio `clasesde10.com` añadido en Netlify
 - [ ] Nameservers o registros DNS apuntando a Netlify
 - [ ] SSL activado (https:// funciona)
 - [ ] Formularios configurados para recibir emails
@@ -131,4 +131,4 @@ Cuando quieras cambiar algo y volver a subir:
 
 ---
 
-*Guía preparada para ClasesDe10 · clasesde10.es · Netlify*
+*Guía preparada para ClasesDe10 · clasesde10.com · Netlify*

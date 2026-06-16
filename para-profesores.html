@@ -7,15 +7,24 @@
 <meta name="description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
 <link rel="canonical" href="https://clasesde10.com/para-profesores.html">
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Para profesores — ClasesDe10">
 <meta property="og:description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
 <meta property="og:url" content="https://clasesde10.com/para-profesores.html">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="twitter:title" content="Para profesores — ClasesDe10">
+<meta name="twitter:description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
 /* WHY JOIN */
@@ -44,8 +53,13 @@
 
 /* COMPARE */
 .compare-section { padding: 90px 0; background: var(--white); }
+.compare-scroll {
+  margin-top: 56px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .compare-table {
-  margin-top: 56px; width: 100%; border-collapse: collapse;
+  width: 100%; min-width: 520px; border-collapse: collapse;
   border-radius: 16px; overflow: hidden;
   box-shadow: 0 4px 24px rgba(0,0,0,0.08);
 }
@@ -160,12 +174,13 @@
   .contact-form-card { padding: 32px 22px; }
 }
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para profesores","item":"https://clasesde10.com/para-profesores.html"}]},{"@type":"WebPage","name":"Para profesores — ClasesDe10","description":"Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.","url":"https://clasesde10.com/para-profesores.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
   <a href="index.html" class="nav-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
@@ -180,18 +195,18 @@
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" onclick="closeMobile()">Cómo funciona</a>
-  <a href="para-padres.html" onclick="closeMobile()">Para familias</a>
-  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
-  <a href="clases-particulares/" onclick="closeMobile()">Clases particulares</a>
-  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
-  <a href="pages/login.html" onclick="closeMobile()">Acceder</a>
-  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
+  <a href="para-padres.html" data-mobile-close>Para familias</a>
+  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
+  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
+  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
+  <a href="pages/login.html" data-mobile-close>Acceder</a>
+  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
 </div>
 
 <header class="page-header">
   <span class="section-label">Para profesores</span>
-  <h1>Comparte tu vocación.<br><em>Encuentra tus alumnos.</em></h1>
+  <h1>Comparte tu vocación. <br><em>Encuentra tus alumnos.</em></h1>
   <p>Si tienes formación y pasión por la enseñanza, ClasesDe10 te da visibilidad real y te conecta con familias que ya te están buscando.</p>
 </header>
 
@@ -241,7 +256,8 @@
     <span class="section-label">Comparativa</span>
     <h2 class="section-title">ClasesDe10 frente a otras opciones</h2>
     <p class="section-desc">No todas las plataformas son iguales. Aquí te mostramos por qué ClasesDe10 es diferente.</p>
-    <table class="compare-table reveal">
+    <div class="compare-scroll reveal">
+    <table class="compare-table">
       <thead>
         <tr>
           <th>Característica</th>
@@ -289,6 +305,7 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 </section>
 
@@ -328,29 +345,44 @@
 
       <div class="contact-form-card reveal">
         <div class="cf-title">🎓 Unirme como profesor/a</div>
-        <div class="cf-form">
+        <form class="cf-form" id="form-profesor" method="post">
           <div class="cf-row">
             <div class="cf-field">
               <label for="prof-nombre">Nombre completo</label>
-              <input id="prof-nombre" type="text" placeholder="Tu nombre y apellidos">
+              <input id="prof-nombre" name="nombre" type="text" placeholder="Tu nombre y apellidos" autocomplete="name" maxlength="160" required>
             </div>
             <div class="cf-field">
               <label for="prof-email">Email</label>
-              <input id="prof-email" type="email" placeholder="tu@email.com">
+              <input id="prof-email" name="email" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
             </div>
           </div>
           <div class="cf-field">
             <label for="prof-telefono">Teléfono / WhatsApp</label>
-            <input id="prof-telefono" type="tel" placeholder="+34 600 000 000">
+            <input id="prof-telefono" name="telefono" type="tel" placeholder="+34 600 000 000" autocomplete="tel" maxlength="40">
+          </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label for="prof-zona">Zona donde das clase</label>
+              <input id="prof-zona" name="zona" type="text" placeholder="Ej: Madrid centro, online, zona norte..." autocomplete="address-level2" maxlength="120">
+            </div>
+            <div class="cf-field">
+              <label for="prof-canal">Canal preferido</label>
+              <select id="prof-canal" name="canal">
+                <option value="">Selecciona</option>
+                <option>WhatsApp</option>
+                <option>Email</option>
+                <option>Llamada</option>
+              </select>
+            </div>
           </div>
           <div class="cf-field">
             <label for="prof-materias">Materias que impartes</label>
-            <input id="prof-materias" type="text" placeholder="Ej: Matemáticas, Física, Inglés...">
+            <input id="prof-materias" name="materias" type="text" placeholder="Ej: Matemáticas, Física, Inglés..." maxlength="180" required>
           </div>
           <div class="cf-row">
             <div class="cf-field">
               <label for="prof-niveles">Niveles</label>
-              <select id="prof-niveles">
+              <select id="prof-niveles" name="niveles">
                 <option value="">Selecciona</option>
                 <option>Primaria</option>
                 <option>ESO</option>
@@ -362,7 +394,7 @@
             </div>
             <div class="cf-field">
               <label for="prof-modalidad">Modalidad</label>
-              <select id="prof-modalidad">
+              <select id="prof-modalidad" name="modalidad">
                 <option value="">Selecciona</option>
                 <option>Presencial</option>
                 <option>Online</option>
@@ -370,17 +402,46 @@
               </select>
             </div>
           </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label for="prof-anios">Años de experiencia</label>
+              <select id="prof-anios" name="anios">
+                <option value="">Selecciona</option>
+                <option>Menos de 1 año</option>
+                <option>1-2 años</option>
+                <option>3-5 años</option>
+                <option>Más de 5 años</option>
+              </select>
+            </div>
+            <div class="cf-field">
+              <label for="prof-tarifa">Tarifa orientativa</label>
+              <input id="prof-tarifa" name="tarifa" type="text" placeholder="Ej: 18 €/h, 20-25 €/h..." inputmode="decimal" maxlength="60">
+            </div>
+          </div>
           <div class="cf-field">
             <label for="prof-experiencia">Formación y experiencia</label>
-            <textarea id="prof-experiencia" placeholder="Cuéntanos tu titulación, años de experiencia y cualquier detalle relevante..."></textarea>
+            <textarea id="prof-experiencia" name="experiencia" maxlength="3000" placeholder="Cuéntanos tu titulación, años de experiencia y cualquier detalle relevante..." required></textarea>
           </div>
           <div class="cf-field">
             <label for="prof-disponibilidad">Disponibilidad horaria</label>
-            <input id="prof-disponibilidad" type="text" placeholder="Ej: Tardes de lunes a viernes, fines de semana...">
+            <input id="prof-disponibilidad" name="disponibilidad" type="text" placeholder="Ej: Tardes de lunes a viernes, fines de semana..." maxlength="180">
           </div>
-          <button class="cf-submit" id="submitBtn">Enviar mi perfil →</button>
+          <div class="cf-field">
+            <label for="prof-verificacion">Documentación de verificación</label>
+            <select id="prof-verificacion" name="verificacion">
+              <option value="">Selecciona</option>
+              <option>Puedo aportar titulación y documento de identidad</option>
+              <option>Puedo aportar titulación</option>
+              <option>No lo tengo ahora, puedo enviarlo después</option>
+            </select>
+          </div>
+          <label class="cf-check" for="prof-privacidad">
+            <input id="prof-privacidad" name="privacidad" type="checkbox" required>
+            <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para valorar mi perfil y contactarme.</span>
+          </label>
+          <button class="cf-submit" id="submitBtn" type="submit">Enviar mi perfil →</button>
           <p class="cf-note">🔐 Datos confidenciales · Solo usados para conectarte con alumnos</p>
-        </div>
+        </form>
       </div>
     </div>
   </div>
@@ -389,7 +450,7 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
@@ -424,22 +485,38 @@
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
+document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.target.closest('[data-mobile-close]')) closeMobile(); });
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
-document.getElementById('submitBtn').addEventListener('click', async function(){
+document.getElementById('form-profesor').addEventListener('submit', async function(e){
+  e.preventDefault();
+  if (!this.reportValidity()) return;
+  const button = document.getElementById('submitBtn');
   const nombre        = document.getElementById('prof-nombre').value.trim();
   const email         = document.getElementById('prof-email').value.trim();
   const telefono      = document.getElementById('prof-telefono').value.trim();
+  const zona          = document.getElementById('prof-zona').value.trim();
+  const canal         = document.getElementById('prof-canal').value.trim();
   const materias      = document.getElementById('prof-materias').value.trim();
   const niveles       = document.getElementById('prof-niveles').value.trim();
   const modalidad     = document.getElementById('prof-modalidad').value.trim();
+  const anios         = document.getElementById('prof-anios').value.trim();
+  const tarifa        = document.getElementById('prof-tarifa').value.trim();
   const experiencia   = document.getElementById('prof-experiencia').value.trim();
   const disponibilidad = document.getElementById('prof-disponibilidad').value.trim();
+  const verificacion  = document.getElementById('prof-verificacion').value.trim();
   const defaultText = 'Enviar mi perfil →';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
+  const detalles = [
+    experiencia,
+    anios && `Años de experiencia: ${anios}`,
+    tarifa && `Tarifa: ${tarifa}`,
+    disponibilidad && `Disponibilidad: ${disponibilidad}`,
+    verificacion && `Verificación: ${verificacion}`,
+  ].filter(Boolean).join('\n');
 
-  setButtonState(this, 'loading', 'Enviando...');
+  setButtonState(button, 'loading', 'Enviando...');
   const { error } = await submitLead({
     tipo: 'profesor',
     nombre,
@@ -447,18 +524,25 @@ document.getElementById('submitBtn').addEventListener('click', async function(){
     telefono,
     perfil: 'profesor',
     asunto: materias ? `Profesor: ${materias}` : 'Alta de profesor',
-    mensaje: experiencia,
-    metadata: { materias, niveles, modalidad, disponibilidad },
+    mensaje: detalles,
+    metadata: { materias, niveles, modalidad, zona, canal, anios, tarifa, disponibilidad, verificacion, consent_privacy: true },
   });
 
   if (error) {
-    setButtonState(this, 'error', error.message || 'No se pudo enviar.');
-    setTimeout(() => setButtonState(this, 'idle', defaultText), 2600);
+    setButtonState(button, 'error', error.message || 'No se pudo enviar.');
+    setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
     return;
   }
 
-  setButtonState(this, 'success', '✅ Perfil enviado — ¡te contactamos pronto!');
+  try {
+    const { trackContacto } = await import('./js/analytics.js');
+    trackContacto('alta_profesor_publica');
+  } catch (_) {}
+
+  setButtonState(button, 'success', '✅ Perfil enviado — ¡te contactamos pronto!');
+  this.reset();
 });
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

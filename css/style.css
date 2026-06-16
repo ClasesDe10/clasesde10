@@ -71,6 +71,17 @@ nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
 .nav-links a:hover,
 .nav-links a.active { color: var(--white); background: rgba(255,255,255,0.09); }
 .nav-links a.active { color: var(--gold); }
+.nav-links .nav-login-link {
+  color: rgba(255,255,255,.7);
+  font-size: .84rem;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 6px;
+}
+.nav-links .nav-login-link:hover {
+  color: var(--white);
+  background: rgba(255,255,255,.09);
+}
 .nav-links .nav-cta {
   background: var(--gold); color: var(--navy) !important;
   font-weight: 700 !important; padding: 8px 20px !important;
@@ -149,6 +160,30 @@ nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
 }
 .section-pad { padding: 100px 0; }
 
+.related-subjects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 20px;
+}
+.related-subjects a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--white);
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: 10px;
+  padding: 12px 18px;
+  text-decoration: none;
+  color: var(--text-body);
+  font-weight: 500;
+  transition: border-color .2s, transform .15s;
+}
+.related-subjects a:hover {
+  border-color: var(--navy);
+  transform: translateY(-1px);
+}
+
 /* ── BUTTONS ─────────────────────────────────── */
 .btn-primary {
   display: inline-block;
@@ -178,6 +213,46 @@ nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
   transition: border-color .2s, background .2s, transform .15s;
 }
 .btn-ghost:hover { border-color: rgba(255,255,255,.8); background: rgba(255,255,255,.07); transform: translateY(-2px); }
+
+/* Forms */
+.cf-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: .78rem;
+  line-height: 1.5;
+  color: var(--gray-mid);
+}
+.cf-check input {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  accent-color: var(--navy);
+}
+.cf-check a {
+  color: var(--navy);
+  font-weight: 700;
+}
+.cf-status {
+  display: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: .83rem;
+  line-height: 1.45;
+}
+.cf-status[data-state="success"],
+.cf-status[data-state="error"] {
+  display: block;
+}
+.cf-status[data-state="success"] {
+  background: rgba(29,122,107,.1);
+  color: #145f53;
+}
+.cf-status[data-state="error"] {
+  background: rgba(192,57,43,.1);
+  color: #a43125;
+}
 
 /* ── CARDS GENERIC ───────────────────────────── */
 .card {

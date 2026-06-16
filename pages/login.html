@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Iniciar sesión — ClasesDe10</title>
 <meta name="description" content="Accede a tu cuenta de ClasesDe10. Plataforma para familias, profesores y alumnos de clases particulares en Madrid.">
+<link rel="canonical" href="https://clasesde10.com/pages/login.html">
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="../css/dashboard.css">
 <style>
 body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
@@ -52,34 +59,46 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   cursor:pointer; color:var(--gray-mid); transition:all .18s;
 }
 .tab-btn.active { background:var(--navy); color:white; border-color:var(--navy); }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 </style>
 </head>
 <body>
 <div class="auth-card">
   <div class="auth-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10">
     <div class="auth-logo-name">Clases<span>De10</span></div>
     <div class="auth-subtitle">Tu academia de confianza en Madrid</div>
   </div>
+  <h1 class="sr-only">Iniciar sesión en ClasesDe10</h1>
 
-  <div id="error-banner" class="error-banner" role="alert"></div>
+  <div id="error-banner" class="error-banner" role="alert" aria-live="assertive"></div>
 
-  <div class="tab-btns">
-    <button class="tab-btn active" id="tab-login">Iniciar sesión</button>
-    <button class="tab-btn" id="tab-forgot">Recuperar acceso</button>
+  <div class="tab-btns" role="tablist" aria-label="Acceso a ClasesDe10">
+    <button type="button" role="tab" class="tab-btn active" id="tab-login" aria-controls="form-login" aria-selected="true">Iniciar sesión</button>
+    <button type="button" role="tab" class="tab-btn" id="tab-forgot" aria-controls="form-forgot" aria-selected="false">Recuperar acceso</button>
   </div>
 
   <!-- FORMULARIO LOGIN -->
-  <form id="form-login" novalidate>
+  <form id="form-login" method="post" role="tabpanel" aria-labelledby="tab-login" novalidate>
     <div class="form-group">
       <label class="form-label" for="email">Correo electrónico <span class="required">*</span></label>
       <input class="form-control" type="email" id="email" name="email"
-             placeholder="tu@email.com" autocomplete="email" required>
+             placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
     </div>
     <div class="form-group">
       <label class="form-label" for="password">Contraseña <span class="required">*</span></label>
       <input class="form-control" type="password" id="password" name="password"
-             placeholder="••••••••" autocomplete="current-password" required>
+             placeholder="••••••••" autocomplete="current-password" maxlength="128" required>
     </div>
     <div class="forgot-link">
       <a href="#" id="go-forgot">¿Olvidaste tu contraseña?</a>
@@ -91,13 +110,13 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   </form>
 
   <!-- FORMULARIO RECUPERAR -->
-  <form id="form-forgot" style="display:none" novalidate>
+  <form id="form-forgot" method="post" role="tabpanel" aria-labelledby="tab-forgot" style="display:none" novalidate>
     <p style="font-size:.875rem;color:var(--gray-mid);margin-bottom:16px">
       Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.
     </p>
     <div class="form-group">
       <label class="form-label" for="email-forgot">Correo electrónico <span class="required">*</span></label>
-      <input class="form-control" type="email" id="email-forgot" placeholder="tu@email.com" required>
+      <input class="form-control" type="email" id="email-forgot" name="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
     </div>
     <button type="submit" class="btn btn-primary btn-lg" style="width:100%;justify-content:center">
       Enviar enlace de recuperación
@@ -142,11 +161,15 @@ function setTab(tab) {
     formForgot.style.display = 'none';
     tabLogin.classList.add('active');
     tabForgot.classList.remove('active');
+    tabLogin.setAttribute('aria-selected', 'true');
+    tabForgot.setAttribute('aria-selected', 'false');
   } else {
     formLogin.style.display = 'none';
     formForgot.style.display = '';
     tabLogin.classList.remove('active');
     tabForgot.classList.add('active');
+    tabLogin.setAttribute('aria-selected', 'false');
+    tabForgot.setAttribute('aria-selected', 'true');
   }
   hideError();
 }
@@ -219,5 +242,6 @@ if (new URLSearchParams(location.search).has('code')) {
   });
 }
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

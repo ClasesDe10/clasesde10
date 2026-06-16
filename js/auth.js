@@ -9,6 +9,8 @@
 
 import db from './supabase-client.js';
 
+const CANONICAL_ORIGIN = 'https://clasesde10.com';
+
 // ─── CONSTANTES ────────────────────────────────────────────────
 const ROLES_RUTAS = {
   admin:    '/pages/dashboard/admin.html',
@@ -44,13 +46,13 @@ export async function requireAuth(rolesPermitidos = []) {
 
   if (!usuario) {
     window.location.href = '/pages/login.html';
-    return null;
+    return new Promise(() => {});
   }
 
   if (rolesPermitidos.length > 0 && !rolesPermitidos.includes(usuario.rol)) {
     const rutaPropia = ROLES_RUTAS[usuario.rol];
     if (rutaPropia) window.location.href = rutaPropia;
-    return null;
+    return new Promise(() => {});
   }
 
   return usuario;
@@ -80,7 +82,7 @@ export async function login(emailRaw, passwordRaw) {
 }
 
 // ─── REGISTRO ───────────────────────────────────────────────────
-export async function register({ email, password, nombre, apellidos, telefono, rol }) {
+export async function register({ email, password, nombre, apellidos, telefono, rol, alumno_invitacion_token, alumnoInvitacionToken }) {
   // Normalizar sin sanitizar — los datos se guardan en texto plano en la BD
   const emailClean    = email.trim().toLowerCase();
   const nombreClean   = nombre.trim();
@@ -95,14 +97,21 @@ export async function register({ email, password, nombre, apellidos, telefono, r
     return { error: { message: 'La contraseña debe tener al menos 8 caracteres.' } };
   }
 
-  if (!['profesor', 'familia'].includes(rol)) {
+  const invitacionAlumno = (alumno_invitacion_token || alumnoInvitacionToken || '').trim();
+
+  if (!['profesor', 'familia', 'alumno'].includes(rol)) {
     return { error: { message: 'Rol no válido.' } };
   }
 
-  // El trigger handle_new_auth_user (migración 003) creará automáticamente:
+  if (rol === 'alumno' && !invitacionAlumno) {
+    return { error: { message: 'El acceso de alumno requiere una invitación válida de una familia.' } };
+  }
+
+  // El trigger handle_new_auth_user (migración 004) creará automáticamente:
   // - Registro en tabla `usuarios`
   // - Registro en tabla `profesores` (si rol = 'profesor')
   // - Registro en tabla `familias` (si rol = 'familia')
+  // - Vinculación a `alumnos` mediante invitación (si rol = 'alumno')
   const { data, error } = await db.auth.signUp({
     email: emailClean,
     password,
@@ -112,10 +121,23 @@ export async function register({ email, password, nombre, apellidos, telefono, r
         apellidos: apellidosClean,
         telefono:  telefonoClean,
         rol,
+        ...(rol === 'alumno' ? { alumno_invitacion_token: invitacionAlumno } : {}),
       },
-      emailRedirectTo: `${location.origin}/pages/login.html`,
+      emailRedirectTo: `${CANONICAL_ORIGIN}/pages/login.html`,
     },
   });
+
+  if (error?.message?.includes('Database error saving new user')) {
+    return {
+      data,
+      error: {
+        ...error,
+        message: rol === 'alumno'
+          ? 'No se pudo vincular el alumno. Revisa que la invitacion sea valida, no este caducada y no se haya usado ya.'
+          : 'No se pudo crear el perfil de usuario en la base de datos. Revisa que la migracion 004_produccion_total.sql este aplicada en Supabase.',
+      },
+    };
+  }
 
   return { data, error };
 }
@@ -129,7 +151,7 @@ export async function logout() {
 // ─── RESET PASSWORD ──────────────────────────────────────────────
 export async function resetPassword(email) {
   const { error } = await db.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-    redirectTo: `${location.origin}/pages/reset-password.html`,
+    redirectTo: `${CANONICAL_ORIGIN}/pages/reset-password.html`,
   });
   return { error };
 }

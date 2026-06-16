@@ -7,15 +7,24 @@
 <meta name="description" content="Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.">
 <link rel="canonical" href="https://clasesde10.com/para-padres.html">
 <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Para familias — ClasesDe10">
 <meta property="og:description" content="Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.">
 <meta property="og:url" content="https://clasesde10.com/para-padres.html">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="twitter:title" content="Para familias — ClasesDe10">
+<meta name="twitter:description" content="Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="css/style.css">
 <style>
 /* BENEFITS */
@@ -129,12 +138,13 @@
   .contact-form-card { padding: 32px 24px; }
 }
 </style>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para familias","item":"https://clasesde10.com/para-padres.html"}]},{"@type":"WebPage","name":"Para familias — ClasesDe10","description":"Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.","url":"https://clasesde10.com/para-padres.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
   <a href="index.html" class="nav-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10 logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
@@ -149,18 +159,18 @@
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" onclick="closeMobile()">Cómo funciona</a>
-  <a href="para-padres.html" onclick="closeMobile()">Para familias</a>
-  <a href="para-profesores.html" onclick="closeMobile()">Para profesores</a>
-  <a href="clases-particulares/" onclick="closeMobile()">Clases particulares</a>
-  <a href="sobre-nosotros.html" onclick="closeMobile()">Nosotros</a>
-  <a href="pages/login.html" onclick="closeMobile()">Acceder</a>
-  <a href="contacto.html" class="m-cta" onclick="closeMobile()">Contactar ahora</a>
+  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
+  <a href="para-padres.html" data-mobile-close>Para familias</a>
+  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
+  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
+  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
+  <a href="pages/login.html" data-mobile-close>Acceder</a>
+  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
 </div>
 
 <header class="page-header">
   <span class="section-label">Para familias</span>
-  <h1>Encuentra el profesor que<br><em>tu hijo necesita</em></h1>
+  <h1>Encuentra el profesor que <br><em>tu hijo necesita</em></h1>
   <p>Profesores verificados, aprendizaje personalizado y búsqueda completamente gratuita. Estamos aquí para ayudarte.</p>
 </header>
 
@@ -263,29 +273,44 @@
 
       <div class="contact-form-card reveal">
         <div class="cf-title">📋 Solicitar profesor para mi hijo/a</div>
-        <div class="cf-form">
+        <form class="cf-form" id="form-familia" method="post">
           <div class="cf-row">
             <div class="cf-field">
               <label for="pad-nombre">Tu nombre</label>
-              <input id="pad-nombre" type="text" placeholder="Nombre del padre/madre">
+              <input id="pad-nombre" name="nombre" type="text" placeholder="Nombre del padre/madre" autocomplete="name" maxlength="160" required>
             </div>
             <div class="cf-field">
               <label for="pad-email">Email</label>
-              <input id="pad-email" type="email" placeholder="tu@email.com">
+              <input id="pad-email" name="email" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
             </div>
           </div>
           <div class="cf-field">
             <label for="pad-telefono">Teléfono / WhatsApp</label>
-            <input id="pad-telefono" type="tel" placeholder="+34 600 000 000">
+            <input id="pad-telefono" name="telefono" type="tel" placeholder="+34 600 000 000" autocomplete="tel" maxlength="40">
+          </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label for="pad-zona">Zona o localidad</label>
+              <input id="pad-zona" name="zona" type="text" placeholder="Ej: Chamberí, Getafe, Madrid centro..." autocomplete="address-level2" maxlength="120">
+            </div>
+            <div class="cf-field">
+              <label for="pad-canal">Canal preferido</label>
+              <select id="pad-canal" name="canal">
+                <option value="">Selecciona</option>
+                <option>WhatsApp</option>
+                <option>Email</option>
+                <option>Llamada</option>
+              </select>
+            </div>
           </div>
           <div class="cf-row">
             <div class="cf-field">
               <label for="pad-alumno">Nombre del alumno/a</label>
-              <input id="pad-alumno" type="text" placeholder="Nombre">
+              <input id="pad-alumno" name="alumno" type="text" placeholder="Nombre" maxlength="160">
             </div>
             <div class="cf-field">
               <label for="pad-nivel">Curso / Nivel</label>
-              <select id="pad-nivel">
+              <select id="pad-nivel" name="nivel">
                 <option value="">Selecciona</option>
                 <option>Primaria (1º–6º)</option>
                 <option>1º ESO</option><option>2º ESO</option><option>3º ESO</option><option>4º ESO</option>
@@ -298,24 +323,76 @@
           </div>
           <div class="cf-field">
             <label for="pad-materia">Asignatura / materia</label>
-            <input id="pad-materia" type="text" placeholder="Ej: Matemáticas, Inglés, Física...">
+            <input id="pad-materia" name="materia" type="text" placeholder="Ej: Matemáticas, Inglés, Física..." maxlength="180" required>
           </div>
           <div class="cf-field">
             <label for="pad-modalidad">Modalidad preferida</label>
-            <select id="pad-modalidad">
+            <select id="pad-modalidad" name="modalidad">
               <option value="">Selecciona</option>
               <option>Presencial en casa</option>
               <option>Online (videollamada)</option>
               <option>Indiferente</option>
             </select>
           </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label for="pad-objetivo">Objetivo principal</label>
+              <select id="pad-objetivo" name="objetivo">
+                <option value="">Selecciona</option>
+                <option>Recuperar la asignatura</option>
+                <option>Subir nota</option>
+                <option>Preparar examen concreto</option>
+                <option>Preparar EBAU / Selectividad</option>
+                <option>Mejorar hábito de estudio</option>
+                <option>Otro objetivo</option>
+              </select>
+            </div>
+            <div class="cf-field">
+              <label for="pad-frecuencia">Frecuencia estimada</label>
+              <select id="pad-frecuencia" name="frecuencia">
+                <option value="">Selecciona</option>
+                <option>1 clase por semana</option>
+                <option>2 clases por semana</option>
+                <option>3 o más clases por semana</option>
+                <option>Intensivo puntual</option>
+                <option>A definir con el profesor</option>
+              </select>
+            </div>
+          </div>
+          <div class="cf-row">
+            <div class="cf-field">
+              <label for="pad-inicio">Cuándo quieres empezar</label>
+              <select id="pad-inicio" name="inicio">
+                <option value="">Selecciona</option>
+                <option>Cuanto antes</option>
+                <option>Esta semana</option>
+                <option>Este mes</option>
+                <option>Más adelante</option>
+              </select>
+            </div>
+            <div class="cf-field">
+              <label for="pad-presupuesto">Presupuesto orientativo</label>
+              <select id="pad-presupuesto" name="presupuesto">
+                <option value="">Selecciona</option>
+                <option>Hasta 15 €/h</option>
+                <option>15-20 €/h</option>
+                <option>20-25 €/h</option>
+                <option>Más de 25 €/h si encaja</option>
+                <option>Prefiero que me orientéis</option>
+              </select>
+            </div>
+          </div>
           <div class="cf-field">
             <label for="pad-disponibilidad">Disponibilidad horaria</label>
-            <textarea id="pad-disponibilidad" placeholder="Ej: Tardes entre semana a partir de las 17h, sábados por la mañana..."></textarea>
+            <textarea id="pad-disponibilidad" name="disponibilidad" maxlength="3000" placeholder="Ej: Tardes entre semana a partir de las 17h, sábados por la mañana..."></textarea>
           </div>
-          <button class="cf-submit" id="submitBtn">Enviar solicitud →</button>
+          <label class="cf-check" for="pad-privacidad">
+            <input id="pad-privacidad" name="privacidad" type="checkbox" required>
+            <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para buscar un profesor adecuado.</span>
+          </label>
+          <button class="cf-submit" id="submitBtn" type="submit">Enviar solicitud →</button>
           <p class="cf-note">🔐 Tus datos son confidenciales y solo se usan para encontrarte el profesor adecuado</p>
-        </div>
+        </form>
       </div>
     </div>
   </div>
@@ -324,7 +401,7 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
@@ -359,22 +436,39 @@
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
+document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.target.closest('[data-mobile-close]')) closeMobile(); });
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
-document.getElementById('submitBtn').addEventListener('click', async function(){
+document.getElementById('form-familia').addEventListener('submit', async function(e){
+  e.preventDefault();
+  if (!this.reportValidity()) return;
+  const button = document.getElementById('submitBtn');
   const nombre       = document.getElementById('pad-nombre').value.trim();
   const email        = document.getElementById('pad-email').value.trim();
   const telefono     = document.getElementById('pad-telefono').value.trim();
+  const zona         = document.getElementById('pad-zona').value.trim();
+  const canal        = document.getElementById('pad-canal').value.trim();
   const alumno       = document.getElementById('pad-alumno').value.trim();
   const nivel        = document.getElementById('pad-nivel').value.trim();
   const materia      = document.getElementById('pad-materia').value.trim();
   const modalidad    = document.getElementById('pad-modalidad').value.trim();
+  const objetivo     = document.getElementById('pad-objetivo').value.trim();
+  const frecuencia   = document.getElementById('pad-frecuencia').value.trim();
+  const inicio       = document.getElementById('pad-inicio').value.trim();
+  const presupuesto  = document.getElementById('pad-presupuesto').value.trim();
   const disponibilidad = document.getElementById('pad-disponibilidad').value.trim();
   const defaultText = 'Enviar solicitud →';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
+  const detalles = [
+    objetivo && `Objetivo: ${objetivo}`,
+    frecuencia && `Frecuencia: ${frecuencia}`,
+    inicio && `Inicio: ${inicio}`,
+    presupuesto && `Presupuesto: ${presupuesto}`,
+    disponibilidad && `Disponibilidad: ${disponibilidad}`,
+  ].filter(Boolean).join('\n');
 
-  setButtonState(this, 'loading', 'Enviando...');
+  setButtonState(button, 'loading', 'Enviando...');
   const { error } = await submitLead({
     tipo: 'familia',
     nombre,
@@ -382,18 +476,25 @@ document.getElementById('submitBtn').addEventListener('click', async function(){
     telefono,
     perfil: 'familia',
     asunto: materia ? `Solicitud de profesor: ${materia}` : 'Solicitud de profesor',
-    mensaje: disponibilidad,
-    metadata: { alumno, nivel, materia, modalidad },
+    mensaje: detalles || materia,
+    metadata: { alumno, nivel, materia, modalidad, zona, canal, objetivo, frecuencia, inicio, presupuesto, consent_privacy: true },
   });
 
   if (error) {
-    setButtonState(this, 'error', error.message || 'No se pudo enviar.');
-    setTimeout(() => setButtonState(this, 'idle', defaultText), 2600);
+    setButtonState(button, 'error', error.message || 'No se pudo enviar.');
+    setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
     return;
   }
 
-  setButtonState(this, 'success', '✅ Solicitud enviada — ¡te contactamos pronto!');
+  try {
+    const { trackSolicitudProfesor } = await import('./js/analytics.js');
+    trackSolicitudProfesor(materia || 'sin_especificar');
+  } catch (_) {}
+
+  setButtonState(button, 'success', '✅ Solicitud enviada — ¡te contactamos pronto!');
+  this.reset();
 });
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

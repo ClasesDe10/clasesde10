@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Crear cuenta — ClasesDe10</title>
 <meta name="description" content="Únete a ClasesDe10. Regístrate como familia o profesor y accede a nuestra plataforma de clases particulares en Madrid.">
+<link rel="canonical" href="https://clasesde10.com/pages/registro.html">
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="../css/dashboard.css">
 <style>
 body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
@@ -50,17 +57,39 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 .auth-footer a:hover { color:var(--gold); }
 .terms-note { font-size:.72rem; color:var(--gray-mid); text-align:center; margin-top:12px; line-height:1.5; }
 .terms-note a { color:var(--navy); }
+.auth-check {
+  display:flex; gap:10px; align-items:flex-start;
+  font-size:.75rem; line-height:1.5; color:var(--gray-mid);
+  margin:2px 0 14px;
+}
+.auth-check input {
+  width:18px; height:18px; margin-top:1px; flex:0 0 auto;
+  accent-color:var(--navy);
+}
+.auth-check a { color:var(--navy); font-weight:700; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 </style>
 </head>
 <body>
 <div class="auth-card">
   <div class="auth-logo">
-    <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10">
     <div class="auth-logo-name">Clases<span>De10</span></div>
   </div>
+  <h1 class="sr-only">Crear cuenta en ClasesDe10</h1>
 
-  <div id="error-banner" class="error-banner" role="alert"></div>
-  <div id="success-banner" class="success-banner">
+  <div id="error-banner" class="error-banner" role="alert" aria-live="assertive"></div>
+  <div id="success-banner" class="success-banner" role="status" aria-live="polite">
     <div style="font-size:1.8rem;margin-bottom:8px">✓</div>
     <strong>¡Cuenta creada!</strong><br>
     Hemos enviado un email de confirmación a <span id="email-confirmado"></span>.<br>
@@ -88,41 +117,45 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
       </label>
     </div>
 
-    <form id="form-registro" novalidate>
+    <form id="form-registro" method="post" novalidate>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label" for="nombre">Nombre <span class="required">*</span></label>
           <input class="form-control" type="text" id="nombre" name="nombre"
-                 placeholder="Tu nombre" autocomplete="given-name" required>
+                 placeholder="Tu nombre" autocomplete="given-name" maxlength="80" required>
         </div>
         <div class="form-group">
           <label class="form-label" for="apellidos">Apellidos <span class="required">*</span></label>
           <input class="form-control" type="text" id="apellidos" name="apellidos"
-                 placeholder="Tus apellidos" autocomplete="family-name" required>
+                 placeholder="Tus apellidos" autocomplete="family-name" maxlength="120" required>
         </div>
       </div>
       <div class="form-group">
         <label class="form-label" for="email">Correo electrónico <span class="required">*</span></label>
         <input class="form-control" type="email" id="email" name="email"
-               placeholder="tu@email.com" autocomplete="email" required>
+               placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
       </div>
       <div class="form-group">
         <label class="form-label" for="telefono">Teléfono</label>
         <input class="form-control" type="tel" id="telefono" name="telefono"
-               placeholder="600 000 000" autocomplete="tel">
+               placeholder="600 000 000" autocomplete="tel" maxlength="40">
       </div>
       <div class="form-group">
         <label class="form-label" for="password">Contraseña <span class="required">*</span></label>
         <input class="form-control" type="password" id="password" name="password"
-               placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8">
+               placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8" maxlength="128">
         <div class="pwd-strength"><div class="pwd-strength-bar" id="pwd-bar"></div></div>
         <div class="form-hint">Mínimo 8 caracteres</div>
       </div>
       <div class="form-group">
         <label class="form-label" for="password2">Repetir contraseña <span class="required">*</span></label>
         <input class="form-control" type="password" id="password2" name="password2"
-               placeholder="Repite tu contraseña" required>
+               placeholder="Repite tu contraseña" autocomplete="new-password" required maxlength="128">
       </div>
+      <label class="auth-check" for="acepta-privacidad">
+        <input id="acepta-privacidad" name="privacidad" type="checkbox" required>
+        <span>Acepto los <a href="/terminos.html" target="_blank" rel="noopener noreferrer">Términos de uso</a> y la <a href="/privacidad.html" target="_blank" rel="noopener noreferrer">Política de privacidad</a>.</span>
+      </label>
       <button type="submit" class="btn btn-gold btn-lg" id="btn-registro" style="width:100%;justify-content:center">
         <span id="btn-text">Crear mi cuenta</span>
         <span id="btn-load" style="display:none">Creando cuenta…</span>
@@ -196,6 +229,7 @@ document.getElementById('password').addEventListener('input', (e) => {
 document.getElementById('form-registro').addEventListener('submit', async (e) => {
   e.preventDefault();
   hideError();
+  if (!e.currentTarget.reportValidity()) return;
 
   const nombre    = document.getElementById('nombre').value.trim();
   const apellidos = document.getElementById('apellidos').value.trim();
@@ -203,6 +237,7 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
   const telefono  = document.getElementById('telefono').value.trim();
   const password  = document.getElementById('password').value;
   const password2 = document.getElementById('password2').value;
+  const privacidad = document.getElementById('acepta-privacidad').checked;
 
   if (!nombre || !apellidos || !email || !password) {
     showError('Completa todos los campos obligatorios.'); return;
@@ -215,6 +250,9 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
   }
   if (password !== password2) {
     showError('Las contraseñas no coinciden.'); return;
+  }
+  if (!privacidad) {
+    showError('Debes aceptar los términos y la política de privacidad para crear la cuenta.'); return;
   }
 
   const btn  = document.getElementById('btn-registro');
@@ -247,5 +285,6 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
   successBanner.style.display = 'block';
 });
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

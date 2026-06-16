@@ -3,20 +3,40 @@
 -- Ejecutar tras crear el bucket 'documentos' en el Dashboard
 -- ═══════════════════════════════════════════════════════════════
 
--- Los objetos del bucket 'documentos' son accesibles públicamente (lectura)
-CREATE POLICY "storage_public_read"
-ON storage.objects FOR SELECT TO public
-USING (bucket_id = 'documentos');
+UPDATE storage.buckets SET public = false WHERE id = 'documentos';
+
+-- Los objetos del bucket 'documentos' son privados; lectura solo por dueño o admin
+CREATE POLICY "storage_user_read"
+ON storage.objects FOR SELECT TO authenticated
+USING (
+  bucket_id = 'documentos'
+  AND (
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+    )
+    OR ((storage.foldername(name))[1] = 'documentos' AND (storage.foldername(name))[2] IN (
+      SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+    ))
+    OR EXISTS (
+      SELECT 1 FROM public.usuarios
+      WHERE auth_id = auth.uid() AND rol = 'admin'
+    )
+  )
+);
 
 -- Un usuario autenticado puede subir archivos a su propia carpeta
--- La estructura es: documentos/{user_id}/{filename}
+-- La estructura compatible es: documentos/{user_id}/{filename}
 CREATE POLICY "storage_user_upload"
 ON storage.objects FOR INSERT TO authenticated
 WITH CHECK (
   bucket_id = 'documentos'
-  AND (storage.foldername(name))[1] IN (
-    -- La primera carpeta debe ser su propio user_id de la tabla usuarios
-    SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+  AND (
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+    )
+    OR ((storage.foldername(name))[1] = 'documentos' AND (storage.foldername(name))[2] IN (
+      SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+    ))
   )
 );
 
@@ -25,8 +45,17 @@ CREATE POLICY "storage_user_delete"
 ON storage.objects FOR DELETE TO authenticated
 USING (
   bucket_id = 'documentos'
-  AND (storage.foldername(name))[1] IN (
-    SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+  AND (
+    (storage.foldername(name))[1] IN (
+      SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+    )
+    OR ((storage.foldername(name))[1] = 'documentos' AND (storage.foldername(name))[2] IN (
+      SELECT id::text FROM public.usuarios WHERE auth_id = auth.uid()
+    ))
+    OR EXISTS (
+      SELECT 1 FROM public.usuarios
+      WHERE auth_id = auth.uid() AND rol = 'admin'
+    )
   )
 );
 

@@ -4,9 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel Administrador — ClasesDe10</title>
+<meta name="description" content="Panel privado de administracion de ClasesDe10 para gestionar usuarios, clases, pagos y leads.">
+<link rel="canonical" href="https://clasesde10.com/pages/dashboard/admin.html">
 <meta name="robots" content="noindex, nofollow">
-<link rel="icon" type="image/png" href="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="../../css/dashboard.css">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 </head>
 <body>
 <div class="dash-layout">
@@ -14,7 +23,7 @@
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <a href="/" class="sidebar-logo">
-      <img src="https://clasesde10.wordpress.com/wp-content/uploads/2025/07/cropped-chatgpt-image-17-jul-2025-20_00_31.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
       <span class="sidebar-logo-text">Clases<span>De10</span></span>
     </a>
 
@@ -65,6 +74,11 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Pagos
         <span class="sidebar-badge" id="badge-pagos" style="display:none">0</span>
+      </button>
+      <button class="sidebar-link" data-section="leads">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
+        Leads
+        <span class="sidebar-badge" id="badge-leads" style="display:none">0</span>
       </button>
       <button class="sidebar-link" data-section="documentos">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -381,7 +395,7 @@
                 <tr>
                   <th>Fecha</th>
                   <th>Familia</th>
-                  <th>Clase</th>
+                  <th>Justificante</th>
                   <th>Importe</th>
                   <th>Método</th>
                   <th>Referencia</th>
@@ -399,7 +413,46 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: DOCUMENTOS ══ -->
+      <!-- SECCION: LEADS PUBLICOS -->
+      <section id="section-leads" class="dash-section" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+          <div style="display:flex;gap:10px">
+            <select class="form-control" id="filtro-lead-tipo" style="width:160px">
+              <option value="">Todos</option>
+              <option value="contacto">Contacto</option>
+              <option value="familia">Familias</option>
+              <option value="profesor">Profesores</option>
+            </select>
+            <select class="form-control" id="filtro-lead-estado" style="width:160px">
+              <option value="">Todos</option>
+              <option value="nuevo">Nuevos</option>
+              <option value="contactado">Contactados</option>
+              <option value="cerrado">Cerrados</option>
+              <option value="spam">Spam</option>
+            </select>
+          </div>
+        </div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Nombre</th>
+                  <th>Email</th>
+                  <th>Telefono</th>
+                  <th>Asunto</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-leads"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
       <section id="section-documentos" class="dash-section" style="display:none">
         <div class="card">
           <div class="card-header">
@@ -474,7 +527,7 @@
       <button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <form id="form-clase" novalidate>
+    <form id="form-clase" method="post" novalidate>
         <input type="hidden" id="clase-id">
         <div class="form-row">
           <div class="form-group">
@@ -533,7 +586,7 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modal-clase')">Cancelar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-clase">Cancelar</button>
       <button class="btn btn-primary" id="btn-guardar-clase">Guardar clase</button>
     </div>
   </div>
@@ -564,7 +617,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modal-asignar')">Cancelar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-asignar">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-asignar">Confirmar asignación</button>
     </div>
   </div>
@@ -585,7 +638,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modal-documento')">Cerrar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-documento">Cerrar</button>
       <button class="btn btn-danger btn-sm" id="btn-rechazar-doc" data-doc-id="">Rechazar</button>
       <button class="btn btn-success btn-sm" id="btn-validar-doc" data-doc-id="">Validar</button>
     </div>
@@ -631,7 +684,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal('modal-incidencia')">Cancelar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-incidencia">Cancelar</button>
       <button class="btn btn-primary" id="btn-guardar-inc">Guardar cambios</button>
     </div>
   </div>
@@ -676,7 +729,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="window.closeModal('modal-editar-alumno')">Cancelar</button>
+      <button class="btn btn-ghost" data-close-modal="modal-editar-alumno">Cancelar</button>
       <button class="btn btn-primary" id="btn-guardar-alumno">Guardar cambios</button>
     </div>
   </div>
@@ -701,11 +754,11 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
-const secciones = ['dashboard','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','documentos','incidencias'];
+const secciones = ['dashboard','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','leads','documentos','incidencias'];
 const TITULOS = {
   dashboard:'Dashboard', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
-  solicitudes:'Solicitudes', pagos:'Pagos', documentos:'Documentos', incidencias:'Incidencias',
+  solicitudes:'Solicitudes', pagos:'Pagos', leads:'Leads', documentos:'Documentos', incidencias:'Incidencias',
 };
 
 function irA(seccion) {
@@ -724,6 +777,7 @@ function irA(seccion) {
   else if (seccion === 'alumnos') cargarAlumnos();
   else if (seccion === 'solicitudes') cargarSolicitudes();
   else if (seccion === 'pagos') cargarPagos();
+  else if (seccion === 'leads') cargarLeads();
   else if (seccion === 'documentos') cargarDocumentos();
   else if (seccion === 'incidencias') cargarIncidencias();
 }
@@ -733,6 +787,10 @@ document.querySelectorAll('[data-section]').forEach(el => {
 });
 initSidebar();
 initModals();
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-close-modal]');
+  if (btn) closeModal(btn.dataset.closeModal);
+});
 document.getElementById('btn-logout').addEventListener('click', () => logout());
 
 // ── DASHBOARD ────────────────────────────────────────────────────
@@ -797,6 +855,13 @@ async function cargarDashboard() {
     const b = document.getElementById('badge-incidencias');
     b.textContent = data.incidencias_abiertas; b.style.display = '';
   }
+  const { count: leadsNuevos } = await db.from('leads_publicos')
+    .select('id', { count:'exact', head:true })
+    .eq('estado', 'nuevo');
+  if (leadsNuevos > 0) {
+    const b = document.getElementById('badge-leads');
+    b.textContent = leadsNuevos; b.style.display = '';
+  }
 
   cargarSolicitudesRecientes();
   cargarProximasClasesDash();
@@ -858,11 +923,17 @@ async function cargarPagosPendientesDash() {
       <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
       <td>${formatFechaCorta(p.created_at)}</td>
       <td>
-        <button class="btn btn-success btn-sm" onclick="validarPago('${p.id}','validado')">Validar</button>
-        <button class="btn btn-ghost btn-sm" onclick="validarPago('${p.id}','rechazado')">Rechazar</button>
+        <button class="btn btn-success btn-sm" data-action="validar-pago" data-id="${sanitize(p.id)}" data-estado="validado">Validar</button>
+        <button class="btn btn-ghost btn-sm" data-action="validar-pago" data-id="${sanitize(p.id)}" data-estado="rechazado">Rechazar</button>
       </td>
     </tr>`).join('') + '</tbody></table></div>';
 }
+
+document.getElementById('lista-pagos-pendientes')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="validar-pago"]');
+  if (!btn) return;
+  window.validarPago(btn.dataset.id, btn.dataset.estado);
+});
 
 // ── CLASES ───────────────────────────────────────────────────────
 const PAG_CLASES = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-clases'), onPageChange: () => cargarClases() });
@@ -895,10 +966,16 @@ async function cargarClases() {
     <td>${c.precio_total ? formatEuros(c.precio_total) : '—'}</td>
     <td>${badgeEstado(c.estado)}</td>
     <td>
-      <button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick="editarClase('${c.id}')">✏️</button>
+      <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-action="editar-clase" data-id="${sanitize(c.id)}">✏️</button>
     </td>
   </tr>`).join('');
 }
+
+document.getElementById('tbody-clases')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="editar-clase"]');
+  if (!btn) return;
+  window.editarClase(btn.dataset.id);
+});
 
 // filtros clases
 ['filtro-clases-busqueda','filtro-clases-estado','filtro-clases-mes'].forEach(id => {
@@ -1079,11 +1156,17 @@ async function cargarProfesores() {
     <td>${badgeEstado(p.estado_verificacion)}</td>
     <td>—</td>
     <td>
-      <button class="btn btn-ghost btn-sm" onclick="cambiarVerificacion('${p.id}','verificado')">✓ Verificar</button>
-      <button class="btn btn-ghost btn-sm" onclick="cambiarVerificacion('${p.id}','rechazado')">✕</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">✓ Verificar</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">✕</button>
     </td>
   </tr>`).join('');
 }
+
+document.getElementById('tbody-profesores')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="cambiar-verificacion"]');
+  if (!btn) return;
+  window.cambiarVerificacion(btn.dataset.id, btn.dataset.estado);
+});
 
 window.cambiarVerificacion = async (id, estado) => {
   const { error } = await db.from('profesores').update({ estado_verificacion: estado }).eq('id', id);
@@ -1294,7 +1377,11 @@ async function cargarSolicitudes() {
     <td>${badgeEstado(s.estado)}</td>
     <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : '—'}</td>
     <td>
-      ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm" onclick="abrirAsignar('${s.id}','${sanitize(s.materia)}','${sanitize(s.familias?.usuarios?.nombre||'')}')">Asignar</button>` : ''}
+      ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm"
+                                      data-action="abrir-asignar"
+                                      data-id="${sanitize(s.id)}"
+                                      data-materia="${sanitize(s.materia)}"
+                                      data-familia="${sanitize(s.familias?.usuarios?.nombre||'')}">Asignar</button>` : ''}
     </td>
   </tr>`).join('');
 }
@@ -1312,6 +1399,12 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     (profs||[]).map(p => `<option value="${p.id}">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</option>`).join('');
   openModal('modal-asignar');
 };
+
+document.getElementById('tbody-solicitudes')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="abrir-asignar"]');
+  if (!btn) return;
+  window.abrirAsignar(btn.dataset.id, btn.dataset.materia, btn.dataset.familia);
+});
 
 document.getElementById('btn-confirmar-asignar').addEventListener('click', async () => {
   const id     = document.getElementById('asignar-solicitud-id').value;
@@ -1335,41 +1428,66 @@ const PAG_PAGO = new Paginacion({ porPagina:20, contenedor: document.getElementB
 async function cargarPagos() {
   const estado = document.getElementById('filtro-pago-estado').value;
   let q = db.from('pagos')
-    .select('*, familias(usuarios(nombre,apellidos))', {count:'exact'});
+    .select('*, familias(usuarios(nombre,apellidos)), documentos(id,nombre,storage_path)', {count:'exact'});
   if (estado) q = q.eq('estado', estado);
   q = q.order('created_at',{ascending:false}).range(PAG_PAGO.offset(), PAG_PAGO.offset()+19);
 
-  const { data, count } = await q;
+  const { data, count, error } = await q;
   PAG_PAGO.setTotal(count||0);
   document.getElementById('pago-count').textContent = `${count||0} pagos`;
 
   const tbody = document.getElementById('tbody-pagos');
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
+    return;
+  }
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin pagos.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(p => `<tr>
+  tbody.innerHTML = data.map(p => {
+    const doc = Array.isArray(p.documentos) ? p.documentos[0] : p.documentos;
+    const docButton = doc?.storage_path ? `
+      <button class="btn btn-ghost btn-sm"
+              data-action="ver-pago-doc"
+              data-doc-id="${sanitize(doc.id)}"
+              data-doc-nombre="${sanitize(doc.nombre || 'Justificante')}"
+              data-doc-path="${sanitize(doc.storage_path)}">Ver</button>
+    ` : '';
+    const revisionButtons = p.estado === 'pendiente' ? `
+      <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(p.id)}" data-pago-estado="validado">✓</button>
+      <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(p.id)}" data-pago-estado="rechazado">✕</button>
+    ` : '';
+
+    return `<tr>
     <td>${formatFechaCorta(p.created_at)}</td>
     <td>${sanitize(p.familias?.usuarios?.nombre||'')} ${sanitize(p.familias?.usuarios?.apellidos||'')}</td>
-    <td>—</td>
+    <td>${doc?.nombre ? sanitize(doc.nombre) : '—'}</td>
     <td><strong>${formatEuros(p.monto)}</strong></td>
     <td>${sanitize(p.metodo)}</td>
     <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
     <td>${badgeEstado(p.estado)}</td>
-    <td>
-      ${p.estado === 'pendiente' ? `
-        <button class="btn btn-success btn-sm" onclick="validarPago('${p.id}','validado')">✓</button>
-        <button class="btn btn-danger btn-sm" onclick="validarPago('${p.id}','rechazado')">✕</button>
-      ` : '—'}
-    </td>
-  </tr>`).join('');
+    <td>${docButton}${revisionButtons || (!docButton ? '—' : '')}</td>
+  </tr>`;
+  }).join('');
 }
 ['filtro-pago-busqueda','filtro-pago-estado'].forEach(id => {
   document.getElementById(id)?.addEventListener('input', debounce(cargarPagos, 350));
 });
 
+document.getElementById('tbody-pagos')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  if (btn.dataset.action === 'ver-pago-doc') {
+    await verDocumento(btn.dataset.docId, btn.dataset.docNombre, btn.dataset.docPath);
+  } else if (btn.dataset.action === 'validar-pago') {
+    await window.validarPago(btn.dataset.pagoId, btn.dataset.pagoEstado);
+  }
+});
+
 document.getElementById('btn-export-pagos').addEventListener('click', async () => {
-  const { data } = await db.from('pagos')
-    .select('*, familias(usuarios(nombre,apellidos,email))')
+  const { data, error } = await db.from('pagos')
+    .select('*, familias(usuarios(nombre,apellidos,email)), documentos(nombre,storage_path)')
     .order('created_at', {ascending:false});
+  if (error) { showToast('Error', error.message, 'error'); return; }
   exportarCSV(
     (data||[]).map(p => ({
       fecha:           p.created_at ? p.created_at.split('T')[0] : '',
@@ -1380,6 +1498,8 @@ document.getElementById('btn-export-pagos').addEventListener('click', async () =
       referencia:      p.referencia || '',
       estado:          p.estado || '',
       notas:           p.notas_familia || '',
+      documento:       p.documentos?.nombre || '',
+      documento_path:  p.documentos?.storage_path || '',
       fecha_validacion: p.fecha_validacion ? p.fecha_validacion.split('T')[0] : '',
     })),
     'pagos_clasesde10.csv',
@@ -1392,6 +1512,8 @@ document.getElementById('btn-export-pagos').addEventListener('click', async () =
       {titulo:'Referencia',     campo:'referencia'},
       {titulo:'Estado',         campo:'estado'},
       {titulo:'Notas',          campo:'notas'},
+      {titulo:'Documento',      campo:'documento'},
+      {titulo:'Ruta documento', campo:'documento_path'},
       {titulo:'Fecha validación', campo:'fecha_validacion'},
     ]
   );
@@ -1410,6 +1532,55 @@ window.validarPago = async (id, estado) => {
 };
 
 // ── DOCUMENTOS ───────────────────────────────────────────────────
+// Leads publicos
+async function cargarLeads() {
+  const tipo = document.getElementById('filtro-lead-tipo').value;
+  const estado = document.getElementById('filtro-lead-estado').value;
+  let q = db.from('leads_publicos').select('*').order('created_at', { ascending:false }).limit(100);
+  if (tipo) q = q.eq('tipo', tipo);
+  if (estado) q = q.eq('estado', estado);
+  const { data, error } = await q;
+
+  const tbody = document.getElementById('tbody-leads');
+  if (error) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
+    return;
+  }
+  if (!data?.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin leads.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(l => `<tr>
+    <td>${formatFechaCorta(l.created_at)}</td>
+    <td>${badgeEstado(l.tipo)}</td>
+    <td><strong>${sanitize(l.nombre)}</strong></td>
+    <td><a href="mailto:${sanitize(l.email)}">${sanitize(l.email)}</a></td>
+    <td>${sanitize(l.telefono || '-')}</td>
+    <td title="${sanitize(l.mensaje || '')}">${sanitize(l.asunto || l.mensaje || '-')}</td>
+    <td>${badgeEstado(l.estado)}</td>
+    <td>
+      ${l.estado !== 'contactado' ? `<button class="btn btn-primary btn-sm" data-action="lead-estado" data-lead-id="${l.id}" data-lead-estado="contactado">Contactado</button>` : ''}
+      ${l.estado !== 'cerrado' ? `<button class="btn btn-ghost btn-sm" data-action="lead-estado" data-lead-id="${l.id}" data-lead-estado="cerrado">Cerrar</button>` : ''}
+    </td>
+  </tr>`).join('');
+}
+
+['filtro-lead-tipo','filtro-lead-estado'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', cargarLeads);
+});
+
+document.getElementById('tbody-leads')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="lead-estado"]');
+  if (!btn) return;
+  const { error } = await db.from('leads_publicos')
+    .update({ estado: btn.dataset.leadEstado })
+    .eq('id', btn.dataset.leadId);
+  if (error) { showToast('Error', error.message, 'error'); return; }
+  showToast('Lead actualizado', '', 'success');
+  cargarLeads();
+});
+
 async function cargarDocumentos() {
   const { data } = await db.from('documentos')
     .select('id, created_at, tipo, nombre, storage_path, estado, notas_admin, usuarios(nombre,apellidos)')
@@ -1418,7 +1589,7 @@ async function cargarDocumentos() {
   const tbody = document.getElementById('tbody-documentos');
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin documentos.</td></tr>'; return; }
 
-  // Usar data-* attributes en lugar de onclick inline para evitar XSS
+  // Usar data-* attributes en lugar de handlers inline para evitar XSS
   tbody.innerHTML = data.map(d => `<tr>
     <td>${formatFechaCorta(d.created_at)}</td>
     <td>${sanitize(d.usuarios?.nombre||'')} ${sanitize(d.usuarios?.apellidos||'')}</td>
@@ -1443,7 +1614,7 @@ async function cargarDocumentos() {
   </tr>`).join('');
 }
 
-// Event delegation para documentos — elimina XSS por onclick inline con datos sin sanitizar
+// Event delegation para documentos: evita ejecutar datos sin sanitizar como codigo
 document.getElementById('tbody-documentos').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
@@ -1583,5 +1754,6 @@ window.closeModal = (id) => {
   document.body.style.overflow = '';
 };
 </script>
+<script src="/js/pwa.js" defer></script>
 </body>
 </html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Pagina offline de ClasesDe10 para seguir navegando cuando no hay conexion.">
+<link rel="canonical" href="https://clasesde10.com/offline.html">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0f1f3d">
+<title>Sin conexion | ClasesDe10</title>
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f1f3d;
+  color: #fff;
+}
+main {
+  width: min(100%, 460px);
+  text-align: center;
+}
+img {
+  width: 84px;
+  height: 84px;
+  border-radius: 18px;
+  margin-bottom: 24px;
+}
+h1 {
+  font-size: clamp(1.8rem, 8vw, 2.6rem);
+  line-height: 1.08;
+  margin-bottom: 14px;
+}
+p {
+  color: rgba(255,255,255,.72);
+  line-height: 1.7;
+  margin-bottom: 26px;
+}
+a, button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 12px 22px;
+  border-radius: 10px;
+  border: 0;
+  background: #e8a030;
+  color: #0f1f3d;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+<main>
+  <img src="/assets/img/logo-192.png" alt="ClasesDe10">
+  <h1>Estas sin conexion</h1>
+  <p>La app de ClasesDe10 esta instalada, pero esta pagina necesita conexion para cargar informacion actualizada. Vuelve a intentarlo cuando recuperes internet.</p>
+  <button type="button" id="retryButton">Reintentar</button>
+</main>
+<script>
+document.getElementById('retryButton').addEventListener('click', () => window.location.reload());
+</script>
+<script src="/js/pwa.js" defer></script>
+</body>
+</html>
