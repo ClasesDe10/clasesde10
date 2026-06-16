@@ -177,3 +177,19 @@ en Firestore `leadsPublicos`, con reglas anonimas estrictas de solo creacion.
 Consecuencia: la captacion nueva deja de depender de Supabase/Sheets. Durante la
 transicion, los leads nuevos se revisan en Firebase Console hasta migrar el
 panel admin a Firebase Auth/Firestore.
+
+## ADR-016 - Auth Firebase preparado pero no activado en UI
+
+Estado: aceptada.
+
+Contexto: Firebase Auth aun no esta inicializado en consola y `firebase auth:export`
+devuelve `CONFIGURATION_NOT_FOUND`. Cambiar `login.html`, `registro.html` o los
+dashboards ahora cortaria el acceso de usuarios actuales.
+
+Decision: crear `js/firebase-auth.js` con una API equivalente a `js/auth.js`
+para login, registro, reset, logout, `requireAuth` y redireccion por rol, pero
+mantener las paginas productivas sobre Supabase hasta crear el primer admin y
+validar reglas/usuarios en Firebase.
+
+Consecuencia: la migracion de Auth queda preparada y reversible. El cambio de
+UI se hara en un paso posterior pequeno, probado y con rollback claro.

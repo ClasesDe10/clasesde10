@@ -81,6 +81,17 @@ Decision: el rol canonico vive en `users/{uid}.role`. Las colecciones privadas
 guardan `familyUid`, `teacherUid`, `studentUid` o mapas de participantes para
 autorizar sin joins.
 
+## Capa Auth frontend
+
+`js/firebase-auth.js` ya existe como adaptador de transicion. Expone login,
+registro, reset, logout, `requireAuth` y redireccion por rol con una forma
+compatible con `js/auth.js`.
+
+No se conecta aun a `pages/login.html`, `pages/registro.html`,
+`pages/reset-password.html` ni dashboards porque Firebase Auth no esta
+inicializado y aun falta crear el primer admin. Mantener Supabase en produccion
+evita corte de acceso mientras Firebase se valida.
+
 ## Storage objetivo
 
 | Ruta | Uso | Regla |

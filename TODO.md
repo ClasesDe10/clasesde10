@@ -13,6 +13,7 @@ Actualizado: 2026-06-16
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
+- [x] Preparar adaptador frontend `js/firebase-auth.js` sin conectarlo aun a UI.
 - [ ] Definir/importar datos reales solo tras validar reglas Firebase.
 - [x] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.
 - [ ] Configurar Supabase Auth redirect URLs:
@@ -73,6 +74,7 @@ Actualizado: 2026-06-16
 - [x] `IMPLEMENTATION_LOG.md` creado para separar cambios reales de documentacion.
 - [x] Firebase SDK importado en `js/firebase-client.js`.
 - [x] Arquitectura Firebase definitiva documentada en `FIREBASE_ARCHITECTURE.md`.
+- [x] Adaptador Firebase Auth preparado para login/registro/reset futuro.
 - [x] Reglas base de Firestore y Storage preparadas.
 - [x] `firebase.json` preparado para Firebase CLI.
 - [x] `.firebaserc` preparado para `clasesde10-50add`.

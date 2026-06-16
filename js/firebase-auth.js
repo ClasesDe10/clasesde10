@@ -1,0 +1,259 @@
+/**
+ * ClasesDe10 - Firebase Auth transition layer.
+ *
+ * This module is intentionally not wired into production pages yet. It mirrors
+ * the public API of js/auth.js so login/register screens can be switched from
+ * Supabase to Firebase once Authentication is enabled and the first admin user
+ * has been bootstrapped.
+ */
+
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
+import {
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { firebaseAuth, firebaseDb } from './firebase-client.js';
+
+const CANONICAL_ORIGIN = 'https://clasesde10.com';
+
+const ROLES_RUTAS = {
+  admin: '/pages/dashboard/admin.html',
+  profesor: '/pages/dashboard/profesor.html',
+  familia: '/pages/dashboard/familia.html',
+  alumno: '/pages/dashboard/alumno.html',
+};
+
+const ROLE_COLLECTION = {
+  profesor: 'profesores',
+  familia: 'familias',
+};
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function authError(message, code = 'firebase-auth/precondition') {
+  return { message, code };
+}
+
+function mapFirebaseError(error) {
+  const messages = {
+    'auth/email-already-in-use': 'Ya existe una cuenta con este email.',
+    'auth/invalid-credential': 'Email o contrasena incorrectos.',
+    'auth/invalid-email': 'Introduce un email valido.',
+    'auth/missing-password': 'Introduce la contrasena.',
+    'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.',
+    'auth/user-disabled': 'Tu cuenta esta desactivada. Contacta con soporte.',
+    'auth/user-not-found': 'Email o contrasena incorrectos.',
+    'auth/weak-password': 'La contrasena debe tener al menos 8 caracteres.',
+    'auth/wrong-password': 'Email o contrasena incorrectos.',
+  };
+
+  if (!error) return null;
+  return {
+    ...error,
+    message: messages[error.code] || error.message || 'No se pudo completar la operacion.',
+  };
+}
+
+function mapProfile(uid, data) {
+  if (!data) return null;
+  return {
+    id: uid,
+    auth_id: uid,
+    uid,
+    email: data.email || '',
+    nombre: data.nombre || '',
+    apellidos: data.apellidos || '',
+    telefono: data.telefono || '',
+    rol: data.role,
+    role: data.role,
+    activo: data.active !== false,
+    active: data.active !== false,
+  };
+}
+
+export function getSession() {
+  return firebaseAuth.currentUser
+    ? { user: firebaseAuth.currentUser }
+    : null;
+}
+
+export async function getUsuarioActual() {
+  const user = firebaseAuth.currentUser;
+  if (!user) return null;
+
+  const snap = await getDoc(doc(firebaseDb, 'users', user.uid));
+  if (!snap.exists()) return null;
+
+  return mapProfile(user.uid, snap.data());
+}
+
+export async function requireAuth(rolesPermitidos = []) {
+  const usuario = await getUsuarioActual();
+
+  if (!usuario) {
+    window.location.href = '/pages/login.html';
+    return new Promise(() => {});
+  }
+
+  if (rolesPermitidos.length > 0 && !rolesPermitidos.includes(usuario.rol)) {
+    const rutaPropia = ROLES_RUTAS[usuario.rol];
+    if (rutaPropia) window.location.href = rutaPropia;
+    return new Promise(() => {});
+  }
+
+  return usuario;
+}
+
+export async function login(emailRaw, passwordRaw) {
+  const email = normalizeEmail(emailRaw);
+  const password = passwordRaw || '';
+
+  if (!email || !password) {
+    return { error: authError('Email y contrasena son obligatorios.') };
+  }
+
+  try {
+    const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+    const usuario = await getUsuarioActual();
+
+    if (!usuario) {
+      await signOut(firebaseAuth);
+      return { error: authError('No existe perfil de usuario en Firestore.') };
+    }
+
+    if (!usuario.activo) {
+      await signOut(firebaseAuth);
+      return { error: authError('Tu cuenta esta desactivada. Contacta con soporte.') };
+    }
+
+    return { data: credential, usuario };
+  } catch (error) {
+    return { error: mapFirebaseError(error) };
+  }
+}
+
+export async function register({
+  email,
+  password,
+  nombre,
+  apellidos,
+  telefono,
+  rol,
+  alumno_invitacion_token,
+  alumnoInvitacionToken,
+}) {
+  const emailClean = normalizeEmail(email);
+  const nombreClean = normalizeText(nombre);
+  const apellidosClean = normalizeText(apellidos);
+  const telefonoClean = normalizeText(telefono);
+  const role = normalizeText(rol);
+  const invitationToken = normalizeText(alumno_invitacion_token || alumnoInvitacionToken);
+
+  if (!emailClean || !password || !nombreClean || !apellidosClean || !role) {
+    return { error: authError('Todos los campos obligatorios deben completarse.') };
+  }
+
+  if (password.length < 8) {
+    return { error: authError('La contrasena debe tener al menos 8 caracteres.') };
+  }
+
+  if (!['profesor', 'familia', 'alumno'].includes(role)) {
+    return { error: authError('Rol no valido.') };
+  }
+
+  if (role === 'alumno') {
+    return {
+      error: authError(
+        invitationToken
+          ? 'El registro de alumno en Firebase requiere migrar primero las invitaciones.'
+          : 'El acceso de alumno requiere una invitacion valida de una familia.',
+      ),
+    };
+  }
+
+  try {
+    const credential = await createUserWithEmailAndPassword(firebaseAuth, emailClean, password);
+    const { user } = credential;
+
+    await updateProfile(user, {
+      displayName: `${nombreClean} ${apellidosClean}`.trim(),
+    });
+
+    await setDoc(doc(firebaseDb, 'users', user.uid), {
+      email: emailClean,
+      nombre: nombreClean,
+      apellidos: apellidosClean,
+      telefono: telefonoClean || null,
+      role,
+      active: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    const profileCollection = ROLE_COLLECTION[role];
+    if (profileCollection) {
+      await setDoc(doc(firebaseDb, profileCollection, user.uid), {
+        userUid: user.uid,
+        email: emailClean,
+        nombre: nombreClean,
+        apellidos: apellidosClean,
+        telefono: telefonoClean || null,
+        active: true,
+        status: role === 'profesor' ? 'pendiente_revision' : 'activo',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await sendEmailVerification(user, {
+      url: `${CANONICAL_ORIGIN}/pages/login.html`,
+    });
+
+    return { data: credential, usuario: await getUsuarioActual() };
+  } catch (error) {
+    return { error: mapFirebaseError(error) };
+  }
+}
+
+export async function logout() {
+  await signOut(firebaseAuth);
+  window.location.href = '/';
+}
+
+export async function resetPassword(email) {
+  try {
+    await sendPasswordResetEmail(firebaseAuth, normalizeEmail(email), {
+      url: `${CANONICAL_ORIGIN}/pages/login.html`,
+    });
+    return { error: null };
+  } catch (error) {
+    return { error: mapFirebaseError(error) };
+  }
+}
+
+export function redirectByRole(rol) {
+  const ruta = ROLES_RUTAS[rol];
+  if (ruta) window.location.href = ruta;
+}
+
+export function onAuthChange(callback) {
+  return onAuthStateChanged(firebaseAuth, async (user) => {
+    callback(user ? 'SIGNED_IN' : 'SIGNED_OUT', user ? { user } : null);
+  });
+}

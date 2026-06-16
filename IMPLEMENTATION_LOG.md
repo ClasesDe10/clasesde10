@@ -24,6 +24,8 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
   temporal creado y borrado.
 - Panel admin legacy actualizado con aviso y enlace a Firebase Console para
   leads nuevos mientras se migra la gestion interna.
+- Creado `js/firebase-auth.js` como adaptador preparado para Firebase Auth,
+  manteniendo login/registro productivos en Supabase hasta inicializar Auth.
 - Auditado `clasesde10-sheets-export.xlsx`; documentado en
   `SHEETS_FIREBASE_AUDIT.md` que Google Sheets no debe migrarse 1:1.
 

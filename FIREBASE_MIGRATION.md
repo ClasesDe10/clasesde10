@@ -11,6 +11,7 @@ Supabase sigue activo para Auth, dashboards y datos operativos legacy.
 Archivo creado:
 
 - `js/firebase-client.js`
+- `js/firebase-auth.js`
 
 SDK cargado desde CDN oficial:
 
@@ -116,6 +117,9 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Apps Script remoto cerrado y sustituido por funciones no-op.
 - Formularios publicos migrados de Supabase a Firestore `leadsPublicos`.
 - Reglas de `leadsPublicos` validadas con lead tecnico temporal creado y borrado.
+- Creado `js/firebase-auth.js` como capa de transicion Auth/Firestore con API
+  compatible con `js/auth.js`. No esta conectado todavia a las paginas porque
+  Firebase Auth sigue sin inicializar.
 - Firebase Auth sigue pendiente porque la API devolvio `CONFIGURATION_NOT_FOUND`
   hasta inicializarlo desde consola.
 - Firebase Storage sigue pendiente porque Firebase exige configurarlo desde
