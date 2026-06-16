@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'clasesde10-pwa-v1';
+const CACHE_VERSION = 'clasesde10-pwa-v2';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
@@ -67,7 +67,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (['style', 'script', 'image', 'font', 'manifest'].includes(request.destination)) {
+  if (['style', 'script', 'manifest'].includes(request.destination)) {
+    event.respondWith(networkFirstAsset(request));
+    return;
+  }
+
+  if (['image', 'font'].includes(request.destination)) {
     event.respondWith(cacheFirst(request));
   }
 });
@@ -85,6 +90,20 @@ async function networkFirstPage(request, event) {
   } catch (_) {
     const cached = await cache.match(request);
     return cached || caches.match('/offline.html');
+  }
+}
+
+async function networkFirstAsset(request) {
+  const cache = await caches.open(STATIC_CACHE);
+
+  try {
+    const response = await fetch(request);
+    if (response && response.ok) {
+      await cache.put(request, response.clone());
+    }
+    return response;
+  } catch (_) {
+    return cache.match(request);
   }
 }
 

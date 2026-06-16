@@ -4,14 +4,21 @@ Fecha: 2026-06-16
 
 ## Resultado Ejecutivo
 
-La base actual es viable y simple: web estatica en Netlify + Supabase como backend. Los mayores riesgos eran duplicidad historica con Google Sheets/Apps Script, archivos muertos, PWA incompleta, formularios pobres para matching y pequenas inconsistencias en la Edge Function. Se corrigieron mejoras seguras y se documentan los pendientes que requieren acceso a produccion.
+La base actual es viable y simple: web estatica en Netlify, Supabase como
+backend legacy y Firebase como destino de migracion. Los mayores riesgos eran
+duplicidad historica con Google Sheets/Apps Script, archivos muertos, PWA
+incompleta, formularios pobres para matching y pequenas inconsistencias en la
+Edge Function. Se corrigieron mejoras seguras y se documentan los pendientes que
+requieren consola/credenciales de produccion.
 
 ## Auditoria Arquitectura
 
 ### Hallazgos
 
-- Supabase ya cubre la operativa principal: auth, roles, dashboards, storage, RLS, leads y notificaciones.
-- Apps Script/Sheets no es consumido por la web actual.
+- Supabase aun cubre la operativa principal: auth, roles, dashboards, storage,
+  RLS y notificaciones.
+- Firebase Firestore ya cubre captacion publica y profesores importados.
+- Apps Script/Sheets no es consumido por la web actual y queda apagado no-op.
 - `ClasesDe10-completo.gs` y `clasp-project/main.gs` son identicos.
 - `matching-ia-gemini.gs` duplica parcialmente logica ya integrada en `main.gs`.
 - `css/shared.js` y `js/seo-components.js` eran codigo muerto; eliminados.
@@ -19,8 +26,9 @@ La base actual es viable y simple: web estatica en Netlify + Supabase como backe
 
 ### Riesgos
 
-- Apps Script legacy puede seguir teniendo triggers activos en Google aunque el repo ya no lo necesite.
-- Google Sheet puede contener datos operativos historicos que no se han migrado.
+- Apps Script legacy puede seguir teniendo triggers activos, pero el codigo
+  remoto ya no escribe, envia emails ni llama a Gemini.
+- Google Sheet contiene datos operativos historicos; solo se importo lo validado.
 - No se pudo verificar Supabase en produccion sin credenciales/sesion admin.
 - No se pudo ejecutar `deno check` porque Deno no esta instalado.
 - No se pudo inspeccionar Supabase/Netlify por CLI porque `supabase` y `netlify` no estan instalados localmente.
@@ -73,7 +81,8 @@ La base actual es viable y simple: web estatica en Netlify + Supabase como backe
 
 ### Pendiente
 
-- Confirmar en Supabase produccion que `leads_publicos.metadata` esta recibiendo los nuevos campos.
+- Leads publicos ya escriben en Firestore `leadsPublicos`; probado con lead
+  tecnico temporal creado y borrado.
 - Definir proceso comercial de conversion de lead a familia/profesor.
 
 ## Auditoria Supabase
@@ -96,6 +105,8 @@ La base actual es viable y simple: web estatica en Netlify + Supabase como backe
 - `leads_publicos` ya no concede insert al rol agregado `public`; queda limitado a `anon` y `authenticated`.
 - Configuracion publica de Supabase centralizada en `js/supabase-config.js`.
 - Storage privado con signed URLs.
+- Los formularios publicos ya no escriben en Supabase; `leads_publicos` queda
+  como tabla legacy hasta migrar el panel admin.
 
 ### Pendiente
 

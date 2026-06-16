@@ -42,9 +42,19 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.keys().hasAll(['tipo', 'nombre', 'email', 'estado', 'createdAt'])
+        && request.resource.data.keys().hasAll([
+          'tipo',
+          'nombre',
+          'email',
+          'metadata',
+          'estado',
+          'createdAt',
+          'updatedAt'
+        ])
         && request.resource.data.tipo in ['contacto', 'familia', 'profesor']
         && request.resource.data.estado == 'nuevo'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
         && request.resource.data.nombre is string
         && request.resource.data.nombre.size() >= 2
         && request.resource.data.nombre.size() <= 160
@@ -62,7 +72,78 @@ service cloud.firestore {
           || (request.resource.data.asunto is string && request.resource.data.asunto.size() <= 180))
         && (!request.resource.data.keys().hasAny(['mensaje'])
           || request.resource.data.mensaje == null
-          || (request.resource.data.mensaje is string && request.resource.data.mensaje.size() <= 3000));
+          || (request.resource.data.mensaje is string && request.resource.data.mensaje.size() <= 3000))
+        && validPublicLeadMetadata();
+    }
+
+    function optionalMetadataString(field, maxSize) {
+      return !request.resource.data.metadata.keys().hasAny([field])
+        || request.resource.data.metadata[field] == null
+        || (
+          request.resource.data.metadata[field] is string
+          && request.resource.data.metadata[field].size() <= maxSize
+        );
+    }
+
+    function validPublicLeadMetadata() {
+      return request.resource.data.metadata is map
+          && request.resource.data.metadata.keys().hasOnly([
+            'alumno',
+            'anios',
+            'canal',
+            'consent_privacy',
+            'disponibilidad',
+            'frecuencia',
+            'inicio',
+            'materia',
+            'materias',
+            'modalidad',
+            'nivel',
+            'niveles',
+            'objetivo',
+            'origen',
+            'page_path',
+            'page_url',
+            'presupuesto',
+            'referrer',
+            'tarifa',
+            'user_agent',
+            'utm_campaign',
+            'utm_content',
+            'utm_medium',
+            'utm_source',
+            'utm_term',
+            'verificacion',
+            'zona'
+          ])
+          && request.resource.data.metadata.keys().hasAll(['consent_privacy'])
+          && optionalMetadataString('alumno', 160)
+          && optionalMetadataString('anios', 80)
+          && optionalMetadataString('canal', 80)
+          && optionalMetadataString('disponibilidad', 300)
+          && optionalMetadataString('frecuencia', 120)
+          && optionalMetadataString('inicio', 120)
+          && optionalMetadataString('materia', 180)
+          && optionalMetadataString('materias', 180)
+          && optionalMetadataString('modalidad', 120)
+          && optionalMetadataString('nivel', 120)
+          && optionalMetadataString('niveles', 120)
+          && optionalMetadataString('objetivo', 160)
+          && optionalMetadataString('origen', 80)
+          && optionalMetadataString('page_path', 300)
+          && optionalMetadataString('page_url', 500)
+          && optionalMetadataString('presupuesto', 120)
+          && optionalMetadataString('referrer', 500)
+          && optionalMetadataString('tarifa', 120)
+          && optionalMetadataString('user_agent', 500)
+          && optionalMetadataString('utm_campaign', 160)
+          && optionalMetadataString('utm_content', 160)
+          && optionalMetadataString('utm_medium', 160)
+          && optionalMetadataString('utm_source', 160)
+          && optionalMetadataString('utm_term', 160)
+          && optionalMetadataString('verificacion', 180)
+          && optionalMetadataString('zona', 180)
+          && request.resource.data.metadata.consent_privacy == true;
     }
 
     function validUserCreate(uid) {

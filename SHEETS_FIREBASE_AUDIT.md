@@ -89,8 +89,7 @@ en dos capas:
 4. Revisar manualmente el subconjunto real de `FAMILIAS` y `ALUMNOS`.
 5. Importar solo familias/alumnos validados.
 6. Subir logs antiguos a Storage como archivo, no a colecciones calientes.
-7. Cambiar formularios publicos a `leadsPublicos` en Firestore.
-8. Migrar dashboards por rol despues de probar reglas con usuarios reales.
+7. Migrar dashboards por rol despues de probar reglas con usuarios reales.
 
 ## Importacion aplicada
 
@@ -99,6 +98,7 @@ en dos capas:
 - Se omitieron 1 email invalido y 3 duplicados por email.
 - Los profesores importados quedan `active = false` y
   `status = pendiente_revision`.
+- Formularios publicos ya escriben en Firestore `leadsPublicos`.
 
 ## Proxima accion humana
 

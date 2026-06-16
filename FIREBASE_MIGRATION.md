@@ -4,8 +4,9 @@ Actualizado: 2026-06-16
 
 ## Estado
 
-Firebase queda importado en la web, Firestore esta creado en Europa y las reglas
-estan desplegadas. Todavia no sustituye Supabase en runtime.
+Firebase queda importado en la web, Firestore esta creado en Europa, las reglas
+estan desplegadas y los formularios publicos ya escriben en `leadsPublicos`.
+Supabase sigue activo para Auth, dashboards y datos operativos legacy.
 
 Archivo creado:
 
@@ -91,9 +92,8 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 1. Activar Firebase Authentication con Email/Password.
 2. Inicializar Firebase Storage si se acepta el requisito de facturacion.
 3. Crear primer usuario admin y documento `users/{uid}`.
-4. Migrar primero formularios publicos a Firestore `leadsPublicos`.
-5. Migrar Auth y dashboards despues, rol por rol.
-6. Importar solo datos de Sheets validados, no el libro entero.
+4. Migrar Auth y dashboards despues, rol por rol.
+5. Importar solo datos de Sheets validados, no el libro entero.
 
 ## Estado aplicado el 2026-06-16
 
@@ -103,6 +103,8 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Importados 24 profesores validos/deduplicados desde Sheets.
 - Creado `importAudits/sheets_profesores_2026_06_16`.
 - Apps Script remoto cerrado y sustituido por funciones no-op.
+- Formularios publicos migrados de Supabase a Firestore `leadsPublicos`.
+- Reglas de `leadsPublicos` validadas con lead tecnico temporal creado y borrado.
 - Firebase Auth sigue pendiente porque la API devolvio `CONFIGURATION_NOT_FOUND`
   hasta inicializarlo desde consola.
 - Firebase Storage sigue pendiente porque Firebase exige configurarlo desde
@@ -112,5 +114,6 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 
 - No borrar Supabase.
 - No cambiar login/registro hasta tener Firebase Auth y reglas.
+- No esperar ver leads nuevos en el panel admin legacy de Supabase.
 - No migrar documentos sin reglas de Storage.
 - No importar datos sin export limpio desde Supabase o CSV validado.

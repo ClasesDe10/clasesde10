@@ -18,6 +18,9 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Firestore `(default)` recreado en `eur3`.
 - Reglas e indices Firestore desplegados.
 - Importados 24 profesores validos/deduplicados a Firestore.
+- Formularios publicos migrados a Firestore `leadsPublicos`.
+- Reglas publicas de `leadsPublicos` endurecidas y probadas con lead tecnico
+  temporal creado y borrado.
 - Auditado `clasesde10-sheets-export.xlsx`; documentado en
   `SHEETS_FIREBASE_AUDIT.md` que Google Sheets no debe migrarse 1:1.
 
@@ -138,6 +141,7 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Firestore verificado en `eur3` con 24 documentos `profesores` y auditoria.
 - Apps Script remoto verificado con `MYSELF` y sin llamadas operativas a Gmail,
   UrlFetch, Gemini ni appendRow.
+- Escritura anonima en `leadsPublicos` verificada con reglas Firestore.
 
 ## Pendiente real antes de produccion
 

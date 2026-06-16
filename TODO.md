@@ -11,7 +11,7 @@ Actualizado: 2026-06-16
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
 - [ ] Definir/importar datos reales solo tras validar reglas Firebase.
-- [ ] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.
+- [x] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.
 - [ ] Configurar Supabase Auth redirect URLs:
   - `https://clasesde10.com/pages/login.html`
   - `https://clasesde10.com/pages/reset-password.html`
@@ -24,7 +24,8 @@ Actualizado: 2026-06-16
   - `NOTIFICATION_SECRET`
   - `RESEND_API_KEY`
 - [ ] Validar RLS por rol con usuarios reales: admin, familia, profesor, alumno.
-- [ ] Confirmar que `leads_publicos` recibe metadata nueva de formularios.
+- [x] Confirmar escritura publica en Firestore `leadsPublicos` con lead tecnico temporal.
+- [ ] Migrar lectura/gestion de leads del panel admin a Firestore.
 - [ ] Instalar Supabase CLI para validar migraciones y Edge Functions con runtime real.
 - [ ] Anadir antispam server-side para leads publicos: Turnstile, rate limit o Edge Function.
 

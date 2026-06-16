@@ -54,4 +54,4 @@ que ningun dato legacy quede operativo sin revision humana.
    facturacion antes de continuar.
 3. Crear primer usuario admin en Firebase Auth.
 4. Crear documento `users/{uid}` con `role = admin`.
-5. Cambiar formularios publicos de Supabase a Firestore `leadsPublicos`.
+5. Migrar lectura/gestion de leads del panel admin a Firestore.

@@ -4,9 +4,16 @@ Fecha de auditoria: 2026-06-16
 
 ## Resumen
 
-ClasesDe10 es una web estatica desplegada en Netlify con una aplicacion privada sobre Supabase. La parte publica capta demanda SEO y leads; la parte privada gestiona usuarios, profesores, familias, alumnos, clases, pagos, documentos e incidencias. Existe ademas un sistema historico en Google Sheets + Apps Script + Gemini que ya no es llamado por la web actual.
+ClasesDe10 es una web estatica desplegada en Netlify con una aplicacion privada
+legacy sobre Supabase y una migracion activa a Firebase. La parte publica capta
+demanda SEO y leads; la parte privada gestiona usuarios, profesores, familias,
+alumnos, clases, pagos, documentos e incidencias. Existe ademas un sistema
+historico en Google Sheets + Apps Script + Gemini que ya esta apagado como
+sistema operativo.
 
-Decision base: Supabase es la fuente de verdad operativa. Google Sheets y Apps Script quedan como legado/archivo hasta migracion o apagado controlado.
+Decision base: Firebase es la fuente de verdad objetivo. Firestore ya recibe
+leads publicos y profesores importados. Supabase sigue temporalmente para Auth,
+dashboards y operativa legacy hasta migracion por fases.
 
 ## Diagrama Logico
 
@@ -15,7 +22,8 @@ flowchart TD
   U["Usuario publico"] --> W["Web estatica Netlify"]
   W --> PWA["PWA: manifest + service worker + offline"]
   W --> L["Formularios publicos"]
-  L --> LP["Supabase: leads_publicos"]
+  L --> LP["Firebase Firestore: leadsPublicos"]
+  W --> FBF["Firebase client: Auth/Firestore/Storage preparados"]
   W --> A["Supabase Auth"]
   A --> D["Dashboards por rol"]
   D --> DB["Supabase Postgres + RLS"]
@@ -24,9 +32,9 @@ flowchart TD
   EF --> R["Resend email"]
   D --> AN["Analytics diferida: GA4/Clarity/Meta si hay IDs"]
 
-  GAS["Apps Script legacy"] --> GS["Google Sheets legacy"]
-  GAS --> GM["Gmail legacy"]
-  GAS --> GE["Gemini matching legacy"]
+  GAS["Apps Script legacy no-op"] -.historico.-> GS["Google Sheets legacy"]
+  GAS -.apagado.-> GM["Gmail legacy"]
+  GAS -.apagado.-> GE["Gemini matching legacy"]
 ```
 
 ## Componentes
@@ -59,7 +67,8 @@ flowchart TD
 
 ### Supabase
 
-- Cliente anonimo publico: `js/supabase-client.js` y `js/public-leads.js`.
+- Cliente anonimo publico legacy: `js/supabase-client.js`.
+- Formularios publicos nuevos: `js/public-leads.js` -> Firebase Firestore.
 - Configuracion publica compartida: `js/supabase-config.js`.
 - Migraciones:
   - `001_schema_completo.sql`: modelo base.
@@ -71,12 +80,14 @@ flowchart TD
 
 ### Google Sheets y Apps Script
 
-- `clasp-project/main.gs`: version canonica si se mantiene Apps Script.
+- `clasp-project/main.js`: version remota segura no-op.
+- `clasp-project/main.gs`: version legacy local previa, no operativa.
 - `ClasesDe10-completo.gs`: duplicado exacto de `clasp-project/main.gs`.
 - `matching-ia-gemini.gs`: modulo de matching IA anterior/aislado; la logica equivalente ya existe integrada en `main.gs`.
 - Sheets legacy: `PROFESORES`, `FAMILIAS`, `ALUMNOS`, `CLASES`, `MATCHING LOG`, `RESUMEN MENSUAL`.
 - Triggers legacy: lectura de Gmail cada 15 min, resumen mensual, matching IA semanal, `onEdit`.
-- Estado: no hay llamadas desde la web actual a Apps Script.
+- Estado: remoto sustituido por funciones no-op; no hay llamadas desde la web
+  actual a Apps Script.
 
 ## Flujos de Datos
 
@@ -86,8 +97,8 @@ Docs ampliados relacionados: `ARCHITECTURE_FULL.md`, `SYSTEM_MAP.md`, `DECISION_
 
 1. Usuario rellena formulario publico.
 2. `js/public-leads.js` valida y normaliza.
-3. Inserta en `leads_publicos`.
-4. Admin gestiona en dashboard.
+3. Inserta en Firestore `leadsPublicos`.
+4. Admin revisa temporalmente en Firebase Console hasta migrar el panel.
 5. Evento de analitica se dispara si hay IDs reales configurados.
 
 ### Registro y acceso
@@ -115,9 +126,10 @@ Docs ampliados relacionados: `ARCHITECTURE_FULL.md`, `SYSTEM_MAP.md`, `DECISION_
 
 | Dominio | Fuente de verdad |
 | --- | --- |
-| Usuarios, roles y sesiones | Supabase Auth + `usuarios` |
-| Profesores/familias/alumnos | Supabase Postgres |
-| Leads publicos | `leads_publicos` |
+| Usuarios, roles y sesiones | Supabase Auth + `usuarios` hasta migrar a Firebase Auth |
+| Profesores | Firestore `profesores` para import limpio; Supabase en dashboards legacy |
+| Familias/alumnos | Supabase Postgres hasta limpieza/import validado |
+| Leads publicos | Firestore `leadsPublicos` |
 | Clases, pagos, documentos | Supabase Postgres + Storage |
 | Matching legacy | Google Sheets hasta migrar/apagar |
 | SEO/publicacion | HTML estatico + sitemap |
@@ -126,7 +138,8 @@ Docs ampliados relacionados: `ARCHITECTURE_FULL.md`, `SYSTEM_MAP.md`, `DECISION_
 
 - Mantener la web sin build hasta que haya necesidad real.
 - Evitar dos fuentes de verdad activas.
-- Centralizar datos operativos en Supabase.
+- Centralizar datos nuevos en Firebase.
+- Mantener Supabase solo como puente operativo hasta migrar dashboards/Auth.
 - Mantener Apps Script cerrado y tratado como legado.
 - No cachear rutas privadas en PWA.
 - Documentar cualquier automatizacion antes de mantenerla o apagarla.

@@ -1,14 +1,21 @@
 # DECISIONS - ClasesDe10
 
-## ADR-001 - Supabase es la fuente de verdad
+## ADR-001 - Fuente de verdad por fases
 
 Estado: aceptada.
 
-Contexto: existen dos sistemas de datos: Supabase y Google Sheets. La web actual no llama a Apps Script; los dashboards y formularios escriben en Supabase.
+Contexto: existen varios sistemas historicos: Supabase, Google Sheets/Apps
+Script y Firebase en migracion. La web ya no debe crear nuevas dependencias en
+Sheets ni Apps Script.
 
-Decision: mantener Supabase como fuente de verdad operativa. Google Sheets queda como legado/archivo hasta migracion o apagado.
+Decision: Firebase es la fuente de verdad objetivo. Firestore ya recibe
+`leadsPublicos` y profesores importados. Supabase sigue como fuente operativa
+temporal para Auth, dashboards y datos relacionales legacy hasta migrar rol por
+rol.
 
-Consecuencia: no se deben crear nuevas funcionalidades sobre Sheets. Cualquier automatizacion futura debe leer/escribir Supabase.
+Consecuencia: no se crean nuevas funcionalidades sobre Sheets ni Apps Script.
+Cualquier flujo nuevo debe ir a Firebase salvo que se documente como puente de
+migracion.
 
 ## ADR-002 - Apps Script cerrado por defecto
 
@@ -100,15 +107,18 @@ Decision: cambiar la policy de insert de `TO public` a `TO anon, authenticated` 
 
 Consecuencia: se mantiene la funcionalidad publica y se reduce superficie de permisos.
 
-## ADR-011 - Firebase importado sin sustituir Supabase todavia
+## ADR-011 - Firebase importado con migracion incremental
 
 Estado: aceptada.
 
 Contexto: se va a migrar a Firebase, pero el proyecto actual es estatico y no tiene npm/bundler. Cambiar todos los flujos de golpe romperia Auth, dashboards, documentos y RLS equivalente.
 
-Decision: crear `js/firebase-client.js` con SDK modular via CDN oficial y dejar Auth, Firestore, Storage, Functions y Analytics preparados. No se cambia todavia la fuente de verdad runtime.
+Decision: crear `js/firebase-client.js` con SDK modular via CDN oficial y migrar
+por capas seguras. Primero Firestore, reglas, importacion limpia y formularios
+publicos. Despues Auth, dashboards, Storage y Functions.
 
-Consecuencia: Firebase queda listo para el siguiente paso, pero Supabase sigue operativo hasta migrar reglas, datos y flujos por fases.
+Consecuencia: Firebase ya recibe captacion publica y datos validados. Supabase
+sigue operativo para las piezas que aun no tienen reemplazo probado.
 
 ## ADR-012 - Sheets no se migra 1:1 a Firebase
 
@@ -153,3 +163,17 @@ Decision: borrar la base vacia y recrearla en `eur3` antes de importar datos.
 
 Consecuencia: Firestore queda alineado con residencia/latencia europea antes de
 que existan datos reales.
+
+## ADR-015 - Formularios publicos a Firestore primero
+
+Estado: aceptada.
+
+Contexto: los formularios publicos eran el flujo mas sencillo de aislar de
+Supabase porque no dependen de login, dashboards ni datos relacionales.
+
+Decision: escribir los formularios de contacto, familia y profesor directamente
+en Firestore `leadsPublicos`, con reglas anonimas estrictas de solo creacion.
+
+Consecuencia: la captacion nueva deja de depender de Supabase/Sheets. Durante la
+transicion, los leads nuevos se revisan en Firebase Console hasta migrar el
+panel admin a Firebase Auth/Firestore.
