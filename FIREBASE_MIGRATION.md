@@ -112,6 +112,7 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Firestore `(default)` recreado en `eur3`.
 - Reglas Firestore desplegadas.
 - Indices Firestore desplegados.
+- Firestore delete protection activada.
 - Importados 24 profesores validos/deduplicados desde Sheets.
 - Creado `importAudits/sheets_profesores_2026_06_16`.
 - Creado `importAudits/sheets_full_audit_2026_06_16` con auditoria agregada

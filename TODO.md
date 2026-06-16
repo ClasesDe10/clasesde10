@@ -7,6 +7,7 @@ Actualizado: 2026-06-16
 - [ ] Activar Firebase Auth Email/Password.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/providers`
 - [x] Crear Firestore Database en `eur3`.
+- [x] Activar delete protection de Firestore.
 - [ ] Crear Firebase Storage.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/storage`
 - [x] Publicar reglas `firebase/firestore.rules`.

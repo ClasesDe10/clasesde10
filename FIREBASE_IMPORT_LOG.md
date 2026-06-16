@@ -9,6 +9,8 @@ Actualizado: 2026-06-16
 | Firestore | Creado en `eur3` |
 | Firestore rules | Desplegadas |
 | Firestore indexes | Desplegados |
+| Firestore delete protection | Activada |
+| Firestore PITR | Desactivado para evitar coste no aprobado |
 | Firebase Auth | Pendiente de inicializacion en consola |
 | Firebase Storage | Pendiente de inicializacion / posible Blaze |
 

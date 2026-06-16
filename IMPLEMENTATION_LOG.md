@@ -18,6 +18,7 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Creado `.firebaserc` apuntando a `clasesde10-50add`.
 - Firestore `(default)` recreado en `eur3`.
 - Reglas e indices Firestore desplegados.
+- Activada delete protection en Firestore `(default)`.
 - Importados 24 profesores validos/deduplicados a Firestore.
 - Formularios publicos migrados a Firestore `leadsPublicos`.
 - Reglas publicas de `leadsPublicos` endurecidas y probadas con lead tecnico

@@ -142,11 +142,15 @@ alto trafico y se anade antispam antes de escalar leads anonimos.
 - Admin solo existe con documento `users/{uid}` y `role = admin`.
 - Storage privado por `uid`.
 - No service role ni claves privadas en frontend.
+- Delete protection de Firestore esta activada para evitar borrados
+  accidentales de la base `(default)`.
 - CSP actual permite transicion; objetivo: eliminar inline JS y reducir
   `unsafe-inline`.
 
 ## Backups y observabilidad
 
+- Firestore delete protection activada.
+- Firestore PITR sigue desactivado para no asumir coste sin decision expresa.
 - Firestore export gestionado cuando el plan/coste lo permita.
 - `importAudits` documenta importaciones.
 - `auditLogs` para acciones administrativas.
