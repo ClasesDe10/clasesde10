@@ -12,6 +12,7 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Importados servicios iniciales: App, Analytics, Auth, Firestore, Storage y Functions.
 - Actualizada CSP en `netlify.toml` para permitir endpoints Firebase necesarios.
 - Creado `FIREBASE_MIGRATION.md` con mapa Supabase -> Firebase y siguiente paso.
+- Creado `FIREBASE_ARCHITECTURE.md` con arquitectura objetivo Firebase.
 - Creados `firebase/firestore.rules`, `firebase/storage.rules`,
   `firebase/firestore.indexes.json` y `firebase.json`.
 - Creado `.firebaserc` apuntando a `clasesde10-50add`.

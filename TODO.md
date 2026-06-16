@@ -72,6 +72,7 @@ Actualizado: 2026-06-16
 - [x] `sitemap.xml` actualizado a `lastmod` 2026-06-16.
 - [x] `IMPLEMENTATION_LOG.md` creado para separar cambios reales de documentacion.
 - [x] Firebase SDK importado en `js/firebase-client.js`.
+- [x] Arquitectura Firebase definitiva documentada en `FIREBASE_ARCHITECTURE.md`.
 - [x] Reglas base de Firestore y Storage preparadas.
 - [x] `firebase.json` preparado para Firebase CLI.
 - [x] `.firebaserc` preparado para `clasesde10-50add`.

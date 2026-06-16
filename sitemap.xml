@@ -4,7 +4,7 @@
         xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
         http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
 
-  <!-- Páginas principales -->
+  <!-- Paginas principales -->
   <url>
     <loc>https://clasesde10.com/</loc>
     <lastmod>2026-06-16</lastmod>
@@ -60,7 +60,7 @@
     <priority>0.3</priority>
   </url>
 
-  <!-- SEO Local Madrid — por materia -->
+  <!-- SEO Local Madrid - por materia -->
   <url>
     <loc>https://clasesde10.com/clases-particulares/</loc>
     <lastmod>2026-06-16</lastmod>
