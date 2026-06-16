@@ -4,7 +4,8 @@ Actualizado: 2026-06-16
 
 ## Estado
 
-Firebase queda importado en la web, pero todavia no sustituye Supabase.
+Firebase queda importado en la web, Firestore esta creado en Europa y las reglas
+estan desplegadas. Todavia no sustituye Supabase en runtime.
 
 Archivo creado:
 
@@ -88,12 +89,24 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 ## Siguiente paso recomendado
 
 1. Activar Firebase Authentication con Email/Password.
-2. Crear Firestore Database.
-3. Crear Firebase Storage.
-4. Definir reglas de seguridad antes de escribir datos reales.
-5. Migrar primero formularios publicos a Firestore.
-6. Migrar Auth y dashboards despues, rol por rol.
-7. Importar solo datos de Sheets validados, no el libro entero.
+2. Inicializar Firebase Storage si se acepta el requisito de facturacion.
+3. Crear primer usuario admin y documento `users/{uid}`.
+4. Migrar primero formularios publicos a Firestore `leadsPublicos`.
+5. Migrar Auth y dashboards despues, rol por rol.
+6. Importar solo datos de Sheets validados, no el libro entero.
+
+## Estado aplicado el 2026-06-16
+
+- Firestore `(default)` recreado en `eur3`.
+- Reglas Firestore desplegadas.
+- Indices Firestore desplegados.
+- Importados 24 profesores validos/deduplicados desde Sheets.
+- Creado `importAudits/sheets_profesores_2026_06_16`.
+- Apps Script remoto cerrado y sustituido por funciones no-op.
+- Firebase Auth sigue pendiente porque la API devolvio `CONFIGURATION_NOT_FOUND`
+  hasta inicializarlo desde consola.
+- Firebase Storage sigue pendiente porque Firebase exige configurarlo desde
+  consola y puede requerir plan Blaze.
 
 ## No hacer todavia
 

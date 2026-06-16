@@ -126,3 +126,30 @@ bloque como colecciones operativas.
 Consecuencia: Firebase nace como fuente de verdad limpia. Los logs y datos
 historicos se conservan fuera del camino critico, preferiblemente en Storage o
 en `legacyImports`/`importAudits` si hace falta trazabilidad.
+
+## ADR-013 - Apps Script apagado como sistema operativo
+
+Estado: aceptada.
+
+Contexto: el Apps Script remoto no coincidia con la copia local, seguia con
+webapp anonima y mezclaba Gmail, Sheets, Gemini, parseo, matching, resumen
+mensual e importacion desde Supabase.
+
+Decision: sustituir el codigo remoto por funciones no-op, cerrar webapp y
+Execution API a `MYSELF`, y tratar Google Sheets solo como archivo historico.
+
+Consecuencia: se elimina la doble fuente de verdad y se corta el flujo que
+generaba datos corruptos en Sheets. Los datos utiles se migran a Firebase de
+forma selectiva y auditada.
+
+## ADR-014 - Firestore en Europa antes de datos reales
+
+Estado: aceptada.
+
+Contexto: Firestore se creo inicialmente en `nam5` por defecto, pero el negocio
+opera en Espana y los datos de familias/profesores son europeos.
+
+Decision: borrar la base vacia y recrearla en `eur3` antes de importar datos.
+
+Consecuencia: Firestore queda alineado con residencia/latencia europea antes de
+que existan datos reales.

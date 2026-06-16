@@ -5,9 +5,10 @@ Actualizado: 2026-06-16
 ## Prioridad 1 - Produccion y fuente de verdad
 
 - [ ] Activar Firebase Auth Email/Password.
-- [ ] Crear Firestore Database.
+- [x] Crear Firestore Database en `eur3`.
 - [ ] Crear Firebase Storage.
-- [ ] Publicar reglas `firebase/firestore.rules` y `firebase/storage.rules`.
+- [x] Publicar reglas `firebase/firestore.rules`.
+- [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
 - [ ] Definir/importar datos reales solo tras validar reglas Firebase.
 - [ ] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.
@@ -32,7 +33,9 @@ Actualizado: 2026-06-16
 - [ ] Revisar triggers activos en Google Apps Script.
 - [x] Exportar datos utiles de Google Sheet legacy.
 - [x] Auditar Excel exportado antes de importar a Firebase.
-- [ ] Deduplicar `PROFESORES` por email y descartar emails invalidos.
+- [x] Deduplicar `PROFESORES` por email y descartar emails invalidos.
+- [x] Importar profesores validos a Firestore como inactivos/pendientes de revision.
+- [x] Apagar Apps Script remoto como sistema operativo.
 - [ ] Separar archivo historico de `LOG PARSEO`, `MATCHING LOG` y `LOG WEB`.
 - [ ] Revisar manualmente subconjunto real de `FAMILIAS` y `ALUMNOS`.
 - [ ] Decidir fecha de apagado de:
@@ -40,7 +43,7 @@ Actualizado: 2026-06-16
   - `generarResumenMensual`
   - `matchingIACompleto`
   - `onEdit`
-- [ ] Migrar matching/resumen a Supabase si sigue siendo necesario.
+- [ ] Migrar matching/resumen a Firebase si sigue siendo necesario.
 - [ ] Eliminar `ClasesDe10-completo.gs` y `matching-ia-gemini.gs` cuando se confirme que `clasp-project/main.gs` es el unico artefacto historico necesario.
 
 ## Prioridad 3 - Calidad y crecimiento
@@ -66,7 +69,9 @@ Actualizado: 2026-06-16
 - [x] Firebase SDK importado en `js/firebase-client.js`.
 - [x] Reglas base de Firestore y Storage preparadas.
 - [x] `firebase.json` preparado para Firebase CLI.
+- [x] `.firebaserc` preparado para `clasesde10-50add`.
 - [x] Auditoria Sheets -> Firebase documentada.
+- [x] Reglas e indices Firestore desplegados.
 - [x] CSP actualizada para Firebase CDN, Auth, Firestore, Storage, Functions y Analytics.
 - [x] Netlify/robots bloquean documentos internos.
 - [x] Browser movil sin overflow, imagenes rotas ni errores de consola en paginas clave.

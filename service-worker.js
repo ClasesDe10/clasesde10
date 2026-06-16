@@ -22,6 +22,7 @@ const PRIVATE_PATHS = [
   /^\/supabase\//,
   /^\/firebase\//,
   /^\/firebase\.json$/,
+  /^\/\.firebaserc$/,
   /^\/\.netlify\//
 ];
 

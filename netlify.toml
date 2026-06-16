@@ -121,7 +121,25 @@
   force = true
 
 [[redirects]]
+  from = "/APPS_SCRIPT_AUDIT.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/FIREBASE_IMPORT_LOG.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
   from = "/firebase.json"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.firebaserc"
   to   = "/404.html"
   status = 404
   force = true

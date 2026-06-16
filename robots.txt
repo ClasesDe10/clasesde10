@@ -18,7 +18,10 @@ Disallow: /ERRORES.md
 Disallow: /IMPLEMENTATION_LOG.md
 Disallow: /FIREBASE_MIGRATION.md
 Disallow: /SHEETS_FIREBASE_AUDIT.md
+Disallow: /APPS_SCRIPT_AUDIT.md
+Disallow: /FIREBASE_IMPORT_LOG.md
 Disallow: /firebase.json
+Disallow: /.firebaserc
 Disallow: /firebase/
 Disallow: /ARCHITECTURE_FULL.md
 Disallow: /SYSTEM_MAP.md

@@ -83,25 +83,30 @@ en dos capas:
 
 ## Plan de importacion seguro
 
-1. Activar Firestore, Auth y Storage en Firebase.
-2. Publicar `firebase/firestore.rules` y `firebase/storage.rules`.
+1. Activar Auth y Storage en Firebase.
+2. Publicar `firebase/storage.rules` cuando Storage este inicializado.
 3. Crear un primer usuario admin manual en Firebase Auth y `users/{uid}`.
-4. Importar `PROFESORES` a una zona de staging o `importAudits`.
-5. Deduplicar por email y descartar emails invalidos.
-6. Revisar manualmente el subconjunto real de `FAMILIAS` y `ALUMNOS`.
-7. Importar solo familias/alumnos validados.
-8. Subir logs antiguos a Storage como archivo, no a colecciones calientes.
-9. Cambiar formularios publicos a `leadsPublicos` en Firestore.
-10. Migrar dashboards por rol despues de probar reglas con usuarios reales.
+4. Revisar manualmente el subconjunto real de `FAMILIAS` y `ALUMNOS`.
+5. Importar solo familias/alumnos validados.
+6. Subir logs antiguos a Storage como archivo, no a colecciones calientes.
+7. Cambiar formularios publicos a `leadsPublicos` en Firestore.
+8. Migrar dashboards por rol despues de probar reglas con usuarios reales.
+
+## Importacion aplicada
+
+- Firestore `profesores`: 24 documentos importados.
+- Firestore `importAudits/sheets_profesores_2026_06_16`: auditoria creada.
+- Se omitieron 1 email invalido y 3 duplicados por email.
+- Los profesores importados quedan `active = false` y
+  `status = pendiente_revision`.
 
 ## Proxima accion humana
 
 En Firebase Console:
 
 1. Activar Authentication con Email/Password.
-2. Crear Firestore Database.
-3. Crear Storage.
-4. Crear un usuario admin.
+2. Crear Storage si no exige cambios de facturacion no aprobados.
+3. Crear un usuario admin.
 
 No pegar claves privadas en el chat. Si hace falta importar con credenciales de
 servidor, descargar el JSON de service account y guardarlo localmente fuera del

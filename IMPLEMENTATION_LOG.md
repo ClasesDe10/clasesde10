@@ -14,8 +14,20 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Creado `FIREBASE_MIGRATION.md` con mapa Supabase -> Firebase y siguiente paso.
 - Creados `firebase/firestore.rules`, `firebase/storage.rules`,
   `firebase/firestore.indexes.json` y `firebase.json`.
+- Creado `.firebaserc` apuntando a `clasesde10-50add`.
+- Firestore `(default)` recreado en `eur3`.
+- Reglas e indices Firestore desplegados.
+- Importados 24 profesores validos/deduplicados a Firestore.
 - Auditado `clasesde10-sheets-export.xlsx`; documentado en
   `SHEETS_FIREBASE_AUDIT.md` que Google Sheets no debe migrarse 1:1.
+
+### Apps Script legacy
+
+- Apps Script remoto verificado: no coincidia con la copia local y seguia con
+  webapp anonima.
+- `appsscript.json` remoto actualizado a `MYSELF`.
+- Codigo remoto sustituido por funciones no-op para cortar Gmail, Sheets,
+  Gemini, `onEdit`, resumen mensual e importaciones cruzadas.
 
 ### PWA / app instalable
 
@@ -111,6 +123,8 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - `DECISION_MATRIX.md`
 - `FIREBASE_MIGRATION.md`
 - `SHEETS_FIREBASE_AUDIT.md`
+- `APPS_SCRIPT_AUDIT.md`
+- `FIREBASE_IMPORT_LOG.md`
 
 ## Validaciones realizadas
 
@@ -121,6 +135,9 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Browser movil: home, contacto, familias, profesores y registro sin overflow, sin imagenes rotas y sin errores de consola.
 - Documentos internos bloqueados en `robots.txt` y `netlify.toml`.
 - Firebase SDK CDN verificado y reglas base preparadas para despliegue en consola/CLI.
+- Firestore verificado en `eur3` con 24 documentos `profesores` y auditoria.
+- Apps Script remoto verificado con `MYSELF` y sin llamadas operativas a Gmail,
+  UrlFetch, Gemini ni appendRow.
 
 ## Pendiente real antes de produccion
 
