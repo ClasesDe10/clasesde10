@@ -99,3 +99,30 @@ Contexto: `leads_publicos` necesita insert anonimo para formularios publicos. La
 Decision: cambiar la policy de insert de `TO public` a `TO anon, authenticated` y retirar `GRANT INSERT ... TO public`.
 
 Consecuencia: se mantiene la funcionalidad publica y se reduce superficie de permisos.
+
+## ADR-011 - Firebase importado sin sustituir Supabase todavia
+
+Estado: aceptada.
+
+Contexto: se va a migrar a Firebase, pero el proyecto actual es estatico y no tiene npm/bundler. Cambiar todos los flujos de golpe romperia Auth, dashboards, documentos y RLS equivalente.
+
+Decision: crear `js/firebase-client.js` con SDK modular via CDN oficial y dejar Auth, Firestore, Storage, Functions y Analytics preparados. No se cambia todavia la fuente de verdad runtime.
+
+Consecuencia: Firebase queda listo para el siguiente paso, pero Supabase sigue operativo hasta migrar reglas, datos y flujos por fases.
+
+## ADR-012 - Sheets no se migra 1:1 a Firebase
+
+Estado: aceptada.
+
+Contexto: el Excel exportado de Google Sheets contiene datos utiles mezclados con
+duplicados, logs de parseo, hojas vacias, formulas sin registros y campos
+corruptos. Copiarlo entero a Firestore trasladaria deuda operativa y coste.
+
+Decision: separar importacion viva y archivo legado. Solo `PROFESORES` queda como
+candidato inmediato tras deduplicacion y validacion. `FAMILIAS`, `ALUMNOS`,
+`MATCHING LOG`, `LOG PARSEO`, `CLASES` y `RESUMEN MENSUAL` no se importan en
+bloque como colecciones operativas.
+
+Consecuencia: Firebase nace como fuente de verdad limpia. Los logs y datos
+historicos se conservan fuera del camino critico, preferiblemente en Storage o
+en `legacyImports`/`importAudits` si hace falta trazabilidad.

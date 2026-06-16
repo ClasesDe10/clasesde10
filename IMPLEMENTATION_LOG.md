@@ -6,6 +6,17 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 
 ## Cambios reales en producto/web
 
+### Firebase
+
+- Creado `js/firebase-client.js` con SDK modular desde CDN oficial.
+- Importados servicios iniciales: App, Analytics, Auth, Firestore, Storage y Functions.
+- Actualizada CSP en `netlify.toml` para permitir endpoints Firebase necesarios.
+- Creado `FIREBASE_MIGRATION.md` con mapa Supabase -> Firebase y siguiente paso.
+- Creados `firebase/firestore.rules`, `firebase/storage.rules`,
+  `firebase/firestore.indexes.json` y `firebase.json`.
+- Auditado `clasesde10-sheets-export.xlsx`; documentado en
+  `SHEETS_FIREBASE_AUDIT.md` que Google Sheets no debe migrarse 1:1.
+
 ### PWA / app instalable
 
 - Creado `manifest.json` completo con `id`, `scope`, `start_url`, iconos locales, shortcuts y `display_override`.
@@ -98,6 +109,8 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - `ARCHITECTURE_V4.md`
 - `FIVE_YEAR_ROADMAP.md`
 - `DECISION_MATRIX.md`
+- `FIREBASE_MIGRATION.md`
+- `SHEETS_FIREBASE_AUDIT.md`
 
 ## Validaciones realizadas
 
@@ -107,6 +120,7 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Rutas locales HTTP 200: home, formularios, registro, manifest, service worker y offline.
 - Browser movil: home, contacto, familias, profesores y registro sin overflow, sin imagenes rotas y sin errores de consola.
 - Documentos internos bloqueados en `robots.txt` y `netlify.toml`.
+- Firebase SDK CDN verificado y reglas base preparadas para despliegue en consola/CLI.
 
 ## Pendiente real antes de produccion
 

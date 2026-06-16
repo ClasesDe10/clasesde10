@@ -1,0 +1,232 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasUserProfile(uid) {
+      return exists(userDoc(uid));
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function hasRole(role) {
+      return signedIn()
+        && hasUserProfile(request.auth.uid)
+        && get(userDoc(request.auth.uid)).data.role == role;
+    }
+
+    function isAdmin() {
+      return hasRole('admin');
+    }
+
+    function validPublicLead() {
+      return request.resource.data.keys().hasOnly([
+          'tipo',
+          'nombre',
+          'email',
+          'telefono',
+          'perfil',
+          'asunto',
+          'mensaje',
+          'metadata',
+          'estado',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll(['tipo', 'nombre', 'email', 'estado', 'createdAt'])
+        && request.resource.data.tipo in ['contacto', 'familia', 'profesor']
+        && request.resource.data.estado == 'nuevo'
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() >= 2
+        && request.resource.data.nombre.size() <= 160
+        && request.resource.data.email is string
+        && request.resource.data.email.size() <= 254
+        && request.resource.data.email.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$')
+        && (!request.resource.data.keys().hasAny(['telefono'])
+          || request.resource.data.telefono == null
+          || (request.resource.data.telefono is string && request.resource.data.telefono.size() <= 40))
+        && (!request.resource.data.keys().hasAny(['perfil'])
+          || request.resource.data.perfil == null
+          || (request.resource.data.perfil is string && request.resource.data.perfil.size() <= 80))
+        && (!request.resource.data.keys().hasAny(['asunto'])
+          || request.resource.data.asunto == null
+          || (request.resource.data.asunto is string && request.resource.data.asunto.size() <= 180))
+        && (!request.resource.data.keys().hasAny(['mensaje'])
+          || request.resource.data.mensaje == null
+          || (request.resource.data.mensaje is string && request.resource.data.mensaje.size() <= 3000));
+    }
+
+    function validUserCreate(uid) {
+      return isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'email',
+          'nombre',
+          'apellidos',
+          'telefono',
+          'role',
+          'active',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll(['email', 'nombre', 'role', 'active', 'createdAt'])
+        && request.resource.data.role in ['familia', 'profesor', 'alumno']
+        && request.resource.data.active == true
+        && request.resource.data.email == request.auth.token.email;
+    }
+
+    function validUserSelfUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'nombre',
+          'apellidos',
+          'telefono',
+          'updatedAt'
+        ])
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.active == resource.data.active;
+    }
+
+    function isFamilyParticipant(data) {
+      return signedIn() && data.familyUid == request.auth.uid;
+    }
+
+    function isTeacherParticipant(data) {
+      return signedIn()
+        && (
+          data.teacherUid == request.auth.uid
+          || (data.keys().hasAny(['teacherUids']) && data.teacherUids[request.auth.uid] == true)
+        );
+    }
+
+    function isStudentParticipant(data) {
+      return signedIn() && data.studentUid == request.auth.uid;
+    }
+
+    function isParticipant(data) {
+      return isFamilyParticipant(data)
+        || isTeacherParticipant(data)
+        || isStudentParticipant(data);
+    }
+
+    match /leadsPublicos/{leadId} {
+      allow create: if validPublicLead();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /users/{uid} {
+      allow create: if validUserCreate(uid);
+      allow read: if isAdmin() || isOwner(uid);
+      allow update: if isAdmin() || (isOwner(uid) && validUserSelfUpdate());
+      allow delete: if isAdmin();
+    }
+
+    match /profesores/{uid} {
+      allow create: if isAdmin() || (isOwner(uid) && hasRole('profesor'));
+      allow read, update: if isAdmin() || isOwner(uid);
+      allow delete: if isAdmin();
+    }
+
+    match /familias/{uid} {
+      allow create: if isAdmin() || (isOwner(uid) && hasRole('familia'));
+      allow read, update: if isAdmin() || isOwner(uid);
+      allow delete: if isAdmin();
+    }
+
+    match /alumnos/{studentId} {
+      allow create: if isAdmin()
+        || (hasRole('familia') && request.resource.data.familyUid == request.auth.uid);
+      allow read: if isAdmin() || isParticipant(resource.data);
+      allow update: if isAdmin()
+        || (
+          isFamilyParticipant(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'nombre',
+            'apellidos',
+            'curso',
+            'nivel',
+            'materias',
+            'objetivos',
+            'disponibilidad',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /asignaciones/{assignmentId} {
+      allow create, update, delete: if isAdmin();
+      allow read: if isAdmin() || isParticipant(resource.data);
+    }
+
+    match /clases/{classId} {
+      allow create, delete: if isAdmin();
+      allow read: if isAdmin() || isParticipant(resource.data);
+      allow update: if isAdmin()
+        || (
+          isTeacherParticipant(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'estado',
+            'notasProfesor',
+            'updatedAt'
+          ])
+          && request.resource.data.estado in ['realizada', 'cancelada']
+        );
+    }
+
+    match /pagos/{paymentId} {
+      allow create: if hasRole('familia') && request.resource.data.familyUid == request.auth.uid;
+      allow read: if isAdmin() || isFamilyParticipant(resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /documentos/{documentId} {
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow read, update, delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    match /notificaciones/{notificationId} {
+      allow create, delete: if isAdmin();
+      allow read: if isAdmin() || (signedIn() && resource.data.userUid == request.auth.uid);
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.userUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'updatedAt'])
+        );
+    }
+
+    match /configuracion/{configId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /configuracionPublica/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /importAudits/{auditId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /legacyImports/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

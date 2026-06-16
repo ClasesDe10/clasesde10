@@ -4,6 +4,13 @@ Actualizado: 2026-06-16
 
 ## Prioridad 1 - Produccion y fuente de verdad
 
+- [ ] Activar Firebase Auth Email/Password.
+- [ ] Crear Firestore Database.
+- [ ] Crear Firebase Storage.
+- [ ] Publicar reglas `firebase/firestore.rules` y `firebase/storage.rules`.
+- [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
+- [ ] Definir/importar datos reales solo tras validar reglas Firebase.
+- [ ] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.
 - [ ] Configurar Supabase Auth redirect URLs:
   - `https://clasesde10.com/pages/login.html`
   - `https://clasesde10.com/pages/reset-password.html`
@@ -23,7 +30,11 @@ Actualizado: 2026-06-16
 ## Prioridad 2 - Apps Script y Google Sheets legacy
 
 - [ ] Revisar triggers activos en Google Apps Script.
-- [ ] Exportar datos utiles de Google Sheet legacy.
+- [x] Exportar datos utiles de Google Sheet legacy.
+- [x] Auditar Excel exportado antes de importar a Firebase.
+- [ ] Deduplicar `PROFESORES` por email y descartar emails invalidos.
+- [ ] Separar archivo historico de `LOG PARSEO`, `MATCHING LOG` y `LOG WEB`.
+- [ ] Revisar manualmente subconjunto real de `FAMILIAS` y `ALUMNOS`.
 - [ ] Decidir fecha de apagado de:
   - `procesarEmailsNuevos`
   - `generarResumenMensual`
@@ -52,6 +63,11 @@ Actualizado: 2026-06-16
 - [x] Permiso de insert de `leads_publicos` reducido a `anon, authenticated`.
 - [x] `sitemap.xml` actualizado a `lastmod` 2026-06-16.
 - [x] `IMPLEMENTATION_LOG.md` creado para separar cambios reales de documentacion.
+- [x] Firebase SDK importado en `js/firebase-client.js`.
+- [x] Reglas base de Firestore y Storage preparadas.
+- [x] `firebase.json` preparado para Firebase CLI.
+- [x] Auditoria Sheets -> Firebase documentada.
+- [x] CSP actualizada para Firebase CDN, Auth, Firestore, Storage, Functions y Analytics.
 - [x] Netlify/robots bloquean documentos internos.
 - [x] Browser movil sin overflow, imagenes rotas ni errores de consola en paginas clave.
 - [x] Documentacion CTO ampliada creada: arquitectura full, seguridad, SEO, UX, rendimiento, alternativas, escalabilidad y roadmap.

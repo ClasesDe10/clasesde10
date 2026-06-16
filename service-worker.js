@@ -20,6 +20,8 @@ const PRIVATE_PATHS = [
   /^\/pages\/registro\.html$/,
   /^\/pages\/reset-password\.html$/,
   /^\/supabase\//,
+  /^\/firebase\//,
+  /^\/firebase\.json$/,
   /^\/\.netlify\//
 ];
 

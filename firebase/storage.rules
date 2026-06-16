@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function validFileSize(maxMb) {
+      return request.resource == null || request.resource.size <= maxMb * 1024 * 1024;
+    }
+
+    match /users/{uid}/{filePath=**} {
+      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10);
+    }
+
+    match /legacy-imports/{filePath=**} {
+      allow read, write: if isAdmin() && validFileSize(50);
+    }
+
+    match /public/{filePath=**} {
+      allow read: if true;
+      allow write: if isAdmin() && validFileSize(5);
+    }
+
+    match /{filePath=**} {
+      allow read, write: if false;
+    }
+  }
+}

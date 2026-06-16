@@ -16,6 +16,10 @@ Disallow: /DECISIONS.md
 Disallow: /TODO.md
 Disallow: /ERRORES.md
 Disallow: /IMPLEMENTATION_LOG.md
+Disallow: /FIREBASE_MIGRATION.md
+Disallow: /SHEETS_FIREBASE_AUDIT.md
+Disallow: /firebase.json
+Disallow: /firebase/
 Disallow: /ARCHITECTURE_FULL.md
 Disallow: /SYSTEM_MAP.md
 Disallow: /TECHNICAL_DEBT.md
