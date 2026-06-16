@@ -5,11 +5,14 @@ Actualizado: 2026-06-16
 ## Prioridad 1 - Produccion y fuente de verdad
 
 - [ ] Activar Firebase Auth Email/Password.
+  - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/providers`
 - [x] Crear Firestore Database en `eur3`.
 - [ ] Crear Firebase Storage.
+  - `https://console.firebase.google.com/u/0/project/clasesde10-50add/storage`
 - [x] Publicar reglas `firebase/firestore.rules`.
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
+  - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
 - [ ] Definir/importar datos reales solo tras validar reglas Firebase.
 - [x] Migrar primero formularios publicos de `leads_publicos` a Firestore `leadsPublicos`.
 - [ ] Configurar Supabase Auth redirect URLs:
@@ -26,6 +29,7 @@ Actualizado: 2026-06-16
 - [ ] Validar RLS por rol con usuarios reales: admin, familia, profesor, alumno.
 - [x] Confirmar escritura publica en Firestore `leadsPublicos` con lead tecnico temporal.
 - [ ] Migrar lectura/gestion de leads del panel admin a Firestore.
+  - `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos`
 - [ ] Instalar Supabase CLI para validar migraciones y Edge Functions con runtime real.
 - [ ] Anadir antispam server-side para leads publicos: Turnstile, rate limit o Edge Function.
 

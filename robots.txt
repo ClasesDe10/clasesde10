@@ -20,6 +20,7 @@ Disallow: /FIREBASE_MIGRATION.md
 Disallow: /SHEETS_FIREBASE_AUDIT.md
 Disallow: /APPS_SCRIPT_AUDIT.md
 Disallow: /FIREBASE_IMPORT_LOG.md
+Disallow: /FIREBASE_CONSOLE_GUIDE.md
 Disallow: /firebase.json
 Disallow: /.firebaserc
 Disallow: /firebase/

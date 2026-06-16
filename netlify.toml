@@ -133,6 +133,12 @@
   force = true
 
 [[redirects]]
+  from = "/FIREBASE_CONSOLE_GUIDE.md"
+  to   = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
   from = "/firebase.json"
   to   = "/404.html"
   status = 404

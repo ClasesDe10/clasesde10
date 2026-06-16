@@ -95,6 +95,17 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 4. Migrar Auth y dashboards despues, rol por rol.
 5. Importar solo datos de Sheets validados, no el libro entero.
 
+## Enlaces directos Firebase Console
+
+- Authentication providers:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/providers`
+- Authentication users:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
+- Storage:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/storage`
+- Leads publicos:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos`
+
 ## Estado aplicado el 2026-06-16
 
 - Firestore `(default)` recreado en `eur3`.

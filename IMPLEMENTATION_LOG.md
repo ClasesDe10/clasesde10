@@ -21,6 +21,8 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Formularios publicos migrados a Firestore `leadsPublicos`.
 - Reglas publicas de `leadsPublicos` endurecidas y probadas con lead tecnico
   temporal creado y borrado.
+- Panel admin legacy actualizado con aviso y enlace a Firebase Console para
+  leads nuevos mientras se migra la gestion interna.
 - Auditado `clasesde10-sheets-export.xlsx`; documentado en
   `SHEETS_FIREBASE_AUDIT.md` que Google Sheets no debe migrarse 1:1.
 
