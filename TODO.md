@@ -12,6 +12,8 @@ Actualizado: 2026-06-16
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/storage`
 - [x] Publicar reglas `firebase/firestore.rules`.
 - [x] Endurecer reglas Firestore para perfiles antes de activar Auth.
+- [x] Configurar y desplegar Firebase Hosting.
+  - `https://clasesde10-50add.web.app`
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
@@ -60,7 +62,8 @@ Actualizado: 2026-06-16
 ## Prioridad 3 - Calidad y crecimiento
 
 - [ ] Ejecutar Lighthouse/PageSpeed en produccion tras desplegar.
-- [ ] Instalar Netlify CLI si se quiere validar deploy preview, headers y redirects desde terminal.
+- [x] Autenticar y enlazar Netlify CLI al sitio `clasesde10`.
+- [ ] Desbloquear creditos de Netlify o mover DNS del dominio a Firebase Hosting.
 - [ ] Configurar IDs reales en `js/analytics.js` o migrar a variables inyectadas.
 - [ ] Revisar Search Console despues del nuevo sitemap.
 - [ ] Medir conversion de formularios publicos.
@@ -85,6 +88,7 @@ Actualizado: 2026-06-16
 - [x] `.firebaserc` preparado para `clasesde10-50add`.
 - [x] Auditoria Sheets -> Firebase documentada.
 - [x] Reglas e indices Firestore desplegados.
+- [x] Firebase Hosting desplegado y verificado.
 - [x] CSP actualizada para Firebase CDN, Auth, Firestore, Storage, Functions y Analytics.
 - [x] Netlify/robots bloquean documentos internos.
 - [x] Browser movil sin overflow, imagenes rotas ni errores de consola en paginas clave.

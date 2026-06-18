@@ -1,6 +1,6 @@
 # FIREBASE_CONSOLE_GUIDE - ClasesDe10
 
-Actualizado: 2026-06-16
+Actualizado: 2026-06-18
 
 ## Proyecto
 
@@ -32,6 +32,10 @@ Actualizado: 2026-06-16
 
 ## URLs utiles para revisar datos
 
+- Web publicada en Firebase Hosting:
+  `https://clasesde10-50add.web.app`
+- Panel de Hosting:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/hosting/sites`
 - Leads publicos nuevos:
   `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos`
 - Profesores importados:
@@ -53,3 +57,13 @@ Actualizado: 2026-06-16
 - No borrar Supabase todavia.
 - No borrar colecciones Firestore importadas.
 - No pegar claves privadas, JSON de service account ni codigos de login en chat.
+
+## Bloqueo externo actual
+
+- Netlify/GitHub no publica los commits nuevos porque la cuenta devuelve:
+  `Skipped due to account credit usage exceeded`.
+- Para que `https://clasesde10.com` vuelva a actualizarse en Netlify hay que
+  resolver el bloqueo de creditos en:
+  `https://app.netlify.com/projects/clasesde10`
+- Alternativa recomendada si se quiere centralizar en Firebase: conectar el
+  dominio personalizado en Firebase Hosting y cambiar DNS cuando este validado.

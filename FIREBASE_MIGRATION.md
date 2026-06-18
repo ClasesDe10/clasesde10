@@ -133,6 +133,21 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Firebase Storage sigue pendiente porque Firebase exige configurarlo desde
   consola y puede requerir plan Blaze.
 
+## Estado aplicado el 2026-06-18
+
+- Firebase Hosting activado para el sitio por defecto `clasesde10-50add`.
+- `firebase.json` ampliado con publicacion estatica desde la raiz, exclusiones de
+  archivos internos, headers de seguridad/cache y redirects basicos.
+- Despliegue validado en:
+  `https://clasesde10-50add.web.app`
+- URL alternativa equivalente:
+  `https://clasesde10-50add.firebaseapp.com`
+- Netlify no esta desplegando cambios nuevos por bloqueo de cuenta:
+  `Skipped due to account credit usage exceeded`.
+- Decision tecnica: mantener Netlify como dominio canonico mientras se resuelve
+  el bloqueo, pero usar Firebase Hosting como via publicada y alineada con la
+  migracion a Firebase.
+
 ## No hacer todavia
 
 - No borrar Supabase.

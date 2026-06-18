@@ -19,6 +19,9 @@ desktop.ini
 # Netlify
 .netlify/
 
+# Firebase Hosting local cache
+.firebase/
+
 # IDE
 .vscode/
 .idea/

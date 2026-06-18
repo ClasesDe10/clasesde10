@@ -30,17 +30,17 @@
   "categories": ["education", "productivity"],
   "shortcuts": [
     {
-      "name": "Mi panel",
-      "short_name": "Panel",
-      "url": "/pages/login.html",
-      "description": "Acceder a mi cuenta",
-      "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
-    },
-    {
       "name": "Solicitar profesor",
       "short_name": "Profesor",
       "url": "/para-padres.html#formulario",
       "description": "Pedir ayuda para encontrar profesor",
+      "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mi panel",
+      "short_name": "Panel",
+      "url": "/pages/login.html",
+      "description": "Acceder a mi cuenta",
       "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
     },
     {

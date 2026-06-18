@@ -163,12 +163,24 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
 - Apps Script remoto verificado con `MYSELF` y sin llamadas operativas a Gmail,
   UrlFetch, Gemini ni appendRow.
 - Escritura anonima en `leadsPublicos` verificada con reglas Firestore.
+- 2026-06-18: Netlify autenticado y enlazado al sitio `clasesde10`, pero todos
+  los builds nuevos quedan en `error` por `Skipped due to account credit usage
+  exceeded`.
+- 2026-06-18: Firebase Hosting configurado y desplegado correctamente en
+  `https://clasesde10-50add.web.app`.
+- 2026-06-18: Firebase Hosting verificado con manifest PWA actualizado,
+  service worker `clasesde10-pwa-v3`, exclusiones `__/` para rutas internas de
+  Firebase y archivos internos (`*.md`, `firebase/*`, `supabase/*`) devolviendo
+  404.
 
 ## Pendiente real antes de produccion
 
-- Aplicar/verificar migraciones Supabase en staging/produccion.
+- Desbloquear creditos/uso de Netlify o mover el dominio `clasesde10.com` a
+  Firebase Hosting.
+- Aplicar/verificar migraciones Supabase en staging/produccion solo si se decide
+  mantener Supabase durante la transicion.
 - Validar RLS con usuarios reales por rol.
 - Configurar secretos reales en Supabase Edge Functions.
 - Revisar triggers activos reales en Google Apps Script.
 - Ejecutar Lighthouse/PageSpeed y Search Console tras deploy.
-- Instalar o usar CLI de Supabase/Netlify/Deno para validacion runtime.
+- Instalar o usar CLI de Supabase/Deno si se mantiene runtime Supabase.
