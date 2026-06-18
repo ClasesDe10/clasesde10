@@ -36,6 +36,8 @@ Actualizado: 2026-06-18
   `https://clasesde10-50add.web.app`
 - Panel de Hosting:
   `https://console.firebase.google.com/u/0/project/clasesde10-50add/hosting/sites`
+- Dominios Firebase Hosting:
+  `https://console.firebase.google.com/u/0/project/clasesde10-50add/hosting/sites/clasesde10-50add/domains`
 - Leads publicos nuevos:
   `https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos`
 - Profesores importados:
@@ -67,3 +69,10 @@ Actualizado: 2026-06-18
   `https://app.netlify.com/projects/clasesde10`
 - Alternativa recomendada si se quiere centralizar en Firebase: conectar el
   dominio personalizado en Firebase Hosting y cambiar DNS cuando este validado.
+
+## Corte gratis a Firebase Hosting
+
+- `clasesde10.com` y `www.clasesde10.com` ya estan creados en Firebase Hosting.
+- Falta cambiar DNS en el proveedor actual (`ns10/11/12.servicio-online.net`).
+- Registros exactos documentados en `FIREBASE_DOMAIN_CUTOVER.md`.
+- No se ha activado Blaze ni facturacion.

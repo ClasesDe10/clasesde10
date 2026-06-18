@@ -180,6 +180,11 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
   creado en `leadsPublicos` mediante `js/public-leads.js` y borrado despues.
 - 2026-06-18: Prueba movil Playwright en home, familias, profesores, contacto
   y login: sin overflow horizontal, formularios visibles y sin imagenes rotas.
+- 2026-06-18: Creados dominios personalizados en Firebase Hosting via API REST:
+  `clasesde10.com` y `www.clasesde10.com` con redireccion a apex. Estado
+  pendiente por DNS externo: `HOST_MISMATCH` y `OWNERSHIP_MISSING`.
+- 2026-06-18: Detectados nameservers actuales `ns10/11/12.servicio-online.net`
+  y documentado corte DNS sin coste en `FIREBASE_DOMAIN_CUTOVER.md`.
 
 ## Pendiente real antes de produccion
 

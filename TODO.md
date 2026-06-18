@@ -14,6 +14,10 @@ Actualizado: 2026-06-16
 - [x] Endurecer reglas Firestore para perfiles antes de activar Auth.
 - [x] Configurar y desplegar Firebase Hosting.
   - `https://clasesde10-50add.web.app`
+- [x] Crear dominios personalizados Firebase Hosting:
+  - `clasesde10.com`
+  - `www.clasesde10.com` -> redireccion a `clasesde10.com`
+- [ ] Cambiar DNS del dominio en proveedor externo segun `FIREBASE_DOMAIN_CUTOVER.md`.
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
 - [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
@@ -63,7 +67,7 @@ Actualizado: 2026-06-16
 
 - [ ] Ejecutar Lighthouse/PageSpeed en produccion tras desplegar.
 - [x] Autenticar y enlazar Netlify CLI al sitio `clasesde10`.
-- [ ] Desbloquear creditos de Netlify o mover DNS del dominio a Firebase Hosting.
+- [ ] Completar propagacion DNS a Firebase Hosting.
 - [ ] Configurar IDs reales en `js/analytics.js` o migrar a variables inyectadas.
 - [ ] Revisar Search Console despues del nuevo sitemap.
 - [ ] Medir conversion de formularios publicos.
