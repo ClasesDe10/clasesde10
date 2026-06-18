@@ -31,3 +31,4 @@ desktop.ini
 # Temporales
 *.tmp
 *.bak
+.playwright-cli/

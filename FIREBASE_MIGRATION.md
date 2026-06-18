@@ -147,6 +147,13 @@ matching, resumen y clases requieren limpieza, archivo o descarte parcial.
 - Decision tecnica: mantener Netlify como dominio canonico mientras se resuelve
   el bloqueo, pero usar Firebase Hosting como via publicada y alineada con la
   migracion a Firebase.
+- Validacion de coste cero: la web estatica pesa ~1,07 MB en repositorio publico
+  util y Firebase Hosting publica 53 archivos despues de excluir artefactos
+  internos. La navegacion, PWA y formularios publicos funcionan sobre Firebase
+  Hosting + Firestore sin Netlify.
+- Limitacion de coste cero: no usar Firebase Storage ni Cloud Functions para
+  nuevas funciones hasta decidir si se acepta Blaze. Formularios simples y Auth
+  Email/Password pueden mantenerse en arquitectura Firebase sin servidor propio.
 
 ## No hacer todavia
 

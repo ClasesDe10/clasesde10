@@ -172,6 +172,14 @@ Este documento separa cambios reales de documentacion. Sirve para saber que se h
   service worker `clasesde10-pwa-v3`, exclusiones `__/` para rutas internas de
   Firebase y archivos internos (`*.md`, `firebase/*`, `supabase/*`) devolviendo
   404.
+- 2026-06-18: Segunda auditoria Firebase Hosting orientada a coste cero:
+  detectado y corregido acceso publico a `/.git/config`; `firebase.json`
+  endurecido con exclusiones explicitas de `.git`, `.github`, `.claude`,
+  `.firebase` y `.netlify`. Redespiegue validado con 53 archivos publicos.
+- 2026-06-18: Prueba real de Firestore desde `web.app`: lead tecnico temporal
+  creado en `leadsPublicos` mediante `js/public-leads.js` y borrado despues.
+- 2026-06-18: Prueba movil Playwright en home, familias, profesores, contacto
+  y login: sin overflow horizontal, formularios visibles y sin imagenes rotas.
 
 ## Pendiente real antes de produccion
 
