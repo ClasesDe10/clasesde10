@@ -16,9 +16,10 @@ const PRECACHE_URLS = [
 
 const PRIVATE_PATHS = [
   /^\/pages\/dashboard\//,
-  /^\/pages\/login\.html$/,
-  /^\/pages\/registro\.html$/,
-  /^\/pages\/reset-password\.html$/,
+  /^\/pages\/login(?:\.html)?$/,
+  /^\/pages\/registro(?:\.html)?$/,
+  /^\/pages\/reset-password(?:\.html)?$/,
+  /^\/offline(?:\.html)?$/,
   /^\/__\//,
   /^\/supabase\//,
   /^\/firebase\//,

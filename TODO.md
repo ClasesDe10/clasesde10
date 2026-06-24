@@ -87,12 +87,18 @@ Actualizado: 2026-06-16
 - [x] Firebase SDK importado en `js/firebase-client.js`.
 - [x] Arquitectura Firebase definitiva documentada en `FIREBASE_ARCHITECTURE.md`.
 - [x] Adaptador Firebase Auth preparado para login/registro/reset futuro.
+- [x] Imports de auth centralizados en `js/auth-provider.js` para facilitar el corte Supabase -> Firebase.
 - [x] Reglas base de Firestore y Storage preparadas.
 - [x] `firebase.json` preparado para Firebase CLI.
 - [x] `.firebaserc` preparado para `clasesde10-50add`.
+- [x] Script local `scripts/check-centralization.mjs` creado para verificar DNS, hosting, tooling y dependencias Supabase.
+- [x] Auditorias CLI/API creadas para Auth, Storage, IAM y Hosting.
+- [x] Hosting Firebase auditado y corregido para rutas limpias, headers noindex/no-store y PWA privada.
+- [x] `package.json` y `scripts/` bloqueados/excluidos del publish root.
 - [x] Auditoria Sheets -> Firebase documentada.
 - [x] Reglas e indices Firestore desplegados.
 - [x] Firebase Hosting desplegado y verificado.
+- [x] Firebase Hosting redesplegado tras corregir headers de rutas limpias y service worker.
 - [x] CSP actualizada para Firebase CDN, Auth, Firestore, Storage, Functions y Analytics.
 - [x] Netlify/robots bloquean documentos internos.
 - [x] Browser movil sin overflow, imagenes rotas ni errores de consola en paginas clave.

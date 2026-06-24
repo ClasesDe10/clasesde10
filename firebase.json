@@ -24,6 +24,8 @@
       "**/.netlify/**",
       "**/node_modules/**",
       "**/*.md",
+      "package.json",
+      "scripts/**",
       "supabase/**",
       "firebase/**",
       "clases-particulares/_gen.py",
@@ -101,6 +103,19 @@
         ]
       },
       {
+        "source": "/pages/login",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
         "source": "/pages/registro.html",
         "headers": [
           {
@@ -114,7 +129,33 @@
         ]
       },
       {
+        "source": "/pages/registro",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
         "source": "/pages/reset-password.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/pages/reset-password",
         "headers": [
           {
             "key": "Cache-Control",
@@ -177,6 +218,19 @@
       },
       {
         "source": "/offline.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600, must-revalidate"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/offline",
         "headers": [
           {
             "key": "Cache-Control",

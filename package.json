@@ -1,0 +1,15 @@
+{
+  "name": "clasesde10",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audit:auth": "node scripts/firebase-auth-audit.mjs",
+    "audit:centralization": "node scripts/check-centralization.mjs",
+    "audit:hosting": "node scripts/hosting-audit.mjs",
+    "audit:iam": "node scripts/firebase-iam-permissions.mjs",
+    "audit:storage": "node scripts/firebase-storage-audit.mjs",
+    "check:centralization": "node scripts/check-centralization.mjs",
+    "firebase:auth:enable-email": "node scripts/firebase-auth-enable-email.mjs",
+    "firebase:storage:create-default": "node scripts/firebase-storage-create-default.mjs"
+  }
+}
