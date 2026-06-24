@@ -93,6 +93,8 @@ Actualizado: 2026-06-16
 - [x] `.firebaserc` preparado para `clasesde10-50add`.
 - [x] Script local `scripts/check-centralization.mjs` creado para verificar DNS, hosting, tooling y dependencias Supabase.
 - [x] Auditorias CLI/API creadas para Auth, Storage, IAM y Hosting.
+- [x] Auditoria runtime Supabase creada y mapa de corte documentado en `FIREBASE_CUTOVER_MAP.md`.
+- [x] Storage de documentos centralizado en `js/document-storage-provider.js`.
 - [x] Hosting Firebase auditado y corregido para rutas limpias, headers noindex/no-store y PWA privada.
 - [x] `package.json` y `scripts/` bloqueados/excluidos del publish root.
 - [x] Auditoria Sheets -> Firebase documentada.

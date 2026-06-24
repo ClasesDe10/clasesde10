@@ -61,12 +61,21 @@ function assertConfig() {
 }
 
 async function head(path, manual = false) {
-  const response = await fetch(`${BASE}${path}`, { method: 'HEAD', redirect: manual ? 'manual' : 'follow' });
-  return {
-    status: response.status,
-    location: response.headers.get('location') || '',
-    headers: response.headers,
-  };
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(`${BASE}${path}`, { method: 'HEAD', redirect: manual ? 'manual' : 'follow' });
+      return {
+        status: response.status,
+        location: response.headers.get('location') || '',
+        headers: response.headers,
+      };
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+  }
+  throw lastError;
 }
 
 async function main() {

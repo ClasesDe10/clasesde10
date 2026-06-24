@@ -410,6 +410,7 @@
 <script type="module">
 import db from '../../js/supabase-client.js';
 import { requireAuth, logout } from '../../js/auth-provider.js';
+import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
@@ -827,9 +828,9 @@ async function cargarPagos() {
 document.getElementById('tbody-pagos').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="ver-pago-doc"]');
   if (!btn) return;
-  const { data, error } = await db.storage.from('documentos').createSignedUrl(btn.dataset.docPath, 3600);
-  if (error || !data?.signedUrl) { showToast('Error', error?.message || 'No se pudo abrir el justificante.', 'error'); return; }
-  window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+  const { data, error } = await getDocumentUrl(btn.dataset.docPath);
+  if (error || !data?.url) { showToast('Error', error?.message || 'No se pudo abrir el justificante.', 'error'); return; }
+  window.open(data.url, '_blank', 'noopener,noreferrer');
 });
 
 document.getElementById('btn-nuevo-pago').addEventListener('click', () => {
@@ -859,7 +860,7 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
       return;
     }
     const path = `documentos/${usuario.id}/pagos/${Date.now()}.${ext}`;
-    const { error: upErr } = await db.storage.from('documentos').upload(path, file, { upsert:false });
+    const { error: upErr } = await uploadDocument(path, file);
     if (upErr) { showToast('Error', upErr.message, 'error'); return; }
 
     const { data: doc, error: docErr } = await db.from('documentos')

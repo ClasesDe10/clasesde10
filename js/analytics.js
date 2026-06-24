@@ -71,7 +71,7 @@ export function trackEvent(eventName, params = {}) {
 
 /**
  * Evento: registro completado
- * Llamar después de db.auth.signUp exitoso
+ * Llamar despues de un registro exitoso en el proveedor de auth activo.
  */
 export function trackRegistro(rol) {
   trackEvent('sign_up', { method: 'email', user_rol: rol });
@@ -80,7 +80,7 @@ export function trackRegistro(rol) {
 
 /**
  * Evento: login exitoso
- * Llamar después de db.auth.signInWithPassword exitoso
+ * Llamar despues de un login exitoso en el proveedor de auth activo.
  */
 export function trackLogin(rol) {
   trackEvent('login', { method: 'email', user_rol: rol });

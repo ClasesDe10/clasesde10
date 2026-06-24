@@ -2,6 +2,8 @@
  * ClasesDe10 — Utilidades globales
  */
 
+import { watchUnreadNotifications } from './notifications-provider.js';
+
 // ─── SANITIZACIÓN XSS ───────────────────────────────────────────
 export function sanitize(str) {
   if (typeof str !== 'string') return '';
@@ -245,22 +247,9 @@ export function initNotificacionesBadge(usuarioId, db) {
   const badge = document.querySelector('.topbar-btn .badge');
   if (!badge) return;
 
-  const actualizar = async () => {
-    const { count } = await db
-      .from('notificaciones')
-      .select('*', { count: 'exact', head: true })
-      .eq('usuario_id', usuarioId)
-      .eq('leida', false);
+  return watchUnreadNotifications(db, usuarioId, (count) => {
     badge.style.display = count > 0 ? 'block' : 'none';
-  };
-
-  actualizar();
-  const canal = db.channel(`notif-${usuarioId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'notificaciones',
-        filter: `usuario_id=eq.${usuarioId}` }, actualizar)
-    .subscribe();
-
-  return canal;
+  });
 }
 
 // ─── VALIDAR EMAIL ───────────────────────────────────────────────

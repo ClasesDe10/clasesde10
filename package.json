@@ -8,6 +8,7 @@
     "audit:hosting": "node scripts/hosting-audit.mjs",
     "audit:iam": "node scripts/firebase-iam-permissions.mjs",
     "audit:storage": "node scripts/firebase-storage-audit.mjs",
+    "audit:supabase": "node scripts/supabase-runtime-audit.mjs",
     "check:centralization": "node scripts/check-centralization.mjs",
     "firebase:auth:enable-email": "node scripts/firebase-auth-enable-email.mjs",
     "firebase:storage:create-default": "node scripts/firebase-storage-create-default.mjs"
