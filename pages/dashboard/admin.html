@@ -831,14 +831,8 @@ async function cargarDashboard() {
     data = response.data;
     if (response.error) throw response.error;
   } catch (error) {
-    document.getElementById('stats-grid').innerHTML = `
-      <div class="alert alert-warning" style="grid-column:1/-1">
-        <div class="alert-body">
-          <div class="alert-title">Datos legacy no disponibles</div>
-          <div>Supabase no respondio para las metricas antiguas. Los modulos ya migrados a Firebase, como Leads, siguen disponibles desde el menu lateral.</div>
-        </div>
-      </div>`;
     console.warn('Dashboard legacy Supabase no disponible', error);
+    await cargarDashboardFirebaseFallback();
     return;
   }
 
@@ -904,6 +898,49 @@ async function cargarDashboard() {
   cargarSolicitudesRecientes();
   cargarProximasClasesDash();
   cargarPagosPendientesDash();
+}
+
+async function cargarDashboardFirebaseFallback() {
+  const { data: leadsNuevos } = await leads.countNew();
+
+  document.getElementById('stats-grid').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-card-header"><div class="stat-card-icon green"></div></div>
+      <div class="stat-card-value">Activo</div>
+      <div class="stat-card-label">Firebase Hosting/Auth</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-header"><div class="stat-card-icon teal"></div></div>
+      <div class="stat-card-value">${leadsNuevos || 0}</div>
+      <div class="stat-card-label">Leads nuevos en Firebase</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-header"><div class="stat-card-icon navy"></div></div>
+      <div class="stat-card-value">-</div>
+      <div class="stat-card-label">Profesores legacy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-header"><div class="stat-card-icon gold"></div></div>
+      <div class="stat-card-value">-</div>
+      <div class="stat-card-label">Familias legacy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-header"><div class="stat-card-icon navy"></div></div>
+      <div class="stat-card-value">-</div>
+      <div class="stat-card-label">Clases legacy</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-card-header"><div class="stat-card-icon gold"></div></div>
+      <div class="stat-card-value">-</div>
+      <div class="stat-card-label">Pagos legacy</div>
+    </div>`;
+
+  document.getElementById('lista-solicitudes-recientes').innerHTML =
+    '<div class="empty-state"><div class="empty-title">Solicitudes en migracion</div><div class="empty-desc">Este modulo sigue usando datos legacy.</div></div>';
+  document.getElementById('lista-proximas-clases').innerHTML =
+    '<div class="empty-state"><div class="empty-title">Clases en migracion</div><div class="empty-desc">Este modulo sigue usando datos legacy.</div></div>';
+  document.getElementById('lista-pagos-pendientes').innerHTML =
+    '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">Pagos pendientes siguen en migracion legacy.</div>';
 }
 
 async function cargarSolicitudesRecientes() {
