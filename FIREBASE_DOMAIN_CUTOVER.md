@@ -1,6 +1,6 @@
 # FIREBASE_DOMAIN_CUTOVER - ClasesDe10
 
-Actualizado: 2026-06-25 16:56 Europe/Madrid
+Actualizado: 2026-06-25 17:39 Europe/Madrid
 
 ## Objetivo
 
@@ -22,16 +22,17 @@ Mover `clasesde10.com` de Netlify a Firebase Hosting sin activar facturacion.
   - `clasesde10.com A` ya responde `199.36.158.100` en `ns10`, `ns11` y `ns12`.
   - `clasesde10.com TXT hosting-site=clasesde10-50add` ya responde en `ns10`, `ns11` y `ns12`.
   - `www.clasesde10.com CNAME clasesde10-50add.web.app` ya responde en `ns10`, `ns11` y `ns12`.
-  - Los dos `_acme-challenge` siguen sin responder en nameservers autoritativos.
+  - Los dos `_acme-challenge` ya responden correctamente en resolvers publicos tras la actualizacion de Hostalia.
 - Estado Firebase API a las 17:16 Europe/Madrid:
   - `clasesde10.com`: `hostState=HOST_MISMATCH`, `ownershipState=OWNERSHIP_MISSING`, `cert=CERT_VALIDATING`.
   - `www.clasesde10.com`: `hostState=HOST_MISMATCH`, `ownershipState=OWNERSHIP_MISSING`, `cert=CERT_VALIDATING`.
-  - Firebase pide ahora estos TXT ACME actuales:
+  - Firebase pidio estos TXT ACME actuales, ya actualizados en Hostalia a las 17:39 Europe/Madrid:
     - `_acme-challenge TXT s05n1RCrYwkepmrS7GpQerXvilgBdwBtY2khK8WN89E`
     - `_acme-challenge.www TXT LtpaKSyfq73psiVycwKtmzgclH__jL0Ytdj52bR2mIU`
 - Estado web temporal:
   - `https://clasesde10-50add.web.app` esta publicado.
-  - `https://clasesde10.com` puede fallar certificado o seguir sirviendo cache/Netlify hasta que Hostalia publique los TXT/CNAME y Firebase emita certificado.
+  - `https://clasesde10.com` y `https://www.clasesde10.com` pueden fallar certificado, mostrar 404 temporal de Firebase o seguir sirviendo cache/Netlify hasta que Firebase complete la transferencia de propiedad y emita certificado.
+  - Firebase Hosting puede tardar hasta 24 horas en transferir propiedad y activar SSL tras detectar los DNS correctos.
 
 ## DNS previo detectado
 
