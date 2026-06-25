@@ -1,9 +1,8 @@
 /**
  * ClasesDe10 - private document storage provider.
  *
- * Current implementation: Supabase Storage bucket `documentos`.
- * Future Firebase cutover: keep this public API and replace the internals with
- * Firebase Storage once the bucket exists.
+ * Uses Firebase Storage through the compatibility data client. The public API
+ * stays stable for dashboards during the Firebase cutover.
  */
 
 import db from './supabase-client.js';
@@ -27,4 +26,3 @@ export async function getDocumentUrl(path, expiresIn = SIGNED_URL_SECONDS) {
     error,
   };
 }
-

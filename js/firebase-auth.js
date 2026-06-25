@@ -232,6 +232,31 @@ export async function register({
       updatedAt: serverTimestamp(),
     });
 
+    const profilePayload = {
+      userUid: user.uid,
+      email: emailClean,
+      nombre: nombreClean,
+      apellidos: apellidosClean,
+      telefono: telefonoClean || null,
+      active: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    if (role === 'familia') {
+      await setDoc(doc(firebaseDb, 'familias', user.uid), {
+        ...profilePayload,
+        status: 'activo',
+      }, { merge: true });
+    }
+
+    if (role === 'profesor') {
+      await setDoc(doc(firebaseDb, 'profesores', user.uid), {
+        ...profilePayload,
+        status: 'pendiente_revision',
+      }, { merge: true });
+    }
+
     await sendEmailVerification(user, {
       url: `${getAuthActionOrigin()}/pages/login.html`,
     });

@@ -420,7 +420,7 @@
             <div class="alert-title">Leads nuevos en Firebase</div>
             <div>
               Los formularios publicos ya escriben en Firestore <code>leadsPublicos</code>.
-              Esta tabla de Supabase queda como historico hasta migrar el panel admin.
+              El panel admin lee estos datos directamente desde Firebase.
               <a href="https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos" target="_blank" rel="noopener noreferrer">Abrir leads en Firebase</a>.
             </div>
           </div>
@@ -745,7 +745,6 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script type="module">
 import db from '../../js/supabase-client.js';
 import { leads } from '../../js/adapters/index.js';
@@ -784,14 +783,14 @@ const LEGACY_TABLES = {
 };
 
 function mostrarLegacyNoDisponible(seccion, error) {
-  console.warn(`Modulo legacy ${seccion} no disponible`, error);
+  console.warn(`Modulo ${seccion} no disponible`, error);
   const meta = LEGACY_TABLES[seccion];
   if (!meta) return;
 
   const tbody = document.getElementById(meta.id);
   if (tbody) {
     tbody.innerHTML = `<tr><td colspan="${meta.colspan}" style="text-align:center;padding:32px;color:var(--gray-mid)">
-      Datos legacy no disponibles. Supabase no respondio para este modulo.
+      No hay datos disponibles para este modulo en Firebase.
     </td></tr>`;
   }
 
@@ -868,7 +867,7 @@ async function cargarDashboard() {
     data = response.data;
     if (response.error) throw response.error;
   } catch (error) {
-    console.warn('Dashboard legacy Supabase no disponible', error);
+    console.warn('Dashboard Firebase no disponible', error);
     await cargarDashboardFirebaseFallback();
     return;
   }
@@ -954,30 +953,30 @@ async function cargarDashboardFirebaseFallback() {
     <div class="stat-card">
       <div class="stat-card-header"><div class="stat-card-icon navy"></div></div>
       <div class="stat-card-value">-</div>
-      <div class="stat-card-label">Profesores legacy</div>
+      <div class="stat-card-label">Profesores</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header"><div class="stat-card-icon gold"></div></div>
       <div class="stat-card-value">-</div>
-      <div class="stat-card-label">Familias legacy</div>
+      <div class="stat-card-label">Familias</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header"><div class="stat-card-icon navy"></div></div>
       <div class="stat-card-value">-</div>
-      <div class="stat-card-label">Clases legacy</div>
+      <div class="stat-card-label">Clases</div>
     </div>
     <div class="stat-card">
       <div class="stat-card-header"><div class="stat-card-icon gold"></div></div>
       <div class="stat-card-value">-</div>
-      <div class="stat-card-label">Pagos legacy</div>
+      <div class="stat-card-label">Pagos</div>
     </div>`;
 
   document.getElementById('lista-solicitudes-recientes').innerHTML =
-    '<div class="empty-state"><div class="empty-title">Solicitudes en migracion</div><div class="empty-desc">Este modulo sigue usando datos legacy.</div></div>';
+    '<div class="empty-state"><div class="empty-title">Sin solicitudes</div><div class="empty-desc">No hay solicitudes registradas en Firebase.</div></div>';
   document.getElementById('lista-proximas-clases').innerHTML =
-    '<div class="empty-state"><div class="empty-title">Clases en migracion</div><div class="empty-desc">Este modulo sigue usando datos legacy.</div></div>';
+    '<div class="empty-state"><div class="empty-title">Sin clases proximas</div><div class="empty-desc">No hay clases registradas en Firebase.</div></div>';
   document.getElementById('lista-pagos-pendientes').innerHTML =
-    '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">Pagos pendientes siguen en migracion legacy.</div>';
+    '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">Sin pagos pendientes en Firebase.</div>';
 }
 
 async function cargarSolicitudesRecientes() {
@@ -1254,9 +1253,9 @@ async function cargarProfesores() {
   tbody.innerHTML = filtrado.map(p => `<tr>
     <td>
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="avatar">${getIniciales(p.usuarios?.nombre, p.usuarios?.apellidos)}</div>
+        <div class="avatar">${getIniciales(p.usuarios?.nombre || p.nombre || p.email, p.usuarios?.apellidos || p.apellidos)}</div>
         <div>
-          <div style="font-weight:600">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</div>
+          <div style="font-weight:600">${sanitize(p.usuarios?.nombre || p.nombre || p.email || 'Profesor')} ${sanitize(p.usuarios?.apellidos || p.apellidos || '')}</div>
           <div style="font-size:.75rem;color:var(--gray-mid)">${sanitize(p.ciudad||'Madrid')}</div>
         </div>
       </div>
@@ -1264,8 +1263,8 @@ async function cargarProfesores() {
     <td>${sanitize(p.usuarios?.email||'')}</td>
     <td>${sanitize(p.usuarios?.telefono||'—')}</td>
     <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'—'}</td>
-    <td>${p.comision_porcentaje}%</td>
-    <td>${badgeEstado(p.estado_verificacion)}</td>
+    <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
+    <td>${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}</td>
     <td>—</td>
     <td>
       <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">✓ Verificar</button>

@@ -3,7 +3,7 @@
  *
  * Public production API kept stable for pages and dashboards. The
  * implementation now delegates authentication operations to the Firebase Auth
- * adapter while Supabase remains available for legacy data modules.
+ * adapter.
  */
 
 import authAdapter from './adapters/firebase-auth-adapter.js';

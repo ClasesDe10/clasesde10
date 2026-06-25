@@ -1,8 +1,7 @@
 /**
  * ClasesDe10 - notifications provider.
  *
- * Current implementation: Supabase `notificaciones` + realtime channel.
- * Future Firebase cutover: replace with Firestore `onSnapshot` in this file.
+ * Uses the shared data client so dashboards do not depend on a backend vendor.
  */
 
 export async function watchUnreadNotifications(db, usuarioId, callback) {
@@ -20,12 +19,10 @@ export async function watchUnreadNotifications(db, usuarioId, callback) {
   await actualizar();
 
   return db.channel(`notif-${usuarioId}`)
-    .on('postgres_changes', {
+    .on('data_changes', {
       event: '*',
-      schema: 'public',
       table: 'notificaciones',
       filter: `usuario_id=eq.${usuarioId}`,
     }, actualizar)
     .subscribe();
 }
-

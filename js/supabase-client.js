@@ -1,20 +1,411 @@
 /**
- * ClasesDe10 — Supabase Client
- * Punto único de inicialización. Importar este módulo en todas las páginas.
+ * ClasesDe10 - Firebase data compatibility client.
+ *
+ * Runtime dashboards still use an older query shape. This module keeps that
+ * API surface but routes reads/writes to Firebase.
  */
 
-import { SUPABASE_ANON_KEY, SUPABASE_URL } from './supabase-config.js';
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import {
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
+import { firebaseDb, firebaseStorage } from './firebase-client.js';
 
-const { createClient } = window.supabase;
-export const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    autoRefreshToken:    true,
-    persistSession:      true,
-    detectSessionInUrl:  true,
+const COLLECTION_ALIASES = {
+  usuarios: 'users',
+  v_clases_completas: 'clases',
+  v_dashboard_admin: 'dashboardStats',
+  v_resumen_profesor_mes: 'resumenProfesorMes',
+};
+
+const FIELD_ALIASES = {
+  usuario_id: ['usuario_id', 'userUid', 'uid', 'firebase_uid'],
+  familia_id: ['familia_id', 'familyUid'],
+  profesor_id: ['profesor_id', 'teacherUid'],
+  alumno_id: ['alumno_id', 'studentId', 'studentUid'],
+  profesor_asignado_id: ['profesor_asignado_id', 'assignedTeacherUid'],
+  estado_verificacion: ['estado_verificacion', 'verificationStatus'],
+  estado: ['estado', 'status'],
+  activo: ['activo', 'active'],
+  created_at: ['created_at', 'createdAt'],
+  fecha: ['fecha', 'date'],
+};
+
+function collectionName(name) {
+  return COLLECTION_ALIASES[name] || name;
+}
+
+function normalizeDate(value) {
+  if (!value) return value;
+  if (typeof value === 'string') return value;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  if (value.seconds) return new Date(value.seconds * 1000).toISOString();
+  return value;
+}
+
+function toLegacyDoc(snap) {
+  const data = snap.data() || {};
+  const createdAt = normalizeDate(data.createdAt || data.created_at);
+  const updatedAt = normalizeDate(data.updatedAt || data.updated_at);
+
+  return {
+    id: snap.id,
+    ...data,
+    created_at: data.created_at || createdAt || null,
+    updated_at: data.updated_at || updatedAt || null,
+  };
+}
+
+async function listCollection(name) {
+  const snap = await getDocs(collection(firebaseDb, collectionName(name)));
+  return snap.docs.map(toLegacyDoc);
+}
+
+async function safeListCollection(name) {
+  try {
+    return await listCollection(name);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function getCollectionMap(name) {
+  const rows = await listCollection(name);
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+function firstValue(row, field) {
+  const aliases = FIELD_ALIASES[field] || [field];
+  for (const alias of aliases) {
+    if (row?.[alias] !== undefined) return row[alias];
+  }
+  return undefined;
+}
+
+function matchesFilter(row, filter) {
+  const value = firstValue(row, filter.field);
+  if (filter.operator === 'eq') return value === filter.value;
+  if (filter.operator === 'gte') return String(value || '') >= String(filter.value || '');
+  if (filter.operator === 'lte') return String(value || '') <= String(filter.value || '');
+  if (filter.operator === 'in') return Array.isArray(filter.value) && filter.value.includes(value);
+  return true;
+}
+
+function compareValues(a, b, direction) {
+  const aa = normalizeDate(a) || '';
+  const bb = normalizeDate(b) || '';
+  if (aa === bb) return 0;
+  const result = aa > bb ? 1 : -1;
+  return direction === false ? -result : result;
+}
+
+function normalizeUser(user) {
+  if (!user) return null;
+  return {
+    ...user,
+    nombre: user.nombre || '',
+    apellidos: user.apellidos || '',
+    email: user.email || '',
+    telefono: user.telefono || '',
+  };
+}
+
+async function hydrateRows(table, rows) {
+  if (!rows.length) return rows;
+
+  const users = await getCollectionMap('users');
+  const familias = table !== 'familias' ? await getCollectionMap('familias') : new Map();
+  const profesores = table !== 'profesores' ? await getCollectionMap('profesores') : new Map();
+  const alumnos = table !== 'alumnos' ? await getCollectionMap('alumnos') : new Map();
+  const documentos = table !== 'documentos' ? await getCollectionMap('documentos') : new Map();
+
+  return rows.map((row) => {
+    const userUid = row.userUid || row.usuario_id || row.uid || row.id;
+    const familiaId = row.familyUid || row.familia_id;
+    const profesorId = row.teacherUid || row.profesor_id || row.profesor_asignado_id || row.assignedTeacherUid;
+    const alumnoId = row.studentId || row.studentUid || row.alumno_id;
+    const familia = familias.get(familiaId);
+    const profesor = profesores.get(profesorId);
+    const alumno = alumnos.get(alumnoId);
+    const documento = documentos.get(row.documento_id || row.documentId);
+    const usuario = normalizeUser(users.get(userUid));
+    const familiaUser = normalizeUser(users.get(familia?.userUid || familia?.usuario_id || familia?.id));
+    const profesorUser = normalizeUser(users.get(profesor?.userUid || profesor?.usuario_id || profesor?.id));
+
+    return {
+      ...row,
+      usuarios: row.usuarios || usuario,
+      familias: row.familias || (familia ? { ...familia, usuarios: familiaUser } : null),
+      profesores: row.profesores || (profesor ? { ...profesor, usuarios: profesorUser } : null),
+      alumnos: row.alumnos || alumno || null,
+      documentos: row.documentos || documento || null,
+      alumno_nombre: row.alumno_nombre || [alumno?.nombre, alumno?.apellidos].filter(Boolean).join(' '),
+      profesor_nombre: row.profesor_nombre || [profesorUser?.nombre, profesorUser?.apellidos].filter(Boolean).join(' '),
+      familia_nombre: row.familia_nombre || [familiaUser?.nombre, familiaUser?.apellidos].filter(Boolean).join(' '),
+      fecha: row.fecha || row.date || null,
+      hora_inicio: row.hora_inicio || row.startTime || null,
+      hora_fin: row.hora_fin || row.endTime || null,
+      materia: row.materia || row.subject || '',
+      estado: row.estado || row.status || '',
+      estado_verificacion: row.estado_verificacion || row.verificationStatus || '',
+      activo: row.activo ?? row.active ?? true,
+    };
+  });
+}
+
+async function dashboardStats() {
+  const [profesores, familias, alumnos, clases, solicitudes, pagos, incidencias] = await Promise.all([
+    safeListCollection('profesores'),
+    safeListCollection('familias'),
+    safeListCollection('alumnos'),
+    safeListCollection('clases'),
+    safeListCollection('solicitudes'),
+    safeListCollection('pagos'),
+    safeListCollection('incidencias'),
+  ]);
+
+  return {
+    profesores_activos: profesores.filter((p) => p.active !== false && p.activo !== false).length,
+    familias_activas: familias.filter((f) => f.active !== false && f.activo !== false).length,
+    alumnos_activos: alumnos.filter((a) => a.active !== false && a.activo !== false).length,
+    clases_mes: clases.length,
+    ingresos_mes: pagos.reduce((sum, p) => sum + Number(p.monto || p.amount || 0), 0),
+    comisiones_mes: clases.reduce((sum, c) => sum + Number(c.comision_clasesde10 || c.platformFee || 0), 0),
+    solicitudes_nuevas: solicitudes.filter((s) => ['nueva', 'nuevo'].includes(s.estado || s.status)).length,
+    pagos_pendientes: pagos.filter((p) => (p.estado || p.status) === 'pendiente').length,
+    incidencias_abiertas: incidencias.filter((i) => (i.estado || i.status) === 'abierta').length,
+  };
+}
+
+function withWriteTimestamps(payload, isCreate = false) {
+  const base = { ...(payload || {}) };
+  if (isCreate) {
+    base.createdAt = base.createdAt || serverTimestamp();
+    base.created_at = base.created_at || new Date().toISOString();
+  }
+  base.updatedAt = serverTimestamp();
+  base.updated_at = new Date().toISOString();
+  return base;
+}
+
+class FirebaseCompatQuery {
+  constructor(table) {
+    this.table = table;
+    this.filters = [];
+    this.sorts = [];
+    this.max = null;
+    this.rangeBounds = null;
+    this.singleRow = false;
+    this.countMode = false;
+    this.headMode = false;
+    this.writeMode = null;
+    this.writePayload = null;
+  }
+
+  select(_columns = '*', options = {}) {
+    this.countMode = options?.count === 'exact';
+    this.headMode = options?.head === true;
+    return this;
+  }
+
+  eq(field, value) {
+    this.filters.push({ field, operator: 'eq', value });
+    return this;
+  }
+
+  gte(field, value) {
+    this.filters.push({ field, operator: 'gte', value });
+    return this;
+  }
+
+  lte(field, value) {
+    this.filters.push({ field, operator: 'lte', value });
+    return this;
+  }
+
+  in(field, value) {
+    this.filters.push({ field, operator: 'in', value });
+    return this;
+  }
+
+  or() {
+    return this;
+  }
+
+  order(field, options = {}) {
+    this.sorts.push({ field, ascending: options.ascending !== false });
+    return this;
+  }
+
+  limit(value) {
+    this.max = value;
+    return this;
+  }
+
+  range(from, to) {
+    this.rangeBounds = { from, to };
+    return this;
+  }
+
+  single() {
+    this.singleRow = true;
+    return this;
+  }
+
+  insert(payload) {
+    this.writeMode = 'insert';
+    this.writePayload = payload;
+    return this;
+  }
+
+  update(payload) {
+    this.writeMode = 'update';
+    this.writePayload = payload;
+    return this;
+  }
+
+  delete() {
+    this.writeMode = 'delete';
+    return this;
+  }
+
+  async executeRead() {
+    if (this.table === 'v_dashboard_admin') {
+      const data = await dashboardStats();
+      return { data: this.singleRow ? data : [data], count: 1, error: null };
+    }
+
+    let rows = await listCollection(this.table);
+    rows = await hydrateRows(this.table, rows);
+    rows = rows.filter((row) => this.filters.every((filter) => matchesFilter(row, filter)));
+
+    for (const sort of this.sorts.reverse()) {
+      rows.sort((a, b) => compareValues(firstValue(a, sort.field), firstValue(b, sort.field), sort.ascending));
+    }
+
+    const total = rows.length;
+    if (this.rangeBounds) rows = rows.slice(this.rangeBounds.from, this.rangeBounds.to + 1);
+    if (this.max) rows = rows.slice(0, this.max);
+
+    if (this.headMode) return { data: null, count: total, error: null };
+    if (this.singleRow) return { data: rows[0] || null, count: total, error: null };
+    return { data: rows, count: this.countMode ? total : null, error: null };
+  }
+
+  async executeWrite() {
+    const target = collectionName(this.table);
+
+    if (this.writeMode === 'insert') {
+      const payloads = Array.isArray(this.writePayload) ? this.writePayload : [this.writePayload];
+      const written = [];
+      for (const payload of payloads) {
+        const data = withWriteTimestamps(payload, true);
+        if (payload?.id) {
+          await setDoc(doc(firebaseDb, target, payload.id), data, { merge: true });
+          written.push({ id: payload.id, ...data });
+        } else {
+          const refDoc = await addDoc(collection(firebaseDb, target), data);
+          written.push({ id: refDoc.id, ...data });
+        }
+      }
+      return { data: Array.isArray(this.writePayload) ? written : written[0], error: null };
+    }
+
+    const matches = await this.executeRead();
+    const rows = Array.isArray(matches.data) ? matches.data : matches.data ? [matches.data] : [];
+
+    if (this.writeMode === 'update') {
+      const data = withWriteTimestamps(this.writePayload, false);
+      await Promise.all(rows.map((row) => updateDoc(doc(firebaseDb, target, row.id), data)));
+      return { data: rows.map((row) => ({ ...row, ...data })), error: null };
+    }
+
+    if (this.writeMode === 'delete') {
+      await Promise.all(rows.map((row) => deleteDoc(doc(firebaseDb, target, row.id))));
+      return { data: rows, error: null };
+    }
+
+    return this.executeRead();
+  }
+
+  async execute() {
+    try {
+      if (this.writeMode) return await this.executeWrite();
+      return await this.executeRead();
+    } catch (error) {
+      return {
+        data: this.singleRow || this.headMode ? null : [],
+        count: this.countMode || this.headMode ? 0 : null,
+        error,
+      };
+    }
+  }
+
+  then(resolve, reject) {
+    return this.execute().then(resolve, reject);
+  }
+}
+
+function from(table) {
+  return new FirebaseCompatQuery(table);
+}
+
+const storage = {
+  from(bucket) {
+    return {
+      async upload(path, file, options = {}) {
+        try {
+          const fileRef = ref(firebaseStorage, `${bucket}/${path}`);
+          const upload = await uploadBytes(fileRef, file, {
+            contentType: options.contentType || file?.type || undefined,
+          });
+          return { data: { path, fullPath: upload.ref.fullPath }, error: null };
+        } catch (error) {
+          return { data: null, error };
+        }
+      },
+      async createSignedUrl(path) {
+        try {
+          const url = await getDownloadURL(ref(firebaseStorage, `${bucket}/${path}`));
+          return { data: { signedUrl: url, url }, error: null };
+        } catch (error) {
+          return { data: null, error };
+        }
+      },
+    };
   },
-  realtime: {
-    params: { eventsPerSecond: 10 },
+};
+
+function channel() {
+  return {
+    on() { return this; },
+    subscribe(callback) {
+      if (typeof callback === 'function') callback('SUBSCRIBED');
+      return this;
+    },
+    unsubscribe() {},
+  };
+}
+
+export const db = {
+  from,
+  storage,
+  channel,
+  removeChannel(channelRef) {
+    if (channelRef?.unsubscribe) channelRef.unsubscribe();
   },
-});
+};
 
 export default db;
