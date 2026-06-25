@@ -823,8 +823,25 @@ async function cargarBadgeLeads() {
 
 // ── DASHBOARD ────────────────────────────────────────────────────
 async function cargarDashboard() {
-  const { data } = await db.from('v_dashboard_admin').select('*').single();
   await cargarBadgeLeads();
+
+  let data = null;
+  try {
+    const response = await db.from('v_dashboard_admin').select('*').single();
+    data = response.data;
+    if (response.error) throw response.error;
+  } catch (error) {
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="alert alert-warning" style="grid-column:1/-1">
+        <div class="alert-body">
+          <div class="alert-title">Datos legacy no disponibles</div>
+          <div>Supabase no respondio para las metricas antiguas. Los modulos ya migrados a Firebase, como Leads, siguen disponibles desde el menu lateral.</div>
+        </div>
+      </div>`;
+    console.warn('Dashboard legacy Supabase no disponible', error);
+    return;
+  }
+
   if (!data) return;
 
   document.getElementById('stats-grid').innerHTML = `
