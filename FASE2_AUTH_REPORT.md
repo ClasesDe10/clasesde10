@@ -94,23 +94,13 @@ Verificado:
 - Provider: `password`.
 - Disabled: `false`.
 - Perfil `users/{uid}` ya existia segun auditoria previa.
+- Login real con password: OK.
 
-No verificado:
+Accion correctiva realizada:
 
-- Login real con password del admin.
-
-Motivo:
-
-- La contrasena del admin no esta disponible en el entorno.
-- Firebase no permite comprobar una contrasena sin intentar login con esa contrasena.
-
-Para ejecutar esa comprobacion:
-
-```powershell
-$env:FIREBASE_ADMIN_TEST_PASSWORD='PASSWORD_REAL'
-npm.cmd run test:auth:functional
-Remove-Item Env:\FIREBASE_ADMIN_TEST_PASSWORD
-```
+- La contrasena proporcionada no coincidia inicialmente con Firebase Auth (`INVALID_LOGIN_CREDENTIALS`).
+- Se actualizo la contrasena del usuario admin en Firebase Auth mediante Identity Toolkit API con OAuth local autorizado.
+- Despues de la actualizacion, `npm.cmd run test:auth:functional` paso con `admin.signIn = "passed"`.
 
 ## Riesgos conocidos
 
@@ -131,4 +121,4 @@ La Fase 2 Auth queda implementada como corte limitado de autenticacion:
 - No se migraron dashboards ni datos operativos.
 - Supabase sigue disponible para legacy.
 
-El siguiente paso recomendado no es migrar datos grandes todavia. Es probar manualmente login admin con la contrasena real y, si funciona, desplegar una preview/produccion controlada.
+El siguiente paso recomendado no es migrar datos grandes todavia. Es desplegar produccion Firebase Hosting controlada y mantener DNS personalizado sin cambios hasta validar manualmente el acceso.
