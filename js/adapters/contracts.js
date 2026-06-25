@@ -53,6 +53,8 @@ export const DOMAIN_METHODS = Object.freeze({
     'logout',
     'register',
     'resetPassword',
+    'verifyPasswordResetCode',
+    'confirmPasswordResetCode',
     'onAuthChange',
   ],
   users: [...BASE_ADAPTER_METHODS, 'getCurrentProfile', 'listByRole', 'setActive'],

@@ -133,10 +133,8 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script type="module">
-import { login, resetPassword, redirectByRole, getSession, getUsuarioActual } from '../js/auth-provider.js';
-import db from '../js/supabase-client.js';
+import { login, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js';
 import { showToast } from '../js/utils.js';
 import { trackLogin } from '../js/analytics.js';
 
@@ -223,24 +221,19 @@ formForgot.addEventListener('submit', async (e) => {
 });
 
 // ── Redirigir si ya hay sesión activa ───────────────────────────
-// Cubre: usuario ya logado que visita /login, y confirmación de email
-// con flujo PKCE donde el SDK intercambia el código antes de llegar aquí.
+// Cubre: usuario ya logado que visita /login.
 const _sesionActual = await getSession();
 if (_sesionActual) {
   const _usuarioActual = await getUsuarioActual();
   if (_usuarioActual?.activo) redirectByRole(_usuarioActual.rol);
 }
 
-// Cubre el caso donde el intercambio PKCE termina DESPUÉS de getSession()
-// (URL tiene ?code= de la confirmación de email)
-if (new URLSearchParams(location.search).has('code')) {
-  db.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-      const u = await getUsuarioActual();
-      if (u?.activo) redirectByRole(u.rol);
-    }
-  });
-}
+onAuthChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    const u = await getUsuarioActual();
+    if (u?.activo) redirectByRole(u.rol);
+  }
+});
 </script>
 <script src="/js/pwa.js" defer></script>
 </body>

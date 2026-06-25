@@ -13,6 +13,8 @@ import {
   register,
   requireAuth,
   resetPassword,
+  verifyPasswordResetCode,
+  confirmPasswordResetCode,
 } from '../firebase-auth.js';
 
 export const authAdapter = {
@@ -23,6 +25,8 @@ export const authAdapter = {
   logout,
   register,
   resetPassword,
+  verifyPasswordResetCode,
+  confirmPasswordResetCode,
   onAuthChange,
 };
 

@@ -25,16 +25,12 @@ const ADAPTER_FILES = {
   configuracion: 'js/adapters/configuracion-adapter.js',
 };
 
-const PRODUCTION_ENTRYPOINTS = [
-  'pages/login.html',
-  'pages/registro.html',
-  'pages/reset-password.html',
+const NON_AUTH_RUNTIME_ENTRYPOINTS = [
   'pages/dashboard/admin.html',
   'pages/dashboard/alumno.html',
   'pages/dashboard/familia.html',
   'pages/dashboard/profesor.html',
   'js/auth-provider.js',
-  'js/auth.js',
   'js/document-storage-provider.js',
   'js/notifications-provider.js',
 ];
@@ -73,11 +69,11 @@ for (const domain of ADAPTER_DOMAINS) {
   assert(registry.includes(domain), `Adapter registry does not export ${domain}`);
 }
 
-for (const file of PRODUCTION_ENTRYPOINTS) {
+for (const file of NON_AUTH_RUNTIME_ENTRYPOINTS) {
   const source = await readRelative(file);
   assert(
     !source.includes('/adapters/') && !source.includes('./adapters/') && !source.includes('../adapters/'),
-    `Production entrypoint imports adapters before cutover: ${file}`,
+    `Non-auth runtime entrypoint imports adapters before its cutover: ${file}`,
   );
 }
 

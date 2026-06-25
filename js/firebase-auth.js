@@ -10,11 +10,13 @@
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  confirmPasswordReset as firebaseConfirmPasswordReset,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
+  verifyPasswordResetCode as firebaseVerifyPasswordResetCode,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
 import {
   doc,
@@ -31,11 +33,6 @@ const ROLES_RUTAS = {
   profesor: '/pages/dashboard/profesor.html',
   familia: '/pages/dashboard/familia.html',
   alumno: '/pages/dashboard/alumno.html',
-};
-
-const ROLE_COLLECTION = {
-  profesor: 'profesores',
-  familia: 'familias',
 };
 
 function normalizeEmail(value) {
@@ -61,6 +58,8 @@ function mapFirebaseError(error) {
     'auth/user-not-found': 'Email o contrasena incorrectos.',
     'auth/weak-password': 'La contrasena debe tener al menos 8 caracteres.',
     'auth/wrong-password': 'Email o contrasena incorrectos.',
+    'auth/expired-action-code': 'El enlace ha caducado. Solicita uno nuevo.',
+    'auth/invalid-action-code': 'El enlace no es valido o ya fue utilizado.',
   };
 
   if (!error) return null;
@@ -72,10 +71,14 @@ function mapFirebaseError(error) {
 
 function mapProfile(uid, data) {
   if (!data) return null;
+  const legacy = data.legacy || {};
+  const appUserId = legacy.supabaseUserId || data.supabaseUserId || uid;
+
   return {
-    id: uid,
-    auth_id: uid,
+    id: appUserId,
+    auth_id: legacy.supabaseAuthId || uid,
     uid,
+    firebase_uid: uid,
     email: data.email || '',
     nombre: data.nombre || '',
     apellidos: data.apellidos || '',
@@ -84,17 +87,28 @@ function mapProfile(uid, data) {
     role: data.role,
     activo: data.active !== false,
     active: data.active !== false,
+    legacy,
   };
 }
 
-export function getSession() {
-  return firebaseAuth.currentUser
-    ? { user: firebaseAuth.currentUser }
-    : null;
+function waitForCurrentUser() {
+  if (firebaseAuth.currentUser) return Promise.resolve(firebaseAuth.currentUser);
+
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
+export async function getSession() {
+  const user = await waitForCurrentUser();
+  return user ? { user } : null;
 }
 
 export async function getUsuarioActual() {
-  const user = firebaseAuth.currentUser;
+  const user = await waitForCurrentUser();
   if (!user) return null;
 
   const snap = await getDoc(doc(firebaseDb, 'users', user.uid));
@@ -206,21 +220,6 @@ export async function register({
       updatedAt: serverTimestamp(),
     });
 
-    const profileCollection = ROLE_COLLECTION[role];
-    if (profileCollection) {
-      await setDoc(doc(firebaseDb, profileCollection, user.uid), {
-        userUid: user.uid,
-        email: emailClean,
-        nombre: nombreClean,
-        apellidos: apellidosClean,
-        telefono: telefonoClean || null,
-        active: true,
-        status: role === 'profesor' ? 'pendiente_revision' : 'activo',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
     await sendEmailVerification(user, {
       url: `${CANONICAL_ORIGIN}/pages/login.html`,
     });
@@ -239,8 +238,26 @@ export async function logout() {
 export async function resetPassword(email) {
   try {
     await sendPasswordResetEmail(firebaseAuth, normalizeEmail(email), {
-      url: `${CANONICAL_ORIGIN}/pages/login.html`,
+      url: `${CANONICAL_ORIGIN}/pages/reset-password.html`,
     });
+    return { error: null };
+  } catch (error) {
+    return { error: mapFirebaseError(error) };
+  }
+}
+
+export async function verifyPasswordResetCode(oobCode) {
+  try {
+    const email = await firebaseVerifyPasswordResetCode(firebaseAuth, String(oobCode || '').trim());
+    return { data: { email }, error: null };
+  } catch (error) {
+    return { data: null, error: mapFirebaseError(error) };
+  }
+}
+
+export async function confirmPasswordResetCode(oobCode, password) {
+  try {
+    await firebaseConfirmPasswordReset(firebaseAuth, String(oobCode || '').trim(), password);
     return { error: null };
   } catch (error) {
     return { error: mapFirebaseError(error) };

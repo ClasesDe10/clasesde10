@@ -12,6 +12,7 @@
     "check:centralization": "node scripts/check-centralization.mjs",
     "firebase:auth:enable-email": "node scripts/firebase-auth-enable-email.mjs",
     "firebase:storage:create-default": "node scripts/firebase-storage-create-default.mjs",
-    "test:adapters": "node scripts/phase1-adapters-test.mjs"
+    "test:adapters": "node scripts/phase1-adapters-test.mjs",
+    "test:auth:functional": "node scripts/firebase-auth-functional-test.mjs"
   }
 }
