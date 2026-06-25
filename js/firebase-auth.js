@@ -23,6 +23,7 @@ import {
   getDoc,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseAuth, firebaseDb } from './firebase-client.js';
 
@@ -203,17 +204,29 @@ export async function register({
     return { error: authError('Rol no valido.') };
   }
 
-  if (role === 'alumno') {
-    return {
-      error: authError(
-        invitationToken
-          ? 'El registro de alumno en Firebase requiere migrar primero las invitaciones.'
-          : 'El acceso de alumno requiere una invitacion valida de una familia.',
-      ),
-    };
-  }
-
   try {
+    let studentInvitation = null;
+
+    if (role === 'alumno') {
+      if (!invitationToken) {
+        return { error: authError('El acceso de alumno requiere una invitacion valida de una familia.') };
+      }
+
+      const invitationSnap = await getDoc(doc(firebaseDb, 'alumno_invitaciones', invitationToken));
+      studentInvitation = invitationSnap.exists()
+        ? { id: invitationSnap.id, ...invitationSnap.data() }
+        : null;
+
+      if (!studentInvitation || (studentInvitation.status || studentInvitation.estado) !== 'pendiente') {
+        return { error: authError('La invitacion no existe o ya fue utilizada.') };
+      }
+
+      const expiresAt = studentInvitation.expiraAt || studentInvitation.expira_at;
+      if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
+        return { error: authError('La invitacion ha caducado. Pide una nueva a tu familia.') };
+      }
+    }
+
     const credential = await createUserWithEmailAndPassword(firebaseAuth, emailClean, password);
     const { user } = credential;
 
@@ -257,9 +270,28 @@ export async function register({
       }, { merge: true });
     }
 
-    await sendEmailVerification(user, {
-      url: `${getAuthActionOrigin()}/pages/login.html`,
-    });
+    if (role === 'alumno') {
+      await updateDoc(doc(firebaseDb, 'alumnos', studentInvitation.studentId || studentInvitation.alumno_id), {
+        studentUid: user.uid,
+        usuario_id: user.uid,
+        updatedAt: serverTimestamp(),
+        updated_at: new Date().toISOString(),
+      });
+      await updateDoc(doc(firebaseDb, 'alumno_invitaciones', studentInvitation.id), {
+        status: 'usada',
+        estado: 'usada',
+        usedByUid: user.uid,
+        usedAt: serverTimestamp(),
+      });
+    }
+
+    try {
+      await sendEmailVerification(user, {
+        url: `${getAuthActionOrigin()}/pages/login.html`,
+      });
+    } catch (verificationError) {
+      console.warn('No se pudo enviar el email de verificacion en este momento.', verificationError);
+    }
 
     return { data: credential, usuario: await getUsuarioActual() };
   } catch (error) {

@@ -830,8 +830,11 @@ function irA(seccion) {
   else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, cargarIncidencias);
 }
 
-document.querySelectorAll('[data-section]').forEach(el => {
-  el.addEventListener('click', () => irA(el.dataset.section));
+document.addEventListener('click', (e) => {
+  const sectionTrigger = e.target.closest('[data-section]');
+  if (!sectionTrigger) return;
+  e.preventDefault();
+  irA(sectionTrigger.dataset.section);
 });
 initSidebar();
 initModals();

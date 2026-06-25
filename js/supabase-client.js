@@ -12,9 +12,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import {
   getDownloadURL,
@@ -43,6 +45,19 @@ const FIELD_ALIASES = {
   fecha: ['fecha', 'date'],
 };
 
+const SERVER_FIELD_ALIASES = {
+  usuario_id: 'userUid',
+  familia_id: 'familyUid',
+  profesor_id: 'teacherUid',
+  alumno_id: 'studentId',
+  profesor_asignado_id: 'assignedTeacherUid',
+  estado_verificacion: 'verificationStatus',
+  estado: 'status',
+  activo: 'active',
+  created_at: 'createdAt',
+  fecha: 'date',
+};
+
 function collectionName(name) {
   return COLLECTION_ALIASES[name] || name;
 }
@@ -68,8 +83,32 @@ function toLegacyDoc(snap) {
   };
 }
 
-async function listCollection(name) {
-  const snap = await getDocs(collection(firebaseDb, collectionName(name)));
+function serverFilterField(field) {
+  return SERVER_FIELD_ALIASES[field] || field;
+}
+
+function serverFilterOperator(operator) {
+  if (operator === 'eq') return '==';
+  if (operator === 'in') return 'in';
+  if (operator === 'gte') return '>=';
+  if (operator === 'lte') return '<=';
+  if (operator === 'lt') return '<';
+  return null;
+}
+
+function buildServerQuery(name, filters = []) {
+  const constraints = [];
+  for (const filter of filters) {
+    const op = serverFilterOperator(filter.operator);
+    if (!op || filter.value === undefined) continue;
+    constraints.push(where(serverFilterField(filter.field), op, filter.value));
+  }
+  const ref = collection(firebaseDb, collectionName(name));
+  return constraints.length ? query(ref, ...constraints) : ref;
+}
+
+async function listCollection(name, filters = []) {
+  const snap = await getDocs(buildServerQuery(name, filters));
   return snap.docs.map(toLegacyDoc);
 }
 
@@ -86,6 +125,14 @@ async function getCollectionMap(name) {
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+async function safeCollectionMap(name) {
+  try {
+    return await getCollectionMap(name);
+  } catch (_) {
+    return new Map();
+  }
+}
+
 function firstValue(row, field) {
   const aliases = FIELD_ALIASES[field] || [field];
   for (const alias of aliases) {
@@ -99,6 +146,7 @@ function matchesFilter(row, filter) {
   if (filter.operator === 'eq') return value === filter.value;
   if (filter.operator === 'gte') return String(value || '') >= String(filter.value || '');
   if (filter.operator === 'lte') return String(value || '') <= String(filter.value || '');
+  if (filter.operator === 'lt') return String(value || '') < String(filter.value || '');
   if (filter.operator === 'in') return Array.isArray(filter.value) && filter.value.includes(value);
   return true;
 }
@@ -125,11 +173,11 @@ function normalizeUser(user) {
 async function hydrateRows(table, rows) {
   if (!rows.length) return rows;
 
-  const users = await getCollectionMap('users');
-  const familias = table !== 'familias' ? await getCollectionMap('familias') : new Map();
-  const profesores = table !== 'profesores' ? await getCollectionMap('profesores') : new Map();
-  const alumnos = table !== 'alumnos' ? await getCollectionMap('alumnos') : new Map();
-  const documentos = table !== 'documentos' ? await getCollectionMap('documentos') : new Map();
+  const users = await safeCollectionMap('users');
+  const familias = table !== 'familias' ? await safeCollectionMap('familias') : new Map();
+  const profesores = table !== 'profesores' ? await safeCollectionMap('profesores') : new Map();
+  const alumnos = table !== 'alumnos' ? await safeCollectionMap('alumnos') : new Map();
+  const documentos = table !== 'documentos' ? await safeCollectionMap('documentos') : new Map();
 
   return rows.map((row) => {
     const userUid = row.userUid || row.usuario_id || row.uid || row.id;
@@ -200,6 +248,53 @@ function withWriteTimestamps(payload, isCreate = false) {
   return base;
 }
 
+function randomToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function normalizeWritePayload(table, payload, isCreate = false) {
+  const data = { ...(payload || {}) };
+
+  if (data.familia_id && !data.familyUid) data.familyUid = data.familia_id;
+  if (data.alumno_id && !data.studentId) data.studentId = data.alumno_id;
+  if (data.profesor_id && !data.teacherUid) data.teacherUid = data.profesor_id;
+  if (data.profesor_asignado_id && !data.assignedTeacherUid) data.assignedTeacherUid = data.profesor_asignado_id;
+  if (data.usuario_id && !data.userUid) data.userUid = data.usuario_id;
+  if (data.estado && !data.status) data.status = data.estado;
+  if (data.activo !== undefined && data.active === undefined) data.active = data.activo;
+
+  if (table === 'alumnos') {
+    data.activo = data.activo ?? data.active ?? true;
+    data.active = data.active ?? data.activo ?? true;
+  }
+
+  if (table === 'solicitudes') {
+    data.estado = data.estado || data.status || 'nueva';
+    data.status = data.status || data.estado;
+  }
+
+  if (table === 'pagos') {
+    data.estado = data.estado || data.status || 'pendiente';
+    data.status = data.status || data.estado;
+  }
+
+  if (table === 'alumno_invitaciones' && isCreate) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    data.token = data.token || randomToken();
+    data.expira_at = data.expira_at || expiresAt;
+    data.expiraAt = data.expiraAt || data.expira_at;
+    data.estado = data.estado || 'pendiente';
+    data.status = data.status || data.estado;
+    data.studentId = data.studentId || data.alumno_id;
+    data.createdByUid = data.createdByUid || data.creado_por;
+    data.familyUid = data.familyUid || data.creado_por;
+  }
+
+  return data;
+}
+
 class FirebaseCompatQuery {
   constructor(table) {
     this.table = table;
@@ -232,6 +327,11 @@ class FirebaseCompatQuery {
 
   lte(field, value) {
     this.filters.push({ field, operator: 'lte', value });
+    return this;
+  }
+
+  lt(field, value) {
+    this.filters.push({ field, operator: 'lt', value });
     return this;
   }
 
@@ -287,7 +387,7 @@ class FirebaseCompatQuery {
       return { data: this.singleRow ? data : [data], count: 1, error: null };
     }
 
-    let rows = await listCollection(this.table);
+    let rows = await listCollection(this.table, this.filters);
     rows = await hydrateRows(this.table, rows);
     rows = rows.filter((row) => this.filters.every((filter) => matchesFilter(row, filter)));
 
@@ -311,8 +411,11 @@ class FirebaseCompatQuery {
       const payloads = Array.isArray(this.writePayload) ? this.writePayload : [this.writePayload];
       const written = [];
       for (const payload of payloads) {
-        const data = withWriteTimestamps(payload, true);
-        if (payload?.id) {
+        const data = withWriteTimestamps(normalizeWritePayload(this.table, payload, true), true);
+        if (this.table === 'alumno_invitaciones' && data.token) {
+          await setDoc(doc(firebaseDb, target, data.token), data, { merge: false });
+          written.push({ id: data.token, ...data });
+        } else if (payload?.id) {
           await setDoc(doc(firebaseDb, target, payload.id), data, { merge: true });
           written.push({ id: payload.id, ...data });
         } else {
@@ -327,7 +430,7 @@ class FirebaseCompatQuery {
     const rows = Array.isArray(matches.data) ? matches.data : matches.data ? [matches.data] : [];
 
     if (this.writeMode === 'update') {
-      const data = withWriteTimestamps(this.writePayload, false);
+      const data = withWriteTimestamps(normalizeWritePayload(this.table, this.writePayload, false), false);
       await Promise.all(rows.map((row) => updateDoc(doc(firebaseDb, target, row.id), data)));
       return { data: rows.map((row) => ({ ...row, ...data })), error: null };
     }

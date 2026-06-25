@@ -265,6 +265,40 @@ service cloud.firestore {
         && request.resource.data.status == resource.data.status;
     }
 
+    function validFamilyStudentUpdate() {
+      return isFamilyParticipant(resource.data)
+        && request.resource.data.familyUid == resource.data.familyUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'nombre',
+          'apellidos',
+          'curso',
+          'nivel',
+          'nivel_educativo',
+          'colegio',
+          'fecha_nacimiento',
+          'materias',
+          'materias_necesita',
+          'objetivos',
+          'disponibilidad',
+          'activo',
+          'active',
+          'updatedAt',
+          'updated_at'
+        ]);
+    }
+
+    function validStudentSelfClaim() {
+      return signedIn()
+        && (!resource.data.keys().hasAny(['studentUid']) || resource.data.studentUid == null)
+        && request.resource.data.studentUid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'studentUid',
+          'usuario_id',
+          'updatedAt',
+          'updated_at'
+        ]);
+    }
+
     function isFamilyParticipant(data) {
       return signedIn() && data.familyUid == request.auth.uid;
     }
@@ -318,16 +352,38 @@ service cloud.firestore {
         || (hasRole('familia') && request.resource.data.familyUid == request.auth.uid);
       allow read: if isAdmin() || isParticipant(resource.data);
       allow update: if isAdmin()
+        || validFamilyStudentUpdate()
+        || validStudentSelfClaim();
+      allow delete: if isAdmin();
+    }
+
+    match /alumno_invitaciones/{invitationId} {
+      allow create: if hasRole('familia')
+        && request.resource.data.familyUid == request.auth.uid
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.status == 'pendiente'
+        && request.resource.data.token is string
+        && request.resource.data.token.size() >= 32
+        && invitationId == request.resource.data.token;
+      allow get: if isAdmin()
+        || (signedIn() && resource.data.familyUid == request.auth.uid)
         || (
-          isFamilyParticipant(resource.data)
+          resource.data.status == 'pendiente'
+          && invitationId == resource.data.token
+        );
+      allow list: if isAdmin()
+        || (signedIn() && resource.data.familyUid == request.auth.uid);
+      allow update: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.status == 'pendiente'
+          && request.resource.data.status == 'usada'
+          && request.resource.data.usedByUid == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'nombre',
-            'apellidos',
-            'curso',
-            'nivel',
-            'materias',
-            'objetivos',
-            'disponibilidad',
+            'status',
+            'estado',
+            'usedByUid',
+            'usedAt',
             'updatedAt'
           ])
         );

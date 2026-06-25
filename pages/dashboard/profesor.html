@@ -446,7 +446,7 @@ document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre
 
 // Cargar perfil profesor
 const { data: perfil } = await db.from('profesores').select('*').eq('usuario_id', usuario.id).single();
-const profesorId = perfil?.id;
+const profesorId = perfil?.id || usuario.uid || usuario.firebase_uid || usuario.id;
 
 // Mostrar alerta de verificación
 if (perfil) {
@@ -482,7 +482,12 @@ function irA(sec) {
                     perfil: cargarPerfil, documentos: cargarDocumentos, disponibilidad: cargarDisponibilidad };
   loaders[sec]?.();
 }
-document.querySelectorAll('[data-section]').forEach(el => el.addEventListener('click', () => irA(el.dataset.section)));
+document.addEventListener('click', (e) => {
+  const sectionTrigger = e.target.closest('[data-section]');
+  if (!sectionTrigger) return;
+  e.preventDefault();
+  irA(sectionTrigger.dataset.section);
+});
 initSidebar();
 initModals();
 document.addEventListener('click', (e) => {

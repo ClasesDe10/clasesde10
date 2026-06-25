@@ -424,7 +424,7 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 const { data: familiaData } = await db.from('familias').select('*').eq('usuario_id', usuario.id).single();
-const familiaId = familiaData?.id;
+const familiaId = familiaData?.id || usuario.uid || usuario.firebase_uid || usuario.id;
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
@@ -439,7 +439,12 @@ function irA(sec) {
                     alumnos: cargarHijos, solicitudes: cargarSolicitudes, pagos: cargarPagos, perfil: cargarPerfil };
   loaders[sec]?.();
 }
-document.querySelectorAll('[data-section]').forEach(el => el.addEventListener('click', () => irA(el.dataset.section)));
+document.addEventListener('click', (e) => {
+  const sectionTrigger = e.target.closest('[data-section]');
+  if (!sectionTrigger) return;
+  e.preventDefault();
+  irA(sectionTrigger.dataset.section);
+});
 initSidebar();
 initModals();
 document.addEventListener('click', (e) => {

@@ -194,7 +194,12 @@ function irA(sec) {
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarMisClases, profesor: cargarProfesor };
   loaders[sec]?.();
 }
-document.querySelectorAll('[data-section]').forEach(el => el.addEventListener('click', () => irA(el.dataset.section)));
+document.addEventListener('click', (e) => {
+  const sectionTrigger = e.target.closest('[data-section]');
+  if (!sectionTrigger) return;
+  e.preventDefault();
+  irA(sectionTrigger.dataset.section);
+});
 initSidebar();
 document.getElementById('btn-logout').addEventListener('click', logout);
 
