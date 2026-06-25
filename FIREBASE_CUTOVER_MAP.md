@@ -19,14 +19,15 @@ numero de archivos posible:
 
 | Bloqueo | Prueba | Error exacto |
 |---|---|---|
-| Firebase Auth no inicializado | `scripts/firebase-auth-audit.mjs` | `CONFIGURATION_NOT_FOUND` |
-| Inicializar Auth por API | `scripts/firebase-auth-enable-email.mjs` | `BILLING_NOT_ENABLED : Identity Platform feature requires billing to be enabled.` |
+| Firebase Auth | Activado manualmente y verificado por CLI/API | 1 usuario exportado correctamente |
 | Firebase Storage no inicializado | `firebase deploy --only storage --dry-run` | `Firebase Storage has not been set up... click 'Get Started'` |
 | Crear default bucket por API | `scripts/firebase-storage-create-default.mjs` | `403 PERMISSION_DENIED` |
 | Netlify deploy publico | `netlify deploy --prod` | `Account credit usage exceeded - new deploys are blocked until credits are added` |
 | DNS dominio | `Resolve-DnsName` | `clasesde10.com A -> 75.2.60.5`, `www -> helpful-fenglisu-f1d7b9.netlify.app` |
 
 No hay `gcloud` ni ADC local en rutas estandar. La sesion disponible es Firebase CLI OAuth.
+Firebase Auth ya esta activo con Email/Password y el primer admin existe:
+`users/dZPatwwkRZNrth5cF1fhoHgBEo12` (`contacto.clasesde10@gmail.com`).
 `cloudbilling.googleapis.com/v1/projects/clasesde10-50add/billingInfo` devuelve
 `billingEnabled: false`. IAM lista una service account
 `firebase-adminsdk-fbsvc@clasesde10-50add.iam.gserviceaccount.com`, pero no hay
@@ -130,12 +131,13 @@ Estimacion por superficie funcional:
 | Hosting/PWA/SEO publico en Firebase | completo | 20% |
 | Formularios publicos a Firestore | completo | 15% |
 | Firestore reglas/modelo base | mayormente completo | 15% |
-| Auth privada | bloqueada por Auth no inicializado | 0% |
+| Auth privada | Firebase Auth activo, provider preparado; corte bloqueado por dashboards Supabase | 8% |
 | Storage privado | preparado, bloqueado por bucket | 3% |
 | Dashboards privados | aun Supabase | 5% |
 | Datos legacy limpios | parcial profesores/leads | 10% |
 
-Total real estimado: **55-60%**.
+Total real estimado: **60-65%**.
 
-El porcentaje subira rapido tras desbloquear Auth/Storage porque ya existen
-`firebase-auth.js`, `auth-provider.js`, reglas, Hosting y provider de documentos.
+El porcentaje subira rapido tras migrar dashboards y desbloquear Storage porque
+ya existen `firebase-auth.js`, `auth-provider.js`, reglas, Hosting, admin y
+provider de documentos.

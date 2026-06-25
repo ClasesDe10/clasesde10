@@ -1,84 +1,67 @@
 #!/usr/bin/env node
 /**
- * Read-only Firebase Auth audit using the local Firebase CLI OAuth session.
+ * Read-only Firebase Auth audit.
+ *
+ * Uses Firebase CLI because the local OAuth session is accepted by CLI Auth
+ * commands even when direct Identity Toolkit admin REST calls reject the token
+ * type.
  */
 
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 const PROJECT_ID = 'clasesde10-50add';
-const PROJECT_NUMBER = '895894357385';
+const tmpFile = path.join(os.tmpdir(), `clasesde10-auth-${Date.now()}.json`);
 
-function readToken() {
-  const configPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  const token = config?.tokens?.access_token;
-  if (!token) throw new Error('Firebase CLI access token not found.');
-  return token;
-}
+function runFirebase(args) {
+  if (process.platform === 'win32') {
+    return execSync(['npx.cmd', '--yes', 'firebase-tools', ...args].join(' '), {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
 
-async function requestJson(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${readToken()}`,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
+  return execFileSync('npx', ['--yes', 'firebase-tools', ...args], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
-  const text = await response.text();
-  let body = null;
+}
+
+function main() {
   try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = text;
+    runFirebase([
+      'auth:export',
+      tmpFile,
+      '--project',
+      PROJECT_ID,
+      '--format=json',
+      '--non-interactive',
+    ]);
+
+    const data = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
+    const users = Array.isArray(data.users) ? data.users : [];
+    const admin = users.find((user) => user.email === 'contacto.clasesde10@gmail.com');
+
+    console.log(JSON.stringify({
+      authAvailable: true,
+      userCount: users.length,
+      admin: admin ? {
+        uid: admin.localId,
+        email: admin.email,
+        emailVerified: Boolean(admin.emailVerified),
+        createdAt: admin.createdAt || null,
+      } : null,
+      providers: [...new Set(users.flatMap((user) => (
+        user.providerUserInfo?.length
+          ? user.providerUserInfo.map((provider) => provider.providerId)
+          : ['password']
+      )))].sort(),
+    }, null, 2));
+  } finally {
+    if (fs.existsSync(tmpFile)) fs.rmSync(tmpFile, { force: true });
   }
-  return { ok: response.ok, status: response.status, body };
 }
 
-function printResult(label, result) {
-  console.log(`\n${label}`);
-  console.log(`status=${result.status} ok=${result.ok}`);
-  if (!result.ok) {
-    console.log(JSON.stringify(result.body, null, 2).slice(0, 2000));
-    return;
-  }
-  console.log(JSON.stringify(result.body, null, 2).slice(0, 4000));
-}
-
-async function main() {
-  printResult(
-    'Identity Toolkit config v2',
-    await requestJson(`https://identitytoolkit.googleapis.com/admin/v2/projects/${PROJECT_ID}/config`),
-  );
-
-  printResult(
-    'Identity Toolkit config v1',
-    await requestJson(`https://identitytoolkit.googleapis.com/admin/v1/projects/${PROJECT_ID}/config`),
-  );
-
-  printResult(
-    'Firebase Auth downloadAccount probe',
-    await requestJson('https://identitytoolkit.googleapis.com/v3/relyingparty/downloadAccount', {
-      method: 'POST',
-      body: JSON.stringify({ targetProjectId: PROJECT_ID, maxResults: 1 }),
-    }),
-  );
-
-  printResult(
-    'Cloud Resource Manager project',
-    await requestJson(`https://cloudresourcemanager.googleapis.com/v1/projects/${PROJECT_ID}`),
-  );
-
-  printResult(
-    'Service Usage identitytoolkit',
-    await requestJson(`https://serviceusage.googleapis.com/v1/projects/${PROJECT_NUMBER}/services/identitytoolkit.googleapis.com`),
-  );
-}
-
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
-
+main();

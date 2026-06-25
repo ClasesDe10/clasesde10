@@ -4,7 +4,7 @@ Actualizado: 2026-06-16
 
 ## Prioridad 1 - Produccion y fuente de verdad
 
-- [ ] Activar Firebase Auth Email/Password.
+- [x] Activar Firebase Auth Email/Password.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/providers`
 - [x] Crear Firestore Database en `eur3`.
 - [x] Activar delete protection de Firestore.
@@ -19,8 +19,9 @@ Actualizado: 2026-06-16
   - `www.clasesde10.com` -> redireccion a `clasesde10.com`
 - [ ] Cambiar DNS del dominio en proveedor externo segun `FIREBASE_DOMAIN_CUTOVER.md`.
 - [ ] Publicar reglas `firebase/storage.rules` cuando Storage exista.
-- [ ] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
+- [x] Crear primer usuario admin en Firebase Auth y documento `users/{uid}`.
   - `https://console.firebase.google.com/u/0/project/clasesde10-50add/authentication/users`
+  - UID admin: `dZPatwwkRZNrth5cF1fhoHgBEo12`
 - [x] Preparar script interno `firebase/bootstrap-admin-user.mjs`.
 - [x] Preparar adaptador frontend `js/firebase-auth.js` sin conectarlo aun a UI.
 - [ ] Definir/importar datos reales solo tras validar reglas Firebase.
@@ -99,6 +100,7 @@ Actualizado: 2026-06-16
 - [x] `package.json` y `scripts/` bloqueados/excluidos del publish root.
 - [x] Auditoria Sheets -> Firebase documentada.
 - [x] Reglas e indices Firestore desplegados.
+- [x] Reglas e indices Firestore redesplegados tras activar Auth.
 - [x] Firebase Hosting desplegado y verificado.
 - [x] Firebase Hosting redesplegado tras corregir headers de rutas limpias y service worker.
 - [x] CSP actualizada para Firebase CDN, Auth, Firestore, Storage, Functions y Analytics.

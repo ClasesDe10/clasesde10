@@ -300,9 +300,8 @@ async function main() {
   checkCodeTouchpoints();
   console.log('\nNext external gates');
   console.log('- DNS: point clasesde10.com and www to Firebase Hosting.');
-  console.log('- Firebase Console: enable Auth Email/Password.');
-  console.log('- Firebase Console: create first Auth user and run bootstrap-admin-user.mjs.');
-  console.log('- Firebase Console: initialize Storage if it does not require unapproved billing.');
+  console.log('- Firebase Storage: initialize the default bucket.');
+  console.log('- Private app: migrate dashboards from Supabase queries to Firestore before switching auth-provider to Firebase.');
 }
 
 main().catch((error) => {
