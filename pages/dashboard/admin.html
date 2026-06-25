@@ -772,6 +772,43 @@ const TITULOS = {
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
   solicitudes:'Solicitudes', pagos:'Pagos', leads:'Leads', documentos:'Documentos', incidencias:'Incidencias',
 };
+const LEGACY_TABLES = {
+  clases: { id: 'tbody-clases', colspan: 9, countId: null },
+  profesores: { id: 'tbody-profesores', colspan: 8, countId: 'prof-count' },
+  familias: { id: 'tbody-familias', colspan: 8, countId: 'fam-count' },
+  alumnos: { id: 'tbody-alumnos', colspan: 7, countId: 'alum-count' },
+  solicitudes: { id: 'tbody-solicitudes', colspan: 9, countId: 'sol-count' },
+  pagos: { id: 'tbody-pagos', colspan: 8, countId: 'pago-count' },
+  documentos: { id: 'tbody-documentos', colspan: 6, countId: null },
+  incidencias: { id: 'tbody-incidencias', colspan: 7, countId: null },
+};
+
+function mostrarLegacyNoDisponible(seccion, error) {
+  console.warn(`Modulo legacy ${seccion} no disponible`, error);
+  const meta = LEGACY_TABLES[seccion];
+  if (!meta) return;
+
+  const tbody = document.getElementById(meta.id);
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="${meta.colspan}" style="text-align:center;padding:32px;color:var(--gray-mid)">
+      Datos legacy no disponibles. Supabase no respondio para este modulo.
+    </td></tr>`;
+  }
+
+  if (meta.countId) {
+    const count = document.getElementById(meta.countId);
+    if (count) count.textContent = '0 resultados';
+  }
+}
+
+function ejecutarCargaSeccion(seccion, loader) {
+  try {
+    const resultado = loader();
+    if (resultado?.catch) resultado.catch((error) => mostrarLegacyNoDisponible(seccion, error));
+  } catch (error) {
+    mostrarLegacyNoDisponible(seccion, error);
+  }
+}
 
 function irA(seccion) {
   secciones.forEach(s => {
@@ -781,17 +818,17 @@ function irA(seccion) {
     l.classList.toggle('active', l.dataset.section === seccion);
   });
   document.getElementById('topbar-title').textContent = TITULOS[seccion] || seccion;
-  if (seccion === 'dashboard') cargarDashboard();
-  else if (seccion === 'clases') cargarClases();
-  else if (seccion === 'calendario') iniciarCalendario();
-  else if (seccion === 'profesores') cargarProfesores();
-  else if (seccion === 'familias') cargarFamilias();
-  else if (seccion === 'alumnos') cargarAlumnos();
-  else if (seccion === 'solicitudes') cargarSolicitudes();
-  else if (seccion === 'pagos') cargarPagos();
-  else if (seccion === 'leads') cargarLeads();
-  else if (seccion === 'documentos') cargarDocumentos();
-  else if (seccion === 'incidencias') cargarIncidencias();
+  if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
+  else if (seccion === 'clases') ejecutarCargaSeccion(seccion, cargarClases);
+  else if (seccion === 'calendario') ejecutarCargaSeccion(seccion, iniciarCalendario);
+  else if (seccion === 'profesores') ejecutarCargaSeccion(seccion, cargarProfesores);
+  else if (seccion === 'familias') ejecutarCargaSeccion(seccion, cargarFamilias);
+  else if (seccion === 'alumnos') ejecutarCargaSeccion(seccion, cargarAlumnos);
+  else if (seccion === 'solicitudes') ejecutarCargaSeccion(seccion, cargarSolicitudes);
+  else if (seccion === 'pagos') ejecutarCargaSeccion(seccion, cargarPagos);
+  else if (seccion === 'leads') ejecutarCargaSeccion(seccion, cargarLeads);
+  else if (seccion === 'documentos') ejecutarCargaSeccion(seccion, cargarDocumentos);
+  else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, cargarIncidencias);
 }
 
 document.querySelectorAll('[data-section]').forEach(el => {
