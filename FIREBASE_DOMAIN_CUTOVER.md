@@ -1,6 +1,6 @@
 # FIREBASE_DOMAIN_CUTOVER - ClasesDe10
 
-Actualizado: 2026-06-18
+Actualizado: 2026-06-25 16:56 Europe/Madrid
 
 ## Objetivo
 
@@ -12,13 +12,28 @@ Mover `clasesde10.com` de Netlify a Firebase Hosting sin activar facturacion.
 - Sitio Firebase Hosting: `clasesde10-50add`
 - Dominio principal creado en Firebase Hosting: `clasesde10.com`
 - Dominio `www` creado en Firebase Hosting con redireccion a `clasesde10.com`
-- Estado Firebase actual:
-  - `hostState`: `HOST_MISMATCH`
-  - `ownershipState`: `OWNERSHIP_MISSING`
-  - certificado temporal en validacion
-- Motivo: DNS todavia apunta a Netlify.
+- DNS editado en Hostalia el 2026-06-25:
+  - `clasesde10.com A 199.36.158.100`
+  - `clasesde10.com TXT hosting-site=clasesde10-50add`
+  - `_acme-challenge.clasesde10.com TXT XAfVmRmiMZI3ICQ5vmvyAXCJLzFeYJeIM-wqzeLmw4E` (valor antiguo, Firebase lo roto despues)
+  - `www.clasesde10.com CNAME clasesde10-50add.web.app`
+  - `_acme-challenge.www.clasesde10.com TXT oM7tJOt3sa5uZ9bMLqLrvazj6C-C12TaYH01cAsSePg` (valor antiguo, Firebase lo roto despues)
+- Verificacion autoritativa:
+  - `clasesde10.com A` ya responde `199.36.158.100` en `ns10`, `ns11` y `ns12`.
+  - `clasesde10.com TXT hosting-site=clasesde10-50add` ya responde en `ns10`, `ns11` y `ns12`.
+  - `www.clasesde10.com CNAME clasesde10-50add.web.app` ya responde en `ns10`, `ns11` y `ns12`.
+  - Los dos `_acme-challenge` siguen sin responder en nameservers autoritativos.
+- Estado Firebase API a las 17:16 Europe/Madrid:
+  - `clasesde10.com`: `hostState=HOST_MISMATCH`, `ownershipState=OWNERSHIP_MISSING`, `cert=CERT_VALIDATING`.
+  - `www.clasesde10.com`: `hostState=HOST_MISMATCH`, `ownershipState=OWNERSHIP_MISSING`, `cert=CERT_VALIDATING`.
+  - Firebase pide ahora estos TXT ACME actuales:
+    - `_acme-challenge TXT s05n1RCrYwkepmrS7GpQerXvilgBdwBtY2khK8WN89E`
+    - `_acme-challenge.www TXT LtpaKSyfq73psiVycwKtmzgclH__jL0Ytdj52bR2mIU`
+- Estado web temporal:
+  - `https://clasesde10-50add.web.app` esta publicado.
+  - `https://clasesde10.com` puede fallar certificado o seguir sirviendo cache/Netlify hasta que Hostalia publique los TXT/CNAME y Firebase emita certificado.
 
-## DNS actual detectado
+## DNS previo detectado
 
 - Nameservers:
   - `ns10.servicio-online.net`
@@ -31,9 +46,9 @@ Mover `clasesde10.com` de Netlify a Firebase Hosting sin activar facturacion.
 - `www.clasesde10.com`:
   - `CNAME helpful-fenglisu-f1d7b9.netlify.app` -> Netlify, debe reemplazarse.
 
-## Cambios DNS necesarios
+## Cambios DNS aplicados en Hostalia
 
-En el panel DNS del proveedor actual, hacer exactamente esto:
+En el panel DNS del proveedor actual se hizo exactamente esto:
 
 1. Eliminar el registro:
    - Host: `@` o `clasesde10.com`
@@ -55,20 +70,20 @@ En el panel DNS del proveedor actual, hacer exactamente esto:
    - Tipo: `TXT`
    - Valor: `v=spf1 redirect=spf.dominioabsoluto.net`
 
-5. Anadir el TXT de certificado para el dominio principal:
+5. Anadir o reemplazar el TXT de certificado para el dominio principal:
    - Host: `_acme-challenge`
    - Tipo: `TXT`
-   - Valor: `XAfVmRmiMZI3ICQ5vmvyAXCJLzFeYJeIM-wqzeLmw4E`
+   - Valor actual pedido por Firebase: `s05n1RCrYwkepmrS7GpQerXvilgBdwBtY2khK8WN89E`
 
 6. Reemplazar el CNAME de `www`:
    - Host: `www`
    - Tipo: `CNAME`
    - Valor: `clasesde10-50add.web.app`
 
-7. Anadir el TXT de certificado para `www`:
+7. Anadir o reemplazar el TXT de certificado para `www`:
    - Host: `_acme-challenge.www`
    - Tipo: `TXT`
-   - Valor: `oM7tJOt3sa5uZ9bMLqLrvazj6C-C12TaYH01cAsSePg`
+   - Valor actual pedido por Firebase: `LtpaKSyfq73psiVycwKtmzgclH__jL0Ytdj52bR2mIU`
 
 ## No tocar
 
