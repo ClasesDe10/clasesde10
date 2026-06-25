@@ -18,6 +18,7 @@ export const ADAPTER_DOMAINS = Object.freeze([
   'documentos',
   'notificaciones',
   'configuracion',
+  'leads',
 ]);
 
 export const COLLECTIONS = Object.freeze({
@@ -33,6 +34,7 @@ export const COLLECTIONS = Object.freeze({
   notificaciones: 'notificaciones',
   configuracion: 'configuracion',
   configuracionPublica: 'configuracionPublica',
+  leadsPublicos: 'leadsPublicos',
 });
 
 export const BASE_ADAPTER_METHODS = Object.freeze([
@@ -68,6 +70,7 @@ export const DOMAIN_METHODS = Object.freeze({
   documentos: [...BASE_ADAPTER_METHODS, 'listByOwner', 'uploadForOwner', 'getDownloadUrl'],
   notificaciones: [...BASE_ADAPTER_METHODS, 'listByUser', 'watchUnread', 'markAsRead'],
   configuracion: ['getValue', 'setValue', 'getPublicValue', 'setPublicValue'],
+  leads: ['listPublic', 'countNew', 'setStatus'],
 });
 
 export function adapterResult(data = null, error = null) {

@@ -748,6 +748,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script type="module">
 import db from '../../js/supabase-client.js';
+import { leads } from '../../js/adapters/index.js';
 import { requireAuth, logout } from '../../js/auth-provider.js';
 import { getDocumentUrl } from '../../js/document-storage-provider.js';
 import {
@@ -804,9 +805,26 @@ document.addEventListener('click', (e) => {
 });
 document.getElementById('btn-logout').addEventListener('click', () => logout());
 
+async function cargarBadgeLeads() {
+  const { data: leadsNuevos, error } = await leads.countNew();
+  if (error) {
+    console.warn('No se pudo cargar el contador de leads Firestore', error);
+    return;
+  }
+
+  const b = document.getElementById('badge-leads');
+  if (leadsNuevos > 0) {
+    b.textContent = leadsNuevos;
+    b.style.display = '';
+  } else {
+    b.style.display = 'none';
+  }
+}
+
 // ── DASHBOARD ────────────────────────────────────────────────────
 async function cargarDashboard() {
   const { data } = await db.from('v_dashboard_admin').select('*').single();
+  await cargarBadgeLeads();
   if (!data) return;
 
   document.getElementById('stats-grid').innerHTML = `
@@ -866,14 +884,6 @@ async function cargarDashboard() {
     const b = document.getElementById('badge-incidencias');
     b.textContent = data.incidencias_abiertas; b.style.display = '';
   }
-  const { count: leadsNuevos } = await db.from('leads_publicos')
-    .select('id', { count:'exact', head:true })
-    .eq('estado', 'nuevo');
-  if (leadsNuevos > 0) {
-    const b = document.getElementById('badge-leads');
-    b.textContent = leadsNuevos; b.style.display = '';
-  }
-
   cargarSolicitudesRecientes();
   cargarProximasClasesDash();
   cargarPagosPendientesDash();
@@ -1547,16 +1557,14 @@ window.validarPago = async (id, estado) => {
 async function cargarLeads() {
   const tipo = document.getElementById('filtro-lead-tipo').value;
   const estado = document.getElementById('filtro-lead-estado').value;
-  let q = db.from('leads_publicos').select('*').order('created_at', { ascending:false }).limit(100);
-  if (tipo) q = q.eq('tipo', tipo);
-  if (estado) q = q.eq('estado', estado);
-  const { data, error } = await q;
-
   const tbody = document.getElementById('tbody-leads');
+
+  const { data, error } = await leads.listPublic({ tipo, estado, max: 100 });
   if (error) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
     return;
   }
+
   if (!data?.length) {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin leads.</td></tr>';
     return;
@@ -1584,12 +1592,11 @@ async function cargarLeads() {
 document.getElementById('tbody-leads')?.addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="lead-estado"]');
   if (!btn) return;
-  const { error } = await db.from('leads_publicos')
-    .update({ estado: btn.dataset.leadEstado })
-    .eq('id', btn.dataset.leadId);
+  const { error } = await leads.setStatus(btn.dataset.leadId, btn.dataset.leadEstado);
   if (error) { showToast('Error', error.message, 'error'); return; }
   showToast('Lead actualizado', '', 'success');
   cargarLeads();
+  cargarBadgeLeads();
 });
 
 async function cargarDocumentos() {

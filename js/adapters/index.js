@@ -17,6 +17,7 @@ import pagos from './pagos-adapter.js';
 import documentos from './documentos-adapter.js';
 import notificaciones from './notificaciones-adapter.js';
 import configuracion from './configuracion-adapter.js';
+import leads from './leads-adapter.js';
 
 export {
   auth,
@@ -31,6 +32,7 @@ export {
   documentos,
   notificaciones,
   configuracion,
+  leads,
 };
 
 export const firebaseAdapters = {
@@ -46,6 +48,7 @@ export const firebaseAdapters = {
   documentos,
   notificaciones,
   configuracion,
+  leads,
 };
 
 export default firebaseAdapters;

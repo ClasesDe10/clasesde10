@@ -23,10 +23,10 @@ const ADAPTER_FILES = {
   documentos: 'js/adapters/documentos-adapter.js',
   notificaciones: 'js/adapters/notificaciones-adapter.js',
   configuracion: 'js/adapters/configuracion-adapter.js',
+  leads: 'js/adapters/leads-adapter.js',
 };
 
 const NON_AUTH_RUNTIME_ENTRYPOINTS = [
-  'pages/dashboard/admin.html',
   'pages/dashboard/alumno.html',
   'pages/dashboard/familia.html',
   'pages/dashboard/profesor.html',
