@@ -27,6 +27,13 @@ import {
 import { firebaseAuth, firebaseDb } from './firebase-client.js';
 
 const CANONICAL_ORIGIN = 'https://clasesde10.com';
+const AUTH_ALLOWED_ORIGINS = new Set([
+  CANONICAL_ORIGIN,
+  'https://www.clasesde10.com',
+  'https://clasesde10-50add.web.app',
+  'https://clasesde10-50add.firebaseapp.com',
+  'https://clasesde10-50add--fase2-auth-ws7x8zcz.web.app',
+]);
 
 const ROLES_RUTAS = {
   admin: '/pages/dashboard/admin.html',
@@ -45,6 +52,11 @@ function normalizeText(value) {
 
 function authError(message, code = 'firebase-auth/precondition') {
   return { message, code };
+}
+
+function getAuthActionOrigin() {
+  const currentOrigin = window.location.origin;
+  return AUTH_ALLOWED_ORIGINS.has(currentOrigin) ? currentOrigin : CANONICAL_ORIGIN;
 }
 
 function mapFirebaseError(error) {
@@ -221,7 +233,7 @@ export async function register({
     });
 
     await sendEmailVerification(user, {
-      url: `${CANONICAL_ORIGIN}/pages/login.html`,
+      url: `${getAuthActionOrigin()}/pages/login.html`,
     });
 
     return { data: credential, usuario: await getUsuarioActual() };
@@ -238,7 +250,7 @@ export async function logout() {
 export async function resetPassword(email) {
   try {
     await sendPasswordResetEmail(firebaseAuth, normalizeEmail(email), {
-      url: `${CANONICAL_ORIGIN}/pages/reset-password.html`,
+      url: `${getAuthActionOrigin()}/pages/reset-password.html`,
     });
     return { error: null };
   } catch (error) {

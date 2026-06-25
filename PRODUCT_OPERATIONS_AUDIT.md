@@ -78,6 +78,15 @@ Dependencias Supabase runtime actuales:
   - `familia` -> `/pages/dashboard/familia.html`
   - `alumno` -> `/pages/dashboard/alumno.html`
 - `users/{uid}` es la fuente de rol en Firebase.
+- Dominios autorizados de Firebase Auth verificados y corregidos:
+  - `localhost`
+  - `clasesde10-50add.firebaseapp.com`
+  - `clasesde10-50add.web.app`
+  - `clasesde10-50add--fase2-auth-ws7x8zcz.web.app`
+  - `clasesde10.com`
+  - `www.clasesde10.com`
+- El error `auth/unauthorized-continue-uri` estaba causado porque `clasesde10.com` y `www.clasesde10.com` no estaban en `authorizedDomains`.
+- Prueba REST de Firebase Auth `accounts:sendOobCode` con `continueUrl=https://clasesde10.com/pages/reset-password.html`: OK `200`.
 
 ### Riesgos
 
@@ -85,6 +94,7 @@ Dependencias Supabase runtime actuales:
 - Registro familia/profesor crea `users/{uid}`, pero no garantiza que exista el perfil completo en `familias/{uid}` o `profesores/{uid}`.
 - Registro alumno esta bloqueado: el codigo devuelve error porque las invitaciones de alumno no estan migradas.
 - Email del admin no esta verificado segun `audit:auth`, aunque puede iniciar sesion.
+- Mientras el dominio propio termina de activarse en Firebase Hosting, los emails de Auth deben usar el origen actual si es un dominio autorizado. El codigo ya se ajusto para no forzar siempre `https://clasesde10.com`.
 
 ## Captacion publica
 
