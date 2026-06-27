@@ -8,8 +8,9 @@ La ejecucion gratuita se hace con GitHub Actions:
 
 - Cada 10 minutos.
 - Tambien manual desde GitHub Actions.
-- Sin Gemini por defecto.
-- Matching determinista y explicable.
+- Matching determinista y explicable como base.
+- Gemini opcional si existe `GEMINI_API_KEY`.
+- Fallback automatico a reglas si Gemini falla o no hay clave.
 
 ## Que automatiza
 
@@ -17,14 +18,15 @@ La ejecucion gratuita se hace con GitHub Actions:
 2. Si el lead es `familia`, crea `solicitudes/lead_{leadId}`.
 3. Si el lead es `profesor`, calcula precio sugerido y diagnostico.
 4. Calcula top 5 profesores para solicitudes nuevas.
-5. Guarda candidatos en `solicitudMatches`.
-6. Guarda ejecuciones en `matchingRuns`.
-7. Crea `notificaciones` para admin.
-8. Si una solicitud ya fue asignada por admin, crea `asignaciones`.
+5. Si hay `GEMINI_API_KEY`, pide a Gemini reordenar/explicar candidatos.
+6. Guarda candidatos en `solicitudMatches`.
+7. Guarda ejecuciones en `matchingRuns`.
+8. Crea `notificaciones` para admin.
+9. Si una solicitud ya fue asignada por admin, crea `asignaciones`.
 
-## Por que no IA como motor principal
+## Como se usa la IA
 
-El matching base no necesita IA para la mayoria de casos. Necesita reglas fiables:
+La IA no sustituye las reglas. Primero se calcula una lista segura de candidatos con datos reales:
 
 - materia
 - nivel
@@ -34,7 +36,14 @@ El matching base no necesita IA para la mayoria de casos. Necesita reglas fiable
 - carga actual
 - verificacion del profesor
 
-La IA puede anadirse despues para casos ambiguos, pero no debe bloquear el flujo ni generar coste.
+Despues, si `GEMINI_API_KEY` esta configurada, Gemini recibe solo esos candidatos y devuelve JSON con:
+
+- `teacherUid`
+- `score`
+- `reason`
+- `risks`
+
+No puede inventar profesores fuera de la lista porque el worker ignora cualquier `teacherUid` que no venga del ranking base.
 
 ## Activacion
 
@@ -46,6 +55,10 @@ Necesita uno de estos secretos de GitHub Actions:
 
 - `FIREBASE_SERVICE_ACCOUNT_JSON`
 - `FIREBASE_SERVICE_ACCOUNT_BASE64`
+
+Para activar IA:
+
+- `GEMINI_API_KEY`
 
 No se guardan credenciales en el repositorio.
 

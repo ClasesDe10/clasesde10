@@ -333,6 +333,83 @@ function scoreTeacher(profile, teacher) {
   };
 }
 
+async function callGeminiForMatching(profile, baseCandidates) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  if (!apiKey || !baseCandidates.length) return null;
+
+  const teacherBlock = baseCandidates.slice(0, 8).map((candidate, index) => (
+    `P${index + 1}: id="${candidate.teacherUid}" nombre="${candidate.nombre}" scoreBase=${candidate.score} materias="${candidate.materias.join(', ')}" niveles="${candidate.niveles.join(', ')}" modalidad="${candidate.modalidad}" zona="${candidate.zona}" carga="${candidate.activeAssignments}/${candidate.maxStudents}" riesgos="${candidate.risks.join('; ')}"`
+  )).join('\n');
+
+  const prompt = [
+    'Eres el asistente de matching de ClasesDe10.',
+    'Tu objetivo es ayudar al administrador a elegir profesor, no inventar datos.',
+    'Reordena los candidatos segun encaje pedagogico, materia, nivel, modalidad, zona, carga actual y riesgos.',
+    'No propongas profesores fuera de la lista. Responde solo JSON valido.',
+    '',
+    `SOLICITUD: materia="${profile.subject}" nivel="${profile.level}" modalidad="${profile.modality}" zona="${profile.zone}" horario="${profile.schedule}" alumno="${profile.studentName}"`,
+    'CANDIDATOS:',
+    teacherBlock,
+    '',
+    'JSON requerido: {"matches":[{"teacherUid":"id exacto","score":90,"reason":"motivo breve para admin","risks":["riesgo breve"]}]}',
+  ].join('\n');
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.15,
+        maxOutputTokens: 900,
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
+
+  const raw = await response.json();
+  if (!response.ok || raw.error) throw new Error(raw.error?.message || `Gemini ${response.status}`);
+
+  const text = raw.candidates?.[0]?.content?.parts?.[0]?.text
+    ?.replace(/^```json\s*/i, '')
+    ?.replace(/^```\s*/i, '')
+    ?.replace(/```\s*$/i, '')
+    ?.trim();
+  if (!text) return null;
+
+  const parsed = JSON.parse(text);
+  if (!Array.isArray(parsed.matches)) return null;
+  return parsed;
+}
+
+function mergeAiRanking(baseCandidates, aiResult) {
+  if (!aiResult?.matches?.length) return baseCandidates.map((candidate) => ({ ...candidate, aiReason: '', aiRisks: [] }));
+
+  const baseByTeacher = new Map(baseCandidates.map((candidate) => [candidate.teacherUid, candidate]));
+  const seen = new Set();
+  const ranked = [];
+
+  for (const match of aiResult.matches) {
+    const teacherUid = clean(match.teacherUid, 120);
+    const candidate = baseByTeacher.get(teacherUid);
+    if (!candidate || seen.has(teacherUid)) continue;
+    seen.add(teacherUid);
+    ranked.push({
+      ...candidate,
+      score: Math.max(candidate.score, Math.min(100, Math.max(0, Number(match.score || 0)))),
+      aiReason: clean(match.reason, 500),
+      aiRisks: Array.isArray(match.risks) ? match.risks.map((risk) => clean(risk, 180)).filter(Boolean) : [],
+    });
+  }
+
+  for (const candidate of baseCandidates) {
+    if (!seen.has(candidate.teacherUid)) ranked.push({ ...candidate, aiReason: '', aiRisks: [] });
+  }
+
+  return ranked.sort((a, b) => b.score - a.score);
+}
+
 async function processPublicLeads(db, stats) {
   const snap = await db.collection('leadsPublicos')
     .where('estado', '==', 'nuevo')
@@ -403,11 +480,25 @@ async function processPublicLeads(db, stats) {
 async function generateMatchesForRequest(db, requestId, request, stats, reason = 'worker_scan') {
   const profile = getRequestProfile(request);
   const teachers = await loadTeachers(db);
-  const candidates = teachers
+  const baseCandidates = teachers
     .map((teacher) => ({ ...teacher, ...scoreTeacher(profile, teacher) }))
     .filter((candidate) => candidate.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .slice(0, 10);
+
+  let aiResult = null;
+  let aiError = null;
+  try {
+    aiResult = await callGeminiForMatching(profile, baseCandidates);
+  } catch (error) {
+    aiError = error.message || String(error);
+  }
+
+  const candidates = mergeAiRanking(baseCandidates, aiResult).slice(0, 5);
+  const aiUsed = Boolean(aiResult?.matches?.length);
+  const aiMode = process.env.GEMINI_API_KEY
+    ? (aiUsed ? 'gemini_assisted' : 'gemini_attempted_fallback_deterministic')
+    : 'deterministic_no_api_key';
 
   const runRef = dryRun
     ? { id: `dry_run_${requestId}` }
@@ -417,8 +508,9 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       status: candidates.length ? 'completed' : 'no_match',
       profile,
       candidatesCount: candidates.length,
-      aiUsed: false,
-      aiMode: 'disabled_free_deterministic',
+      aiUsed,
+      aiMode,
+      aiError,
       createdAt: now(),
     });
 
@@ -438,10 +530,12 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
         teacherEmail: candidate.email,
         score: candidate.score,
         rank: index + 1,
-        reasons: candidate.reasons,
-        risks: uniq(candidate.risks),
+        reasons: candidate.aiReason ? [candidate.aiReason, ...candidate.reasons] : candidate.reasons,
+        risks: uniq([...(candidate.aiRisks || []), ...candidate.risks]),
         subjectMatch: profile.subject,
         levelMatch: profile.level,
+        aiUsed,
+        aiMode,
         status: 'propuesto',
         estado: 'propuesto',
         createdAt: now(),
@@ -467,7 +561,9 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     candidatesCount: candidates.length,
     bestTeacherUid: candidates[0]?.teacherUid || null,
     bestScore: candidates[0]?.score || 0,
-    aiUsed: false,
+    aiUsed,
+    aiMode,
+    aiError,
   });
 
   if (!candidates.length) {
@@ -581,7 +677,15 @@ async function main() {
     if (candidates[0].teacherUid !== 'prof_ok' || candidates[0].score <= candidates[1].score) {
       throw new Error('Self-test failed: deterministic matching did not rank the expected teacher first.');
     }
-    console.log(JSON.stringify({ selfTest: 'passed', best: candidates[0] }, null, 2));
+
+    const aiMerged = mergeAiRanking(candidates, {
+      matches: [{ teacherUid: 'prof_ok', score: 99, reason: 'Encaje IA validado.', risks: ['Confirmar horario.'] }],
+    });
+    if (aiMerged[0].teacherUid !== 'prof_ok' || !aiMerged[0].aiReason) {
+      throw new Error('Self-test failed: AI ranking merge did not preserve the expected teacher.');
+    }
+
+    console.log(JSON.stringify({ selfTest: 'passed', best: aiMerged[0] }, null, 2));
     return;
   }
 
