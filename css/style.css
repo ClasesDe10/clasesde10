@@ -30,6 +30,27 @@ body {
   overflow-x: hidden;
 }
 
+img,
+picture,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  min-width: 0;
+}
+
 /* ── NAV ─────────────────────────────────────── */
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
@@ -312,10 +333,413 @@ footer {
 
 /* ── RESPONSIVE ──────────────────────────────── */
 @media (max-width: 900px) {
+  .nav-links {
+    display: none;
+  }
+
+  .hamburger {
+    display: flex;
+  }
+
   .footer-inner { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 680px) {
-  .nav-links { display: none; }
-  .hamburger { display: flex; }
   .footer-inner { grid-template-columns: 1fr; gap: 36px; }
+}
+
+/* Broad responsive hardening for public pages and SEO landing pages. */
+@media (max-width: 1024px) {
+  .section-inner {
+    max-width: 100%;
+  }
+
+  .story-grid,
+  .values-grid,
+  .benefits-grid,
+  .why-grid,
+  .form-grid,
+  .contact-grid,
+  .ht-grid,
+  .dual-grid,
+  .tm-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .compare-scroll,
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --nav-h: 64px;
+    --radius: 14px;
+  }
+
+  nav {
+    padding: 0 16px;
+  }
+
+  .nav-logo {
+    min-width: 0;
+  }
+
+  .nav-logo img {
+    width: 38px;
+    height: 38px;
+  }
+
+  .nav-logo-text {
+    font-size: 1.12rem;
+    white-space: nowrap;
+  }
+
+  .mobile-menu {
+    padding: 24px 18px max(24px, env(safe-area-inset-bottom));
+  }
+
+  .page-header {
+    padding: calc(var(--nav-h) + 46px) 18px 48px;
+  }
+
+  .page-header h1,
+  .section-title,
+  .seo-hero h1,
+  .hero-title {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    hyphens: auto;
+  }
+
+  .section-pad,
+  .story-section,
+  .values-section,
+  .future-section,
+  .benefits-section,
+  .materias-section,
+  .why-section,
+  .compare-section,
+  .contact-section,
+  .faq-section,
+  .how-teaser,
+  .dual-cta,
+  .testi-mini,
+  .hub-section,
+  .seo-section {
+    padding-top: 64px !important;
+    padding-bottom: 64px !important;
+  }
+
+  .section-inner,
+  .legal-header .inner,
+  .legal-content {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .card,
+  .benefit-card,
+  .why-card,
+  .value-card,
+  .sv-card,
+  .future-item,
+  .contact-form-card,
+  .tm-card,
+  .ht-card {
+    border-radius: 14px;
+  }
+
+  .benefit-card,
+  .fi-item,
+  .ci-card,
+  .future-item,
+  .tm-author {
+    align-items: flex-start;
+  }
+
+  .cf-row,
+  .form-row,
+  .story-grid,
+  .values-grid,
+  .benefits-grid,
+  .why-grid,
+  .form-grid,
+  .contact-grid,
+  .ht-grid,
+  .dual-grid,
+  .tm-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .materias-grid,
+  .materias-grid.grid,
+  .materias-grid:not(.unused),
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .niveles-grid {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+  }
+
+  .materia-link {
+    min-width: 0;
+  }
+
+  .materia-info {
+    min-width: 0;
+    padding-right: 12px;
+  }
+
+  .materia-info .name,
+  .materia-info .sub {
+    overflow-wrap: anywhere;
+  }
+
+  .hero-stats,
+  .profile-stats {
+    gap: 24px;
+  }
+
+  .cta-banner,
+  .cta-card,
+  .profile-banner {
+    border-radius: 16px;
+  }
+
+  .cta-banner {
+    margin-left: 18px !important;
+    margin-right: 18px !important;
+    padding: 36px 22px !important;
+  }
+
+  .hero-btns,
+  .seo-ctas,
+  .cta-btns,
+  .mission-btns {
+    width: 100%;
+  }
+
+  .hero-btns a,
+  .seo-ctas a,
+  .cta-btns a,
+  .mission-btns a,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .cf-submit {
+    max-width: 100%;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .cf-field input,
+  .cf-field select,
+  .cf-field textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .form-section .section-inner,
+  .form-grid,
+  .form-info,
+  .form-info > *,
+  .fi-item,
+  .fi-item > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .form-grid,
+  .form-info,
+  .fi-item {
+    width: 100% !important;
+  }
+
+  .compare-table {
+    min-width: 560px;
+  }
+}
+
+@media (max-width: 520px) {
+  body {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .page-header {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .page-header h1 {
+    font-size: 1.72rem;
+    line-height: 1.15;
+  }
+
+  .section-title {
+    font-size: 1.35rem;
+    line-height: 1.2;
+  }
+
+  .section-desc,
+  .page-header p,
+  .seo-section p,
+  .legal-content p,
+  .legal-content li {
+    font-size: .94rem;
+    line-height: 1.72;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .section-inner,
+  .legal-header .inner,
+  .legal-content {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .hero-logo-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 16px;
+  }
+
+  .hero-badge {
+    font-size: .68rem;
+    padding: 6px 12px;
+  }
+
+  .hero-title {
+    font-size: 1.95rem;
+    line-height: 1.12;
+    max-width: 100%;
+  }
+
+  .hero-desc {
+    margin-bottom: 30px;
+  }
+
+  .hero-pills,
+  .related-subjects,
+  .seo-pills {
+    justify-content: flex-start;
+  }
+
+  .pill,
+  .seo-pill,
+  .step-tag {
+    max-width: 100%;
+  }
+
+  .hero-btns,
+  .seo-ctas,
+  .cta-btns,
+  .mission-btns {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-btns .btn-primary,
+  .hero-btns .btn-ghost,
+  .seo-ctas a,
+  .cta-btns a,
+  .mission-btns a {
+    width: 100%;
+    padding: 13px 18px !important;
+  }
+
+  .hero-stats,
+  .profile-stats {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-top: 44px;
+    padding-top: 30px;
+  }
+
+  .stat-num,
+  .ps-num {
+    font-size: 2rem;
+  }
+
+  .benefit-card,
+  .why-card,
+  .value-card,
+  .sv-card,
+  .future-item,
+  .contact-form-card,
+  .tm-card,
+  .ht-card,
+  .card {
+    padding: 24px 18px !important;
+  }
+
+  .benefit-card,
+  .ci-card,
+  .fi-item,
+  .future-item {
+    gap: 12px;
+  }
+
+  .benefit-ico,
+  .why-ico,
+  .ci-ico,
+  .fi-ico,
+  .sv-ico {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+  }
+
+  .materias-grid,
+  .grid,
+  .niveles-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .materia-link {
+    padding: 16px 44px 16px 16px !important;
+  }
+
+  .materia-arrow {
+    opacity: 1 !important;
+  }
+
+  .faq-q {
+    padding: 18px !important;
+  }
+
+  .faq-a.open {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+
+  .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 380px) {
+  nav {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .nav-logo-text {
+    font-size: 1rem;
+  }
+
+  .page-header h1,
+  .hero-title {
+    font-size: 1.62rem;
+  }
+
+  .section-title {
+    font-size: 1.45rem;
+  }
 }

@@ -82,6 +82,31 @@
           right: 12px;
           bottom: max(12px, env(safe-area-inset-bottom));
           width: auto;
+          padding: 14px;
+          border-radius: 12px;
+        }
+        .cd10-install-card__top {
+          gap: 10px;
+        }
+        .cd10-install-card img {
+          width: 34px;
+          height: 34px;
+          border-radius: 8px;
+        }
+        .cd10-install-card strong {
+          font-size: .9rem;
+        }
+        .cd10-install-card p {
+          font-size: .78rem;
+        }
+        .cd10-install-card__actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .cd10-install-card button {
+          width: 100%;
+          min-height: 40px;
+          padding: 8px 10px;
         }
       }
     `;

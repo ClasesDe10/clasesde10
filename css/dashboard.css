@@ -920,6 +920,16 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .stats-grid { grid-template-columns: 1fr; }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }
+  .dash-section > div[style*="display:flex"] {
+    align-items: stretch !important;
+  }
+  .dash-section > div[style*="display:flex"] > div[style*="display:flex"] {
+    width: 100%;
+    flex: 1 1 100%;
+  }
+  .dash-section > div[style*="display:flex"] .form-control {
+    max-width: 100%;
+  }
   .chat-layout {
     grid-template-columns: 1fr;
     min-height: calc(100dvh - var(--topbar-h) - 32px);
@@ -1070,6 +1080,20 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     min-width: 36px;
     padding: 8px;
   }
+  .dash-section > div[style*="display:flex"] > div[style*="display:flex"],
+  .dash-section > div[style*="display:flex"] > div[style*="display:flex"] > * {
+    flex: 1 1 100%;
+  }
+  .dash-section > div[style*="display:flex"] .form-control,
+  .dash-section > div[style*="display:flex"] input,
+  .dash-section > div[style*="display:flex"] select,
+  .dash-section > div[style*="display:flex"] .btn {
+    width: 100% !important;
+  }
+  .dash-section > div[style*="display:flex"] .btn-icon {
+    width: 36px !important;
+    flex: 0 0 36px;
+  }
   .form-group {
     margin-bottom: 14px;
   }
@@ -1109,6 +1133,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .modal-footer .btn {
     flex: 1 1 130px;
+  }
+  #profesor-detalle-body > div[style*="grid-template-columns"],
+  #asignar-profesor-detalle > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
   }
   .toast-container {
     top: calc(var(--topbar-h) + 8px);

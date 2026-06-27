@@ -138,9 +138,9 @@
         ? '0 4px 30px rgba(0,0,0,0.3)' : '';
     }, { passive: true });
 
-    // Responsive: mostrar hamburger en móvil
+    // Responsive: usar hamburger en móvil y tablet.
     function checkMobile() {
-      const isMobile = window.innerWidth < 768;
+      const isMobile = window.innerWidth <= 900;
       if (hamburger) hamburger.style.display = isMobile ? 'flex' : 'none';
       if (navLinks)  navLinks.style.display  = isMobile ? 'none' : 'flex';
     }
