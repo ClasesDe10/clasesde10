@@ -321,6 +321,78 @@ service cloud.firestore {
         || isStudentParticipant(data);
     }
 
+    function isChatParticipant(data) {
+      return signedIn()
+        && (
+          data.familyUid == request.auth.uid
+          || data.teacherUid == request.auth.uid
+          || (
+            data.keys().hasAny(['participantUids'])
+            && data.participantUids[request.auth.uid] == true
+          )
+        );
+    }
+
+    function validChatCreate(chatId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/asignaciones/$(chatId))
+        && request.resource.data.keys().hasOnly([
+          'assignmentId',
+          'asignacion_id',
+          'familyUid',
+          'familia_id',
+          'teacherUid',
+          'profesor_id',
+          'studentId',
+          'alumno_id',
+          'materia',
+          'familyName',
+          'teacherName',
+          'studentName',
+          'participantUids',
+          'active',
+          'createdAt',
+          'updatedAt',
+          'lastMessage',
+          'lastMessageAt'
+        ])
+        && request.resource.data.assignmentId == chatId
+        && request.resource.data.asignacion_id == chatId
+        && (
+          request.resource.data.familyUid == get(/databases/$(database)/documents/asignaciones/$(chatId)).data.familyUid
+          || request.resource.data.familyUid == get(/databases/$(database)/documents/asignaciones/$(chatId)).data.familia_id
+        )
+        && (
+          request.resource.data.teacherUid == get(/databases/$(database)/documents/asignaciones/$(chatId)).data.teacherUid
+          || request.resource.data.teacherUid == get(/databases/$(database)/documents/asignaciones/$(chatId)).data.profesor_id
+        )
+        && request.resource.data.participantUids[request.resource.data.familyUid] == true
+        && request.resource.data.participantUids[request.resource.data.teacherUid] == true
+        && request.resource.data.active == true
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && (isAdmin() || isChatParticipant(request.resource.data));
+    }
+
+    function validChatMessageCreate() {
+      return request.resource.data.keys().hasOnly([
+          'senderUid',
+          'senderRole',
+          'senderName',
+          'body',
+          'createdAt',
+          'readBy'
+        ])
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.senderRole in ['familia', 'profesor', 'admin']
+        && request.resource.data.senderName is string
+        && request.resource.data.senderName.size() <= 160
+        && request.resource.data.body is string
+        && request.resource.data.body.size() >= 1
+        && request.resource.data.body.size() <= 2000
+        && request.resource.data.createdAt == request.time;
+    }
+
     match /leadsPublicos/{leadId} {
       allow create: if validPublicLead();
       allow read, update, delete: if isAdmin();
@@ -393,6 +465,38 @@ service cloud.firestore {
     match /asignaciones/{assignmentId} {
       allow create, update, delete: if isAdmin();
       allow read: if isAdmin() || isParticipant(resource.data);
+    }
+
+    match /chats/{chatId} {
+      allow create: if validChatCreate(chatId);
+      allow read: if isAdmin() || isChatParticipant(resource.data);
+      allow update: if isAdmin()
+        || (
+          isChatParticipant(resource.data)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'lastMessage',
+            'lastMessageAt',
+            'updatedAt'
+          ])
+        );
+      allow delete: if isAdmin();
+
+      match /mensajes/{messageId} {
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+        allow create: if signedIn()
+          && exists(/databases/$(database)/documents/chats/$(chatId))
+          && (
+            isAdmin()
+            || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          )
+          && validChatMessageCreate();
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /clases/{classId} {

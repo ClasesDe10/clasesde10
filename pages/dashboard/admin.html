@@ -84,6 +84,10 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Documentos
       </button>
+      <button class="sidebar-link" data-section="chats">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
+        Chats
+      </button>
       <button class="sidebar-link" data-section="incidencias">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
         Incidencias
@@ -487,6 +491,10 @@
       </section>
 
       <!-- ══ SECCIÓN: INCIDENCIAS ══ -->
+      <section id="section-chats" class="dash-section" style="display:none">
+        <div id="chat-admin"></div>
+      </section>
+
       <section id="section-incidencias" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
@@ -754,6 +762,7 @@ import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { leads } from '../../js/adapters/index.js';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
@@ -769,12 +778,13 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
-const secciones = ['dashboard','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','leads','documentos','incidencias'];
+const secciones = ['dashboard','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','leads','documentos','chats','incidencias'];
 const TITULOS = {
   dashboard:'Dashboard', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
-  solicitudes:'Solicitudes', pagos:'Pagos', leads:'Leads', documentos:'Documentos', incidencias:'Incidencias',
+  solicitudes:'Solicitudes', pagos:'Pagos', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias',
 };
+let chatInicializado = false;
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
   profesores: { id: 'tbody-profesores', colspan: 8, countId: 'prof-count' },
@@ -831,6 +841,7 @@ function irA(seccion) {
   else if (seccion === 'pagos') ejecutarCargaSeccion(seccion, cargarPagos);
   else if (seccion === 'leads') ejecutarCargaSeccion(seccion, cargarLeads);
   else if (seccion === 'documentos') ejecutarCargaSeccion(seccion, cargarDocumentos);
+  else if (seccion === 'chats') ejecutarCargaSeccion(seccion, cargarChats);
   else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, cargarIncidencias);
 }
 
@@ -1842,6 +1853,19 @@ async function actualizarDoc(id, estado) {
 }
 
 // ── INCIDENCIAS ──────────────────────────────────────────────────
+async function cargarChats() {
+  if (chatInicializado) return;
+  chatInicializado = true;
+  await initChatWidget({
+    container: document.getElementById('chat-admin'),
+    db,
+    usuario,
+    role: 'admin',
+    profileId: usuario.uid || usuario.firebase_uid || usuario.id,
+    showToast,
+  });
+}
+
 async function cargarIncidencias() {
   const estado    = document.getElementById('filtro-inc-estado').value;
   const prioridad = document.getElementById('filtro-inc-prioridad').value;

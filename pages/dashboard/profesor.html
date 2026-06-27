@@ -55,6 +55,10 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         Ingresos
       </button>
+      <button class="sidebar-link" data-section="chat">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
+        Chat
+      </button>
       <div class="sidebar-section-title">Mi cuenta</div>
       <button class="sidebar-link" data-section="perfil">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -220,6 +224,10 @@
       </section>
 
       <!-- ══ MI PERFIL ══ -->
+      <section id="section-chat" class="dash-section" style="display:none">
+        <div id="chat-profesor"></div>
+      </section>
+
       <section id="section-perfil" class="dash-section" style="display:none">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
           <div class="card">
@@ -432,6 +440,7 @@
 import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   formatEuros, badgeEstado, getIniciales, debounce, sanitize, fechaHoy, nombreMes
@@ -469,8 +478,9 @@ if (perfil) {
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Mis clases',
-                  alumnos:'Mis alumnos', ingresos:'Ingresos', perfil:'Mi perfil',
+                  alumnos:'Mis alumnos', ingresos:'Ingresos', chat:'Chat', perfil:'Mi perfil',
                   documentos:'Documentos', disponibilidad:'Disponibilidad' };
+let chatInicializado = false;
 
 function irA(sec) {
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
@@ -478,7 +488,7 @@ function irA(sec) {
   document.querySelectorAll('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.section === sec));
   document.getElementById('topbar-title').textContent = TITULOS[sec] || sec;
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarMisClases,
-                    alumnos: cargarMisAlumnos, ingresos: cargarIngresos,
+                    alumnos: cargarMisAlumnos, ingresos: cargarIngresos, chat: cargarChat,
                     perfil: cargarPerfil, documentos: cargarDocumentos, disponibilidad: cargarDisponibilidad };
   loaders[sec]?.();
 }
@@ -729,6 +739,19 @@ async function cargarIngresos() {
 const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universidad','Adultos'];
 let materiasActuales = [];
 let nivelesActuales  = [];
+
+async function cargarChat() {
+  if (chatInicializado || !profesorId) return;
+  chatInicializado = true;
+  await initChatWidget({
+    container: document.getElementById('chat-profesor'),
+    db,
+    usuario,
+    role: 'profesor',
+    profileId: profesorId,
+    showToast,
+  });
+}
 
 async function cargarPerfil() {
   if (!perfil) return;

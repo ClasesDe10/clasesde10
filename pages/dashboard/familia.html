@@ -60,6 +60,10 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Pagos
       </button>
+      <button class="sidebar-link" data-section="chat">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
+        Chat
+      </button>
       <div class="sidebar-section-title">Mi cuenta</div>
       <button class="sidebar-link" data-section="perfil">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
@@ -218,6 +222,10 @@
       </section>
 
       <!-- ══ PERFIL ══ -->
+      <section id="section-chat" class="dash-section" style="display:none">
+        <div id="chat-familia"></div>
+      </section>
+
       <section id="section-perfil" class="dash-section" style="display:none">
         <div class="card" style="max-width:560px">
           <div class="card-header"><span class="card-title">Mis datos</span></div>
@@ -411,6 +419,7 @@ import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   formatEuros, badgeEstado, getIniciales, sanitize, fechaHoy
@@ -428,7 +437,8 @@ const familiaId = familiaData?.id || usuario.uid || usuario.firebase_uid || usua
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
-                  alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Pagos', perfil:'Mi perfil' };
+                  alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Pagos', chat:'Chat', perfil:'Mi perfil' };
+let chatInicializado = false;
 
 function irA(sec) {
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
@@ -436,7 +446,7 @@ function irA(sec) {
   document.querySelectorAll('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.section === sec));
   document.getElementById('topbar-title').textContent = TITULOS[sec] || sec;
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarClases,
-                    alumnos: cargarHijos, solicitudes: cargarSolicitudes, pagos: cargarPagos, perfil: cargarPerfil };
+                    alumnos: cargarHijos, solicitudes: cargarSolicitudes, pagos: cargarPagos, chat: cargarChat, perfil: cargarPerfil };
   loaders[sec]?.();
 }
 document.addEventListener('click', (e) => {
@@ -898,6 +908,19 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
 });
 
 // ── PERFIL ───────────────────────────────────────────────────────
+async function cargarChat() {
+  if (chatInicializado || !familiaId) return;
+  chatInicializado = true;
+  await initChatWidget({
+    container: document.getElementById('chat-familia'),
+    db,
+    usuario,
+    role: 'familia',
+    profileId: familiaId,
+    showToast,
+  });
+}
+
 async function cargarPerfil() {
   document.getElementById('p-nombre').value    = usuario.nombre || '';
   document.getElementById('p-apellidos').value = usuario.apellidos || '';
