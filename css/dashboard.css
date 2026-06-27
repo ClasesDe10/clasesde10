@@ -1046,20 +1046,91 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     flex-wrap: wrap;
   }
   .table-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
   }
-  table {
-    min-width: 620px;
+  .table-wrapper table.responsive-card-table {
+    display: block;
+    min-width: 0;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: .8rem;
   }
-  thead th {
-    padding: 9px 10px;
-    font-size: .66rem;
-    letter-spacing: .04em;
+  .table-wrapper table.responsive-card-table thead {
+    display: none;
   }
-  tbody td {
-    padding: 10px;
+  .table-wrapper table.responsive-card-table tbody {
+    display: block;
+    width: 100%;
+  }
+  .table-wrapper table.responsive-card-table tbody tr {
+    display: block;
+    width: 100%;
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+  }
+  .table-wrapper table.responsive-card-table tbody tr:last-child {
+    margin-bottom: 0;
+  }
+  .table-wrapper table.responsive-card-table tbody tr:hover {
+    background: var(--white);
+  }
+  .table-wrapper table.responsive-card-table tbody td {
+    display: grid;
+    grid-template-columns: minmax(88px, 38%) minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    width: 100%;
+    padding: 9px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    text-align: right;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .table-wrapper table.responsive-card-table tbody td::before {
+    content: attr(data-label);
+    min-width: 0;
+    color: var(--gray-mid);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    line-height: 1.4;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .table-wrapper table.responsive-card-table tbody td:last-child {
+    border-bottom: 0;
+  }
+  .table-wrapper table.responsive-card-table tbody td[colspan] {
+    display: block;
+    padding: 22px 8px;
+    text-align: center;
+  }
+  .table-wrapper table.responsive-card-table tbody td[colspan]::before {
+    content: none;
+  }
+  .table-wrapper table.responsive-card-table tbody td .badge {
+    justify-self: end;
+  }
+  .table-wrapper table.responsive-card-table tbody td .btn {
+    width: 100%;
+    white-space: normal;
+  }
+  .table-wrapper table.responsive-card-table tbody td > div,
+  .table-wrapper table.responsive-card-table tbody td > span,
+  .table-wrapper table.responsive-card-table tbody td > strong {
+    min-width: 0;
+  }
+  .card-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .pagination {
+    justify-content: center;
+    flex-wrap: wrap;
   }
   .btn {
     min-height: 36px;

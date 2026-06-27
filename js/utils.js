@@ -60,6 +60,70 @@ export function nombreDia(idx) {
   return ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'][idx];
 }
 
+// ─── TABLAS RESPONSIVE ───────────────────────────────────────────
+let responsiveTablesObserver;
+let responsiveTablesFrame = 0;
+
+export function refreshResponsiveTables(root = null) {
+  if (typeof document === 'undefined') return;
+  const scope = root?.querySelectorAll ? root : document;
+  const tables = scope.matches?.('.table-wrapper table')
+    ? [scope]
+    : Array.from(scope.querySelectorAll?.('.table-wrapper table') || []);
+
+  tables.forEach((table) => {
+    const headers = Array.from(table.querySelectorAll('thead th'))
+      .map((th) => th.textContent.trim().replace(/\s+/g, ' '));
+    if (!headers.length) return;
+
+    table.classList.add('responsive-card-table');
+    Array.from(table.tBodies || []).forEach((tbody) => {
+      Array.from(tbody.rows || []).forEach((row) => {
+        Array.from(row.cells || []).forEach((cell, index) => {
+          if (Number(cell.getAttribute('colspan') || 1) > 1) {
+            cell.dataset.label = '';
+            return;
+          }
+          const label = headers[index] || '';
+          if (label) cell.dataset.label = label;
+        });
+      });
+    });
+  });
+}
+
+function scheduleResponsiveTablesRefresh() {
+  if (responsiveTablesFrame) return;
+  const raf = typeof requestAnimationFrame === 'function'
+    ? requestAnimationFrame
+    : (callback) => setTimeout(callback, 16);
+  responsiveTablesFrame = raf(() => {
+    responsiveTablesFrame = 0;
+    refreshResponsiveTables();
+  });
+}
+
+export function initResponsiveTables() {
+  if (typeof document === 'undefined') return;
+  refreshResponsiveTables();
+  if (responsiveTablesObserver || typeof MutationObserver === 'undefined') return;
+
+  responsiveTablesObserver = new MutationObserver((mutations) => {
+    if (mutations.some((mutation) => mutation.addedNodes.length)) {
+      scheduleResponsiveTablesRefresh();
+    }
+  });
+  responsiveTablesObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initResponsiveTables, { once: true });
+  } else {
+    initResponsiveTables();
+  }
+}
+
 // ─── DINERO ─────────────────────────────────────────────────────
 export function formatEuros(n) {
   if (n === null || n === undefined) return '—';
