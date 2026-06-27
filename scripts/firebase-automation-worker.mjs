@@ -1,0 +1,611 @@
+#!/usr/bin/env node
+
+import admin from 'firebase-admin';
+
+const DEFAULT_PROJECT_ID = 'clasesde10-50add';
+const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
+const args = new Set(process.argv.slice(2));
+const dryRun = args.has('--dry-run');
+const selfTest = args.has('--self-test');
+const limitArg = process.argv.find((arg) => arg.startsWith('--limit='));
+const limit = Number(limitArg?.split('=')[1] || process.env.AUTOMATION_LIMIT || 50);
+
+function clean(value, max = 500) {
+  return String(value || '').trim().slice(0, max);
+}
+
+function lower(value) {
+  return clean(value).toLowerCase();
+}
+
+function asArray(value) {
+  if (Array.isArray(value)) return value.map((item) => clean(item)).filter(Boolean);
+  return clean(value)
+    .split(/[,;/+|]|\sy\s/i)
+    .map((item) => clean(item))
+    .filter(Boolean);
+}
+
+function uniq(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function tokenize(value) {
+  return lower(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .split(/[^a-z0-9]+/)
+    .filter((item) => item.length > 2);
+}
+
+function now() {
+  return admin.firestore.FieldValue.serverTimestamp();
+}
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function initFirebaseAdmin() {
+  if (admin.apps.length) return;
+
+  const projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || DEFAULT_PROJECT_ID;
+  const rawJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const rawBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+
+  if (rawJson || rawBase64) {
+    const decoded = rawJson || Buffer.from(rawBase64, 'base64').toString('utf8');
+    const credential = admin.credential.cert(JSON.parse(decoded));
+    admin.initializeApp({ credential, projectId });
+    return;
+  }
+
+  admin.initializeApp({
+    credential: admin.credential.applicationDefault(),
+    projectId,
+  });
+}
+
+function normalizeStatus(data) {
+  return lower(data.status || data.estado || data.estado_verificacion || data.verificationStatus);
+}
+
+function getUserName(user) {
+  return [user?.nombre, user?.apellidos].filter(Boolean).join(' ').trim() || user?.email || '';
+}
+
+function calculateTeacherPrice(data) {
+  let base = 15;
+  const education = lower([data.titulacion, data.nivel_estudios, data.universidad, data.bio].join(' '));
+  if (education.includes('doctor') || education.includes('master') || education.includes('master')) base += 8;
+  else if (education.includes('grado') || education.includes('licenci') || education.includes('ingenier') || education.includes('universidad')) base += 5;
+  else if (education.includes('fp') || education.includes('modulo')) base += 2;
+
+  const experienceText = lower([data.experiencia, data.anios, data.bio].join(' '));
+  const years = Number(experienceText.match(/\d+/)?.[0] || 0);
+  if (years >= 5) base += 6;
+  else if (years >= 3) base += 4;
+  else if (years >= 1) base += 2;
+
+  const subjects = lower([data.materias, data.materia].flat().join(' '));
+  if (/(matematic|mates|fisica|quimica)/.test(subjects)) base += 3;
+  return Math.round(base * 2) / 2;
+}
+
+function teacherDiagnostic(data, price) {
+  const subjects = asArray(data.materias || data.materia).join(', ') || 'Sin materias';
+  const levels = asArray(data.niveles_educativos || data.niveles || data.nivel).join(', ') || 'Sin niveles';
+  const zone = clean(data.zona || data.ciudad || data.metadata?.zona) || 'Sin zona';
+  const modality = clean(data.modalidad || data.metadata?.modalidad) || 'Sin modalidad';
+  const warnings = [];
+  if (subjects === 'Sin materias') warnings.push('Faltan materias.');
+  if (levels === 'Sin niveles') warnings.push('Faltan niveles.');
+  if (!clean(data.experiencia || data.bio || data.metadata?.anios)) warnings.push('Falta experiencia declarada.');
+  return {
+    summary: `Materias: ${subjects}. Niveles: ${levels}. Modalidad: ${modality}. Zona: ${zone}. Precio sugerido: ${price} EUR/h.`,
+    warnings,
+  };
+}
+
+function studentDiagnostic(data) {
+  const subject = clean(data.materia || data.materias || data.metadata?.materia || data.metadata?.materias) || 'Sin materia';
+  const level = clean(data.nivel || data.curso || data.metadata?.nivel) || 'Sin nivel';
+  const modality = clean(data.modalidad || data.metadata?.modalidad) || 'Sin modalidad';
+  const zone = clean(data.zona || data.metadata?.zona) || 'Sin zona';
+  return {
+    summary: `Alumno: ${clean(data.alumno || data.metadata?.alumno || data.studentName) || 'Sin nombre'}. Nivel: ${level}. Materia: ${subject}. Modalidad: ${modality}. Zona: ${zone}.`,
+    missing: [
+      subject === 'Sin materia' ? 'materia' : '',
+      level === 'Sin nivel' ? 'nivel' : '',
+      zone === 'Sin zona' ? 'zona' : '',
+    ].filter(Boolean),
+  };
+}
+
+function leadToPublicRequest(leadId, lead) {
+  const metadata = lead.metadata || {};
+  const subject = clean(metadata.materia || metadata.materias || lead.asunto || lead.mensaje, 180);
+  const studentName = clean(metadata.alumno || lead.alumno || '', 160);
+  return {
+    source: 'publicLead',
+    publicLeadId: leadId,
+    estado: 'nueva',
+    status: 'nueva',
+    materia: subject,
+    nivel: clean(metadata.nivel || metadata.niveles, 120),
+    modalidad: clean(metadata.modalidad, 120),
+    zona: clean(metadata.zona, 180),
+    preferencia_horario: clean(metadata.disponibilidad || metadata.frecuencia || metadata.inicio, 300),
+    observaciones: clean(lead.mensaje, 2000),
+    familySnapshot: {
+      nombre: clean(lead.nombre, 160),
+      email: clean(lead.email, 254).toLowerCase(),
+      telefono: clean(lead.telefono, 40),
+    },
+    studentSnapshot: {
+      nombre: studentName,
+      nivel: clean(metadata.nivel || metadata.niveles, 120),
+    },
+    matchStatus: 'pending',
+    createdAt: now(),
+    updatedAt: now(),
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  };
+}
+
+async function getAdminUsers(db) {
+  const snap = await db.collection('users').where('role', '==', 'admin').get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+async function notifyAdmins(db, title, body, payload = {}) {
+  const admins = await getAdminUsers(db);
+  if (!admins.length) {
+    await addAutomationEvent(db, {
+      type: 'admin_notification_missing_recipient',
+      title,
+      body,
+      payload,
+      adminEmail: ADMIN_EMAIL,
+    });
+    return;
+  }
+
+  await Promise.all(admins.map((user) => writeDoc(db.collection('notificaciones'), null, {
+    userUid: user.id,
+    titulo: title,
+    title,
+    cuerpo: body,
+    body,
+    type: payload.type || 'automation',
+    payload,
+    readAt: null,
+    createdAt: now(),
+    updatedAt: now(),
+  })));
+}
+
+async function addAutomationEvent(db, payload) {
+  await writeDoc(db.collection('automationEvents'), null, {
+    ...payload,
+    worker: 'github-actions',
+    dryRun,
+    createdAt: now(),
+  });
+}
+
+async function writeDoc(collectionRef, id, payload, options = {}) {
+  if (dryRun) return { id: id || `dry_${Date.now()}` };
+  if (id) {
+    const ref = collectionRef.doc(id);
+    await ref.set(payload, options.merge === false ? undefined : { merge: true });
+    return ref;
+  }
+  return collectionRef.add(payload);
+}
+
+async function updateRef(ref, payload) {
+  if (dryRun) return;
+  await ref.update(payload);
+}
+
+async function countActiveAssignmentsByTeacher(db) {
+  const snap = await db.collection('asignaciones').where('active', '==', true).get();
+  const counts = new Map();
+  snap.docs.forEach((doc) => {
+    const data = doc.data();
+    const teacherUid = data.teacherUid || data.profesor_id;
+    if (teacherUid) counts.set(teacherUid, (counts.get(teacherUid) || 0) + 1);
+  });
+  return counts;
+}
+
+async function loadTeachers(db) {
+  const [teachersSnap, usersSnap, assignmentCounts] = await Promise.all([
+    db.collection('profesores').get(),
+    db.collection('users').get(),
+    countActiveAssignmentsByTeacher(db),
+  ]);
+  const users = new Map(usersSnap.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+
+  return teachersSnap.docs
+    .map((doc) => {
+      const data = doc.data();
+      const userUid = data.userUid || data.usuario_id || doc.id;
+      const user = users.get(userUid) || {};
+      const status = normalizeStatus(data);
+      return {
+        id: doc.id,
+        teacherUid: doc.id,
+        userUid,
+        nombre: getUserName(user) || getUserName(data) || doc.id,
+        email: user.email || data.email || '',
+        status,
+        active: data.active !== false && data.activo !== false,
+        materias: asArray(data.materias || data.materia),
+        niveles: asArray(data.niveles_educativos || data.niveles || data.nivel),
+        modalidad: clean(data.modalidad || data.tipo_clase || data.formato),
+        zona: clean(data.zona || data.ciudad || data.barrio),
+        bio: clean(data.bio || data.experiencia, 1000),
+        tarifa: Number(data.tarifa_hora || data.precio || data.price || 0),
+        maxStudents: Number(data.maxStudents || data.max_alumnos || 5),
+        activeAssignments: assignmentCounts.get(doc.id) || assignmentCounts.get(userUid) || 0,
+      };
+    })
+    .filter((teacher) => teacher.active && ['verificado', 'activo', 'pendiente_revision', 'pendiente', ''].includes(teacher.status));
+}
+
+function getRequestProfile(request) {
+  const metadata = request.metadata || {};
+  const student = request.studentSnapshot || {};
+  return {
+    subject: clean(request.materia || request.subject || metadata.materia || metadata.materias),
+    level: clean(request.nivel || request.nivel_educativo || request.curso || student.nivel || metadata.nivel),
+    modality: clean(request.modalidad || metadata.modalidad),
+    zone: clean(request.zona || metadata.zona),
+    schedule: clean(request.preferencia_horario || request.disponibilidad || metadata.disponibilidad),
+    studentName: clean(student.nombre || request.alumno_nombre || metadata.alumno),
+  };
+}
+
+function scoreTeacher(profile, teacher) {
+  let score = 0;
+  const reasons = [];
+  const risks = [];
+  const subjectTokens = tokenize(profile.subject);
+  const teacherSubjectText = lower(teacher.materias.join(' '));
+  const subjectMatches = subjectTokens.filter((token) => teacherSubjectText.includes(token));
+  if (subjectTokens.length && subjectMatches.length) {
+    score += Math.min(45, 25 + subjectMatches.length * 10);
+    reasons.push(`Cubre la materia (${profile.subject}).`);
+  } else if (subjectTokens.length) {
+    risks.push(`No hay coincidencia clara de materia (${profile.subject}).`);
+    score -= 20;
+  } else {
+    score += 10;
+    risks.push('La solicitud no indica materia clara.');
+  }
+
+  const level = lower(profile.level);
+  const levels = lower(teacher.niveles.join(' '));
+  if (level && (levels.includes(level) || levels.includes('todos') || (levels.includes('eso') && level.includes('eso')))) {
+    score += 25;
+    reasons.push(`Nivel compatible (${profile.level}).`);
+  } else if (level) {
+    risks.push(`Nivel no confirmado (${profile.level}).`);
+  }
+
+  const modality = lower(profile.modality);
+  const teacherModality = lower(teacher.modalidad);
+  if (!modality || !teacherModality || teacherModality.includes('ambas') || modality.includes('ambas') || teacherModality.includes(modality)) {
+    score += 10;
+    if (profile.modality) reasons.push(`Modalidad compatible (${profile.modality}).`);
+  } else {
+    risks.push(`Modalidad pendiente de validar (${profile.modality} vs ${teacher.modalidad}).`);
+  }
+
+  const zone = lower(profile.zone);
+  const teacherZone = lower(teacher.zona);
+  if (zone && teacherZone && (teacherZone.includes(zone) || zone.includes(teacherZone) || teacherModality.includes('online'))) {
+    score += 10;
+    reasons.push(`Zona/modalidad compatible (${profile.zone}).`);
+  } else if (zone) {
+    risks.push(`Zona no confirmada (${profile.zone}).`);
+  }
+
+  const remaining = Math.max(0, teacher.maxStudents - teacher.activeAssignments);
+  if (remaining > 0) {
+    score += Math.min(10, remaining * 2);
+    reasons.push(`${remaining} plaza(s) estimadas disponibles.`);
+  } else {
+    score -= 30;
+    risks.push('Carga actual completa.');
+  }
+
+  if (teacher.status === 'verificado' || teacher.status === 'activo') score += 8;
+  else risks.push('Profesor pendiente de revision/verificacion.');
+
+  return {
+    score: Math.max(0, Math.min(100, Math.round(score))),
+    reasons,
+    risks,
+  };
+}
+
+async function processPublicLeads(db, stats) {
+  const snap = await db.collection('leadsPublicos')
+    .where('estado', '==', 'nuevo')
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get();
+
+  for (const doc of snap.docs) {
+    const lead = doc.data();
+    const type = clean(lead.tipo, 30);
+    stats.leadsSeen += 1;
+
+    if (lead.automationStatus === 'request_created' || lead.automationStatus === 'review_teacher_lead') continue;
+
+    await addAutomationEvent(db, { type: 'lead_received', leadId: doc.id, leadType: type });
+
+    if (type === 'profesor') {
+      const price = calculateTeacherPrice({ ...lead, ...(lead.metadata || {}) });
+      const diagnostic = teacherDiagnostic({ ...lead, ...(lead.metadata || {}) }, price);
+      await updateRef(doc.ref, {
+        suggestedHourlyRate: price,
+        diagnostico: diagnostic,
+        automationStatus: 'review_teacher_lead',
+        estado: 'procesado',
+        updatedAt: now(),
+      });
+      await notifyAdmins(db, 'Nuevo profesor interesado', `${lead.nombre || lead.email || 'Profesor'} envio una solicitud publica. Precio sugerido: ${price} EUR/h.`, {
+        type: 'teacher_lead',
+        leadId: doc.id,
+      });
+      stats.teacherLeadsProcessed += 1;
+      continue;
+    }
+
+    if (type === 'familia') {
+      const requestRef = db.collection('solicitudes').doc(`lead_${doc.id}`);
+      const requestPayload = leadToPublicRequest(doc.id, lead);
+      await writeDoc(db.collection('solicitudes'), requestRef.id, requestPayload);
+      await updateRef(doc.ref, {
+        automationStatus: 'request_created',
+        estado: 'procesado',
+        solicitudId: requestRef.id,
+        diagnostico: studentDiagnostic({ ...lead, ...(lead.metadata || {}) }),
+        updatedAt: now(),
+      });
+      await notifyAdmins(db, 'Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
+        type: 'family_lead_request',
+        leadId: doc.id,
+        requestId: requestRef.id,
+      });
+      stats.familyLeadsProcessed += 1;
+      continue;
+    }
+
+    await updateRef(doc.ref, {
+      automationStatus: 'contact_notified',
+      estado: 'procesado',
+      updatedAt: now(),
+    });
+    await notifyAdmins(db, 'Nuevo contacto publico', `${lead.nombre || lead.email || 'Contacto'} envio un mensaje.`, {
+      type: 'contact_lead',
+      leadId: doc.id,
+    });
+    stats.contactLeadsProcessed += 1;
+  }
+}
+
+async function generateMatchesForRequest(db, requestId, request, stats, reason = 'worker_scan') {
+  const profile = getRequestProfile(request);
+  const teachers = await loadTeachers(db);
+  const candidates = teachers
+    .map((teacher) => ({ ...teacher, ...scoreTeacher(profile, teacher) }))
+    .filter((candidate) => candidate.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  const runRef = dryRun
+    ? { id: `dry_run_${requestId}` }
+    : await db.collection('matchingRuns').add({
+      requestId,
+      reason,
+      status: candidates.length ? 'completed' : 'no_match',
+      profile,
+      candidatesCount: candidates.length,
+      aiUsed: false,
+      aiMode: 'disabled_free_deterministic',
+      createdAt: now(),
+    });
+
+  if (!dryRun) {
+    const batch = db.batch();
+    candidates.forEach((candidate, index) => {
+      const ref = db.collection('solicitudMatches').doc(`${requestId}_${candidate.teacherUid}`);
+      batch.set(ref, {
+        requestId,
+        solicitud_id: requestId,
+        runId: runRef.id,
+        teacherUid: candidate.teacherUid,
+        profesor_id: candidate.teacherUid,
+        teacherUserUid: candidate.userUid,
+        teacherName: candidate.nombre,
+        nombreProfesor: candidate.nombre,
+        teacherEmail: candidate.email,
+        score: candidate.score,
+        rank: index + 1,
+        reasons: candidate.reasons,
+        risks: uniq(candidate.risks),
+        subjectMatch: profile.subject,
+        levelMatch: profile.level,
+        status: 'propuesto',
+        estado: 'propuesto',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: true });
+    });
+    batch.update(db.collection('solicitudes').doc(requestId), {
+      matchStatus: candidates.length ? 'ready' : 'no_match',
+      bestTeacherUid: candidates[0]?.teacherUid || null,
+      bestScore: candidates[0]?.score || 0,
+      matchRunId: runRef.id,
+      matchComputedAt: now(),
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    await batch.commit();
+  }
+
+  await addAutomationEvent(db, {
+    type: 'matching_generated',
+    requestId,
+    runId: runRef.id,
+    candidatesCount: candidates.length,
+    bestTeacherUid: candidates[0]?.teacherUid || null,
+    bestScore: candidates[0]?.score || 0,
+    aiUsed: false,
+  });
+
+  if (!candidates.length) {
+    await notifyAdmins(db, 'Solicitud sin match automatico', `No hay candidatos claros para ${profile.subject || 'la solicitud'} (${profile.level || 'nivel sin indicar'}).`, {
+      type: 'matching_no_match',
+      requestId,
+    });
+  }
+
+  stats.matchesGenerated += 1;
+}
+
+async function processPendingRequests(db, stats) {
+  const snap = await db.collection('solicitudes')
+    .where('status', '==', 'nueva')
+    .limit(limit)
+    .get();
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    stats.requestsSeen += 1;
+    if (data.matchStatus === 'ready') continue;
+    await generateMatchesForRequest(db, doc.id, data, stats);
+  }
+}
+
+async function processAssignedRequests(db, stats) {
+  const snap = await db.collection('solicitudes')
+    .where('status', '==', 'asignada')
+    .limit(limit)
+    .get();
+
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const teacherUid = data.assignedTeacherUid || data.profesor_asignado_id;
+    if (!teacherUid) continue;
+
+    const assignmentId = `${doc.id}_${teacherUid}`;
+    const assignmentRef = db.collection('asignaciones').doc(assignmentId);
+    const existing = await assignmentRef.get();
+    if (existing.exists) continue;
+
+    const studentId = data.studentId || data.alumno_id || null;
+    const familyUid = data.familyUid || data.familia_id || null;
+    await writeDoc(db.collection('asignaciones'), assignmentId, {
+      requestId: doc.id,
+      solicitud_id: doc.id,
+      teacherUid,
+      profesor_id: teacherUid,
+      studentId,
+      alumno_id: studentId,
+      familyUid,
+      familia_id: familyUid,
+      materia: data.materia || data.subject || '',
+      active: true,
+      activa: true,
+      source: 'request_assignment_worker',
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    await writeDoc(db.collection('solicitudMatches'), `${doc.id}_${teacherUid}`, {
+      status: 'asignado',
+      estado: 'asignado',
+      selectedAt: now(),
+      updatedAt: now(),
+    });
+    await addAutomationEvent(db, {
+      type: 'assignment_created',
+      requestId: doc.id,
+      assignmentId,
+      teacherUid,
+      studentId,
+    });
+    stats.assignmentsCreated += 1;
+  }
+}
+
+async function main() {
+  if (selfTest) {
+    const profile = getRequestProfile({
+      materia: 'Matematicas',
+      nivel: '2 ESO',
+      modalidad: 'online',
+      zona: 'Madrid',
+      preferencia_horario: 'martes tarde',
+    });
+    const candidates = [
+      {
+        teacherUid: 'prof_ok',
+        materias: ['Matematicas', 'Fisica'],
+        niveles: ['ESO', 'Bachillerato'],
+        modalidad: 'online',
+        zona: 'Madrid',
+        maxStudents: 5,
+        activeAssignments: 1,
+        status: 'verificado',
+      },
+      {
+        teacherUid: 'prof_low',
+        materias: ['Ingles'],
+        niveles: ['Primaria'],
+        modalidad: 'presencial',
+        zona: 'Sevilla',
+        maxStudents: 1,
+        activeAssignments: 1,
+        status: 'pendiente',
+      },
+    ].map((teacher) => ({ ...teacher, ...scoreTeacher(profile, teacher) }))
+      .sort((a, b) => b.score - a.score);
+
+    if (candidates[0].teacherUid !== 'prof_ok' || candidates[0].score <= candidates[1].score) {
+      throw new Error('Self-test failed: deterministic matching did not rank the expected teacher first.');
+    }
+    console.log(JSON.stringify({ selfTest: 'passed', best: candidates[0] }, null, 2));
+    return;
+  }
+
+  initFirebaseAdmin();
+  const db = admin.firestore();
+  const stats = {
+    dryRun,
+    leadsSeen: 0,
+    familyLeadsProcessed: 0,
+    teacherLeadsProcessed: 0,
+    contactLeadsProcessed: 0,
+    requestsSeen: 0,
+    matchesGenerated: 0,
+    assignmentsCreated: 0,
+  };
+
+  await processPublicLeads(db, stats);
+  await processPendingRequests(db, stats);
+  await processAssignedRequests(db, stats);
+
+  console.log(JSON.stringify(stats, null, 2));
+}
+
+main().catch((error) => {
+  console.error(error?.stack || error?.message || error);
+  process.exit(1);
+});

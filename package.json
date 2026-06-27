@@ -9,10 +9,14 @@
     "audit:iam": "node scripts/firebase-iam-permissions.mjs",
     "audit:storage": "node scripts/firebase-storage-audit.mjs",
     "audit:supabase": "node scripts/supabase-runtime-audit.mjs",
+    "automation:matching": "node scripts/firebase-automation-worker.mjs",
     "check:centralization": "node scripts/check-centralization.mjs",
     "firebase:auth:enable-email": "node scripts/firebase-auth-enable-email.mjs",
     "firebase:storage:create-default": "node scripts/firebase-storage-create-default.mjs",
     "test:adapters": "node scripts/phase1-adapters-test.mjs",
     "test:auth:functional": "node scripts/firebase-auth-functional-test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.10.0"
   }
 }
