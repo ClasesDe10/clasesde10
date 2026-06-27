@@ -453,6 +453,22 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /matchingRuns/{runId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /solicitudMatches/{matchId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /automationEvents/{eventId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /resumenMensual/{summaryId} {
+      allow read, write: if isAdmin();
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -616,6 +616,10 @@
         <div id="asignar-solicitud-info" style="background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem"></div>
       </div>
       <div class="form-group">
+        <label class="form-label">Matching IA / automatico</label>
+        <div id="asignar-match-recomendaciones" style="background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem;color:var(--gray-mid)">Cargando recomendaciones...</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">Profesor asignado <span class="required">*</span></label>
         <select class="form-control" id="asignar-profesor">
           <option value="">Seleccionar profesor verificado…</option>
@@ -1507,17 +1511,68 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
   document.getElementById('asignar-solicitud-id').value = solicitudId;
   document.getElementById('asignar-solicitud-info').innerHTML =
     `<strong>Materia:</strong> ${sanitize(materia)}<br><strong>Familia:</strong> ${sanitize(familia)}`;
-  const { data: profs } = await db.from('profesores')
-    .select('id, usuarios(nombre,apellidos)').eq('estado_verificacion','verificado');
+  document.getElementById('asignar-match-recomendaciones').innerHTML = 'Cargando recomendaciones...';
+  const [{ data: profs }, { data: matches, error: matchError }] = await Promise.all([
+    db.from('profesores')
+      .select('id,nombre,apellidos,email, usuarios(nombre,apellidos)').eq('estado_verificacion','verificado'),
+    db.from('solicitudMatches')
+      .select('*')
+      .eq('solicitud_id', solicitudId)
+      .order('score', { ascending: false })
+      .limit(5),
+  ]);
   document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar…</option>' +
-    (profs||[]).map(p => `<option value="${p.id}">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</option>`).join('');
+    (profs||[]).map(p => {
+      const nombre = `${p.usuarios?.nombre || p.nombre || ''} ${p.usuarios?.apellidos || p.apellidos || ''}`.trim() || p.email || p.id;
+      return `<option value="${sanitize(p.id)}">${sanitize(nombre)}</option>`;
+    }).join('');
+  renderAsignarMatches(matches || [], matchError);
   openModal('modal-asignar');
 };
+
+function renderAsignarMatches(matches, error) {
+  const box = document.getElementById('asignar-match-recomendaciones');
+  if (!box) return;
+  if (error) {
+    box.innerHTML = `<span style="color:var(--danger)">No se pudieron cargar las recomendaciones: ${sanitize(error.message)}</span>`;
+    return;
+  }
+  if (!matches.length) {
+    box.innerHTML = 'Sin recomendaciones calculadas todavia. La automatizacion las genera al entrar una solicitud nueva y revisa pendientes cada hora.';
+    return;
+  }
+  box.innerHTML = matches.map((m) => {
+    const reasons = (m.reasons || []).slice(0, 2).map(sanitize).join(' ');
+    const risks = (m.risks || []).slice(0, 2).map(sanitize).join(' ');
+    return `
+      <div style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
+        <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
+          <strong>${sanitize(m.teacherName || m.nombreProfesor || m.teacherEmail || m.profesor_id || 'Profesor')}</strong>
+          <span class="badge badge-success">${Number(m.score || 0)}%</span>
+        </div>
+        <div style="margin-top:6px">${reasons || 'Candidato propuesto por compatibilidad general.'}</div>
+        ${risks ? `<div style="margin-top:4px;color:var(--gray-mid)">A revisar: ${risks}</div>` : ''}
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px"
+                data-action="seleccionar-match"
+                data-profesor-id="${sanitize(m.profesor_id || m.teacherUid)}"
+                data-match-notas="${sanitize([reasons, risks && `A revisar: ${risks}`].filter(Boolean).join(' '))}">
+          Usar este profesor
+        </button>
+      </div>`;
+  }).join('');
+}
 
 document.getElementById('tbody-solicitudes')?.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action="abrir-asignar"]');
   if (!btn) return;
   window.abrirAsignar(btn.dataset.id, btn.dataset.materia, btn.dataset.familia);
+});
+
+document.getElementById('modal-asignar')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="seleccionar-match"]');
+  if (!btn) return;
+  document.getElementById('asignar-profesor').value = btn.dataset.profesorId || '';
+  document.getElementById('asignar-notas').value = btn.dataset.matchNotas || '';
 });
 
 document.getElementById('btn-confirmar-asignar').addEventListener('click', async () => {
