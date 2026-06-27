@@ -54,9 +54,13 @@ function initFirebaseAdmin() {
   const rawBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
   if (rawJson || rawBase64) {
-    const decoded = rawJson || Buffer.from(rawBase64, 'base64').toString('utf8');
-    const credential = admin.credential.cert(JSON.parse(decoded));
-    admin.initializeApp({ credential, projectId });
+    try {
+      const decoded = rawJson || Buffer.from(rawBase64, 'base64').toString('utf8');
+      const credential = admin.credential.cert(JSON.parse(decoded));
+      admin.initializeApp({ credential, projectId });
+    } catch (error) {
+      throw new Error(`Invalid Firebase service account configuration: ${error.message}`);
+    }
     return;
   }
 
@@ -355,9 +359,12 @@ async function callGeminiForMatching(profile, baseCandidates) {
     'JSON requerido: {"matches":[{"teacherUid":"id exacto","score":90,"reason":"motivo breve para admin","risks":["riesgo breve"]}]}',
   ].join('\n');
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -710,6 +717,14 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error?.stack || error?.message || error);
+  const message = error?.message || String(error);
+  const stack = error?.stack || message;
+  if (/default credentials|applicationDefault|GOOGLE_APPLICATION_CREDENTIALS/i.test(stack)) {
+    console.error(
+      'Firebase credentials unavailable. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64, ' +
+      'or configure GOOGLE_APPLICATION_CREDENTIALS for local dry-runs.',
+    );
+  }
+  console.error(stack);
   process.exit(1);
 });

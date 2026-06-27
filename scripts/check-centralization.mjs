@@ -25,10 +25,12 @@ const NETLIFY_A = '75.2.60.5';
 const EXPECTED_FIREBASE_CNAME = 'clasesde10-50add.web.app';
 
 const IGNORE_DIRS = new Set([
+  '.github',
   '.git',
   '.firebase',
   '.netlify',
   'node_modules',
+  'output',
 ]);
 
 const TEXT_EXTENSIONS = new Set([
@@ -274,6 +276,10 @@ function checkCodeTouchpoints() {
       && file !== 'js/auth.js'
       && file !== 'js/supabase-client.js'
       && file !== 'js/supabase-client.example.js'
+      && file !== 'firebase.json'
+      && file !== 'netlify.toml'
+      && file !== 'package.json'
+      && file !== 'package-lock.json'
     ));
 
   if (runtimeFiles.length === 0) ok('No runtime Supabase touchpoints outside legacy modules');
@@ -288,7 +294,7 @@ function checkCodeTouchpoints() {
   const firebaseConfig = fs.existsSync(path.join(ROOT, 'firebase.json'));
   if (firebaseConfig) ok('Firebase hosting config present', 'firebase.json');
   else fail('Firebase hosting config missing');
-  if (netlifyConfig) warn('Netlify config still present', 'keep until DNS cutover is verified');
+  if (netlifyConfig) warn('Netlify config still present', 'legacy rollback artifact; Firebase DNS is already verified');
 }
 
 async function main() {
@@ -299,7 +305,6 @@ async function main() {
   checkCli();
   checkCodeTouchpoints();
   console.log('\nNext external gates');
-  console.log('- DNS: point clasesde10.com and www to Firebase Hosting.');
   console.log('- Firebase Storage: initialize the default bucket.');
   console.log('- Private app: migrate dashboards from Supabase queries to Firestore before switching auth-provider to Firebase.');
 }

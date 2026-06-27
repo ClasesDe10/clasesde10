@@ -1,0 +1,92 @@
+name: Quality checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --omit=dev
+
+      - name: Syntax check runtime modules
+        run: |
+          node --check js/auth.js
+          node --check js/firebase-client.js
+          node --check js/supabase-client.js
+          node --check js/chat-widget.js
+          node --check js/document-storage-provider.js
+          node --check js/notifications-provider.js
+          node --check scripts/firebase-automation-worker.mjs
+          node --check scripts/firebase-storage-create-default.mjs
+          node --check scripts/check-centralization.mjs
+          node --check scripts/hosting-audit.mjs
+          node --check scripts/supabase-runtime-audit.mjs
+
+      - name: Adapter tests
+        run: npm run test:adapters
+
+      - name: Automation worker self-test
+        run: npm run automation:matching -- --self-test
+
+      - name: Hosting and migration audits
+        run: |
+          npm run audit:hosting
+          npm run audit:supabase
+
+  functions:
+    name: Functions validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    defaults:
+      run:
+        working-directory: functions
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --omit=dev
+
+      - name: Syntax check functions
+        run: node --check index.js

@@ -9,7 +9,7 @@ import path from 'node:path';
 
 const PROJECT_ID = 'clasesde10-50add';
 const LOCATION = 'EUROPE-WEST1';
-const URL = `https://firebasestorage.googleapis.com/v1alpha/projects/${PROJECT_ID}/defaultBucket`;
+const API_VERSIONS = ['v1alpha', 'v1beta'];
 
 function readToken() {
   const configPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
@@ -20,27 +20,41 @@ function readToken() {
 }
 
 async function main() {
-  const response = await fetch(URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${readToken()}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ location: LOCATION }),
-  });
-  const text = await response.text();
-  let body = text;
-  try {
-    body = JSON.parse(text);
-  } catch {}
+  const token = readToken();
+  const failures = [];
 
-  console.log(`status=${response.status} ok=${response.ok}`);
-  console.log(JSON.stringify(body, null, 2));
-  if (!response.ok) process.exit(1);
+  for (const version of API_VERSIONS) {
+    const url = `https://firebasestorage.googleapis.com/${version}/projects/${PROJECT_ID}/defaultBucket`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ location: LOCATION }),
+    });
+    const text = await response.text();
+    let body = text;
+    try {
+      body = JSON.parse(text);
+    } catch {}
+
+    console.log(`[${version}] status=${response.status} ok=${response.ok}`);
+    console.log(JSON.stringify(body, null, 2));
+    if (response.ok) return;
+    failures.push({ version, status: response.status, body });
+  }
+
+  const hasPermissionDenied = failures.some((failure) => failure.status === 403);
+  console.error('Firebase Storage default bucket could not be initialized automatically.');
+  if (hasPermissionDenied) {
+    console.error('Current Firebase CLI credentials were rejected by the Firebasestorage defaultBucket API with 403 PERMISSION_DENIED.');
+  }
+  console.error('Next unblock: initialize Storage in Firebase Console or rerun with credentials that can create the default Firebase Storage bucket.');
+  process.exitCode = 1;
 }
 
 main().catch((error) => {
   console.error(error);
-  process.exit(1);
+  process.exitCode = 1;
 });
-

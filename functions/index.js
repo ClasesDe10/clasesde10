@@ -293,15 +293,19 @@ function scoreTeacher(profile, teacher) {
 async function callGeminiIfConfigured(profile, candidates) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || !candidates.length) return null;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
   const teacherBlock = candidates.slice(0, 8).map((candidate, index) => (
     `P${index + 1}: id="${candidate.teacherUid}" nombre="${candidate.nombre}" scoreBase=${candidate.score} materias="${candidate.materias.join(', ')}" niveles="${candidate.niveles.join(', ')}" modalidad="${candidate.modalidad}" zona="${candidate.zona}" riesgos="${candidate.risks.join('; ')}"`
   )).join('\n');
 
   const prompt = `Eres el motor de matching de ClasesDe10. Ordena los mejores profesores para esta solicitud. Responde solo JSON valido.\nSOLICITUD: materia="${profile.subject}" nivel="${profile.level}" modalidad="${profile.modality}" zona="${profile.zone}" horario="${profile.schedule}"\nCANDIDATOS:\n${teacherBlock}\nJSON requerido: {"matches":[{"teacherUid":"...","score":90,"reason":"frase breve","risks":["..."]}]}`;
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.15, maxOutputTokens: 700 },
