@@ -467,6 +467,21 @@ service cloud.firestore {
       allow read: if isAdmin() || isParticipant(resource.data);
     }
 
+    match /solicitudes/{requestId} {
+      allow create: if isAdmin()
+        || (hasRole('familia') && request.resource.data.familyUid == request.auth.uid);
+      allow read: if isAdmin()
+        || isFamilyParticipant(resource.data)
+        || (
+          signedIn()
+          && (
+            resource.data.assignedTeacherUid == request.auth.uid
+            || resource.data.profesor_asignado_id == request.auth.uid
+          )
+        );
+      allow update, delete: if isAdmin();
+    }
+
     match /chats/{chatId} {
       allow create: if validChatCreate(chatId);
       allow read: if isAdmin() || isChatParticipant(resource.data);
