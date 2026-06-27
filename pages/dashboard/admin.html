@@ -1290,6 +1290,17 @@ function perfilProfesorCompleto(p) {
   return incidenciasPerfilProfesor(p).length === 0;
 }
 
+function estadoProfesorNormalizado(p) {
+  return String(p?.estado_verificacion || p?.verificationStatus || p?.status || p?.estado || '').trim().toLowerCase();
+}
+
+function profesorPuedeAparecerAsignacion(p) {
+  const estado = estadoProfesorNormalizado(p);
+  const bloqueado = ['rechazado', 'rejected', 'bloqueado', 'blocked', 'suspendido', 'suspended', 'inactivo', 'inactive'];
+  if (bloqueado.includes(estado)) return false;
+  return p?.active === true || p?.activo === true || ['verificado', 'verified', 'activo', 'active'].includes(estado);
+}
+
 function renderProfesorDetalle(p) {
   if (!p) return '<div class="empty-state"><div class="empty-title">Profesor no encontrado</div></div>';
   const issues = incidenciasPerfilProfesor(p);
@@ -1632,29 +1643,6 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
   document.getElementById('asignar-solicitud-info').innerHTML =
     `<strong>Materia:</strong> ${sanitize(materia)}<br><strong>Familia:</strong> ${sanitize(familia)}`;
   document.getElementById('asignar-match-recomendaciones').innerHTML = 'Cargando recomendaciones...';
-  const [{ data: profs }, { data: matches, error: matchError }] = await Promise.all([
-    db.from('profesores')
-      .select('id,nombre,apellidos,email, usuarios(nombre,apellidos)').eq('estado_verificacion','verificado'),
-    db.from('solicitudMatches')
-      .select('*')
-      .eq('solicitud_id', solicitudId)
-      .order('score', { ascending: false })
-      .limit(5),
-  ]);
-  document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar…</option>' +
-    (profs||[]).map(p => {
-      const nombre = `${p.usuarios?.nombre || p.nombre || ''} ${p.usuarios?.apellidos || p.apellidos || ''}`.trim() || p.email || p.id;
-      return `<option value="${sanitize(p.id)}">${sanitize(nombre)}</option>`;
-    }).join('');
-  renderAsignarMatches(matches || [], matchError);
-  openModal('modal-asignar');
-};
-
-window.abrirAsignar = async (solicitudId, materia, familia) => {
-  document.getElementById('asignar-solicitud-id').value = solicitudId;
-  document.getElementById('asignar-solicitud-info').innerHTML =
-    `<strong>Materia:</strong> ${sanitize(materia)}<br><strong>Familia:</strong> ${sanitize(familia)}`;
-  document.getElementById('asignar-match-recomendaciones').innerHTML = 'Cargando recomendaciones...';
   document.getElementById('asignar-profesor-detalle').style.display = 'none';
   document.getElementById('asignar-profesor-detalle').innerHTML = '';
 
@@ -1683,14 +1671,27 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     `;
   }
 
-  const profesoresVerificados = (profs || []).filter((p) => (p.estado_verificacion || p.verificationStatus || p.status) === 'verificado');
-  profesoresVerificados.forEach((p) => profesoresCache.set(p.id, p));
+  const profesoresElegibles = (profs || []).filter(profesorPuedeAparecerAsignacion);
+  profesoresElegibles.forEach((p) => profesoresCache.set(p.id, p));
   document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
-    profesoresVerificados.map((p) => {
+    (profesoresElegibles.length ? profesoresElegibles.map((p) => {
       const completo = perfilProfesorCompleto(p);
+      const issues = incidenciasPerfilProfesor(p).slice(0, 3).join(', ');
       const nombre = nombreProfesor(p);
-      return `<option value="${sanitize(p.id)}" ${completo ? '' : 'disabled'}>${sanitize(nombre)}${completo ? '' : ' (perfil incompleto)'}</option>`;
-    }).join('');
+      return `<option value="${sanitize(p.id)}" ${completo ? '' : 'disabled'}>${sanitize(nombre)}${completo ? '' : ` (perfil incompleto: ${sanitize(issues)})`}</option>`;
+    }).join('') : '<option value="" disabled>No hay profesores activos o verificados</option>');
+
+  const detalleProfesor = document.getElementById('asignar-profesor-detalle');
+  const completos = profesoresElegibles.filter(perfilProfesorCompleto).length;
+  if (detalleProfesor && !completos) {
+    detalleProfesor.style.display = '';
+    detalleProfesor.innerHTML = profesoresElegibles.length
+      ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, materias, niveles, tarifa, disponibilidad y presentacion antes de asignar.</div></div>`
+      : '<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Activa o verifica al menos un profesor con perfil completo antes de asignar esta solicitud.</div></div>';
+  } else if (detalleProfesor) {
+    detalleProfesor.style.display = 'none';
+    detalleProfesor.innerHTML = '';
+  }
   renderAsignarMatches(matches || [], matchError);
   openModal('modal-asignar');
 };
@@ -1703,7 +1704,7 @@ function renderAsignarMatches(matches, error) {
     return;
   }
   if (!matches.length) {
-    box.innerHTML = 'Sin recomendaciones calculadas todavia. La automatizacion las genera al entrar una solicitud nueva y revisa pendientes cada hora.';
+    box.innerHTML = 'Sin recomendaciones calculadas todavia. La automatizacion las genera al entrar una solicitud nueva y revisa pendientes cada hora. Mientras tanto puedes asignar manualmente solo profesores activos/verificados con perfil completo.';
     return;
   }
   box.innerHTML = matches.map((m) => {
