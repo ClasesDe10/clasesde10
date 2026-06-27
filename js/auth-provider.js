@@ -15,4 +15,4 @@ export {
   register,
   requireAuth,
   resetPassword,
-} from './auth.js';
+} from './auth.js?v=20260627-domain-auth';

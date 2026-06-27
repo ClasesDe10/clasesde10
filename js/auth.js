@@ -6,7 +6,7 @@
  * adapter.
  */
 
-import authAdapter from './adapters/firebase-auth-adapter.js';
+import authAdapter from './adapters/firebase-auth-adapter.js?v=20260627-domain-auth';
 
 export const getSession = authAdapter.getSession;
 export const getUsuarioActual = authAdapter.getCurrentUser;

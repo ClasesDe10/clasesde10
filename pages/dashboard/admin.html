@@ -746,10 +746,10 @@
 </div>
 
 <script type="module">
-import db from '../../js/supabase-client.js';
+import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { leads } from '../../js/adapters/index.js';
-import { requireAuth, logout } from '../../js/auth-provider.js';
-import { getDocumentUrl } from '../../js/document-storage-provider.js';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
+import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,

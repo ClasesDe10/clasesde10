@@ -25,7 +25,7 @@ import {
   setDoc,
   updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
-import { firebaseAuth, firebaseDb } from './firebase-client.js';
+import { firebaseAuth, firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 
 const CANONICAL_ORIGIN = 'https://clasesde10.com';
 const AUTH_ALLOWED_ORIGINS = new Set([

@@ -23,7 +23,7 @@ import {
   ref,
   uploadBytes,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
-import { firebaseDb, firebaseStorage } from './firebase-client.js';
+import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
 
 const COLLECTION_ALIASES = {
   usuarios: 'users',
