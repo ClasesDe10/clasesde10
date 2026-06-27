@@ -53,6 +53,8 @@ jobs:
           node --check scripts/mobile-admin-login.playwright.js
           node --check scripts/mobile-calendar-screenshot.playwright.js
           node --check scripts/mobile-admin-modal-audit.playwright.js
+          node --check scripts/mobile-auth-onboarding-screenshots.playwright.js
+          node --check scripts/mobile-teacher-short-form-screenshot.playwright.js
 
       - name: Adapter tests
         run: npm run test:adapters

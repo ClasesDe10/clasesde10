@@ -55,6 +55,46 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 .auth-footer { text-align:center; margin-top:20px; font-size:.82rem; color:var(--gray-mid); }
 .auth-footer a { color:var(--navy); font-weight:600; text-decoration:none; }
 .auth-footer a:hover { color:var(--gold); }
+.auth-sep { text-align:center; color:var(--gray-mid); font-size:.78rem; margin:16px 0; position:relative; }
+.auth-sep::before, .auth-sep::after { content:''; position:absolute; top:50%; width:34%; height:1px; background:rgba(0,0,0,0.1); }
+.auth-sep::before { left:0; }
+.auth-sep::after { right:0; }
+.google-auth-btn {
+  width: 100%;
+  min-height: 46px;
+  border: 1.5px solid rgba(15,31,61,.16);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text-dark);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color .18s, background .18s, transform .15s;
+}
+.google-auth-btn:hover { border-color: var(--navy); background: rgba(15,31,61,.025); transform: translateY(-1px); }
+.google-auth-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: #4285f4;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+}
+.google-auth-note {
+  color: var(--gray-mid);
+  font-size: .72rem;
+  line-height: 1.45;
+  text-align: center;
+  margin: 8px 0 0;
+}
+.google-auth-note a { color: var(--navy); font-weight: 700; }
 .terms-note { font-size:.72rem; color:var(--gray-mid); text-align:center; margin-top:12px; line-height:1.5; }
 .terms-note a { color:var(--navy); }
 .auth-check {
@@ -139,6 +179,9 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     min-height: 42px;
     white-space: normal;
   }
+  .google-auth-btn {
+    min-height: 44px;
+  }
 }
 </style>
 </head>
@@ -179,6 +222,18 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
       </label>
     </div>
 
+    <div id="google-register-block">
+      <button type="button" class="google-auth-btn" id="btn-google-registro">
+        <span class="google-auth-mark">G</span>
+        <span id="btn-google-registro-text">Continuar con Google</span>
+      </button>
+      <p class="google-auth-note">
+        Al continuar aceptas los <a href="/terminos.html" target="_blank" rel="noopener noreferrer">Terminos</a>
+        y la <a href="/privacidad.html" target="_blank" rel="noopener noreferrer">Politica de privacidad</a>.
+      </p>
+      <div class="auth-sep">o usa email</div>
+    </div>
+
     <form id="form-registro" method="post" novalidate>
       <div class="form-row">
         <div class="form-group">
@@ -203,56 +258,8 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
                placeholder="600 000 000" autocomplete="tel" maxlength="40">
       </div>
       <div class="profesor-extra" id="profesor-extra">
-        <div class="profesor-extra-title">Perfil obligatorio de profesor</div>
-        <div class="form-group">
-          <label class="form-label" for="prof-foto-url">Foto de perfil (URL) <span class="required">*</span></label>
-          <input class="form-control" type="url" id="prof-foto-url" placeholder="https://...">
-          <div class="form-hint">Usa una URL publica de una foto profesional. Cuando Storage este activo se podra subir archivo directamente.</div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="prof-direccion">Calle y numero <span class="required">*</span></label>
-          <input class="form-control" type="text" id="prof-direccion" placeholder="Calle, numero, piso" maxlength="180">
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="prof-ciudad">Ciudad <span class="required">*</span></label>
-            <input class="form-control" type="text" id="prof-ciudad" value="Madrid" maxlength="80">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="prof-cp">Codigo postal <span class="required">*</span></label>
-            <input class="form-control" type="text" id="prof-cp" placeholder="28000" maxlength="12">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="prof-zona">Zona/barrio donde vive <span class="required">*</span></label>
-          <input class="form-control" type="text" id="prof-zona" placeholder="Chamberi, Retiro, online..." maxlength="120">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="prof-materias">Materias que imparte <span class="required">*</span></label>
-          <input class="form-control" type="text" id="prof-materias" placeholder="Matematicas, Fisica, Ingles">
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="prof-niveles">Niveles educativos <span class="required">*</span></label>
-          <input class="form-control" type="text" id="prof-niveles" placeholder="ESO, Bachillerato, Universidad">
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="prof-experiencia">Anios de experiencia <span class="required">*</span></label>
-            <input class="form-control" type="number" id="prof-experiencia" min="0" max="60" step="1" placeholder="2">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="prof-tarifa">Tarifa orientativa EUR/h <span class="required">*</span></label>
-            <input class="form-control" type="number" id="prof-tarifa" min="1" max="200" step="0.5" placeholder="18">
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="prof-disponibilidad">Disponibilidad <span class="required">*</span></label>
-          <textarea class="form-control" id="prof-disponibilidad" rows="3" placeholder="Lunes a jueves tardes, sabados manana, online..."></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="prof-bio">Presentacion y experiencia <span class="required">*</span></label>
-          <textarea class="form-control" id="prof-bio" rows="4" placeholder="Explica tu experiencia, metodologia y tipo de alumno ideal. Minimo 40 caracteres."></textarea>
-        </div>
+        <div class="profesor-extra-title">Perfil de profesor</div>
+        <div class="form-hint">Crea tu cuenta ahora. Dentro del panel te pediremos foto, zona, materias, niveles, tarifa, disponibilidad y experiencia antes de poder recibir asignaciones.</div>
       </div>
       <div class="form-group">
         <label class="form-label" for="password">Contrasena <span class="required">*</span></label>
@@ -290,7 +297,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 </div>
 
 <script type="module">
-import { register } from '../js/auth-provider.js?v=20260627-domain-auth';
+import { loginWithGoogle, redirectByRole, register } from '../js/auth-provider.js?v=20260627-domain-auth';
 import { validarEmail, sanitize } from '../js/utils.js';
 import { trackRegistro } from '../js/analytics.js';
 
@@ -300,28 +307,20 @@ const formWrapper    = document.getElementById('form-wrapper');
 const cardFamilia    = document.getElementById('card-familia');
 const cardProfesor   = document.getElementById('card-profesor');
 const profesorExtra  = document.getElementById('profesor-extra');
+const googleBlock    = document.getElementById('google-register-block');
 const pwdBar         = document.getElementById('pwd-bar');
 let rolSeleccionado  = 'familia';
 const params = new URLSearchParams(window.location.search);
 const alumnoToken = params.get('token') || '';
-const profesorRequiredIds = [
-  'telefono',
-  'prof-foto-url',
-  'prof-direccion',
-  'prof-ciudad',
-  'prof-cp',
-  'prof-zona',
-  'prof-materias',
-  'prof-niveles',
-  'prof-experiencia',
-  'prof-tarifa',
-  'prof-disponibilidad',
-  'prof-bio',
-];
+const profesorRequiredIds = [];
+
+if (params.get('rol') === 'profesor') rolSeleccionado = 'profesor';
+if (params.get('rol') === 'familia') rolSeleccionado = 'familia';
 
 if (params.get('rol') === 'alumno' && alumnoToken) {
   rolSeleccionado = 'alumno';
   document.querySelector('.rol-selector').style.display = 'none';
+  googleBlock.style.display = 'none';
   document.getElementById('registro-subtitle').textContent = 'Crea tu acceso de alumno con la invitación recibida por tu familia.';
 }
 
@@ -349,6 +348,27 @@ function setRol(rol) {
   });
 });
 setRol(rolSeleccionado);
+
+document.getElementById('btn-google-registro').addEventListener('click', async () => {
+  hideError();
+  const btn = document.getElementById('btn-google-registro');
+  const text = document.getElementById('btn-google-registro-text');
+  const defaultText = text.textContent;
+  btn.disabled = true;
+  text.textContent = 'Abriendo Google...';
+
+  const { error, usuario } = await loginWithGoogle(rolSeleccionado);
+
+  if (error) {
+    showError(error.message);
+    btn.disabled = false;
+    text.textContent = defaultText;
+    return;
+  }
+
+  trackRegistro(usuario.rol || rolSeleccionado);
+  redirectByRole(usuario.rol || rolSeleccionado);
+});
 
 // Indicador fortaleza contraseña
 document.getElementById('password').addEventListener('input', (e) => {
@@ -392,22 +412,7 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
     showError('Debes aceptar los términos y la política de privacidad para crear la cuenta.'); return;
   }
 
-  const profesorPayload = rolSeleccionado === 'profesor' ? {
-    foto_url: document.getElementById('prof-foto-url').value.trim(),
-    direccion: document.getElementById('prof-direccion').value.trim(),
-    ciudad: document.getElementById('prof-ciudad').value.trim(),
-    codigo_postal: document.getElementById('prof-cp').value.trim(),
-    zona: document.getElementById('prof-zona').value.trim(),
-    materias: document.getElementById('prof-materias').value.trim(),
-    niveles_educativos: document.getElementById('prof-niveles').value.trim(),
-    experiencia_anios: document.getElementById('prof-experiencia').value,
-    tarifa_hora: document.getElementById('prof-tarifa').value,
-    disponibilidad_resumen: document.getElementById('prof-disponibilidad').value.trim(),
-    bio: document.getElementById('prof-bio').value.trim(),
-  } : {};
-  if (rolSeleccionado === 'profesor' && profesorPayload.bio.length < 40) {
-    showError('La presentacion del profesor debe tener al menos 40 caracteres.'); return;
-  }
+  const profesorPayload = {};
 
   const btn  = document.getElementById('btn-registro');
   const text = document.getElementById('btn-text');

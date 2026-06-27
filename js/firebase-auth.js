@@ -9,11 +9,13 @@
 
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
   confirmPasswordReset as firebaseConfirmPasswordReset,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   updateProfile,
   verifyPasswordResetCode as firebaseVerifyPasswordResetCode,
@@ -43,12 +45,32 @@ const ROLES_RUTAS = {
   alumno: '/pages/dashboard/alumno.html',
 };
 
+const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
 function normalizeText(value) {
   return String(value || '').trim();
+}
+
+function splitDisplayName(displayName, fallbackEmail = '') {
+  const cleanName = normalizeText(displayName);
+  if (cleanName) {
+    const parts = cleanName.split(/\s+/);
+    return {
+      nombre: parts.shift() || cleanName,
+      apellidos: parts.join(' '),
+    };
+  }
+
+  const localPart = normalizeEmail(fallbackEmail).split('@')[0] || 'Usuario';
+  return {
+    nombre: localPart.replace(/[._-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    apellidos: '',
+  };
 }
 
 function authError(message, code = 'firebase-auth/precondition') {
@@ -62,11 +84,17 @@ function getAuthActionOrigin() {
 
 function mapFirebaseError(error) {
   const messages = {
+    'auth/account-exists-with-different-credential': 'Ya existe una cuenta con este email usando otro metodo de acceso.',
+    'auth/cancelled-popup-request': 'Ya hay una ventana de Google abierta.',
     'auth/email-already-in-use': 'Ya existe una cuenta con este email.',
     'auth/invalid-credential': 'Email o contrasena incorrectos.',
     'auth/invalid-email': 'Introduce un email valido.',
     'auth/missing-password': 'Introduce la contrasena.',
+    'auth/operation-not-allowed': 'El acceso con Google no esta activado en Firebase.',
+    'auth/popup-blocked': 'El navegador ha bloqueado la ventana de Google. Permite ventanas emergentes para continuar.',
+    'auth/popup-closed-by-user': 'Has cerrado la ventana de Google antes de terminar.',
     'auth/too-many-requests': 'Demasiados intentos. Espera unos minutos y vuelve a intentarlo.',
+    'auth/unauthorized-domain': 'Este dominio no esta autorizado en Firebase Auth.',
     'auth/user-disabled': 'Tu cuenta esta desactivada. Contacta con soporte.',
     'auth/user-not-found': 'Email o contrasena incorrectos.',
     'auth/weak-password': 'La contrasena debe tener al menos 8 caracteres.',
@@ -80,6 +108,56 @@ function mapFirebaseError(error) {
     ...error,
     message: messages[error.code] || error.message || 'No se pudo completar la operacion.',
   };
+}
+
+async function createMinimalRoleProfile(user, role) {
+  const emailClean = normalizeEmail(user.email);
+  const providerProfile = user.providerData?.find((provider) => provider.providerId === 'google.com') || {};
+  const names = splitDisplayName(user.displayName || providerProfile.displayName, emailClean);
+
+  const basePayload = {
+    email: emailClean,
+    nombre: names.nombre,
+    apellidos: names.apellidos,
+    telefono: null,
+    role,
+    active: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  await setDoc(doc(firebaseDb, 'users', user.uid), basePayload, { merge: true });
+
+  const profilePayload = {
+    userUid: user.uid,
+    email: emailClean,
+    nombre: names.nombre,
+    apellidos: names.apellidos,
+    telefono: null,
+    active: true,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (role === 'familia') {
+    await setDoc(doc(firebaseDb, 'familias', user.uid), {
+      ...profilePayload,
+      status: 'activo',
+    }, { merge: true });
+  }
+
+  if (role === 'profesor') {
+    await setDoc(doc(firebaseDb, 'profesores', user.uid), {
+      ...profilePayload,
+      perfil_completo: false,
+      profileComplete: false,
+      estado_verificacion: 'pendiente_perfil',
+      verificationStatus: 'pendiente_perfil',
+      status: 'pendiente_perfil',
+    }, { merge: true });
+  }
+
+  return getUsuarioActual();
 }
 
 function mapProfile(uid, data) {
@@ -175,6 +253,33 @@ export async function login(emailRaw, passwordRaw) {
   }
 }
 
+export async function loginWithGoogle(roleForNewAccount = '') {
+  try {
+    const credential = await signInWithPopup(firebaseAuth, googleProvider);
+    let usuario = await getUsuarioActual();
+
+    if (!usuario) {
+      const role = normalizeText(roleForNewAccount);
+      if (!['profesor', 'familia'].includes(role)) {
+        await signOut(firebaseAuth);
+        return {
+          error: authError('No existe perfil para esta cuenta. Entra en Crear cuenta y elige familia o profesor antes de continuar con Google.'),
+        };
+      }
+      usuario = await createMinimalRoleProfile(credential.user, role);
+    }
+
+    if (!usuario?.activo) {
+      await signOut(firebaseAuth);
+      return { error: authError('Tu cuenta esta desactivada. Contacta con soporte.') };
+    }
+
+    return { data: credential, usuario };
+  } catch (error) {
+    return { error: mapFirebaseError(error) };
+  }
+}
+
 export async function register({
   email,
   password,
@@ -217,6 +322,8 @@ export async function register({
     : normalizeText(niveles_educativos).split(',').map((item) => item.trim()).filter(Boolean);
   const experienciaNum = Number(experiencia_anios || 0);
   const tarifaNum = Number(tarifa_hora || 0);
+  const hasExperience = normalizeText(experiencia_anios) !== '' && Number.isFinite(experienciaNum);
+  const hasHourlyRate = normalizeText(tarifa_hora) !== '' && Number.isFinite(tarifaNum) && tarifaNum > 0;
 
   if (!emailClean || !password || !nombreClean || !apellidosClean || !role) {
     return { error: authError('Todos los campos obligatorios deben completarse.') };
@@ -230,25 +337,20 @@ export async function register({
     return { error: authError('Rol no valido.') };
   }
 
-  if (role === 'profesor') {
-    const missingTeacherProfile = [
-      !telefonoClean,
-      !fotoUrlClean,
-      !direccionClean,
-      !ciudadClean,
-      !codigoPostalClean,
-      !zonaClean,
-      !materiasList.length,
-      !nivelesList.length,
-      !Number.isFinite(experienciaNum),
-      !tarifaNum,
-      !disponibilidadClean,
-      bioClean.length < 40,
-    ].some(Boolean);
-    if (missingTeacherProfile) {
-      return { error: authError('Para registrarte como profesor debes completar foto, direccion, zona, telefono, materias, niveles, experiencia, tarifa, disponibilidad y una presentacion suficiente.') };
-    }
-  }
+  const teacherProfileComplete = role === 'profesor' && [
+    telefonoClean,
+    fotoUrlClean,
+    direccionClean,
+    ciudadClean,
+    codigoPostalClean,
+    zonaClean,
+    materiasList.length,
+    nivelesList.length,
+    hasExperience,
+    hasHourlyRate,
+    disponibilidadClean,
+    bioClean.length >= 40,
+  ].every(Boolean);
 
   try {
     let studentInvitation = null;
@@ -312,32 +414,22 @@ export async function register({
     if (role === 'profesor') {
       await setDoc(doc(firebaseDb, 'profesores', user.uid), {
         ...profilePayload,
-        foto_url: fotoUrlClean,
-        photoUrl: fotoUrlClean,
-        direccion: direccionClean,
-        address: direccionClean,
-        ciudad: ciudadClean,
-        city: ciudadClean,
-        codigo_postal: codigoPostalClean,
-        postalCode: codigoPostalClean,
-        zona: zonaClean,
-        zone: zonaClean,
-        materias: materiasList,
-        subjects: materiasList,
-        niveles_educativos: nivelesList,
-        levels: nivelesList,
-        experiencia_anios: Number.isFinite(experienciaNum) ? experienciaNum : 0,
-        experienceYears: Number.isFinite(experienciaNum) ? experienciaNum : 0,
-        tarifa_hora: tarifaNum,
-        hourlyRate: tarifaNum,
-        disponibilidad_resumen: disponibilidadClean,
-        availabilitySummary: disponibilidadClean,
-        bio: bioClean,
-        perfil_completo: true,
-        profileComplete: true,
-        estado_verificacion: 'pendiente',
-        verificationStatus: 'pendiente',
-        status: 'pendiente_revision',
+        ...(fotoUrlClean ? { foto_url: fotoUrlClean, photoUrl: fotoUrlClean } : {}),
+        ...(direccionClean ? { direccion: direccionClean, address: direccionClean } : {}),
+        ...(ciudadClean ? { ciudad: ciudadClean, city: ciudadClean } : {}),
+        ...(codigoPostalClean ? { codigo_postal: codigoPostalClean, postalCode: codigoPostalClean } : {}),
+        ...(zonaClean ? { zona: zonaClean, zone: zonaClean } : {}),
+        ...(materiasList.length ? { materias: materiasList, subjects: materiasList } : {}),
+        ...(nivelesList.length ? { niveles_educativos: nivelesList, levels: nivelesList } : {}),
+        ...(hasExperience ? { experiencia_anios: experienciaNum, experienceYears: experienciaNum } : {}),
+        ...(hasHourlyRate ? { tarifa_hora: tarifaNum, hourlyRate: tarifaNum } : {}),
+        ...(disponibilidadClean ? { disponibilidad_resumen: disponibilidadClean, availabilitySummary: disponibilidadClean } : {}),
+        ...(bioClean ? { bio: bioClean } : {}),
+        perfil_completo: teacherProfileComplete,
+        profileComplete: teacherProfileComplete,
+        estado_verificacion: teacherProfileComplete ? 'pendiente' : 'pendiente_perfil',
+        verificationStatus: teacherProfileComplete ? 'pendiente' : 'pendiente_perfil',
+        status: teacherProfileComplete ? 'pendiente_revision' : 'pendiente_perfil',
       }, { merge: true });
     }
 

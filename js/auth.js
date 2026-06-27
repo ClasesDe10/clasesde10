@@ -12,6 +12,7 @@ export const getSession = authAdapter.getSession;
 export const getUsuarioActual = authAdapter.getCurrentUser;
 export const requireAuth = authAdapter.requireAuth;
 export const login = authAdapter.login;
+export const loginWithGoogle = authAdapter.loginWithGoogle;
 export const logout = authAdapter.logout;
 export const register = authAdapter.register;
 export const resetPassword = authAdapter.resetPassword;

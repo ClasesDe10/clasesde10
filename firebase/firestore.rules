@@ -222,6 +222,10 @@ service cloud.firestore {
           'telefono',
           'active',
           'status',
+          'perfil_completo',
+          'profileComplete',
+          'estado_verificacion',
+          'verificationStatus',
           'createdAt',
           'updatedAt'
         ])
@@ -242,9 +246,17 @@ service cloud.firestore {
         && request.resource.data.active == true
         && request.resource.data.status in (
           role == 'profesor'
-            ? ['pendiente_revision']
+            ? ['pendiente_revision', 'pendiente_perfil']
             : ['activo']
         )
+        && (!request.resource.data.keys().hasAny(['perfil_completo'])
+          || request.resource.data.perfil_completo == false)
+        && (!request.resource.data.keys().hasAny(['profileComplete'])
+          || request.resource.data.profileComplete == false)
+        && (!request.resource.data.keys().hasAny(['estado_verificacion'])
+          || request.resource.data.estado_verificacion in ['pendiente', 'pendiente_perfil'])
+        && (!request.resource.data.keys().hasAny(['verificationStatus'])
+          || request.resource.data.verificationStatus in ['pendiente', 'pendiente_perfil'])
         && validClientTimestampsOnCreate();
     }
 
@@ -406,14 +418,14 @@ service cloud.firestore {
     }
 
     match /profesores/{uid} {
-      allow create: if isAdmin() || (hasRole('profesor') && validRoleProfileCreate(uid, 'profesor'));
+      allow create: if isAdmin() || validRoleProfileCreate(uid, 'profesor');
       allow read: if isAdmin() || isOwner(uid);
       allow update: if isAdmin() || (isOwner(uid) && validRoleProfileSelfUpdate());
       allow delete: if isAdmin();
     }
 
     match /familias/{uid} {
-      allow create: if isAdmin() || (hasRole('familia') && validRoleProfileCreate(uid, 'familia'));
+      allow create: if isAdmin() || validRoleProfileCreate(uid, 'familia');
       allow read: if isAdmin() || isOwner(uid);
       allow update: if isAdmin() || (isOwner(uid) && validRoleProfileSelfUpdate());
       allow delete: if isAdmin();

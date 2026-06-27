@@ -9,6 +9,7 @@ export {
   getSession,
   getUsuarioActual,
   login,
+  loginWithGoogle,
   logout,
   onAuthChange,
   redirectByRole,

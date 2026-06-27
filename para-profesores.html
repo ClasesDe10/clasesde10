@@ -140,6 +140,29 @@
   box-shadow: 0 8px 40px rgba(0,0,0,0.2);
 }
 .cf-title { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--navy); font-weight: 700; margin-bottom: 28px; }
+.teacher-entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.teacher-entry-actions a {
+  min-height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: .9rem;
+}
+.teacher-entry-actions .primary { background: var(--teal); color: var(--white); }
+.teacher-entry-actions .secondary { background: var(--gray-soft); color: var(--navy); }
+.cf-subtitle { font-size: .86rem; color: var(--gray-mid); line-height: 1.6; margin: -12px 0 18px; }
+.cf-field:has(#prof-canal),
+.cf-field:has(#prof-niveles),
+.cf-field:has(#prof-anios),
+.cf-field:has(#prof-tarifa),
+.cf-field:has(#prof-experiencia),
+.cf-field:has(#prof-disponibilidad),
+.cf-field:has(#prof-verificacion) {
+  display: none;
+}
 .cf-form { display: flex; flex-direction: column; gap: 16px; }
 .cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .cf-field { display: flex; flex-direction: column; gap: 6px; }
@@ -172,6 +195,7 @@
 @media (max-width:680px) {
   .cf-row { grid-template-columns: 1fr; }
   .contact-form-card { padding: 32px 22px; }
+  .teacher-entry-actions { grid-template-columns: 1fr; }
 }
 </style>
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para profesores","item":"https://clasesde10.com/para-profesores.html"}]},{"@type":"WebPage","name":"Para profesores — ClasesDe10","description":"Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.","url":"https://clasesde10.com/para-profesores.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
@@ -318,7 +342,7 @@
     <div style="text-align:center"><div class="ps-num">0%</div><div class="ps-label">Comisión por clase</div></div>
     <div style="text-align:center"><div class="ps-num">48h</div><div class="ps-label">Primera propuesta</div></div>
   </div>
-  <a href="#formulario" class="btn-primary">🎓 Quiero unirme ahora</a>
+  <a href="pages/registro.html?rol=profesor" class="btn-primary">Crear cuenta gratis</a>
 </div>
 
 <!-- FORMULARIO -->
@@ -344,7 +368,12 @@
       </div>
 
       <div class="contact-form-card reveal">
-        <div class="cf-title">🎓 Unirme como profesor/a</div>
+        <div class="cf-title">Empieza como profesor/a</div>
+        <div class="teacher-entry-actions">
+          <a class="primary" href="pages/registro.html?rol=profesor">Crear cuenta</a>
+          <a class="secondary" href="pages/login.html">Iniciar sesion</a>
+        </div>
+        <p class="cf-subtitle">La ficha completa se rellena dentro del panel. Si prefieres que te contactemos primero, deja solo estos datos basicos.</p>
         <form class="cf-form" id="form-profesor" method="post">
           <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
             <label for="prof-website">Website</label>
@@ -424,7 +453,7 @@
           </div>
           <div class="cf-field">
             <label for="prof-experiencia">Formación y experiencia</label>
-            <textarea id="prof-experiencia" name="experiencia" maxlength="3000" placeholder="Cuéntanos tu titulación, años de experiencia y cualquier detalle relevante..." required></textarea>
+            <textarea id="prof-experiencia" name="experiencia" maxlength="3000" placeholder="Cuéntanos tu titulación, años de experiencia y cualquier detalle relevante..."></textarea>
           </div>
           <div class="cf-field">
             <label for="prof-disponibilidad">Disponibilidad horaria</label>
@@ -443,8 +472,8 @@
             <input id="prof-privacidad" name="privacidad" type="checkbox" required>
             <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para valorar mi perfil y contactarme.</span>
           </label>
-          <button class="cf-submit" id="submitBtn" type="submit">Enviar mi perfil →</button>
-          <p class="cf-note">🔐 Datos confidenciales · Solo usados para conectarte con alumnos</p>
+          <button class="cf-submit" id="submitBtn" type="submit">Dejar mis datos</button>
+          <p class="cf-note">Datos confidenciales. La ficha completa se rellena dentro de tu cuenta.</p>
         </form>
       </div>
     </div>
@@ -511,7 +540,7 @@ document.getElementById('form-profesor').addEventListener('submit', async functi
   const disponibilidad = document.getElementById('prof-disponibilidad').value.trim();
   const verificacion  = document.getElementById('prof-verificacion').value.trim();
   const website_url = document.getElementById('prof-website').value.trim();
-  const defaultText = 'Enviar mi perfil →';
+  const defaultText = 'Dejar mis datos';
   const { submitLead, setButtonState } = await import('./js/public-leads.js');
   const detalles = [
     experiencia,
@@ -541,7 +570,7 @@ document.getElementById('form-profesor').addEventListener('submit', async functi
   }
 
   if (data?.spam) {
-    setButtonState(button, 'success', 'Perfil enviado. Gracias.');
+    setButtonState(button, 'success', 'Datos enviados. Gracias.');
     this.reset();
     return;
   }
@@ -551,7 +580,7 @@ document.getElementById('form-profesor').addEventListener('submit', async functi
     trackContacto('alta_profesor_publica');
   } catch (_) {}
 
-  setButtonState(button, 'success', '✅ Perfil enviado — ¡te contactamos pronto!');
+  setButtonState(button, 'success', 'Datos enviados. Te contactamos pronto.');
   this.reset();
 });
 </script>

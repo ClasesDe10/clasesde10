@@ -43,6 +43,35 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 .auth-footer { text-align:center; margin-top:20px; font-size:.82rem; color:var(--gray-mid); }
 .auth-footer a { color:var(--navy); font-weight:600; text-decoration:none; }
 .auth-footer a:hover { color:var(--gold); }
+.google-auth-btn {
+  width: 100%;
+  min-height: 46px;
+  border: 1.5px solid rgba(15,31,61,.16);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text-dark);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: border-color .18s, background .18s, transform .15s;
+  margin: 0 0 16px;
+}
+.google-auth-btn:hover { border-color: var(--navy); background: rgba(15,31,61,.025); transform: translateY(-1px); }
+.google-auth-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  color: #4285f4;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.08);
+}
 .forgot-link { text-align:right; margin-top:-10px; margin-bottom:14px; }
 .forgot-link a { font-size:.78rem; color:var(--gray-mid); text-decoration:none; }
 .forgot-link a:hover { color:var(--navy); }
@@ -123,6 +152,9 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     min-height: 42px;
     white-space: normal;
   }
+  .google-auth-btn {
+    min-height: 44px;
+  }
   .forgot-link {
     text-align: left;
     margin-top: 6px;
@@ -145,6 +177,11 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     <button type="button" role="tab" class="tab-btn active" id="tab-login" aria-controls="form-login" aria-selected="true">Iniciar sesión</button>
     <button type="button" role="tab" class="tab-btn" id="tab-forgot" aria-controls="form-forgot" aria-selected="false">Recuperar acceso</button>
   </div>
+
+  <button type="button" class="google-auth-btn" id="btn-google-login">
+    <span class="google-auth-mark">G</span>
+    <span id="btn-google-login-text">Continuar con Google</span>
+  </button>
 
   <!-- FORMULARIO LOGIN -->
   <form id="form-login" method="post" role="tabpanel" aria-labelledby="tab-login" novalidate>
@@ -192,7 +229,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 </div>
 
 <script type="module">
-import { login, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260627-domain-auth';
+import { login, loginWithGoogle, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260627-domain-auth';
 import { showToast } from '../js/utils.js';
 import { trackLogin } from '../js/analytics.js';
 
@@ -258,6 +295,27 @@ formLogin.addEventListener('submit', async (e) => {
     btnText.style.display = '';
     btnLoad.style.display = 'none';
     btn.disabled = false;
+    return;
+  }
+
+  trackLogin(usuario.rol);
+  redirectByRole(usuario.rol);
+});
+
+document.getElementById('btn-google-login').addEventListener('click', async () => {
+  hideError();
+  const btn = document.getElementById('btn-google-login');
+  const text = document.getElementById('btn-google-login-text');
+  const defaultText = text.textContent;
+  btn.disabled = true;
+  text.textContent = 'Abriendo Google...';
+
+  const { error, usuario } = await loginWithGoogle();
+
+  if (error) {
+    showError(error.message);
+    btn.disabled = false;
+    text.textContent = defaultText;
     return;
   }
 
