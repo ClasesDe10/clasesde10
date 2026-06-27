@@ -70,6 +70,64 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   white-space: nowrap;
   border: 0;
 }
+@media (max-width: 520px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  body {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: max(20px, env(safe-area-inset-top)) 12px 20px;
+  }
+  .auth-card {
+    min-width: 0;
+    width: 100%;
+    max-width: 360px;
+    padding: 28px 20px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .auth-logo {
+    margin-bottom: 24px;
+  }
+  .auth-logo img {
+    width: 52px;
+    height: 52px;
+  }
+  .auth-logo-name {
+    font-size: 1.35rem;
+  }
+  .auth-subtitle {
+    font-size: .82rem;
+  }
+  .tab-btns {
+    grid-template-columns: 1fr;
+    display: grid;
+    gap: 8px;
+  }
+  .tab-btn {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: .8rem;
+  }
+  .form-control {
+    max-width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .btn {
+    max-width: 100%;
+    min-height: 42px;
+    white-space: normal;
+  }
+  .forgot-link {
+    text-align: left;
+    margin-top: 6px;
+  }
+}
 </style>
 </head>
 <body>

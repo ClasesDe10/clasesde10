@@ -78,6 +78,54 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   white-space: nowrap;
   border: 0;
 }
+@media (max-width: 560px) {
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  body {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: max(20px, env(safe-area-inset-top)) 12px 20px;
+  }
+  .auth-card {
+    min-width: 0;
+    width: 100%;
+    max-width: 360px;
+    padding: 28px 20px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .auth-logo {
+    margin-bottom: 22px;
+  }
+  .auth-logo img {
+    width: 52px;
+    height: 52px;
+  }
+  .auth-logo-name {
+    font-size: 1.3rem;
+  }
+  .rol-selector {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .rol-card {
+    padding: 12px;
+  }
+  .form-control {
+    max-width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .btn {
+    max-width: 100%;
+    min-height: 42px;
+    white-space: normal;
+  }
+}
 </style>
 </head>
 <body>
