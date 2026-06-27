@@ -1311,4 +1311,53 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     padding-left: 10px;
     padding-right: 10px;
   }
+  .calendar-header {
+    padding: 10px 9px;
+    gap: 8px;
+  }
+  .calendar-title {
+    min-width: 0;
+    font-size: .95rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .calendar-nav {
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  .calendar-nav button {
+    width: 30px;
+    height: 30px;
+  }
+  .calendar-grid {
+    padding: 10px 8px;
+  }
+  .calendar-days-header,
+  .calendar-days {
+    gap: 2px;
+  }
+  .calendar-day-name {
+    font-size: .58rem;
+    letter-spacing: 0;
+    padding: 4px 0;
+  }
+  .calendar-day {
+    min-height: 34px;
+    border-radius: 7px;
+    padding: 3px 1px;
+  }
+  .day-num {
+    font-size: .74rem;
+    margin-bottom: 1px;
+  }
+  .day-dot {
+    width: 4px;
+    height: 4px;
+  }
+  .calendar-legend {
+    padding: 0 8px 10px !important;
+    gap: 6px !important;
+    flex-wrap: wrap;
+  }
 }

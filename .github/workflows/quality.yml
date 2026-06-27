@@ -48,6 +48,11 @@ jobs:
           node --check scripts/check-centralization.mjs
           node --check scripts/hosting-audit.mjs
           node --check scripts/supabase-runtime-audit.mjs
+          node --check scripts/mobile-responsive-audit.playwright.js
+          node --check scripts/mobile-responsive-summary.playwright.js
+          node --check scripts/mobile-admin-login.playwright.js
+          node --check scripts/mobile-calendar-screenshot.playwright.js
+          node --check scripts/mobile-admin-modal-audit.playwright.js
 
       - name: Adapter tests
         run: npm run test:adapters
