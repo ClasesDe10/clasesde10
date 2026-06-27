@@ -184,6 +184,17 @@ export async function register({
   rol,
   alumno_invitacion_token,
   alumnoInvitacionToken,
+  foto_url,
+  direccion,
+  ciudad,
+  codigo_postal,
+  zona,
+  materias,
+  niveles_educativos,
+  experiencia_anios,
+  tarifa_hora,
+  disponibilidad_resumen,
+  bio,
 }) {
   const emailClean = normalizeEmail(email);
   const nombreClean = normalizeText(nombre);
@@ -191,6 +202,21 @@ export async function register({
   const telefonoClean = normalizeText(telefono);
   const role = normalizeText(rol);
   const invitationToken = normalizeText(alumno_invitacion_token || alumnoInvitacionToken);
+  const fotoUrlClean = normalizeText(foto_url);
+  const direccionClean = normalizeText(direccion);
+  const ciudadClean = normalizeText(ciudad);
+  const codigoPostalClean = normalizeText(codigo_postal);
+  const zonaClean = normalizeText(zona);
+  const disponibilidadClean = normalizeText(disponibilidad_resumen);
+  const bioClean = normalizeText(bio);
+  const materiasList = Array.isArray(materias)
+    ? materias.map(normalizeText).filter(Boolean)
+    : normalizeText(materias).split(',').map((item) => item.trim()).filter(Boolean);
+  const nivelesList = Array.isArray(niveles_educativos)
+    ? niveles_educativos.map(normalizeText).filter(Boolean)
+    : normalizeText(niveles_educativos).split(',').map((item) => item.trim()).filter(Boolean);
+  const experienciaNum = Number(experiencia_anios || 0);
+  const tarifaNum = Number(tarifa_hora || 0);
 
   if (!emailClean || !password || !nombreClean || !apellidosClean || !role) {
     return { error: authError('Todos los campos obligatorios deben completarse.') };
@@ -202,6 +228,26 @@ export async function register({
 
   if (!['profesor', 'familia', 'alumno'].includes(role)) {
     return { error: authError('Rol no valido.') };
+  }
+
+  if (role === 'profesor') {
+    const missingTeacherProfile = [
+      !telefonoClean,
+      !fotoUrlClean,
+      !direccionClean,
+      !ciudadClean,
+      !codigoPostalClean,
+      !zonaClean,
+      !materiasList.length,
+      !nivelesList.length,
+      !Number.isFinite(experienciaNum),
+      !tarifaNum,
+      !disponibilidadClean,
+      bioClean.length < 40,
+    ].some(Boolean);
+    if (missingTeacherProfile) {
+      return { error: authError('Para registrarte como profesor debes completar foto, direccion, zona, telefono, materias, niveles, experiencia, tarifa, disponibilidad y una presentacion suficiente.') };
+    }
   }
 
   try {
@@ -266,6 +312,31 @@ export async function register({
     if (role === 'profesor') {
       await setDoc(doc(firebaseDb, 'profesores', user.uid), {
         ...profilePayload,
+        foto_url: fotoUrlClean,
+        photoUrl: fotoUrlClean,
+        direccion: direccionClean,
+        address: direccionClean,
+        ciudad: ciudadClean,
+        city: ciudadClean,
+        codigo_postal: codigoPostalClean,
+        postalCode: codigoPostalClean,
+        zona: zonaClean,
+        zone: zonaClean,
+        materias: materiasList,
+        subjects: materiasList,
+        niveles_educativos: nivelesList,
+        levels: nivelesList,
+        experiencia_anios: Number.isFinite(experienciaNum) ? experienciaNum : 0,
+        experienceYears: Number.isFinite(experienciaNum) ? experienciaNum : 0,
+        tarifa_hora: tarifaNum,
+        hourlyRate: tarifaNum,
+        disponibilidad_resumen: disponibilidadClean,
+        availabilitySummary: disponibilidadClean,
+        bio: bioClean,
+        perfil_completo: true,
+        profileComplete: true,
+        estado_verificacion: 'pendiente',
+        verificationStatus: 'pendiente',
         status: 'pendiente_revision',
       }, { merge: true });
     }

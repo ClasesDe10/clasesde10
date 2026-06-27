@@ -249,8 +249,26 @@
                   <input class="form-control" type="tel" id="p-telefono">
                 </div>
                 <div class="form-group">
+                  <label class="form-label">Foto de perfil (URL)</label>
+                  <input class="form-control" type="url" id="p-foto-url" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Calle y numero</label>
+                  <input class="form-control" type="text" id="p-direccion" placeholder="Calle, numero, piso">
+                </div>
+                <div class="form-group">
                   <label class="form-label">Ciudad</label>
                   <input class="form-control" type="text" id="p-ciudad" placeholder="Madrid">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Codigo postal</label>
+                    <input class="form-control" type="text" id="p-cp" placeholder="28000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Zona/barrio</label>
+                    <input class="form-control" type="text" id="p-zona" placeholder="Chamberi, Retiro, online...">
+                  </div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Nivel de estudios</label>
@@ -270,6 +288,20 @@
                 <div class="form-group">
                   <label class="form-label">Biografía / Presentación</label>
                   <textarea class="form-control" id="p-bio" rows="4" placeholder="Cuéntanos sobre ti, tu experiencia y metodología…"></textarea>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Anios de experiencia</label>
+                    <input class="form-control" type="number" id="p-experiencia" min="0" max="60" step="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Tarifa orientativa EUR/h</label>
+                    <input class="form-control" type="number" id="p-tarifa" min="1" max="200" step="0.5">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Disponibilidad resumida</label>
+                  <textarea class="form-control" id="p-disponibilidad" rows="3" placeholder="Lunes a jueves tardes, sabados manana, online..."></textarea>
                 </div>
                 <div class="form-group">
                   <label class="form-label">IBAN (para transferencias)</label>
@@ -761,10 +793,17 @@ async function cargarPerfil() {
   document.getElementById('p-nombre').value      = usuario.nombre || '';
   document.getElementById('p-apellidos').value   = usuario.apellidos || '';
   document.getElementById('p-telefono').value    = usuario.telefono || '';
+  document.getElementById('p-foto-url').value    = perfil.foto_url || perfil.photoUrl || '';
+  document.getElementById('p-direccion').value   = perfil.direccion || perfil.address || '';
   document.getElementById('p-ciudad').value      = perfil.ciudad || 'Madrid';
+  document.getElementById('p-cp').value          = perfil.codigo_postal || perfil.postalCode || '';
+  document.getElementById('p-zona').value        = perfil.zona || perfil.zone || '';
   document.getElementById('p-nivel').value       = perfil.nivel_estudios || '';
   document.getElementById('p-universidad').value = perfil.universidad || '';
   document.getElementById('p-bio').value         = perfil.bio || '';
+  document.getElementById('p-experiencia').value = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
+  document.getElementById('p-tarifa').value      = perfil.tarifa_hora ?? perfil.hourlyRate ?? '';
+  document.getElementById('p-disponibilidad').value = perfil.disponibilidad_resumen || perfil.availabilitySummary || '';
   document.getElementById('p-iban').value        = perfil.iban || '';
 
   renderMaterias();
@@ -837,20 +876,56 @@ document.getElementById('btn-add-materia').addEventListener('click', () => {
 
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const telefono = document.getElementById('p-telefono').value.trim();
+  const fotoUrl = document.getElementById('p-foto-url').value.trim();
+  const direccion = document.getElementById('p-direccion').value.trim();
+  const ciudad = document.getElementById('p-ciudad').value.trim();
+  const codigoPostal = document.getElementById('p-cp').value.trim();
+  const zona = document.getElementById('p-zona').value.trim();
+  const bio = document.getElementById('p-bio').value.trim();
+  const experiencia = Number(document.getElementById('p-experiencia').value || 0);
+  const tarifa = Number(document.getElementById('p-tarifa').value || 0);
+  const disponibilidad = document.getElementById('p-disponibilidad').value.trim();
+
+  if (!telefono || !fotoUrl || !direccion || !ciudad || !codigoPostal || !zona ||
+      !materiasActuales.length || !nivelesActuales.length || !tarifa || !disponibilidad || bio.length < 40) {
+    showToast('Perfil incompleto', 'Completa foto, telefono, direccion, zona, materias, niveles, tarifa, disponibilidad y presentacion antes de guardar.', 'warning');
+    return;
+  }
+
   const [{ error: e1 }, { error: e2 }] = await Promise.all([
     db.from('usuarios').update({
       nombre:    document.getElementById('p-nombre').value.trim(),
       apellidos: document.getElementById('p-apellidos').value.trim(),
-      telefono:  document.getElementById('p-telefono').value.trim(),
+      telefono,
     }).eq('id', usuario.id),
     db.from('profesores').update({
-      ciudad:            document.getElementById('p-ciudad').value.trim(),
+      foto_url:          fotoUrl,
+      photoUrl:          fotoUrl,
+      direccion,
+      address:           direccion,
+      ciudad,
+      city:              ciudad,
+      codigo_postal:     codigoPostal,
+      postalCode:        codigoPostal,
+      zona,
+      zone:              zona,
       nivel_estudios:    document.getElementById('p-nivel').value,
       universidad:       document.getElementById('p-universidad').value.trim(),
-      bio:               document.getElementById('p-bio').value.trim(),
+      bio,
+      experiencia_anios: Number.isFinite(experiencia) ? experiencia : 0,
+      experienceYears:   Number.isFinite(experiencia) ? experiencia : 0,
+      tarifa_hora:       tarifa,
+      hourlyRate:        tarifa,
+      disponibilidad_resumen: disponibilidad,
+      availabilitySummary: disponibilidad,
       iban:              document.getElementById('p-iban').value.trim(),
       materias:          materiasActuales,
+      subjects:          materiasActuales,
       niveles_educativos: nivelesActuales,
+      levels:            nivelesActuales,
+      perfil_completo:   true,
+      profileComplete:   true,
     }).eq('id', profesorId),
   ]);
   if (e1 || e2) { showToast('Error', (e1||e2).message, 'error'); return; }

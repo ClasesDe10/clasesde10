@@ -67,6 +67,20 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   accent-color:var(--navy);
 }
 .auth-check a { color:var(--navy); font-weight:700; }
+.profesor-extra {
+  display: none;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-bottom: 16px;
+  background: rgba(15,31,61,.025);
+}
+.profesor-extra.open { display: block; }
+.profesor-extra-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 10px;
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -188,8 +202,60 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
         <input class="form-control" type="tel" id="telefono" name="telefono"
                placeholder="600 000 000" autocomplete="tel" maxlength="40">
       </div>
+      <div class="profesor-extra" id="profesor-extra">
+        <div class="profesor-extra-title">Perfil obligatorio de profesor</div>
+        <div class="form-group">
+          <label class="form-label" for="prof-foto-url">Foto de perfil (URL) <span class="required">*</span></label>
+          <input class="form-control" type="url" id="prof-foto-url" placeholder="https://...">
+          <div class="form-hint">Usa una URL publica de una foto profesional. Cuando Storage este activo se podra subir archivo directamente.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="prof-direccion">Calle y numero <span class="required">*</span></label>
+          <input class="form-control" type="text" id="prof-direccion" placeholder="Calle, numero, piso" maxlength="180">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="prof-ciudad">Ciudad <span class="required">*</span></label>
+            <input class="form-control" type="text" id="prof-ciudad" value="Madrid" maxlength="80">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="prof-cp">Codigo postal <span class="required">*</span></label>
+            <input class="form-control" type="text" id="prof-cp" placeholder="28000" maxlength="12">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="prof-zona">Zona/barrio donde vive <span class="required">*</span></label>
+          <input class="form-control" type="text" id="prof-zona" placeholder="Chamberi, Retiro, online..." maxlength="120">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="prof-materias">Materias que imparte <span class="required">*</span></label>
+          <input class="form-control" type="text" id="prof-materias" placeholder="Matematicas, Fisica, Ingles">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="prof-niveles">Niveles educativos <span class="required">*</span></label>
+          <input class="form-control" type="text" id="prof-niveles" placeholder="ESO, Bachillerato, Universidad">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="prof-experiencia">Anios de experiencia <span class="required">*</span></label>
+            <input class="form-control" type="number" id="prof-experiencia" min="0" max="60" step="1" placeholder="2">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="prof-tarifa">Tarifa orientativa EUR/h <span class="required">*</span></label>
+            <input class="form-control" type="number" id="prof-tarifa" min="1" max="200" step="0.5" placeholder="18">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="prof-disponibilidad">Disponibilidad <span class="required">*</span></label>
+          <textarea class="form-control" id="prof-disponibilidad" rows="3" placeholder="Lunes a jueves tardes, sabados manana, online..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="prof-bio">Presentacion y experiencia <span class="required">*</span></label>
+          <textarea class="form-control" id="prof-bio" rows="4" placeholder="Explica tu experiencia, metodologia y tipo de alumno ideal. Minimo 40 caracteres."></textarea>
+        </div>
+      </div>
       <div class="form-group">
-        <label class="form-label" for="password">Contraseña <span class="required">*</span></label>
+        <label class="form-label" for="password">Contrasena <span class="required">*</span></label>
         <input class="form-control" type="password" id="password" name="password"
                placeholder="Mínimo 8 caracteres" autocomplete="new-password" required minlength="8" maxlength="128">
         <div class="pwd-strength"><div class="pwd-strength-bar" id="pwd-bar"></div></div>
@@ -233,10 +299,25 @@ const successBanner  = document.getElementById('success-banner');
 const formWrapper    = document.getElementById('form-wrapper');
 const cardFamilia    = document.getElementById('card-familia');
 const cardProfesor   = document.getElementById('card-profesor');
+const profesorExtra  = document.getElementById('profesor-extra');
 const pwdBar         = document.getElementById('pwd-bar');
 let rolSeleccionado  = 'familia';
 const params = new URLSearchParams(window.location.search);
 const alumnoToken = params.get('token') || '';
+const profesorRequiredIds = [
+  'telefono',
+  'prof-foto-url',
+  'prof-direccion',
+  'prof-ciudad',
+  'prof-cp',
+  'prof-zona',
+  'prof-materias',
+  'prof-niveles',
+  'prof-experiencia',
+  'prof-tarifa',
+  'prof-disponibilidad',
+  'prof-bio',
+];
 
 if (params.get('rol') === 'alumno' && alumnoToken) {
   rolSeleccionado = 'alumno';
@@ -250,15 +331,24 @@ function showError(msg) {
 }
 function hideError() { errorBanner.style.display = 'none'; }
 
+function setRol(rol) {
+  rolSeleccionado = rol;
+  cardFamilia.classList.toggle('selected', rol === 'familia');
+  cardProfesor.classList.toggle('selected', rol === 'profesor');
+  profesorExtra.classList.toggle('open', rol === 'profesor');
+  profesorRequiredIds.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.required = rol === 'profesor';
+  });
+}
+
 // Selección de rol
 [cardFamilia, cardProfesor].forEach(card => {
   card.addEventListener('click', () => {
-    cardFamilia.classList.remove('selected');
-    cardProfesor.classList.remove('selected');
-    card.classList.add('selected');
-    rolSeleccionado = card.querySelector('input').value;
+    setRol(card.querySelector('input').value);
   });
 });
+setRol(rolSeleccionado);
 
 // Indicador fortaleza contraseña
 document.getElementById('password').addEventListener('input', (e) => {
@@ -302,6 +392,23 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
     showError('Debes aceptar los términos y la política de privacidad para crear la cuenta.'); return;
   }
 
+  const profesorPayload = rolSeleccionado === 'profesor' ? {
+    foto_url: document.getElementById('prof-foto-url').value.trim(),
+    direccion: document.getElementById('prof-direccion').value.trim(),
+    ciudad: document.getElementById('prof-ciudad').value.trim(),
+    codigo_postal: document.getElementById('prof-cp').value.trim(),
+    zona: document.getElementById('prof-zona').value.trim(),
+    materias: document.getElementById('prof-materias').value.trim(),
+    niveles_educativos: document.getElementById('prof-niveles').value.trim(),
+    experiencia_anios: document.getElementById('prof-experiencia').value,
+    tarifa_hora: document.getElementById('prof-tarifa').value,
+    disponibilidad_resumen: document.getElementById('prof-disponibilidad').value.trim(),
+    bio: document.getElementById('prof-bio').value.trim(),
+  } : {};
+  if (rolSeleccionado === 'profesor' && profesorPayload.bio.length < 40) {
+    showError('La presentacion del profesor debe tener al menos 40 caracteres.'); return;
+  }
+
   const btn  = document.getElementById('btn-registro');
   const text = document.getElementById('btn-text');
   const load = document.getElementById('btn-load');
@@ -315,6 +422,7 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
     telefono,
     rol: rolSeleccionado,
     alumno_invitacion_token: alumnoToken,
+    ...profesorPayload,
   });
 
   if (error) {

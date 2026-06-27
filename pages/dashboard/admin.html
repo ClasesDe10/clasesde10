@@ -633,6 +633,7 @@
           <option value="">Seleccionar profesor verificado…</option>
         </select>
       </div>
+      <div id="asignar-profesor-detalle" style="display:none;margin-bottom:14px;background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem"></div>
       <div class="form-group">
         <label class="form-label">Notas</label>
         <textarea class="form-control" id="asignar-notas" rows="3" placeholder="Notas para el expediente…"></textarea>
@@ -641,6 +642,20 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-asignar">Cancelar</button>
       <button class="btn btn-primary" id="btn-confirmar-asignar">Confirmar asignación</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE PROFESOR -->
+<div class="modal-overlay" id="modal-profesor-detalle">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header">
+      <span class="modal-title">Perfil completo del profesor</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="profesor-detalle-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-profesor-detalle">Cerrar</button>
     </div>
   </div>
 </div>
@@ -785,6 +800,7 @@ const TITULOS = {
   solicitudes:'Solicitudes', pagos:'Pagos', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias',
 };
 let chatInicializado = false;
+let profesoresCache = new Map();
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
   profesores: { id: 'tbody-profesores', colspan: 8, countId: 'prof-count' },
@@ -1241,6 +1257,71 @@ function mostrarClasesDia(fecha, clases) {
 // ── PROFESORES ───────────────────────────────────────────────────
 const PAG_PROF = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-profesores'), onPageChange: cargarProfesores });
 
+function nombreProfesor(p) {
+  return `${p?.usuarios?.nombre || p?.nombre || ''} ${p?.usuarios?.apellidos || p?.apellidos || ''}`.trim() || p?.email || p?.usuarios?.email || p?.id || 'Profesor';
+}
+
+function listaCampo(valor) {
+  if (Array.isArray(valor)) return valor.filter(Boolean);
+  if (!valor) return [];
+  return String(valor).split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function incidenciasPerfilProfesor(p) {
+  const materias = listaCampo(p?.materias || p?.subjects);
+  const niveles = listaCampo(p?.niveles_educativos || p?.levels);
+  const issues = [];
+  if (!(p?.foto_url || p?.photoUrl)) issues.push('foto');
+  if (!(p?.usuarios?.email || p?.email)) issues.push('email');
+  if (!(p?.usuarios?.telefono || p?.telefono)) issues.push('telefono');
+  if (!(p?.direccion || p?.address)) issues.push('calle');
+  if (!(p?.ciudad || p?.city)) issues.push('ciudad');
+  if (!(p?.codigo_postal || p?.postalCode)) issues.push('codigo postal');
+  if (!(p?.zona || p?.zone)) issues.push('zona');
+  if (!materias.length) issues.push('materias');
+  if (!niveles.length) issues.push('niveles');
+  if (!Number(p?.tarifa_hora || p?.hourlyRate || 0)) issues.push('tarifa');
+  if (!(p?.disponibilidad_resumen || p?.availabilitySummary)) issues.push('disponibilidad');
+  if (!p?.bio || String(p.bio).trim().length < 40) issues.push('presentacion');
+  return issues;
+}
+
+function perfilProfesorCompleto(p) {
+  return incidenciasPerfilProfesor(p).length === 0;
+}
+
+function renderProfesorDetalle(p) {
+  if (!p) return '<div class="empty-state"><div class="empty-title">Profesor no encontrado</div></div>';
+  const issues = incidenciasPerfilProfesor(p);
+  const materias = listaCampo(p.materias || p.subjects);
+  const niveles = listaCampo(p.niveles_educativos || p.levels);
+  const foto = p.foto_url || p.photoUrl || '';
+  const fila = (label, value) => `<div><strong>${label}:</strong> ${sanitize(value || '-')}</div>`;
+  return `
+    <div style="display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:start">
+      <div style="width:112px;height:112px;border-radius:12px;background:var(--gray-soft);overflow:hidden;display:flex;align-items:center;justify-content:center">
+        ${foto ? `<img src="${sanitize(foto)}" alt="Foto profesor" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:.8rem;color:var(--gray-mid)">Sin foto</span>'}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:.9rem;line-height:1.45">
+        <h3 style="margin:0;color:var(--navy)">${sanitize(nombreProfesor(p))}</h3>
+        ${fila('Email', p.usuarios?.email || p.email)}
+        ${fila('Telefono', p.usuarios?.telefono || p.telefono)}
+        ${fila('Direccion', p.direccion || p.address)}
+        ${fila('Zona', [p.zona || p.zone, p.ciudad || p.city, p.codigo_postal || p.postalCode].filter(Boolean).join(', '))}
+        ${fila('Tarifa', Number(p.tarifa_hora || p.hourlyRate || 0) ? `${Number(p.tarifa_hora || p.hourlyRate)} EUR/h` : '')}
+        ${fila('Experiencia', Number.isFinite(Number(p.experiencia_anios ?? p.experienceYears)) ? `${Number(p.experiencia_anios ?? p.experienceYears)} anios` : '')}
+      </div>
+    </div>
+    <div style="margin-top:16px;display:grid;gap:10px;font-size:.9rem;line-height:1.5">
+      ${fila('Materias', materias.join(', '))}
+      ${fila('Niveles', niveles.join(', '))}
+      ${fila('Disponibilidad', p.disponibilidad_resumen || p.availabilitySummary)}
+      <div><strong>Presentacion:</strong><br>${sanitize(p.bio || '-')}</div>
+      ${issues.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Perfil incompleto</div>Falta: ${issues.map(sanitize).join(', ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">✓</span><div class="alert-body"><div class="alert-title">Perfil completo</div>Puede verificarse y asignarse.</div></div>'}
+    </div>
+  `;
+}
+
 async function cargarProfesores() {
   const busq   = document.getElementById('filtro-prof-busqueda').value.trim();
   const estado = document.getElementById('filtro-prof-estado').value;
@@ -1267,6 +1348,7 @@ async function cargarProfesores() {
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>'; return; }
 
   const filtrado = data;
+  profesoresCache = new Map(filtrado.map((p) => [p.id, p]));
 
   tbody.innerHTML = filtrado.map(p => `<tr>
     <td>
@@ -1282,9 +1364,15 @@ async function cargarProfesores() {
     <td>${sanitize(p.usuarios?.telefono||'—')}</td>
     <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'—'}</td>
     <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
-    <td>${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}</td>
+    <td>
+      ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
+      <div style="margin-top:4px;font-size:.72rem;color:${perfilProfesorCompleto(p) ? 'var(--success)' : 'var(--warning)'}">
+        ${perfilProfesorCompleto(p) ? 'Perfil completo' : `Falta: ${incidenciasPerfilProfesor(p).slice(0, 3).map(sanitize).join(', ')}`}
+      </div>
+    </td>
     <td>—</td>
     <td>
+      <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver perfil</button>
       <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">✓ Verificar</button>
       <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">✕</button>
     </td>
@@ -1292,13 +1380,34 @@ async function cargarProfesores() {
 }
 
 document.getElementById('tbody-profesores')?.addEventListener('click', (e) => {
+  const verBtn = e.target.closest('[data-action="ver-profesor"]');
+  if (verBtn) {
+    window.verProfesor(verBtn.dataset.id);
+    return;
+  }
   const btn = e.target.closest('[data-action="cambiar-verificacion"]');
   if (!btn) return;
   window.cambiarVerificacion(btn.dataset.id, btn.dataset.estado);
 });
 
+window.verProfesor = (id) => {
+  const profesor = profesoresCache.get(id);
+  document.getElementById('profesor-detalle-body').innerHTML = renderProfesorDetalle(profesor);
+  openModal('modal-profesor-detalle');
+};
+
 window.cambiarVerificacion = async (id, estado) => {
-  const { error } = await db.from('profesores').update({ estado_verificacion: estado }).eq('id', id);
+  const profesor = profesoresCache.get(id);
+  if (estado === 'verificado' && profesor && !perfilProfesorCompleto(profesor)) {
+    showToast('Perfil incompleto', `No se puede verificar. Falta: ${incidenciasPerfilProfesor(profesor).join(', ')}.`, 'warning');
+    window.verProfesor(id);
+    return;
+  }
+  const { error } = await db.from('profesores').update({
+    estado_verificacion: estado,
+    verificationStatus: estado,
+    status: estado === 'verificado' ? 'verificado' : estado,
+  }).eq('id', id);
   if (error) { showToast('Error', error.message, 'error'); return; }
   showToast('Actualizado', `Profesor ${estado}.`, 'success');
   cargarProfesores();
@@ -1541,6 +1650,51 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
   openModal('modal-asignar');
 };
 
+window.abrirAsignar = async (solicitudId, materia, familia) => {
+  document.getElementById('asignar-solicitud-id').value = solicitudId;
+  document.getElementById('asignar-solicitud-info').innerHTML =
+    `<strong>Materia:</strong> ${sanitize(materia)}<br><strong>Familia:</strong> ${sanitize(familia)}`;
+  document.getElementById('asignar-match-recomendaciones').innerHTML = 'Cargando recomendaciones...';
+  document.getElementById('asignar-profesor-detalle').style.display = 'none';
+  document.getElementById('asignar-profesor-detalle').innerHTML = '';
+
+  const [{ data: solicitud }, { data: profs }, { data: matches, error: matchError }] = await Promise.all([
+    db.from('solicitudes')
+      .select('*, familias(usuarios(nombre,apellidos)), alumnos(nombre,apellidos)')
+      .eq('id', solicitudId)
+      .single(),
+    db.from('profesores')
+      .select('*, usuarios(nombre,apellidos,email,telefono)'),
+    db.from('solicitudMatches')
+      .select('*')
+      .eq('solicitud_id', solicitudId)
+      .order('score', { ascending: false })
+      .limit(5),
+  ]);
+
+  window.solicitudAsignacionActual = solicitud || null;
+  if (solicitud) {
+    document.getElementById('asignar-solicitud-info').innerHTML = `
+      <strong>Materia:</strong> ${sanitize(solicitud.materia || materia)}<br>
+      <strong>Familia:</strong> ${sanitize(solicitud.familias?.usuarios?.nombre || familia || '-')}<br>
+      <strong>Alumno:</strong> ${sanitize([solicitud.alumnos?.nombre, solicitud.alumnos?.apellidos].filter(Boolean).join(' ') || solicitud.alumno_nombre || '-')}<br>
+      <strong>Nivel:</strong> ${sanitize(solicitud.nivel || '-')}<br>
+      <strong>Horario:</strong> ${sanitize(solicitud.preferencia_horario || '-')}
+    `;
+  }
+
+  const profesoresVerificados = (profs || []).filter((p) => (p.estado_verificacion || p.verificationStatus || p.status) === 'verificado');
+  profesoresVerificados.forEach((p) => profesoresCache.set(p.id, p));
+  document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
+    profesoresVerificados.map((p) => {
+      const completo = perfilProfesorCompleto(p);
+      const nombre = nombreProfesor(p);
+      return `<option value="${sanitize(p.id)}" ${completo ? '' : 'disabled'}>${sanitize(nombre)}${completo ? '' : ' (perfil incompleto)'}</option>`;
+    }).join('');
+  renderAsignarMatches(matches || [], matchError);
+  openModal('modal-asignar');
+};
+
 function renderAsignarMatches(matches, error) {
   const box = document.getElementById('asignar-match-recomendaciones');
   if (!box) return;
@@ -1584,21 +1738,88 @@ document.getElementById('modal-asignar')?.addEventListener('click', (e) => {
   if (!btn) return;
   document.getElementById('asignar-profesor').value = btn.dataset.profesorId || '';
   document.getElementById('asignar-notas').value = btn.dataset.matchNotas || '';
+  renderProfesorAsignacionSeleccionado(btn.dataset.profesorId || '');
 });
+
+document.getElementById('asignar-profesor')?.addEventListener('change', (e) => {
+  renderProfesorAsignacionSeleccionado(e.target.value);
+});
+
+function renderProfesorAsignacionSeleccionado(profesorId) {
+  const box = document.getElementById('asignar-profesor-detalle');
+  const profesor = profesoresCache.get(profesorId);
+  if (!box || !profesor) {
+    if (box) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+    }
+    return;
+  }
+  box.style.display = '';
+  box.innerHTML = renderProfesorDetalle(profesor);
+}
 
 document.getElementById('btn-confirmar-asignar').addEventListener('click', async () => {
   const id     = document.getElementById('asignar-solicitud-id').value;
   const profId = document.getElementById('asignar-profesor').value;
   if (!profId) { showToast('Atención', 'Selecciona un profesor.', 'warning'); return; }
+  const profesor = profesoresCache.get(profId);
+  if (profesor && !perfilProfesorCompleto(profesor)) {
+    showToast('Perfil incompleto', 'No se puede asignar un profesor con perfil incompleto.', 'warning');
+    renderProfesorAsignacionSeleccionado(profId);
+    return;
+  }
+
+  let solicitud = window.solicitudAsignacionActual;
+  if (!solicitud || solicitud.id !== id) {
+    const { data } = await db.from('solicitudes').select('*').eq('id', id).single();
+    solicitud = data;
+  }
+  const alumnoId = solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid;
+  const familiaId = solicitud?.familia_id || solicitud?.familyUid;
+  if (!alumnoId) {
+    showToast('Solicitud incompleta', 'La solicitud no tiene alumno asociado. Edita o crea el alumno antes de asignar profesor.', 'warning');
+    return;
+  }
+
+  const notas = document.getElementById('asignar-notas').value.trim();
+  const now = new Date().toISOString();
   const { error } = await db.from('solicitudes').update({
     estado: 'asignada',
+    status: 'asignada',
     profesor_asignado_id: profId,
-    fecha_asignacion: new Date().toISOString(),
-    notas_admin: document.getElementById('asignar-notas').value.trim(),
+    assignedTeacherUid: profId,
+    fecha_asignacion: now,
+    notas_admin: notas,
   }).eq('id', id);
   if (error) { showToast('Error', error.message, 'error'); return; }
+
+  const asignacionId = `${id}_${profId}`;
+  const { error: asignacionError } = await db.from('asignaciones').insert({
+    id: asignacionId,
+    solicitud_id: id,
+    requestId: id,
+    profesor_id: profId,
+    teacherUid: profId,
+    alumno_id: alumnoId,
+    studentId: alumnoId,
+    familia_id: familiaId || null,
+    familyUid: familiaId || null,
+    materia: solicitud?.materia || solicitud?.subject || '',
+    subject: solicitud?.materia || solicitud?.subject || '',
+    nivel: solicitud?.nivel || '',
+    activa: true,
+    active: true,
+    estado: 'activa',
+    status: 'activa',
+    notas_admin: notas,
+    assignedAt: now,
+    fecha_asignacion: now,
+  });
+  if (asignacionError) { showToast('Error', asignacionError.message, 'error'); return; }
+
   closeModal('modal-asignar');
-  showToast('Asignado', 'Profesor asignado correctamente.', 'success');
+  showToast('Asignado', 'Profesor asignado y relacion activa creada correctamente.', 'success');
   cargarSolicitudes();
 });
 
