@@ -178,15 +178,15 @@
       <section id="section-clases" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <input type="text" class="form-control" id="filtro-clases-busqueda" placeholder="Buscar por alumno o profesor…" style="width:240px">
-            <select class="form-control" id="filtro-clases-estado" style="width:160px">
+            <input type="text" class="form-control" id="filtro-clases-busqueda" aria-label="Buscar clases por alumno o profesor" placeholder="Buscar por alumno o profesor…" style="width:240px">
+            <select class="form-control" id="filtro-clases-estado" aria-label="Filtrar clases por estado" style="width:160px">
               <option value="">Todos los estados</option>
               <option value="programada">Programada</option>
               <option value="realizada">Realizada</option>
               <option value="cancelada">Cancelada</option>
               <option value="reprogramada">Reprogramada</option>
             </select>
-            <input type="month" class="form-control" id="filtro-clases-mes" style="width:160px">
+            <input type="month" class="form-control" id="filtro-clases-mes" aria-label="Filtrar clases por mes" style="width:160px">
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-outline btn-sm" id="btn-export-clases">↓ Exportar CSV</button>
@@ -241,8 +241,8 @@
       <section id="section-profesores" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <input type="text" class="form-control" id="filtro-prof-busqueda" placeholder="Buscar profesor…" style="width:240px">
-            <select class="form-control" id="filtro-prof-estado" style="width:180px">
+            <input type="text" class="form-control" id="filtro-prof-busqueda" aria-label="Buscar profesor" placeholder="Buscar profesor…" style="width:240px">
+            <select class="form-control" id="filtro-prof-estado" aria-label="Filtrar profesores por estado" style="width:180px">
               <option value="">Todos los estados</option>
               <option value="pendiente">Pendiente verificación</option>
               <option value="verificado">Verificado</option>
@@ -280,7 +280,7 @@
       <!-- ══ SECCIÓN: FAMILIAS ══ -->
       <section id="section-familias" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-          <input type="text" class="form-control" id="filtro-fam-busqueda" placeholder="Buscar familia…" style="width:260px">
+          <input type="text" class="form-control" id="filtro-fam-busqueda" aria-label="Buscar familia" placeholder="Buscar familia…" style="width:260px">
           <button class="btn btn-outline btn-sm" id="btn-export-familias">↓ Exportar CSV</button>
         </div>
         <div class="card">
@@ -311,7 +311,7 @@
       <!-- ══ SECCIÓN: ALUMNOS ══ -->
       <section id="section-alumnos" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-          <input type="text" class="form-control" id="filtro-alum-busqueda" placeholder="Buscar alumno…" style="width:260px">
+          <input type="text" class="form-control" id="filtro-alum-busqueda" aria-label="Buscar alumno" placeholder="Buscar alumno…" style="width:260px">
           <button class="btn btn-outline btn-sm" id="btn-export-alumnos">↓ Exportar CSV</button>
         </div>
         <div class="card">
@@ -342,8 +342,8 @@
       <section id="section-solicitudes" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <input type="text" class="form-control" id="filtro-sol-busqueda" placeholder="Buscar…" style="width:220px">
-            <select class="form-control" id="filtro-sol-estado" style="width:150px">
+            <input type="text" class="form-control" id="filtro-sol-busqueda" aria-label="Buscar solicitudes" placeholder="Buscar…" style="width:220px">
+            <select class="form-control" id="filtro-sol-estado" aria-label="Filtrar solicitudes por estado" style="width:150px">
               <option value="">Todos</option>
               <option value="nueva">Nuevas</option>
               <option value="asignada">Asignadas</option>
@@ -382,8 +382,8 @@
       <section id="section-pagos" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <input type="text" class="form-control" id="filtro-pago-busqueda" placeholder="Buscar…" style="width:220px">
-            <select class="form-control" id="filtro-pago-estado" style="width:150px">
+            <input type="text" class="form-control" id="filtro-pago-busqueda" aria-label="Buscar pagos" placeholder="Buscar…" style="width:220px">
+            <select class="form-control" id="filtro-pago-estado" aria-label="Filtrar pagos por estado" style="width:150px">
               <option value="">Todos</option>
               <option value="pendiente">Pendientes</option>
               <option value="validado">Validados</option>
@@ -431,13 +431,13 @@
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <select class="form-control" id="filtro-lead-tipo" style="width:160px">
+            <select class="form-control" id="filtro-lead-tipo" aria-label="Filtrar leads por tipo" style="width:160px">
               <option value="">Todos</option>
               <option value="contacto">Contacto</option>
               <option value="familia">Familias</option>
               <option value="profesor">Profesores</option>
             </select>
-            <select class="form-control" id="filtro-lead-estado" style="width:160px">
+            <select class="form-control" id="filtro-lead-estado" aria-label="Filtrar leads por estado" style="width:160px">
               <option value="">Todos</option>
               <option value="nuevo">Nuevos</option>
               <option value="contactado">Contactados</option>
@@ -498,13 +498,13 @@
       <section id="section-incidencias" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <select class="form-control" id="filtro-inc-estado" style="width:160px">
+            <select class="form-control" id="filtro-inc-estado" aria-label="Filtrar incidencias por estado" style="width:160px">
               <option value="">Todos</option>
               <option value="abierta">Abiertas</option>
               <option value="en_proceso">En proceso</option>
               <option value="resuelta">Resueltas</option>
             </select>
-            <select class="form-control" id="filtro-inc-prioridad" style="width:150px">
+            <select class="form-control" id="filtro-inc-prioridad" aria-label="Filtrar incidencias por prioridad" style="width:150px">
               <option value="">Todas prioridades</option>
               <option value="urgente">Urgente</option>
               <option value="alta">Alta</option>

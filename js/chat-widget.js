@@ -183,7 +183,7 @@ function renderShell(container) {
         </div>
         <div class="chat-messages" data-chat-messages></div>
         <form class="chat-compose" data-chat-form style="display:none">
-          <textarea class="form-control" data-chat-input rows="2" maxlength="2000" placeholder="Escribe un mensaje..."></textarea>
+          <textarea class="form-control" data-chat-input rows="2" maxlength="2000" aria-label="Escribe un mensaje" placeholder="Escribe un mensaje..."></textarea>
           <button class="btn btn-primary" type="submit">Enviar</button>
         </form>
       </section>

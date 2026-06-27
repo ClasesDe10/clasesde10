@@ -9,10 +9,11 @@
   --navy-light:  #1a3260;
   --gold:        #e8a030;
   --gold-light:  #f5c060;
+  --gold-text:   #8a5a00;
   --cream:       #faf8f3;
   --white:       #ffffff;
   --gray-soft:   #f0ede6;
-  --gray-mid:    #8a8478;
+  --gray-mid:    #6f695f;
   --text-dark:   #1a1612;
   --text-body:   #3d3830;
   --teal:        #1d7a6b;
@@ -167,7 +168,7 @@ nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
 .section-inner { max-width: 1100px; margin: 0 auto; padding: 0 5vw; }
 .section-label {
   font-size: .73rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--gold); margin-bottom: 10px; display: block;
+  color: var(--gold-text); margin-bottom: 10px; display: block;
 }
 .section-title {
   font-family: 'Playfair Display', serif;
