@@ -472,18 +472,20 @@ const storage = {
     return {
       async upload(path, file, options = {}) {
         try {
-          const fileRef = ref(firebaseStorage, `${bucket}/${path}`);
+          const objectPath = [bucket, path].filter(Boolean).join('/');
+          const fileRef = ref(firebaseStorage, objectPath);
           const upload = await uploadBytes(fileRef, file, {
             contentType: options.contentType || file?.type || undefined,
           });
-          return { data: { path, fullPath: upload.ref.fullPath }, error: null };
+          return { data: { path: objectPath, fullPath: upload.ref.fullPath }, error: null };
         } catch (error) {
           return { data: null, error };
         }
       },
       async createSignedUrl(path) {
         try {
-          const url = await getDownloadURL(ref(firebaseStorage, `${bucket}/${path}`));
+          const objectPath = [bucket, path].filter(Boolean).join('/');
+          const url = await getDownloadURL(ref(firebaseStorage, objectPath));
           return { data: { signedUrl: url, url }, error: null };
         } catch (error) {
           return { data: null, error };

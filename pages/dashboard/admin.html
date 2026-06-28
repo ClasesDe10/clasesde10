@@ -296,8 +296,8 @@
                   <th>Email</th>
                   <th>Teléfono</th>
                   <th>Ciudad</th>
-                  <th>Alumnos</th>
-                  <th>Clases mes</th>
+                  <th>Perfil</th>
+                  <th>Confianza</th>
                   <th>Alta</th>
                   <th>Acciones</th>
                 </tr>
@@ -1915,6 +1915,9 @@ function renderProfesorDetalle(p) {
   const issues = incidenciasPerfilProfesor(p);
   const materias = listaCampo(p.materias || p.subjects);
   const niveles = listaCampo(p.niveles_educativos || p.levels);
+  const especialidades = listaCampo(p.especialidades || p.specialties);
+  const idiomas = listaCampo(p.idiomas || p.languages);
+  const certificaciones = listaCampo(p.certificaciones || p.certifications);
   const foto = p.foto_url || p.photoUrl || '';
   const fila = (label, value) => `<div><strong>${label}:</strong> ${sanitize(value || '-')}</div>`;
   return `
@@ -1933,8 +1936,13 @@ function renderProfesorDetalle(p) {
     </div>
     <div style="margin-top:16px;display:grid;gap:10px;font-size:.9rem;line-height:1.5">
       ${renderProfesorAiPanel(p)}
+      ${fila('Perfil completado', p.profileCompletionPercent !== undefined ? `${p.profileCompletionPercent}%` : '')}
+      ${fila('Confianza', p.trustScore !== undefined ? `${p.trustScore}/100 (${p.trustLevel || 'sin nivel'})` : '')}
       ${fila('Materias', materias.join(', '))}
       ${fila('Niveles', niveles.join(', '))}
+      ${fila('Especialidades', especialidades.join(', '))}
+      ${fila('Idiomas', idiomas.join(', '))}
+      ${fila('Certificaciones', certificaciones.join(', '))}
       ${fila('Formacion', p.estudio_exacto || p.exactStudy || p.nivel_estudios || p.studyLevel)}
       ${fila('Centro', p.centro_estudios || p.studyCenter || p.colegio_estudios || p.universidad)}
       ${fila('Nota Bachillerato', p.nota_bachillerato ?? p.bachilleratoGrade ?? '')}
@@ -2134,9 +2142,9 @@ async function cargarFamilias() {
     <td><div style="font-weight:600">${sanitize(f.usuarios?.nombre)} ${sanitize(f.usuarios?.apellidos)}</div></td>
     <td>${sanitize(f.usuarios?.email||'')}</td>
     <td>${sanitize(f.usuarios?.telefono||'—')}</td>
-    <td>${sanitize(f.ciudad||'Madrid')}</td>
-    <td>—</td>
-    <td>—</td>
+    <td>${sanitize([f.zona || f.zone, f.ciudad || f.city || 'Madrid', f.codigo_postal || f.postalCode].filter(Boolean).join(', '))}</td>
+    <td>${f.profileCompletionPercent !== undefined ? `${sanitize(f.profileCompletionPercent)}%` : '—'}</td>
+    <td>${f.trustScore !== undefined ? `${sanitize(f.trustScore)}/100` : '—'}</td>
     <td style="font-size:.78rem;color:var(--gray-mid)">${formatFechaCorta(f.created_at)}</td>
     <td><button class="btn btn-ghost btn-sm btn-icon" title="Ver detalle">👁</button></td>
   </tr>`).join('');
@@ -2155,6 +2163,10 @@ document.getElementById('btn-export-familias').addEventListener('click', async (
       telefono:       f.usuarios?.telefono || '',
       ciudad:         f.ciudad || '',
       codigo_postal:  f.codigo_postal || '',
+      zona:           f.zona || f.zone || '',
+      contacto_preferido: f.contacto_preferido || f.preferredContact || '',
+      perfil:         f.profileCompletionPercent ?? '',
+      confianza:      f.trustScore ?? '',
       como_nos_conocio: f.como_nos_conocio || '',
       alta:           f.created_at ? f.created_at.split('T')[0] : '',
     })),
@@ -2166,6 +2178,10 @@ document.getElementById('btn-export-familias').addEventListener('click', async (
       {titulo:'Teléfono',     campo:'telefono'},
       {titulo:'Ciudad',       campo:'ciudad'},
       {titulo:'Código postal',campo:'codigo_postal'},
+      {titulo:'Zona',         campo:'zona'},
+      {titulo:'Canal preferido', campo:'contacto_preferido'},
+      {titulo:'Perfil %',     campo:'perfil'},
+      {titulo:'Confianza',    campo:'confianza'},
       {titulo:'Cómo nos conoció', campo:'como_nos_conocio'},
       {titulo:'Fecha alta',   campo:'alta'},
     ]

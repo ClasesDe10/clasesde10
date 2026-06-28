@@ -231,40 +231,113 @@
       </section>
 
       <section id="section-perfil" class="dash-section" style="display:none">
-        <div class="card" style="max-width:560px">
-          <div class="card-header"><span class="card-title">Mis datos</span></div>
-          <div class="card-body">
-    <form id="form-perfil" method="post" novalidate>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Nombre</label>
-                  <input class="form-control" type="text" id="p-nombre">
+        <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:20px">
+          <div class="card" style="grid-column:1/-1">
+            <div class="card-header"><span class="card-title">Calidad del perfil familiar</span></div>
+            <div class="card-body" id="familia-calidad-panel">
+              <div style="color:var(--gray-mid);font-size:.875rem">Calculando estado del perfil...</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">Mis datos</span></div>
+            <div class="card-body">
+      <form id="form-perfil" method="post" novalidate>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Nombre</label>
+                    <input class="form-control" type="text" id="p-nombre">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Apellidos</label>
+                    <input class="form-control" type="text" id="p-apellidos">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Teléfono / WhatsApp</label>
+                    <input class="form-control" type="tel" id="p-telefono" placeholder="+34 600 000 000">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Canal preferido</label>
+                    <select class="form-control" id="p-contacto-preferido">
+                      <option value="">Seleccionar...</option>
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="telefono">Telefono</option>
+                      <option value="email">Email</option>
+                      <option value="chat">Chat de la plataforma</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Apellidos</label>
-                  <input class="form-control" type="text" id="p-apellidos">
+                  <label class="form-label">Dirección</label>
+                  <input class="form-control" type="text" id="p-direccion" placeholder="Calle, numero, piso">
                 </div>
-              </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Ciudad</label>
+                    <input class="form-control" type="text" id="p-ciudad" placeholder="Madrid">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Código postal</label>
+                    <input class="form-control" type="text" id="p-cp" placeholder="28000">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Zona/barrio principal</label>
+                  <input class="form-control" type="text" id="p-zona" placeholder="Chamberi, Retiro, online...">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Contacto alternativo</label>
+                    <input class="form-control" type="text" id="p-emergencia-nombre" placeholder="Nombre del otro tutor o contacto">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Teléfono alternativo</label>
+                    <input class="form-control" type="tel" id="p-emergencia-telefono" placeholder="+34 600 000 000">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Idiomas de comunicación</label>
+                  <input class="form-control" type="text" id="p-idiomas" placeholder="Español, ingles...">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Preferencias educativas y observaciones</label>
+                  <textarea class="form-control" id="p-notas" rows="4" placeholder="Ej: preferimos presencial, necesita refuerzo de habitos, disponibilidad de tardes, experiencia previa..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Guardar cambios</button>
+              </form>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><span class="card-title">Verificación del tutor</span></div>
+            <div class="card-body">
               <div class="form-group">
-                <label class="form-label">Teléfono</label>
-                <input class="form-control" type="tel" id="p-telefono">
+                <label class="form-label">Tipo de documento</label>
+                <select class="form-control" id="fam-doc-tipo">
+                  <option value="dni">DNI / Pasaporte</option>
+                  <option value="tutor">Documento de tutor legal</option>
+                  <option value="otro">Otro</option>
+                </select>
               </div>
-              <div class="form-group">
-                <label class="form-label">Dirección</label>
-                <input class="form-control" type="text" id="p-direccion">
+              <label class="upload-zone" id="fam-upload-zone" style="margin-top:8px">
+                <input type="file" id="fam-doc-file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                <div class="upload-zone-icon">📎</div>
+                <div class="upload-zone-title">Adjuntar documento</div>
+                <div class="upload-zone-sub">PDF, JPG, PNG o WebP · Máx. 10 MB</div>
+              </label>
+              <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+                <button class="btn btn-primary" id="btn-subir-doc-familia">Subir verificación</button>
+                <span id="fam-upload-progress" style="font-size:.82rem;color:var(--gray-mid)"></span>
               </div>
-              <div class="form-row">
-                <div class="form-group">
-                  <label class="form-label">Ciudad</label>
-                  <input class="form-control" type="text" id="p-ciudad" placeholder="Madrid">
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Código postal</label>
-                  <input class="form-control" type="text" id="p-cp">
-                </div>
+              <div class="table-wrapper" style="margin-top:16px">
+                <table>
+                  <thead><tr><th>Tipo</th><th>Estado</th><th>Acción</th></tr></thead>
+                  <tbody id="tbody-docs-familia"><tr><td colspan="3" style="text-align:center;padding:24px;color:var(--gray-mid)">Sin documentos.</td></tr></tbody>
+                </table>
               </div>
-              <button type="submit" class="btn btn-primary">Guardar cambios</button>
-            </form>
+            </div>
           </div>
         </div>
       </section>
@@ -422,6 +495,12 @@
 import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import {
+  evaluateFamilyProfileProfessional,
+  toProfileList,
+  validatePhone,
+  validatePostalCode,
+} from '../../js/profile-engine.js?v=20260628-profile-quality';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
@@ -469,6 +548,69 @@ const familiaId = familiaLegacy?.id || familiaData?.id || familiaFirestoreId;
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
                   alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Pagos', chat:'Chat', perfil:'Mi perfil' };
 let chatInicializado = false;
+let documentosFamiliaPerfilCache = [];
+let alumnosFamiliaPerfilCache = [];
+
+function ownerUid() {
+  return usuario.uid || usuario.firebase_uid || usuario.id;
+}
+
+function renderQualityPanel(targetId, evaluation) {
+  const panel = document.getElementById(targetId);
+  if (!panel) return;
+  const missing = evaluation.issueLabels.slice(0, 4);
+  const recommendations = evaluation.recommendations.slice(0, 4);
+  const indicatorHtml = evaluation.indicators.map((indicator) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:${indicator.complete ? 'rgba(22,163,74,.10)' : 'rgba(217,119,6,.10)'};color:${indicator.complete ? 'var(--success)' : 'var(--warning)'};font-size:.78rem;font-weight:700">
+      ${indicator.complete ? 'OK' : '!'} ${sanitize(indicator.label)}
+    </span>`).join('');
+
+  panel.innerHTML = `
+    <div style="display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:18px;align-items:center">
+      <div>
+        <div style="font-size:2rem;font-weight:800;color:var(--navy);line-height:1">${evaluation.percent}%</div>
+        <div style="font-size:.8rem;color:var(--gray-mid);font-weight:700;text-transform:uppercase;letter-spacing:.04em">perfil completado</div>
+        <div style="height:8px;background:var(--gray-soft);border-radius:999px;overflow:hidden;margin-top:10px">
+          <div style="width:${evaluation.percent}%;height:100%;background:${evaluation.complete ? 'var(--success)' : 'var(--gold)'}"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${indicatorHtml}</div>
+        <div style="font-size:.88rem;color:var(--gray-dark)">
+          <strong>Confianza:</strong> ${evaluation.trustScore}/100 (${sanitize(evaluation.trustLevel)}).
+          ${evaluation.pendingDocuments ? `${evaluation.pendingDocuments} documento(s) pendiente(s) de validacion.` : ''}
+        </div>
+        ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Datos necesarios para asignaciones mas precisas</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
+        ${!missing.length && recommendations.length ? `<div style="margin-top:10px;color:var(--gray-mid);font-size:.84rem">Siguiente mejora: ${recommendations.map(sanitize).join(', ')}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+async function cargarDocumentosFamiliaPerfilCache() {
+  const { data, error } = await db.from('documentos').select('*').eq('ownerUid', ownerUid()).order('created_at', { ascending: false });
+  if (error) {
+    console.warn('No se pudieron cargar documentos de familia', error);
+    documentosFamiliaPerfilCache = [];
+    return documentosFamiliaPerfilCache;
+  }
+  documentosFamiliaPerfilCache = (data || []).filter((doc) => !['justificante_pago', 'pago'].includes(String(doc.tipo || '').toLowerCase()));
+  return documentosFamiliaPerfilCache;
+}
+
+async function cargarAlumnosFamiliaPerfilCache() {
+  const { data, error } = await db.from('alumnos').select('id,nombre,apellidos,activo,active').eq('familia_id', familiaId);
+  if (error) {
+    console.warn('No se pudieron cargar alumnos para calidad de perfil', error);
+    alumnosFamiliaPerfilCache = [];
+    return alumnosFamiliaPerfilCache;
+  }
+  alumnosFamiliaPerfilCache = data || [];
+  return alumnosFamiliaPerfilCache;
+}
+
+function evaluarPerfilFamiliaActual(extra = {}) {
+  return evaluateFamilyProfileProfessional({ ...familiaData, ...extra }, alumnosFamiliaPerfilCache, documentosFamiliaPerfilCache);
+}
 
 function claseTerminada(clase, margenMinutos = 0) {
   if (!clase?.fecha) return false;
@@ -966,17 +1108,24 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
       showToast('Error', 'Formato no permitido. Usa PDF, JPG, PNG o WebP.', 'error');
       return;
     }
-    const path = `documentos/${usuario.id}/pagos/${Date.now()}.${ext}`;
-    const { error: upErr } = await uploadDocument(path, file);
+    const path = `pagos/${Date.now()}.${ext}`;
+    const { data: up, error: upErr } = await uploadDocument(path, file);
     if (upErr) { showToast('Error', upErr.message, 'error'); return; }
+    const storagePath = up?.fullPath || up?.path || path;
 
     const { data: doc, error: docErr } = await db.from('documentos')
       .insert({
-        usuario_id: usuario.id,
+        ownerUid: ownerUid(),
+        usuario_id: ownerUid(),
+        userUid: ownerUid(),
+        profileId: familiaFirestoreId,
+        role: 'familia',
         tipo:'justificante_pago',
         nombre:file.name,
-        url:path,
-        storage_path:path,
+        estado: 'pendiente',
+        status: 'pendiente',
+        url: storagePath,
+        storage_path: storagePath,
         tamano_bytes:file.size,
         mime_type:file.type,
       })
@@ -1015,12 +1164,21 @@ async function cargarChat() {
 }
 
 async function cargarPerfil() {
+  await Promise.all([cargarDocumentosFamiliaPerfilCache(), cargarAlumnosFamiliaPerfilCache()]);
   document.getElementById('p-nombre').value    = usuario.nombre || familiaData.nombre || '';
   document.getElementById('p-apellidos').value = usuario.apellidos || familiaData.apellidos || '';
   document.getElementById('p-telefono').value  = usuario.telefono || familiaData.telefono || '';
   document.getElementById('p-direccion').value = familiaData.direccion || familiaData.address || '';
   document.getElementById('p-ciudad').value    = familiaData.ciudad || familiaData.city || 'Madrid';
   document.getElementById('p-cp').value        = familiaData.codigo_postal || familiaData.postalCode || '';
+  document.getElementById('p-zona').value      = familiaData.zona || familiaData.zone || '';
+  document.getElementById('p-contacto-preferido').value = familiaData.contacto_preferido || familiaData.preferredContact || '';
+  document.getElementById('p-emergencia-nombre').value = familiaData.contacto_emergencia_nombre || familiaData.emergencyContactName || '';
+  document.getElementById('p-emergencia-telefono').value = familiaData.contacto_emergencia_telefono || familiaData.emergencyContactPhone || '';
+  document.getElementById('p-idiomas').value = toProfileList(familiaData.idiomas || familiaData.languages || []).join(', ');
+  document.getElementById('p-notas').value = familiaData.notas_perfil || familiaData.profileNotes || '';
+  renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
+  renderDocumentosFamilia();
 }
 
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
@@ -1031,19 +1189,77 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const direccion = document.getElementById('p-direccion').value.trim();
   const ciudad = document.getElementById('p-ciudad').value.trim();
   const codigoPostal = document.getElementById('p-cp').value.trim();
+  const zona = document.getElementById('p-zona').value.trim();
+  const contactoPreferido = document.getElementById('p-contacto-preferido').value.trim();
+  const emergenciaNombre = document.getElementById('p-emergencia-nombre').value.trim();
+  const emergenciaTelefono = document.getElementById('p-emergencia-telefono').value.trim();
+  const idiomas = toProfileList(document.getElementById('p-idiomas').value);
+  const notasPerfil = document.getElementById('p-notas').value.trim();
+  const phoneCheck = validatePhone(telefono);
+  const postalCheck = validatePostalCode(codigoPostal);
+  const emergencyPhoneCheck = emergenciaTelefono ? validatePhone(emergenciaTelefono) : { valid: true };
 
-  if (!nombre || !apellidos || !telefono || !direccion || !ciudad || !codigoPostal) {
-    showToast('Perfil incompleto', 'Completa nombre, apellidos, telefono, direccion, ciudad y codigo postal.', 'warning');
+  if (!nombre || !apellidos || !phoneCheck.valid || !direccion || !ciudad || !postalCheck.valid || !zona || !contactoPreferido || !emergencyPhoneCheck.valid) {
+    showToast('Perfil incompleto', 'Completa nombre, apellidos, telefono valido, direccion, ciudad, CP de 5 digitos, zona y canal preferido.', 'warning');
     return;
   }
 
-  const familiaPayload = {
+  const evaluation = evaluateFamilyProfileProfessional({
+    ...familiaData,
     nombre,
     apellidos,
     telefono,
     direccion,
+    address: direccion,
     ciudad,
+    city: ciudad,
     codigo_postal: codigoPostal,
+    postalCode: codigoPostal,
+    zona,
+    zone: zona,
+    contacto_preferido: contactoPreferido,
+    preferredContact: contactoPreferido,
+    contacto_emergencia_nombre: emergenciaNombre,
+    emergencyContactName: emergenciaNombre,
+    contacto_emergencia_telefono: emergenciaTelefono,
+    emergencyContactPhone: emergenciaTelefono,
+    idiomas,
+    languages: idiomas,
+    notas_perfil: notasPerfil,
+    profileNotes: notasPerfil,
+  }, alumnosFamiliaPerfilCache, documentosFamiliaPerfilCache);
+
+  const familiaPayload = {
+    userUid: familiaFirestoreId,
+    email: usuario.email || familiaData.email || '',
+    nombre,
+    apellidos,
+    telefono,
+    direccion,
+    address: direccion,
+    ciudad,
+    city: ciudad,
+    codigo_postal: codigoPostal,
+    postalCode: codigoPostal,
+    zona,
+    zone: zona,
+    contacto_preferido: contactoPreferido,
+    preferredContact: contactoPreferido,
+    contacto_emergencia_nombre: emergenciaNombre,
+    emergencyContactName: emergenciaNombre,
+    contacto_emergencia_telefono: emergenciaTelefono,
+    emergencyContactPhone: emergenciaTelefono,
+    idiomas,
+    languages: idiomas,
+    notas_perfil: notasPerfil,
+    profileNotes: notasPerfil,
+    perfil_completo: evaluation.complete,
+    profileComplete: evaluation.complete,
+    profileCompletionPercent: evaluation.percent,
+    profileCompletion: evaluation.percent,
+    profileIssues: evaluation.issueLabels,
+    trustScore: evaluation.trustScore,
+    trustLevel: evaluation.trustLevel,
     updatedAt: serverTimestamp(),
     updated_at: new Date().toISOString(),
   };
@@ -1081,8 +1297,29 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     if (familiaLegacy?.id) {
       await db.from('familias').update({
         direccion,
+        address: direccion,
         ciudad,
+        city: ciudad,
         codigo_postal: codigoPostal,
+        postalCode: codigoPostal,
+        zona,
+        zone: zona,
+        contacto_preferido: contactoPreferido,
+        preferredContact: contactoPreferido,
+        contacto_emergencia_nombre: emergenciaNombre,
+        emergencyContactName: emergenciaNombre,
+        contacto_emergencia_telefono: emergenciaTelefono,
+        emergencyContactPhone: emergenciaTelefono,
+        idiomas,
+        languages: idiomas,
+        notas_perfil: notasPerfil,
+        profileNotes: notasPerfil,
+        perfil_completo: evaluation.complete,
+        profileComplete: evaluation.complete,
+        profileCompletionPercent: evaluation.percent,
+        profileIssues: evaluation.issueLabels,
+        trustScore: evaluation.trustScore,
+        trustLevel: evaluation.trustLevel,
       }).eq('id', familiaLegacy.id);
     }
   } catch (error) {
@@ -1090,7 +1327,90 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   }
 
   familiaData = { ...familiaData, ...familiaPayload };
+  renderQualityPanel('familia-calidad-panel', evaluation);
   showToast('Guardado', 'Perfil actualizado.', 'success');
+});
+
+function renderDocumentosFamilia() {
+  const tbody = document.getElementById('tbody-docs-familia');
+  if (!tbody) return;
+  if (!documentosFamiliaPerfilCache.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--gray-mid)">Sin documentos.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = documentosFamiliaPerfilCache.map((doc) => `
+    <tr>
+      <td>${sanitize(doc.tipo || 'documento')}</td>
+      <td>${badgeEstado(doc.estado || doc.status || 'pendiente')}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm"
+                data-action="ver-doc-familia"
+                data-doc-path="${sanitize(doc.storage_path || doc.url || '')}">Ver</button>
+      </td>
+    </tr>`).join('');
+}
+
+document.getElementById('tbody-docs-familia')?.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action="ver-doc-familia"]');
+  if (!btn) return;
+  const { data, error } = await getDocumentUrl(btn.dataset.docPath);
+  if (error || !data?.url) {
+    showToast('Error', error?.message || 'No se pudo abrir el documento.', 'error');
+    return;
+  }
+  window.open(data.url, '_blank', 'noopener,noreferrer');
+});
+
+const famUploadZone = document.getElementById('fam-upload-zone');
+const famDocFile = document.getElementById('fam-doc-file');
+famDocFile?.addEventListener('change', () => {
+  famUploadZone.querySelector('.upload-zone-title').textContent = famDocFile.files[0]?.name || 'Adjuntar documento';
+});
+
+document.getElementById('btn-subir-doc-familia')?.addEventListener('click', async () => {
+  const file = famDocFile.files[0];
+  if (!file) { showToast('Atención', 'Selecciona un archivo.', 'warning'); return; }
+  if (file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
+
+  const tipo = document.getElementById('fam-doc-tipo').value;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (!UPLOAD_EXT_PERMITIDAS.includes(ext) || (file.type && !UPLOAD_MIME_PERMITIDOS.includes(file.type))) {
+    showToast('Error', 'Formato no permitido. Usa PDF, JPG, PNG o WebP.', 'error');
+    return;
+  }
+
+  const progress = document.getElementById('fam-upload-progress');
+  progress.textContent = 'Subiendo...';
+  const path = `familia/${tipo}_${Date.now()}.${ext}`;
+  const { data: up, error: upErr } = await uploadDocument(path, file);
+  if (upErr) { showToast('Error', upErr.message, 'error'); progress.textContent = ''; return; }
+  const storagePath = up?.fullPath || up?.path || path;
+
+  const { error } = await db.from('documentos').insert({
+    ownerUid: ownerUid(),
+    usuario_id: ownerUid(),
+    userUid: ownerUid(),
+    profileId: familiaFirestoreId,
+    role: 'familia',
+    tipo,
+    nombre: file.name,
+    estado: 'pendiente',
+    status: 'pendiente',
+    url: storagePath,
+    storage_path: storagePath,
+    tamano_bytes: file.size,
+    mime_type: file.type,
+  });
+
+  if (error) { showToast('Error', error.message, 'error'); progress.textContent = ''; return; }
+  famDocFile.value = '';
+  famUploadZone.querySelector('.upload-zone-title').textContent = 'Adjuntar documento';
+  progress.textContent = '';
+  showToast('Subido', 'Documento enviado para revisión.', 'success');
+  await cargarDocumentosFamiliaPerfilCache();
+  renderDocumentosFamilia();
+  renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
 });
 
 // ── INIT ─────────────────────────────────────────────────────────

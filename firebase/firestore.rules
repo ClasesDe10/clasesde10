@@ -263,12 +263,33 @@ service cloud.firestore {
           'nombre',
           'apellidos',
           'telefono',
+          'userUid',
+          'email',
           'direccion',
           'address',
           'ciudad',
           'city',
           'codigo_postal',
           'postalCode',
+          'zona',
+          'zone',
+          'contacto_preferido',
+          'preferredContact',
+          'contacto_emergencia_nombre',
+          'emergencyContactName',
+          'contacto_emergencia_telefono',
+          'emergencyContactPhone',
+          'idiomas',
+          'languages',
+          'notas_perfil',
+          'profileNotes',
+          'perfil_completo',
+          'profileComplete',
+          'profileCompletionPercent',
+          'profileCompletion',
+          'profileIssues',
+          'trustScore',
+          'trustLevel',
           'updatedAt',
           'updated_at'
         ])
@@ -281,6 +302,16 @@ service cloud.firestore {
         && optionalString('city', 160)
         && optionalString('codigo_postal', 20)
         && optionalString('postalCode', 20)
+        && optionalString('zona', 160)
+        && optionalString('zone', 160)
+        && optionalString('contacto_preferido', 40)
+        && optionalString('preferredContact', 40)
+        && optionalString('contacto_emergencia_nombre', 160)
+        && optionalString('emergencyContactName', 160)
+        && optionalString('contacto_emergencia_telefono', 40)
+        && optionalString('emergencyContactPhone', 40)
+        && optionalString('notas_perfil', 1200)
+        && optionalString('profileNotes', 1200)
         && validClientUpdatedAt()
         && (
           request.resource.data.userUid == resource.data.userUid
@@ -289,7 +320,13 @@ service cloud.firestore {
             && request.resource.data.userUid == request.auth.uid
           )
         )
-        && request.resource.data.email == resource.data.email
+        && (
+          request.resource.data.email == resource.data.email
+          || (
+            !resource.data.keys().hasAny(['email'])
+            && request.resource.data.email == request.auth.token.email
+          )
+        )
         && request.resource.data.active == resource.data.active
         && request.resource.data.status == resource.data.status;
     }
@@ -330,10 +367,21 @@ service cloud.firestore {
           'subjects',
           'niveles_educativos',
           'levels',
+          'especialidades',
+          'specialties',
+          'idiomas',
+          'languages',
+          'certificaciones',
+          'certifications',
           'acepta_bizum',
           'hasBizum',
           'perfil_completo',
           'profileComplete',
+          'profileCompletionPercent',
+          'profileCompletion',
+          'profileIssues',
+          'trustScore',
+          'trustLevel',
           'estado_verificacion',
           'verificationStatus',
           'status',

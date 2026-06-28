@@ -257,6 +257,13 @@
 
       <section id="section-perfil" class="dash-section" style="display:none">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+          <div class="card" style="grid-column:1/-1">
+            <div class="card-header"><span class="card-title">Calidad del perfil</span></div>
+            <div class="card-body" id="perfil-calidad-panel">
+              <div style="color:var(--gray-mid);font-size:.875rem">Calculando estado del perfil...</div>
+            </div>
+          </div>
+
           <div class="card">
             <div class="card-header"><span class="card-title">Datos personales</span></div>
             <div class="card-body">
@@ -334,6 +341,21 @@
                   <label class="form-label">Biografía / Presentación</label>
                   <textarea class="form-control" id="p-bio" rows="4" placeholder="Cuéntanos sobre ti, tu experiencia y metodología…"></textarea>
                 </div>
+                <div class="form-group">
+                  <label class="form-label">Especialidades concretas</label>
+                  <textarea class="form-control" id="p-especialidades" rows="3" placeholder="Ej: EVAU, TDAH, alto rendimiento, padel iniciacion, guitarra clasica, piano moderno..."></textarea>
+                  <div class="form-hint">Separalas por comas o por lineas. Ayudan al matching y al admin a entender mejor tu perfil.</div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Idiomas de atencion</label>
+                    <input class="form-control" type="text" id="p-idiomas" placeholder="Español, ingles, frances...">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Certificaciones relevantes</label>
+                    <input class="form-control" type="text" id="p-certificaciones" placeholder="Monitor, C1, conservatorio, oposiciones...">
+                  </div>
+                </div>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Anios de experiencia</label>
@@ -390,7 +412,9 @@
                 <select class="form-control" id="doc-tipo">
                   <option value="dni">DNI / Pasaporte</option>
                   <option value="titulo">Título académico</option>
+                  <option value="certificado">Certificado / licencia profesional</option>
                   <option value="curriculum">Currículum</option>
+                  <option value="identidad">Otra verificación de identidad</option>
                   <option value="otro">Otro</option>
                 </select>
               </div>
@@ -515,6 +539,14 @@
 import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import {
+  evaluateTeacherProfileProfessional,
+  isValidGrade,
+  parseGrade,
+  toProfileList,
+  validatePhone,
+  validatePostalCode,
+} from '../../js/profile-engine.js?v=20260628-profile-quality';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
@@ -1009,6 +1041,58 @@ const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universid
 let materiasActuales = [];
 let nivelesActuales  = [];
 let fotoPerfilDataUrl = '';
+let documentosPerfilCache = [];
+
+function ownerUid() {
+  return usuario.uid || usuario.firebase_uid || usuario.id;
+}
+
+function renderQualityPanel(targetId, evaluation) {
+  const panel = document.getElementById(targetId);
+  if (!panel) return;
+  const missing = evaluation.issueLabels.slice(0, 4);
+  const recommendations = evaluation.recommendations.slice(0, 4);
+  const indicatorHtml = evaluation.indicators.map((indicator) => `
+    <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:${indicator.complete ? 'rgba(22,163,74,.10)' : 'rgba(217,119,6,.10)'};color:${indicator.complete ? 'var(--success)' : 'var(--warning)'};font-size:.78rem;font-weight:700">
+      ${indicator.complete ? 'OK' : '!'} ${sanitize(indicator.label)}
+    </span>`).join('');
+
+  panel.innerHTML = `
+    <div style="display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:18px;align-items:center">
+      <div>
+        <div style="font-size:2rem;font-weight:800;color:var(--navy);line-height:1">${evaluation.percent}%</div>
+        <div style="font-size:.8rem;color:var(--gray-mid);font-weight:700;text-transform:uppercase;letter-spacing:.04em">perfil completado</div>
+        <div style="height:8px;background:var(--gray-soft);border-radius:999px;overflow:hidden;margin-top:10px">
+          <div style="width:${evaluation.percent}%;height:100%;background:${evaluation.complete ? 'var(--success)' : 'var(--gold)'}"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${indicatorHtml}</div>
+        <div style="font-size:.88rem;color:var(--gray-dark)">
+          <strong>Confianza:</strong> ${evaluation.trustScore}/100 (${sanitize(evaluation.trustLevel)}).
+          ${evaluation.pendingDocuments ? `${evaluation.pendingDocuments} documento(s) pendiente(s) de validacion.` : ''}
+        </div>
+        ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Falta para poder asignarte sin friccion</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
+        ${!missing.length && recommendations.length ? `<div style="margin-top:10px;color:var(--gray-mid);font-size:.84rem">Siguiente mejora: ${recommendations.map(sanitize).join(', ')}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+async function cargarDocumentosPerfilCache() {
+  const uid = ownerUid();
+  const { data, error } = await db.from('documentos').select('*').eq('ownerUid', uid).order('created_at', { ascending: false });
+  if (error) {
+    console.warn('No se pudieron cargar documentos del perfil', error);
+    documentosPerfilCache = [];
+    return documentosPerfilCache;
+  }
+  documentosPerfilCache = data || [];
+  return documentosPerfilCache;
+}
+
+function evaluarPerfilActual(extra = {}) {
+  return evaluateTeacherProfileProfessional({ ...perfil, ...extra }, documentosPerfilCache);
+}
 
 function setFotoPreview(src) {
   const preview = document.getElementById('p-foto-preview');
@@ -1075,8 +1159,9 @@ async function cargarChat() {
 }
 
 async function cargarPerfil() {
-  materiasActuales = perfil.materias || [];
-  nivelesActuales  = perfil.niveles_educativos || [];
+  await cargarDocumentosPerfilCache();
+  materiasActuales = toProfileList(perfil.materias || perfil.subjects || []);
+  nivelesActuales  = toProfileList(perfil.niveles_educativos || perfil.levels || []);
 
   document.getElementById('p-nombre').value      = usuario.nombre || perfil.nombre || '';
   document.getElementById('p-apellidos').value   = usuario.apellidos || perfil.apellidos || '';
@@ -1092,11 +1177,18 @@ async function cargarPerfil() {
   document.getElementById('p-nota-bachillerato').value = perfil.nota_bachillerato ?? perfil.bachilleratoGrade ?? '';
   document.getElementById('p-nota-universidad').value = perfil.nota_media_universidad ?? perfil.universityAverageGrade ?? '';
   document.getElementById('p-bio').value         = perfil.bio || '';
+  document.getElementById('p-especialidades').value = toProfileList(perfil.especialidades || perfil.specialties || []).join(', ');
+  document.getElementById('p-idiomas').value = toProfileList(perfil.idiomas || perfil.languages || []).join(', ');
+  document.getElementById('p-certificaciones').value = toProfileList(perfil.certificaciones || perfil.certifications || []).join(', ');
   document.getElementById('p-experiencia').value = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
   document.getElementById('p-disponibilidad').value = perfil.disponibilidad_resumen || perfil.availabilitySummary || '';
   document.getElementById('p-bizum').checked     = perfil.acepta_bizum === true || perfil.hasBizum === true;
 
   renderMaterias();
+  renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual({
+    materias: materiasActuales,
+    niveles_educativos: nivelesActuales,
+  }));
 
   document.getElementById('niveles-check').innerHTML = NIVELES_LISTA.map(n => `
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
@@ -1168,8 +1260,9 @@ document.getElementById('niveles-check').addEventListener('change', (e) => {
 
 document.getElementById('btn-add-materia').addEventListener('click', () => {
   const val = document.getElementById('nueva-materia').value.trim();
-  if (val && !materiasActuales.includes(val)) {
-    materiasActuales.push(val);
+  const normalized = toProfileList([val])[0];
+  if (normalized && !materiasActuales.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
+    materiasActuales.push(normalized);
     renderMaterias();
     document.getElementById('nueva-materia').value = '';
   }
@@ -1177,6 +1270,8 @@ document.getElementById('btn-add-materia').addEventListener('click', () => {
 
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const nombre = document.getElementById('p-nombre').value.trim();
+  const apellidos = document.getElementById('p-apellidos').value.trim();
   const telefono = document.getElementById('p-telefono').value.trim();
   const fotoUrl = fotoPerfilDataUrl;
   const direccion = document.getElementById('p-direccion').value.trim();
@@ -1186,25 +1281,73 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const tipoFormacion = document.getElementById('p-nivel').value.trim();
   const estudioExacto = document.getElementById('p-estudio-exacto').value.trim();
   const centroEstudios = document.getElementById('p-centro-estudios').value.trim();
-  const notaBachillerato = Number(document.getElementById('p-nota-bachillerato').value);
-  const notaUniversidad = Number(document.getElementById('p-nota-universidad').value);
+  const notaBachillerato = parseGrade(document.getElementById('p-nota-bachillerato').value);
+  const notaUniversidad = parseGrade(document.getElementById('p-nota-universidad').value);
   const bio = document.getElementById('p-bio').value.trim();
+  const especialidades = toProfileList(document.getElementById('p-especialidades').value);
+  const idiomas = toProfileList(document.getElementById('p-idiomas').value);
+  const certificaciones = toProfileList(document.getElementById('p-certificaciones').value);
   const experiencia = Number(document.getElementById('p-experiencia').value || 0);
   const disponibilidad = document.getElementById('p-disponibilidad').value.trim();
   const aceptaBizum = document.getElementById('p-bizum').checked;
-  const notasValidas = Number.isFinite(notaBachillerato) && notaBachillerato >= 0 && notaBachillerato <= 10
-    && Number.isFinite(notaUniversidad) && notaUniversidad >= 0 && notaUniversidad <= 10;
+  const phoneCheck = validatePhone(telefono);
+  const postalCheck = validatePostalCode(codigoPostal);
+  const notasValidas = isValidGrade(notaBachillerato) && isValidGrade(notaUniversidad);
+  materiasActuales = toProfileList(materiasActuales);
+  nivelesActuales = toProfileList(nivelesActuales);
 
-  if (!telefono || !fotoUrl || !direccion || !ciudad || !codigoPostal || !zona ||
+  if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid || !zona ||
       !tipoFormacion || !estudioExacto || !centroEstudios || !notasValidas ||
-      !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum) {
-    showToast('Perfil incompleto', 'Completa foto, telefono, direccion, zona, estudios, centro, notas, materias/actividades, niveles, disponibilidad, Bizum y presentacion antes de guardar.', 'warning');
+      !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum ||
+      !Number.isFinite(experiencia) || experiencia < 0 || experiencia > 60) {
+    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, CP de 5 digitos, zona, estudios, centro, notas, materias/actividades, niveles, disponibilidad, Bizum y presentacion.', 'warning');
     return;
   }
 
-  const nombre = document.getElementById('p-nombre').value.trim();
-  const apellidos = document.getElementById('p-apellidos').value.trim();
   const perfilActivo = perfil.active !== false && perfil.activo !== false;
+  const evaluation = evaluateTeacherProfileProfessional({
+    ...perfil,
+    nombre,
+    apellidos,
+    telefono,
+    foto_url: fotoUrl,
+    photoUrl: fotoUrl,
+    direccion,
+    address: direccion,
+    ciudad,
+    city: ciudad,
+    codigo_postal: codigoPostal,
+    postalCode: codigoPostal,
+    zona,
+    zone: zona,
+    nivel_estudios: tipoFormacion,
+    studyLevel: tipoFormacion,
+    estudio_exacto: estudioExacto,
+    exactStudy: estudioExacto,
+    centro_estudios: centroEstudios,
+    studyCenter: centroEstudios,
+    nota_bachillerato: notaBachillerato,
+    bachilleratoGrade: notaBachillerato,
+    nota_media_universidad: notaUniversidad,
+    universityAverageGrade: notaUniversidad,
+    bio,
+    experiencia_anios: experiencia,
+    experienceYears: experiencia,
+    disponibilidad_resumen: disponibilidad,
+    availabilitySummary: disponibilidad,
+    materias: materiasActuales,
+    subjects: materiasActuales,
+    niveles_educativos: nivelesActuales,
+    levels: nivelesActuales,
+    especialidades,
+    specialties: especialidades,
+    idiomas,
+    languages: idiomas,
+    certificaciones,
+    certifications: certificaciones,
+    acepta_bizum: aceptaBizum,
+    hasBizum: aceptaBizum,
+  }, documentosPerfilCache);
   const profesorPayload = {
     userUid: profesorFirestoreId,
     email: usuario.email || perfil.email || '',
@@ -1213,23 +1356,50 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     telefono,
     active: perfilActivo,
     foto_url: fotoUrl,
+    photoUrl: fotoUrl,
     direccion,
+    address: direccion,
     ciudad,
+    city: ciudad,
     codigo_postal: codigoPostal,
+    postalCode: codigoPostal,
     zona,
+    zone: zona,
     nivel_estudios: tipoFormacion,
+    studyLevel: tipoFormacion,
     estudio_exacto: estudioExacto,
+    exactStudy: estudioExacto,
     centro_estudios: centroEstudios,
+    studyCenter: centroEstudios,
     colegio_estudios: centroEstudios,
     nota_bachillerato: notaBachillerato,
+    bachilleratoGrade: notaBachillerato,
     nota_media_universidad: notaUniversidad,
+    universityAverageGrade: notaUniversidad,
     bio,
     experiencia_anios: Number.isFinite(experiencia) ? experiencia : 0,
+    experienceYears: Number.isFinite(experiencia) ? experiencia : 0,
     disponibilidad_resumen: disponibilidad,
+    availabilitySummary: disponibilidad,
     materias: materiasActuales,
+    subjects: materiasActuales,
     niveles_educativos: nivelesActuales,
-    acepta_bizum: true,
-    perfil_completo: true,
+    levels: nivelesActuales,
+    especialidades,
+    specialties: especialidades,
+    idiomas,
+    languages: idiomas,
+    certificaciones,
+    certifications: certificaciones,
+    acepta_bizum: aceptaBizum,
+    hasBizum: aceptaBizum,
+    perfil_completo: evaluation.complete,
+    profileComplete: evaluation.complete,
+    profileCompletionPercent: evaluation.percent,
+    profileCompletion: evaluation.percent,
+    profileIssues: evaluation.issueLabels,
+    trustScore: evaluation.trustScore,
+    trustLevel: evaluation.trustLevel,
     updatedAt: serverTimestamp(),
     updated_at: new Date().toISOString(),
   };
@@ -1279,8 +1449,19 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       codigo_postal:     codigoPostal,
       postalCode:        codigoPostal,
       zona,
+      zone:              zona,
       nivel_estudios:    tipoFormacion,
+      studyLevel:        tipoFormacion,
+      estudio_exacto:    estudioExacto,
+      exactStudy:        estudioExacto,
       universidad:       centroEstudios,
+      centro_estudios:   centroEstudios,
+      studyCenter:       centroEstudios,
+      colegio_estudios:  centroEstudios,
+      nota_bachillerato: notaBachillerato,
+      bachilleratoGrade: notaBachillerato,
+      nota_media_universidad: notaUniversidad,
+      universityAverageGrade: notaUniversidad,
       bio,
       experiencia_anios: Number.isFinite(experiencia) ? experiencia : 0,
       experienceYears:   Number.isFinite(experiencia) ? experiencia : 0,
@@ -1290,8 +1471,20 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       subjects:          materiasActuales,
       niveles_educativos: nivelesActuales,
       levels:            nivelesActuales,
-      perfil_completo:   true,
-      profileComplete:   true,
+      especialidades,
+      specialties:       especialidades,
+      idiomas,
+      languages:         idiomas,
+      certificaciones,
+      certifications:    certificaciones,
+      acepta_bizum:      aceptaBizum,
+      hasBizum:          aceptaBizum,
+      perfil_completo:   evaluation.complete,
+      profileComplete:   evaluation.complete,
+      profileCompletionPercent: evaluation.percent,
+      profileIssues:     evaluation.issueLabels,
+      trustScore:        evaluation.trustScore,
+      trustLevel:        evaluation.trustLevel,
       }).eq('id', perfilLegacy.id);
     }
   } catch (error) {
@@ -1299,12 +1492,14 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   }
 
   perfil = { ...perfil, ...profesorPayload };
+  renderQualityPanel('perfil-calidad-panel', evaluation);
   showToast('Guardado', 'Perfil actualizado correctamente.', 'success');
 });
 
 // ── DOCUMENTOS ───────────────────────────────────────────────────
 async function cargarDocumentos() {
-  const { data } = await db.from('documentos').select('*').eq('usuario_id', usuario.id).order('created_at',{ascending:false});
+  const data = await cargarDocumentosPerfilCache();
+  renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual());
   const tbody = document.getElementById('tbody-mis-docs');
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin documentos subidos.</td></tr>'; return; }
   tbody.innerHTML = data.map(d => `<tr>
@@ -1366,17 +1561,27 @@ document.getElementById('btn-subir-doc').addEventListener('click', async () => {
     showToast('Error', 'Formato no permitido. Usa PDF, JPG, PNG o WebP.', 'error');
     return;
   }
-  const path = `documentos/${usuario.id}/${tipo}_${Date.now()}.${ext}`;
+  const path = `profesor/${tipo}_${Date.now()}.${ext}`;
   const prog = document.getElementById('upload-progress');
   prog.textContent = 'Subiendo…';
 
   const { data: up, error: upErr } = await uploadDocument(path, file);
   if (upErr) { showToast('Error', upErr.message, 'error'); prog.textContent = ''; return; }
+  const storagePath = up?.fullPath || up?.path || path;
 
   // Bucket privado — no generamos URL pública, solo guardamos el path
   const { error } = await db.from('documentos').insert({
-    usuario_id: usuario.id, tipo, nombre: file.name,
-    url: path, storage_path: path,
+    ownerUid: ownerUid(),
+    usuario_id: ownerUid(),
+    userUid: ownerUid(),
+    profileId: profesorFirestoreId,
+    role: 'profesor',
+    tipo,
+    nombre: file.name,
+    estado: 'pendiente',
+    status: 'pendiente',
+    url: storagePath,
+    storage_path: storagePath,
     tamano_bytes: file.size, mime_type: file.type,
   });
 

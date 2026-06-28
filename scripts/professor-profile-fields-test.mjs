@@ -13,7 +13,11 @@ for (const id of [
   'p-centro-estudios',
   'p-nota-bachillerato',
   'p-nota-universidad',
+  'p-especialidades',
+  'p-idiomas',
+  'p-certificaciones',
   'p-bizum',
+  'perfil-calidad-panel',
 ]) {
   assert.ok(professorDashboard.includes(`id="${id}"`), `Missing teacher profile field ${id}`);
 }
@@ -42,6 +46,12 @@ for (const field of [
   'nota_bachillerato',
   'nota_media_universidad',
   'acepta_bizum',
+  'profileCompletionPercent',
+  'profileIssues',
+  'trustScore',
+  'especialidades',
+  'idiomas',
+  'certificaciones',
 ]) {
   assert.ok(aiEngine.includes(field) || professorDashboard.includes(field), `Missing Firebase/AI field ${field}`);
 }

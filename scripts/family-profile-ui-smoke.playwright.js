@@ -54,6 +54,12 @@ async (page) => {
   await page.locator('#p-direccion').fill('Calle Perfil 10');
   await page.locator('#p-ciudad').fill('Madrid');
   await page.locator('#p-cp').fill('28010');
+  await page.locator('#p-zona').fill('Chamberi');
+  await page.locator('#p-contacto-preferido').selectOption('whatsapp');
+  await page.locator('#p-emergencia-nombre').fill('Tutor Alternativo');
+  await page.locator('#p-emergencia-telefono').fill('699123456');
+  await page.locator('#p-idiomas').fill('Espanol, Ingles');
+  await page.locator('#p-notas').fill('Preferimos clases presenciales por la tarde y seguimiento semanal de avances.');
   await page.locator('#form-perfil button[type="submit"]').click();
   await page.waitForTimeout(1500);
 
@@ -80,6 +86,15 @@ async (page) => {
   if (result.family?.codigo_postal !== '28010') {
     throw new Error(`Family postal code was not saved: ${JSON.stringify({ user: result.user, family: result.family })}`);
   }
+  if (result.family?.zona !== 'Chamberi' || result.family?.preferredContact !== 'whatsapp') {
+    throw new Error(`Family matching fields were not saved: ${JSON.stringify({ family: result.family })}`);
+  }
+  if (!Array.isArray(result.family?.languages) || !result.family.languages.includes('Ingles')) {
+    throw new Error(`Family languages were not saved: ${JSON.stringify({ family: result.family })}`);
+  }
+  if (typeof result.family?.profileCompletionPercent !== 'number') {
+    throw new Error(`Family profile completion was not saved: ${JSON.stringify({ family: result.family })}`);
+  }
 
   return {
     uid: setup.uid,
@@ -89,6 +104,8 @@ async (page) => {
       direccion: result.family.direccion,
       ciudad: result.family.ciudad,
       codigo_postal: result.family.codigo_postal,
+      zona: result.family.zona,
+      profileCompletionPercent: result.family.profileCompletionPercent,
     },
   };
 }
