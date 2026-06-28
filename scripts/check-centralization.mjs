@@ -261,14 +261,16 @@ function checkCodeTouchpoints() {
   if (authImports.size === 0) ok('Auth imports centralized through js/auth-provider.js');
   else fail('Direct js/auth.js imports remain', [...authImports.keys()].join(', '));
 
-  const supabaseRuntime = countMatches([
+  const realSupabaseRuntime = countMatches([
     /supabase-client\.js/,
     /window\.supabase/,
     /@supabase\/supabase-js/,
+  ]);
+  const compatibilityRuntime = countMatches([
     /\.from\(['"][a-z_]+['"]\)/,
     /\.storage\.from\(/,
   ]);
-  const runtimeFiles = [...supabaseRuntime.keys()]
+  const realRuntimeFiles = [...realSupabaseRuntime.keys()]
     .filter((file) => (
       !file.startsWith('supabase/')
       && !file.startsWith('scripts/')
@@ -281,11 +283,30 @@ function checkCodeTouchpoints() {
       && file !== 'package.json'
       && file !== 'package-lock.json'
     ));
+  const compatibilityFiles = [...compatibilityRuntime.keys()]
+    .filter((file) => (
+      !file.startsWith('supabase/')
+      && !file.startsWith('scripts/')
+      && !file.endsWith('.md')
+      && file !== 'js/firebase-data-client.js'
+      && file !== 'js/supabase-client.js'
+      && file !== 'firebase.json'
+      && file !== 'netlify.toml'
+      && file !== 'package.json'
+      && file !== 'package-lock.json'
+    ));
 
-  if (runtimeFiles.length === 0) ok('No runtime Supabase touchpoints outside legacy modules');
+  if (realRuntimeFiles.length === 0) ok('No active runtime Supabase client imports outside legacy shim');
   else {
-    warn('Legacy Supabase-shaped compatibility API touchpoints still present', `${runtimeFiles.length} files`);
-    for (const file of runtimeFiles) {
+    warn('Active Supabase runtime touchpoints still present', `${realRuntimeFiles.length} files`);
+    for (const file of realRuntimeFiles) {
+      console.log(`       - ${file}`);
+    }
+  }
+  if (compatibilityFiles.length === 0) ok('Dashboards no longer use Firebase compatibility db.from API');
+  else {
+    warn('Firebase compatibility db.from API touchpoints still present', `${compatibilityFiles.length} files`);
+    for (const file of compatibilityFiles) {
       console.log(`       - ${file}`);
     }
   }
@@ -306,7 +327,7 @@ async function main() {
   checkCodeTouchpoints();
   console.log('\nNext external gates');
   console.log('- Firebase Storage: initialize the default bucket.');
-  console.log('- Private app: replace legacy db.from compatibility calls with dedicated Firebase adapters when each dashboard is migrated module by module.');
+  console.log('- Private app: replace db.from compatibility calls with dedicated Firebase adapters when each dashboard is migrated module by module.');
 }
 
 main().catch((error) => {

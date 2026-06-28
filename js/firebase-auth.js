@@ -1,10 +1,9 @@
 /**
  * ClasesDe10 - Firebase Auth transition layer.
  *
- * This module is intentionally not wired into production pages yet. It mirrors
- * the public API of js/auth.js so login/register screens can be switched from
- * Supabase to Firebase once Authentication is enabled and the first admin user
- * has been bootstrapped.
+ * This module is the production Firebase Auth provider behind auth-provider.js.
+ * It supports Email/Password and Google Sign-In while keeping the dashboard
+ * profile contract stable.
  */
 
 import {

@@ -228,6 +228,15 @@
         ]
       },
       {
+        "source": "/js/firebase-data-client.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/js/supabase-client.js",
         "headers": [
           {
@@ -250,7 +259,7 @@
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, max-age=0, must-revalidate"
+            "value": "no-store, no-cache, must-revalidate"
           }
         ]
       },

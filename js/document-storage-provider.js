@@ -5,7 +5,7 @@
  * stays stable for dashboards during the Firebase cutover.
  */
 
-import db from './supabase-client.js?v=20260627-domain-auth';
+import db from './firebase-data-client.js?v=20260628-data-client';
 import { firebaseAuth } from './firebase-client.js?v=20260627-domain-auth';
 
 const DOCUMENT_BUCKET = 'documentos';

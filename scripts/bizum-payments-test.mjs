@@ -26,7 +26,7 @@ const [
   read('pages/dashboard/profesor.html'),
   read('pages/dashboard/admin.html'),
   read('firebase/firestore.rules'),
-  read('js/supabase-client.js'),
+  read('js/firebase-data-client.js'),
   read('js/payment-engine.js'),
   read('js/adapters/pagos-adapter.js'),
   read('js/adapters/contracts.js'),

@@ -78,7 +78,7 @@ function checkHosting() {
     fail('Content-Security-Policy must block object/embed content.');
   }
 
-  for (const source of ['/pages/dashboard/**', '/js/auth-provider.js', '/js/firebase-auth.js', '/js/firebase-client.js']) {
+  for (const source of ['/pages/dashboard/**', '/js/auth-provider.js', '/js/firebase-auth.js', '/js/firebase-client.js', '/js/firebase-data-client.js']) {
     if (!/no-store|no-cache/.test(headerValue(config, source, 'Cache-Control'))) {
       fail(`${source} must not be cached aggressively.`);
     }
@@ -230,6 +230,11 @@ function checkFunctions() {
   for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs']) {
     if (!functionsCode.includes(needle)) fail(`Scalability function path missing: ${needle}.`);
   }
+
+  const workerCode = readText('scripts/firebase-automation-worker.mjs');
+  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated']) {
+    if (!workerCode.includes(needle)) fail(`GitHub automation worker scalability path missing: ${needle}.`);
+  }
 }
 
 function checkSupabaseBoundary() {
@@ -241,6 +246,7 @@ function checkSupabaseBoundary() {
     'js/admin-control-center.js',
     'js/chat-widget.js',
     'js/document-storage-provider.js',
+    'js/firebase-data-client.js',
     'js/supabase-client.js',
   ]);
   const offenders = [];
@@ -258,9 +264,9 @@ function checkSupabaseBoundary() {
   }
 
   if (offenders.length) fail(`Unexpected new runtime Supabase dependencies: ${offenders.join(', ')}.`);
-  if (queryCount > 92) fail(`Runtime Supabase query count increased above migration baseline: ${queryCount}.`);
-  if (storageCount > 2) fail(`Runtime Supabase storage call count increased above migration baseline: ${storageCount}.`);
-  if (queryCount > 0) warn(`Legacy Supabase-shaped compatibility API still present by design: ${queryCount} db.from calls, ${storageCount} storage calls routed by the Firebase compatibility client.`);
+  if (queryCount > 92) fail(`Firebase compatibility query count increased above migration baseline: ${queryCount}.`);
+  if (storageCount > 2) fail(`Firebase compatibility storage call count increased above migration baseline: ${storageCount}.`);
+  if (queryCount > 0) warn(`Firebase compatibility API still present by design: ${queryCount} db.from calls, ${storageCount} storage calls routed by the Firebase data client.`);
 }
 
 checkHosting();

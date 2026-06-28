@@ -58,6 +58,8 @@ const trustContextLimit = Math.max(1, Number(process.env.TRUST_CONTEXT_LIMIT || 
 const matchingTeacherScanLimit = Math.max(1, Number(process.env.MATCHING_TEACHER_SCAN_LIMIT || 1000));
 const matchingUserScanLimit = Math.max(1, Number(process.env.MATCHING_USER_SCAN_LIMIT || 2000));
 const matchingAssignmentScanLimit = Math.max(1, Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000));
+const systemJobLimit = Math.max(1, Number(process.env.SYSTEM_JOB_LIMIT || 50));
+const systemJobMaxBackoffMs = 60 * 60 * 1000;
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -373,6 +375,113 @@ async function writeDoc(collectionRef, id, payload, options = {}) {
 async function updateRef(ref, payload) {
   if (dryRun) return;
   await ref.update(payload);
+}
+
+function dateFromFirestore(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof value.toDate === 'function') return value.toDate();
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function retryDelayMs(attempts) {
+  const safeAttempts = Math.max(1, Number(attempts || 1));
+  return Math.min(systemJobMaxBackoffMs, Math.round((2 ** (safeAttempts - 1)) * 60 * 1000));
+}
+
+function serializeJobError(error) {
+  return {
+    message: clean(error?.message || error || 'unknown_error', 1000),
+    code: clean(error?.code || error?.name || '', 120) || null,
+    stack: clean(error?.stack || '', 2000) || null,
+    at: isoNow(),
+  };
+}
+
+async function countQuery(queryRef) {
+  try {
+    const snap = await queryRef.count().get();
+    return snap.data().count;
+  } catch {
+    return null;
+  }
+}
+
+function buildScaleAlerts(metrics) {
+  const alerts = [];
+  if ((metrics.jobs?.queued || 0) > 500) alerts.push({ level: 'high', type: 'job_backlog', message: 'System job backlog above 500 queued jobs.' });
+  if ((metrics.jobs?.deadLetter || 0) > 0) alerts.push({ level: 'critical', type: 'dead_letters', message: 'Dead-letter jobs require admin review.' });
+  if ((metrics.payments?.overdue || 0) > 0) alerts.push({ level: 'high', type: 'overdue_payments', message: 'There are overdue payments.' });
+  if ((metrics.notifications?.unread || 0) > 10000) alerts.push({ level: 'medium', type: 'notification_backlog', message: 'Unread notification backlog is high.' });
+  return alerts;
+}
+
+async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
+  const metrics = {
+    source,
+    generatedAt: isoNow(),
+    users: {
+      total: await countQuery(db.collection('users')),
+      admins: await countQuery(db.collection('users').where('role', '==', 'admin')),
+    },
+    marketplace: {
+      teachers: await countQuery(db.collection('profesores')),
+      families: await countQuery(db.collection('familias')),
+      students: await countQuery(db.collection('alumnos')),
+      requests: await countQuery(db.collection('solicitudes')),
+      assignments: await countQuery(db.collection('asignaciones')),
+    },
+    classes: {
+      total: await countQuery(db.collection('clases')),
+      scheduled: await countQuery(db.collection('clases').where('status', '==', 'programada')),
+      completed: await countQuery(db.collection('clases').where('status', '==', 'realizada')),
+    },
+    payments: {
+      total: await countQuery(db.collection('pagos')),
+      pending: await countQuery(db.collection('pagos').where('status', '==', 'pendiente')),
+      overdue: await countQuery(db.collection('pagos').where('status', '==', 'vencido')),
+      needsReview: await countQuery(db.collection('pagos').where('reconciliationStatus', '==', 'needs_review')),
+    },
+    notifications: {
+      total: await countQuery(db.collection('notificaciones')),
+      unread: await countQuery(db.collection('notificaciones').where('readAt', '==', null)),
+      tokens: await countQuery(db.collection('notificationTokens').where('active', '==', true)),
+    },
+    jobs: {
+      queued: await countQuery(db.collection('systemJobs').where('status', '==', 'queued')),
+      processing: await countQuery(db.collection('systemJobs').where('status', '==', 'processing')),
+      deadLetter: await countQuery(db.collection('systemJobs').where('status', '==', 'dead_letter')),
+    },
+    incidents: {
+      open: await countQuery(db.collection('incidencias').where('status', '==', 'abierta')),
+      critical: await countQuery(db.collection('incidencias').where('priority', '==', 'critical')),
+    },
+    version: 'scale-engine-2026-06-28',
+  };
+  const alerts = buildScaleAlerts(metrics);
+  const id = isoNow().slice(0, 16).replace(/[:]/g, '-');
+
+  await writeDoc(db.collection('metricSnapshots'), `platform_${id}`, {
+    scope: 'platform',
+    period: '10m',
+    metrics,
+    alerts,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+
+  for (const alert of alerts) {
+    await writeDoc(db.collection('opsAlerts'), `${alert.type}_${id}`, {
+      ...alert,
+      status: 'open',
+      source: 'github_actions_worker',
+      createdAt: now(),
+      updatedAt: now(),
+    });
+  }
+
+  return { alerts };
 }
 
 async function countActiveAssignmentsByTeacher(db) {
@@ -713,6 +822,163 @@ async function processPendingRequests(db, stats) {
     stats.requestsSeen += 1;
     if (data.matchStatus === 'ready') continue;
     await generateMatchesForRequest(db, doc.id, data, stats);
+  }
+}
+
+async function dispatchSystemJob(db, job, stats) {
+  const type = clean(job.data.type, 120);
+  const payload = job.data.payload || {};
+
+  if (type === 'noop') return { skipped: true, reason: 'noop' };
+
+  if (type === 'matching.request') {
+    const requestId = clean(payload.requestId || payload.solicitud_id, 180);
+    if (!requestId) throw new Error('matching.request requires requestId.');
+    const requestSnap = await db.collection('solicitudes').doc(requestId).get();
+    if (!requestSnap.exists) return { skipped: true, reason: 'request_not_found', requestId };
+    const request = requestSnap.data();
+    if (request.matchStatus === 'ready' && request.matchRunId) {
+      return { skipped: true, reason: 'already_matched', requestId };
+    }
+    await generateMatchesForRequest(db, requestId, request, stats, payload.reason || 'system_job');
+    return { requestId };
+  }
+
+  if (type === 'notification.admin') {
+    await notifyAdmins(
+      db,
+      payload.title || 'ClasesDe10',
+      payload.body || '',
+      payload.payload || { type: 'automation' },
+    );
+    return { notified: 'admin' };
+  }
+
+  if (type === 'notification.internal') {
+    const userUid = clean(payload.userUid || payload.usuario_id, 180);
+    const created = await notifyUserOnce(
+      db,
+      userUid,
+      payload.title || payload.titulo || 'ClasesDe10',
+      payload.body || payload.cuerpo || '',
+      payload.payload || { type: payload.type || 'automation' },
+      payload.idempotencyKey || job.data.idempotencyKey || `system_job_${job.id}`,
+    );
+    return { notified: userUid, created };
+  }
+
+  if (type === 'metrics.snapshot') {
+    const snapshot = await writeScaleMetricSnapshot(db, payload.source || 'system_job');
+    stats.metricSnapshotsCreated += 1;
+    stats.opsAlertsCreated += snapshot.alerts.length;
+    return { alerts: snapshot.alerts.length };
+  }
+
+  if (type === 'audit.event') {
+    const entityType = clean(payload.entityType, 80);
+    const action = clean(payload.action, 120);
+    if (!entityType || !action) throw new Error('audit.event requires entityType and action.');
+    await writeDoc(db.collection('auditLogs'), null, {
+      actorUid: clean(payload.actorUid || 'system', 180),
+      action,
+      entityType,
+      entityId: clean(payload.entityId, 180) || null,
+      metadata: payload.metadata || {},
+      trace: job.data.trace || null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    return { audited: true, entityType, action };
+  }
+
+  throw new Error(`Unsupported system job type: ${type}`);
+}
+
+async function markSystemJobCompleted(job, result) {
+  await writeDoc(job.ref.parent, job.id, {
+    status: 'completed',
+    completedAt: now(),
+    leaseUntil: null,
+    result,
+    updatedAt: now(),
+  });
+}
+
+async function markSystemJobFailed(db, job, error) {
+  const attempts = Math.max(1, Number(job.data.attempts || 1));
+  const maxAttempts = Math.max(1, Number(job.data.maxAttempts || 5));
+  const lastError = serializeJobError(error);
+
+  if (attempts >= maxAttempts) {
+    await writeDoc(job.ref.parent, job.id, {
+      status: 'dead_letter',
+      deadLetterAt: now(),
+      leaseUntil: null,
+      lastError,
+      updatedAt: now(),
+    });
+    await writeDoc(db.collection('deadLetters'), job.id, {
+      jobId: job.id,
+      type: job.data.type || '',
+      payload: job.data.payload || {},
+      attempts,
+      maxAttempts,
+      lastError,
+      trace: job.data.trace || null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    return;
+  }
+
+  await writeDoc(job.ref.parent, job.id, {
+    status: 'queued',
+    runAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + retryDelayMs(attempts))),
+    leaseUntil: null,
+    lastError,
+    updatedAt: now(),
+  });
+}
+
+async function processQueuedSystemJobs(db, stats) {
+  const snap = await db.collection('systemJobs')
+    .where('status', '==', 'queued')
+    .limit(systemJobLimit)
+    .get()
+    .catch(() => ({ docs: [] }));
+  const dueJobs = snap.docs
+    .map((doc) => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
+    .filter((job) => {
+      const runAt = dateFromFirestore(job.data.runAt);
+      return !runAt || runAt.getTime() <= Date.now();
+    })
+    .sort((a, b) => {
+      const priority = Number(b.data.priority || 0) - Number(a.data.priority || 0);
+      if (priority) return priority;
+      return (dateFromFirestore(a.data.runAt)?.getTime() || 0) - (dateFromFirestore(b.data.runAt)?.getTime() || 0);
+    });
+
+  stats.systemJobsSeen += snap.docs.length;
+  for (const job of dueJobs) {
+    const attempts = Math.max(0, Number(job.data.attempts || 0)) + 1;
+    await writeDoc(job.ref.parent, job.id, {
+      status: 'processing',
+      attempts,
+      workerId: 'github-actions-worker',
+      startedAt: now(),
+      leaseUntil: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
+      updatedAt: now(),
+    });
+    job.data.attempts = attempts;
+
+    try {
+      const result = await dispatchSystemJob(db, job, stats);
+      await markSystemJobCompleted(job, result);
+      stats.systemJobsProcessed += 1;
+    } catch (error) {
+      await markSystemJobFailed(db, job, error);
+      stats.systemJobsFailed += 1;
+    }
   }
 }
 
@@ -1457,11 +1723,17 @@ async function main() {
     lifecycleHistoryEventsCreated: 0,
     lifecycleNotificationsCreated: 0,
     trustProfilesUpdated: 0,
+    systemJobsSeen: 0,
+    systemJobsProcessed: 0,
+    systemJobsFailed: 0,
+    metricSnapshotsCreated: 0,
+    opsAlertsCreated: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit,
       matchingUserScanLimit,
       matchingAssignmentScanLimit,
+      systemJobLimit,
     },
   };
 
@@ -1471,6 +1743,7 @@ async function main() {
     return;
   }
 
+  await processQueuedSystemJobs(db, stats);
   await processPublicLeads(db, stats);
   await processTrustReputation(db, stats);
   await processPendingRequests(db, stats);
@@ -1484,6 +1757,9 @@ async function main() {
   await reconcileVerifiedPayments(db, stats);
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
+  const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');
+  stats.metricSnapshotsCreated += 1;
+  stats.opsAlertsCreated += snapshot.alerts.length;
 
   console.log(JSON.stringify(stats, null, 2));
 }

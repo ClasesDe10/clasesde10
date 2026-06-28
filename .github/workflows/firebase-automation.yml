@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  matching:
+  automation:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -41,6 +41,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-2.0-flash
+          SYSTEM_JOB_LIMIT: 50
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -z "$FIREBASE_SERVICE_ACCOUNT_BASE64" ]; then
             echo "::warning::Firebase automation skipped: configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64 as a repository secret."

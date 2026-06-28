@@ -48,6 +48,7 @@ function auditFile(file) {
     file: rel(file),
     supabaseCdn: /@supabase\/supabase-js/.test(text),
     importsSupabaseClient: /supabase-client\.js/.test(text),
+    importsFirebaseDataClient: /firebase-data-client\.js/.test(text),
     importsAuthProvider: /auth-provider\.js/.test(text),
     directAuthJs: /from ['"][./]+js\/auth\.js['"]/.test(text),
     tables: unique(matches(text, /\.from\(['"`]([^'"`]+)['"`]\)/g)),
@@ -58,14 +59,19 @@ function auditFile(file) {
     storageCount: count(text, /db\.storage\.from\(/g),
   };
 
-  const hasDependency = info.supabaseCdn
+  const hasRealSupabaseDependency = Boolean(info.supabaseCdn
     || info.importsSupabaseClient
-    || info.tables.length
-    || info.storageBuckets.length
     || info.authMethods.length
-    || info.realtimeChannels;
+    || info.realtimeChannels);
+  const hasFirebaseCompatibilityApi = Boolean(info.importsFirebaseDataClient
+    || info.tables.length
+    || info.storageBuckets.length);
 
-  return hasDependency ? info : null;
+  return (hasRealSupabaseDependency || hasFirebaseCompatibilityApi) ? {
+    ...info,
+    hasRealSupabaseDependency,
+    hasFirebaseCompatibilityApi,
+  } : null;
 }
 
 const files = RUNTIME_DIRS.flatMap((dir) => walk(path.join(ROOT, dir)));
@@ -95,7 +101,8 @@ const bucketUsage = Object.fromEntries(
 );
 
 const summary = {
-  runtimeFilesWithSupabase: runtimeInventory.length,
+  runtimeFilesWithSupabase: runtimeInventory.filter((item) => item.hasRealSupabaseDependency).length,
+  runtimeFilesWithFirebaseCompatibilityApi: runtimeInventory.filter((item) => item.hasFirebaseCompatibilityApi).length,
   files: runtimeInventory,
   tables: tableUsage,
   storageBuckets: bucketUsage,
@@ -109,4 +116,3 @@ const summary = {
 };
 
 console.log(JSON.stringify(summary, null, 2));
-
