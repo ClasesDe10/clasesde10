@@ -778,7 +778,7 @@ import { leads } from '../../js/adapters/index.js';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
-import { collection, doc as firestoreDoc, getDocs, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
@@ -1344,6 +1344,77 @@ async function cargarProfesoresFirestore() {
   return profesoresFirestoreCache;
 }
 
+function mapDoc(docSnap) {
+  return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } : null;
+}
+
+async function cargarColeccionMap(nombreColeccion) {
+  const snap = await getDocs(collection(firebaseDb, nombreColeccion));
+  return new Map(snap.docs.map((docSnap) => [docSnap.id, { id: docSnap.id, ...docSnap.data() }]));
+}
+
+function mapSolicitudFirestore(docSnap, familiasMap, alumnosMap, profesoresMap) {
+  if (!docSnap?.exists()) return null;
+  const data = { id: docSnap.id, ...docSnap.data() };
+  const familiaId = data.familyUid || data.familia_id;
+  const alumnoId = data.studentId || data.alumno_id || data.studentUid;
+  const profesorId = data.assignedTeacherUid || data.profesor_asignado_id;
+  const familia = familiasMap.get(familiaId) || {};
+  const alumno = alumnosMap.get(alumnoId) || {};
+  const profesor = profesoresMap.get(profesorId) || {};
+  const estado = data.estado || data.status || 'nueva';
+  return {
+    ...data,
+    estado,
+    status: estado,
+    created_at: data.created_at || data.createdAt,
+    familias: { usuarios: familia },
+    alumnos: alumno,
+    profesores: { usuarios: profesor },
+    familia_id: familiaId,
+    familyUid: familiaId,
+    alumno_id: alumnoId,
+    studentId: alumnoId,
+    profesor_asignado_id: profesorId,
+    assignedTeacherUid: profesorId,
+    createdSort: timestampMillis(data.createdAt || data.created_at),
+  };
+}
+
+async function cargarSolicitudesFirestore() {
+  const [solicitudesSnap, familiasMap, alumnosMap, profesores] = await Promise.all([
+    getDocs(collection(firebaseDb, 'solicitudes')),
+    cargarColeccionMap('familias'),
+    cargarColeccionMap('alumnos'),
+    cargarProfesoresFirestore(),
+  ]);
+  const profesoresMap = new Map(profesores.map((profesor) => [profesor.id, profesor]));
+  return solicitudesSnap.docs
+    .map((docSnap) => mapSolicitudFirestore(docSnap, familiasMap, alumnosMap, profesoresMap))
+    .filter(Boolean)
+    .sort((a, b) => b.createdSort - a.createdSort);
+}
+
+async function getSolicitudFirestore(id) {
+  const [solicitudSnap, familiasMap, alumnosMap, profesores] = await Promise.all([
+    getDoc(firestoreDoc(firebaseDb, 'solicitudes', id)),
+    cargarColeccionMap('familias'),
+    cargarColeccionMap('alumnos'),
+    cargarProfesoresFirestore(),
+  ]);
+  const profesoresMap = new Map(profesores.map((profesor) => [profesor.id, profesor]));
+  return mapSolicitudFirestore(solicitudSnap, familiasMap, alumnosMap, profesoresMap);
+}
+
+async function cargarSolicitudMatchesFirestore(solicitudId) {
+  const snap = await getDocs(collection(firebaseDb, 'solicitudMatches'));
+  return snap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+    .filter((match) => (match.requestId || match.solicitud_id) === solicitudId)
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, 5);
+}
+
 function renderProfesorDetalle(p) {
   if (!p) return '<div class="empty-state"><div class="empty-title">Profesor no encontrado</div></div>';
   const issues = incidenciasPerfilProfesor(p);
@@ -1712,7 +1783,38 @@ const PAG_SOL = new Paginacion({ porPagina:20, contenedor: document.getElementBy
 
 async function cargarSolicitudes() {
   const estado = document.getElementById('filtro-sol-estado').value;
-  let q = db.from('solicitudes')
+  const solicitudesFirestore = await cargarSolicitudesFirestore();
+  const filtradasFirestore = solicitudesFirestore.filter((s) => !estado || String(s.estado || s.status || '').toLowerCase() === estado);
+  PAG_SOL.setTotal(filtradasFirestore.length);
+  document.getElementById('sol-count').textContent = `${filtradasFirestore.length} solicitudes`;
+
+  const tbodySolicitudes = document.getElementById('tbody-solicitudes');
+  if (!filtradasFirestore.length) {
+    tbodySolicitudes.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin solicitudes.</td></tr>';
+    return;
+  }
+
+  const paginaSolicitudes = filtradasFirestore.slice(PAG_SOL.offset(), PAG_SOL.offset() + 20);
+  tbodySolicitudes.innerHTML = paginaSolicitudes.map(s => `<tr>
+    <td>${formatFechaCorta(s.created_at)}</td>
+    <td>${sanitize(s.familias?.usuarios?.nombre||'')} ${sanitize(s.familias?.usuarios?.apellidos||'')}</td>
+    <td>${sanitize(s.alumnos?.nombre||'â€”')} ${sanitize(s.alumnos?.apellidos||'')}</td>
+    <td><strong>${sanitize(s.materia)}</strong></td>
+    <td>${sanitize(s.nivel||'â€”')}</td>
+    <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'â€”')}</td>
+    <td>${badgeEstado(s.estado)}</td>
+    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : 'â€”'}</td>
+    <td>
+      ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm"
+                                      data-action="abrir-asignar"
+                                      data-id="${sanitize(s.id)}"
+                                      data-materia="${sanitize(s.materia)}"
+                                      data-familia="${sanitize(s.familias?.usuarios?.nombre||'')}">Asignar</button>` : ''}
+    </td>
+  </tr>`).join('');
+  return;
+
+  let q = null
     .select('*, familias(usuarios(nombre,apellidos)), alumnos(nombre,apellidos), profesores(usuarios(nombre,apellidos))', {count:'exact'});
   if (estado) q = q.eq('estado', estado);
   q = q.order('created_at',{ascending:false}).range(PAG_SOL.offset(), PAG_SOL.offset()+19);
@@ -1754,14 +1856,63 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
   document.getElementById('asignar-profesor-detalle').style.display = 'none';
   document.getElementById('asignar-profesor-detalle').innerHTML = '';
 
+  try {
+    const [solicitud, profs, matches] = await Promise.all([
+      getSolicitudFirestore(solicitudId),
+      cargarProfesoresFirestore(),
+      cargarSolicitudMatchesFirestore(solicitudId),
+    ]);
+
+    window.solicitudAsignacionActual = solicitud || null;
+    if (solicitud) {
+      document.getElementById('asignar-solicitud-info').innerHTML = `
+        <strong>Materia:</strong> ${sanitize(solicitud.materia || materia)}<br>
+        <strong>Familia:</strong> ${sanitize(solicitud.familias?.usuarios?.nombre || familia || '-')}<br>
+        <strong>Alumno:</strong> ${sanitize([solicitud.alumnos?.nombre, solicitud.alumnos?.apellidos].filter(Boolean).join(' ') || solicitud.alumno_nombre || '-')}<br>
+        <strong>Nivel:</strong> ${sanitize(solicitud.nivel || '-')}<br>
+        <strong>Horario:</strong> ${sanitize(solicitud.preferencia_horario || '-')}
+      `;
+    }
+
+    const profesoresElegibles = (profs || []).filter(profesorPuedeAparecerAsignacion);
+    profesoresElegibles.forEach((p) => profesoresCache.set(p.id, p));
+    document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
+      (profesoresElegibles.length ? profesoresElegibles.map((p) => {
+        const completo = perfilProfesorCompleto(p);
+        const issues = incidenciasPerfilProfesor(p).slice(0, 3).join(', ');
+        const nombre = nombreProfesor(p);
+        return `<option value="${sanitize(p.id)}" ${completo ? '' : 'disabled'}>${sanitize(nombre)}${completo ? '' : ` (perfil incompleto: ${sanitize(issues)})`}</option>`;
+      }).join('') : '<option value="" disabled>No hay profesores activos o verificados</option>');
+
+    const detalleProfesor = document.getElementById('asignar-profesor-detalle');
+    const completos = profesoresElegibles.filter(perfilProfesorCompleto).length;
+    if (detalleProfesor && !completos) {
+      detalleProfesor.style.display = '';
+      detalleProfesor.innerHTML = profesoresElegibles.length
+        ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, materias, niveles, tarifa, disponibilidad y presentacion antes de asignar.</div></div>`
+        : '<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Activa o verifica al menos un profesor con perfil completo antes de asignar esta solicitud.</div></div>';
+    } else if (detalleProfesor) {
+      detalleProfesor.style.display = 'none';
+      detalleProfesor.innerHTML = '';
+    }
+    renderAsignarMatches(matches || [], null);
+    openModal('modal-asignar');
+    return;
+  } catch (error) {
+    showToast('Error', error.message, 'error');
+    document.getElementById('asignar-match-recomendaciones').innerHTML = `<span style="color:var(--danger)">${sanitize(error.message)}</span>`;
+    openModal('modal-asignar');
+    return;
+  }
+
   const [{ data: solicitud }, { data: profs }, { data: matches, error: matchError }] = await Promise.all([
-    db.from('solicitudes')
+    null
       .select('*, familias(usuarios(nombre,apellidos)), alumnos(nombre,apellidos)')
       .eq('id', solicitudId)
       .single(),
-    db.from('profesores')
+    null
       .select('*, usuarios(nombre,apellidos,email,telefono)'),
-    db.from('solicitudMatches')
+    null
       .select('*')
       .eq('solicitud_id', solicitudId)
       .order('score', { ascending: false })
@@ -1881,8 +2032,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
 
   let solicitud = window.solicitudAsignacionActual;
   if (!solicitud || solicitud.id !== id) {
-    const { data } = await db.from('solicitudes').select('*').eq('id', id).single();
-    solicitud = data;
+    solicitud = await getSolicitudFirestore(id);
   }
   const alumnoId = solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid;
   const familiaId = solicitud?.familia_id || solicitud?.familyUid;
@@ -1893,39 +2043,48 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
 
   const notas = document.getElementById('asignar-notas').value.trim();
   const now = new Date().toISOString();
-  const { error } = await db.from('solicitudes').update({
-    estado: 'asignada',
-    status: 'asignada',
-    profesor_asignado_id: profId,
-    assignedTeacherUid: profId,
-    fecha_asignacion: now,
-    notas_admin: notas,
-  }).eq('id', id);
-  if (error) { showToast('Error', error.message, 'error'); return; }
-
   const asignacionId = `${id}_${profId}`;
-  const { error: asignacionError } = await db.from('asignaciones').insert({
-    id: asignacionId,
-    solicitud_id: id,
-    requestId: id,
-    profesor_id: profId,
-    teacherUid: profId,
-    alumno_id: alumnoId,
-    studentId: alumnoId,
-    familia_id: familiaId || null,
-    familyUid: familiaId || null,
-    materia: solicitud?.materia || solicitud?.subject || '',
-    subject: solicitud?.materia || solicitud?.subject || '',
-    nivel: solicitud?.nivel || '',
-    activa: true,
-    active: true,
-    estado: 'activa',
-    status: 'activa',
-    notas_admin: notas,
-    assignedAt: now,
-    fecha_asignacion: now,
-  });
-  if (asignacionError) { showToast('Error', asignacionError.message, 'error'); return; }
+  try {
+    await updateDoc(firestoreDoc(firebaseDb, 'solicitudes', id), {
+      estado: 'asignada',
+      status: 'asignada',
+      profesor_asignado_id: profId,
+      assignedTeacherUid: profId,
+      fecha_asignacion: now,
+      assignedAt: serverTimestamp(),
+      notas_admin: notas,
+      updatedAt: serverTimestamp(),
+      updated_at: now,
+    });
+
+    await setDoc(firestoreDoc(firebaseDb, 'asignaciones', asignacionId), {
+      id: asignacionId,
+      solicitud_id: id,
+      requestId: id,
+      profesor_id: profId,
+      teacherUid: profId,
+      alumno_id: alumnoId,
+      studentId: alumnoId,
+      familia_id: familiaId || null,
+      familyUid: familiaId || null,
+      materia: solicitud?.materia || solicitud?.subject || '',
+      subject: solicitud?.materia || solicitud?.subject || '',
+      nivel: solicitud?.nivel || '',
+      activa: true,
+      active: true,
+      estado: 'activa',
+      status: 'activa',
+      source: 'admin_manual',
+      notas_admin: notas,
+      assignedAt: serverTimestamp(),
+      fecha_asignacion: now,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (error) {
+    showToast('Error', error.message, 'error');
+    return;
+  }
 
   closeModal('modal-asignar');
   showToast('Asignado', 'Profesor asignado y relacion activa creada correctamente.', 'success');

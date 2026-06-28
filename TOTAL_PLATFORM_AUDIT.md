@@ -58,6 +58,7 @@ Comprobaciones ejecutadas:
 | Matching lee aliases importados | Completado | `functions/index.js` ahora reconoce `subjects`, `levels`, `hourlyRate` y `tarifaHora`. |
 | Desplegar Functions con cambio de matching | Bloqueado por facturacion | `firebase deploy --only functions` exige Blaze para habilitar `cloudbuild.googleapis.com` y `artifactregistry.googleapis.com`. |
 | Migrar admin Profesores a Firestore | Completado y desplegado | `pages/dashboard/admin.html` lista, filtra, exporta y cambia verificacion de profesores desde Firestore. Smoke produccion: `26 profesores`, `20` filas, sin fallback legacy. |
+| Migrar admin Solicitudes/Asignacion a Firestore | Completado y desplegado | Lista solicitudes Firebase, abre modal de asignacion y crea `asignaciones` Firestore manualmente si hay profesor completo. Smoke produccion: `1 solicitudes`, modal OK, sin fallback legacy. |
 
 ## 3. Arquitectura actual
 
