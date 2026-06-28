@@ -676,6 +676,46 @@ textarea {
   color: var(--gray-mid);
   font-size: .78rem;
 }
+.control-health-score {
+  --score: 0;
+  flex: 0 0 auto;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 2px;
+  background:
+    radial-gradient(circle at center, var(--white) 58%, transparent 60%),
+    conic-gradient(var(--success) calc(var(--score) * 1%), rgba(0,0,0,.08) 0);
+  border: 1px solid rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+}
+.control-health-score.warning {
+  background:
+    radial-gradient(circle at center, var(--white) 58%, transparent 60%),
+    conic-gradient(var(--warning) calc(var(--score) * 1%), rgba(0,0,0,.08) 0);
+}
+.control-health-score.danger {
+  background:
+    radial-gradient(circle at center, var(--white) 58%, transparent 60%),
+    conic-gradient(var(--danger) calc(var(--score) * 1%), rgba(0,0,0,.08) 0);
+}
+.control-health-score strong {
+  color: var(--navy);
+  font-size: 1.55rem;
+  line-height: 1;
+}
+.control-health-score span {
+  max-width: 72px;
+  color: var(--gray-mid);
+  font-size: .66rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-align: center;
+  text-transform: uppercase;
+}
 .control-kpi-grid {
   margin-bottom: 0;
 }
@@ -790,6 +830,122 @@ textarea {
   color: var(--text-dark);
   font-size: .72rem;
   overflow-wrap: anywhere;
+}
+.control-chart-sub {
+  color: var(--gray-mid);
+  font-size: .68rem;
+}
+.control-forecast-grid,
+.control-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.control-forecast-item,
+.control-insight-card,
+.control-anomaly-card,
+.control-rank-row {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(0,0,0,.06);
+  border-radius: var(--radius-sm);
+  background: #fbfaf7;
+}
+.control-forecast-item span,
+.control-insight-card span {
+  display: block;
+  color: var(--gray-mid);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.control-forecast-item strong,
+.control-insight-card strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--navy);
+  font-size: 1.05rem;
+  line-height: 1.15;
+}
+.control-forecast-item em,
+.control-insight-card em {
+  display: block;
+  margin-top: 4px;
+  color: var(--gray-mid);
+  font-size: .72rem;
+  font-style: normal;
+}
+.control-insight-card {
+  width: 100%;
+  border-left: 4px solid var(--success);
+  cursor: pointer;
+  text-align: left;
+}
+.control-insight-card.warning { border-left-color: var(--warning); }
+.control-insight-card.danger { border-left-color: var(--danger); }
+.control-anomaly-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-left: 4px solid var(--warning);
+  background: rgba(217,119,6,.06);
+}
+.control-anomaly-card.danger {
+  border-left-color: var(--danger);
+  background: rgba(220,38,38,.06);
+}
+.control-anomaly-metric {
+  color: var(--gray-mid);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.control-anomaly-title,
+.control-rank-title {
+  margin-top: 2px;
+  color: var(--text-dark);
+  font-size: .86rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.control-anomaly-body,
+.control-rank-meta {
+  margin-top: 3px;
+  color: var(--gray-mid);
+  font-size: .75rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.control-rank-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  background: var(--white);
+}
+.control-rank-position,
+.control-rank-score {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(15,31,61,.09);
+  color: var(--navy);
+  font-weight: 900;
+  font-size: .78rem;
+}
+.control-rank-score {
+  background: rgba(29,122,107,.12);
+  color: var(--teal);
+}
+.control-sla-grid {
+  display: grid;
+  gap: 12px;
+}
+.control-market-grid-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .control-timeline {
   display: grid;
@@ -1874,6 +2030,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     padding: 14px;
     flex-direction: column;
   }
+  .control-health-score {
+    width: 96px;
+    height: 96px;
+  }
   .control-live {
     width: 100%;
     justify-content: flex-start;
@@ -1883,6 +2043,23 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .control-market-grid {
     grid-template-columns: 1fr;
+  }
+  .control-forecast-grid,
+  .control-insight-grid,
+  .control-market-grid-compact {
+    grid-template-columns: 1fr;
+  }
+  .control-anomaly-card,
+  .control-rank-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .control-anomaly-card .btn {
+    width: 100%;
+  }
+  .control-rank-position,
+  .control-rank-score {
+    width: 100%;
+    border-radius: 8px;
   }
   .control-alert {
     align-items: stretch;

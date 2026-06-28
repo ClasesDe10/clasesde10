@@ -1,16 +1,21 @@
 async (page) => {
   await page.waitForFunction(() => {
     const root = document.querySelector('#admin-control-center .control-center');
-    return root && root.textContent.includes('Centro de control') && !root.textContent.includes('Centro de control no disponible');
+    return root && root.textContent.includes('Inteligencia empresarial') && !root.textContent.includes('Centro de control no disponible');
   }, null, { timeout: 30000 });
 
   const result = await page.evaluate(() => {
     const root = document.querySelector('#section-dashboard');
-    const text = root?.innerText || '';
+    const text = root?.textContent || '';
     const cards = root?.querySelectorAll('.control-kpi').length || 0;
     const chartBars = root?.querySelectorAll('.control-chart-bar').length || 0;
     const actionButtons = root?.querySelectorAll('[data-control-nav]').length || 0;
     const required = [
+      'Inteligencia empresarial',
+      'Prevision de cierre',
+      'Deteccion de anomalias',
+      'SLA operativo',
+      'Profesores destacados',
       'Salud del marketplace',
       'Evolucion mensual',
       'Alertas automaticas',
