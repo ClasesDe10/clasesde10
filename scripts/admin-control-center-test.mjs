@@ -24,6 +24,9 @@ assert(admin.includes('data-admin-control-center'), 'Admin dashboard must expose
 assert(admin.includes('initAdminControlCenter'), 'Admin dashboard must initialize the control center module.');
 assert(admin.includes("navigate: irA"), 'Control center actions must navigate to existing admin sections.');
 assert(admin.includes('data-section="ia"'), 'Admin dashboard must expose the admin AI section in navigation.');
+assert(admin.includes('data-section="configuracion"'), 'Admin dashboard must expose the platform configuration section in navigation.');
+assert(admin.includes('data-admin-platform-config'), 'Admin dashboard must expose the platform configuration root.');
+assert(admin.includes('initAdminPlatformConfig'), 'Admin dashboard must initialize the platform configuration center.');
 assert(admin.includes('data-admin-ai-assistant'), 'Admin dashboard must expose the admin AI assistant root.');
 assert(admin.includes('initAdminAiAssistant'), 'Admin dashboard must initialize the admin AI assistant.');
 assert(admin.includes('renderCrmFicha'), 'Admin dashboard must render unified CRM profiles.');
@@ -110,5 +113,6 @@ assert(rules.includes('match /crmNotes/{noteId}'), 'Firestore rules must protect
 assert(rules.includes('match /crmTasks/{taskId}'), 'Firestore rules must protect CRM tasks.');
 assert(rules.includes('match /adminAiQueries/{queryId}'), 'Firestore rules must protect admin AI query logs.');
 assert(rules.includes('match /platformHealthChecks/{checkId}'), 'Firestore rules must protect Mission Control health checks.');
+assert(rules.includes('match /platformConfigHistory/{historyId}'), 'Firestore rules must protect platform configuration history.');
 
 console.log('Admin control center validation passed.');

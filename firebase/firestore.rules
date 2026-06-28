@@ -1087,6 +1087,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /platformConfigHistory/{historyId} {
+      allow read, write: if isAdmin();
+    }
+
     match /auditLogs/{logId} {
       allow read: if isAdmin();
       allow create: if isAdmin() || validAuditLogCreate();

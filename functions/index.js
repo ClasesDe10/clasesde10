@@ -23,6 +23,7 @@ const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 let adminUsersCache = { expiresAt: 0, users: [] };
 let notificationSettingsCache = { expiresAt: 0, settings: null };
 let automationRulesCache = { expiresAt: 0, rules: [] };
+let platformConfigCache = { expiresAt: 0, config: {} };
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -535,6 +536,27 @@ async function loadAutomationRules() {
   return automationRulesCache.rules;
 }
 
+async function loadPlatformConfig() {
+  if (platformConfigCache.expiresAt > Date.now()) return platformConfigCache.config;
+  try {
+    const snap = await db.collection('configuracion').doc('platform').get();
+    const config = snap.exists ? (snap.data().config || {}) : {};
+    platformConfigCache = { expiresAt: Date.now() + 60 * 1000, config };
+  } catch (error) {
+    logger.warn('Could not load platform configuration; defaults will be used.', error);
+    platformConfigCache = { expiresAt: Date.now() + 60 * 1000, config: {} };
+  }
+  return platformConfigCache.config;
+}
+
+function configNumber(config, path, fallback) {
+  const value = String(path || '').split('.').reduce((current, key) => (
+    current === undefined || current === null ? undefined : current[key]
+  ), config);
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
 async function writePlannedNotification(notification) {
   const payload = notification.payload || { type: notification.type || 'automation' };
   const extra = {
@@ -587,11 +609,14 @@ async function writePlannedNotification(notification) {
 }
 
 async function materializeAutomationPlan(event, extra = {}) {
-  const rules = await loadAutomationRules();
+  const [rules, platformConfig] = await Promise.all([
+    loadAutomationRules(),
+    loadPlatformConfig(),
+  ]);
   const plan = buildAutomationPlan({
     ...event,
     source: event.source || extra.source || 'functions',
-  }, { rules });
+  }, { rules, config: platformConfig });
   const counts = {
     automationEvents: 0,
     notifications: 0,
@@ -1807,6 +1832,8 @@ exports.processSystemJobs = onSchedule({
   timeZone: 'Europe/Madrid',
 }, async () => {
   const workerId = `systemJobs-${Date.now().toString(36)}`;
+  const platformConfig = await loadPlatformConfig();
+  const batchLimit = Math.max(1, Math.min(500, configNumber(platformConfig, 'automation.systemJobBatchLimit', SYSTEM_JOB_BATCH_LIMIT)));
   let snap;
   try {
     snap = await db.collection('systemJobs')
@@ -1814,7 +1841,7 @@ exports.processSystemJobs = onSchedule({
       .where('runAt', '<=', admin.firestore.Timestamp.now())
       .orderBy('runAt', 'asc')
       .orderBy('priority', 'desc')
-      .limit(SYSTEM_JOB_BATCH_LIMIT)
+      .limit(batchLimit)
       .get();
   } catch (error) {
     logger.error('processSystemJobs query failed', { message: error.message });

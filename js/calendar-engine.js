@@ -127,6 +127,17 @@ export function calculateDurationMinutes(startTime, endTime) {
   return Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 60000));
 }
 
+function configValue(config, path, fallback) {
+  const value = String(path || '').split('.').reduce((current, key) => (
+    current === undefined || current === null ? undefined : current[key]
+  ), config);
+  return value === undefined || value === null || value === '' ? fallback : value;
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+}
+
 export function validateClassTimeRange(date, startTime, endTime) {
   const errors = [];
   if (!normalizeDateString(date)) errors.push('fecha');
@@ -177,9 +188,16 @@ export function buildAdminClassPayload(input = {}, previous = {}, options = {}) 
   const nextStatus = changedSchedule && isScheduledClassStatus(requestedStatus) ? 'reprogramada' : requestedStatus;
   const nowIso = options.nowIso || new Date().toISOString();
   const price = input.precio_total ?? input.amount ?? null;
-  const teacherAmount = input.importe_profesor ?? input.teacherAmount ?? null;
+  let teacherAmount = input.importe_profesor ?? input.teacherAmount ?? null;
+  const numericPrice = price === null || price === '' ? null : Number(price);
+  if ((teacherAmount === null || teacherAmount === '' || teacherAmount === undefined) && Number.isFinite(numericPrice)) {
+    const commissionPercent = Number(configValue(options.config, 'business.defaultCommissionPercent', 25));
+    const minimumFee = Number(configValue(options.config, 'business.minimumPlatformFee', 0));
+    const configuredFee = Math.max(Number.isFinite(minimumFee) ? minimumFee : 0, numericPrice * (Number.isFinite(commissionPercent) ? commissionPercent : 25) / 100);
+    teacherAmount = roundMoney(Math.max(0, numericPrice - configuredFee));
+  }
   const platformFee = price !== null && teacherAmount !== null
-    ? Math.round((Number(price || 0) - Number(teacherAmount || 0) + Number.EPSILON) * 100) / 100
+    ? roundMoney(Number(price || 0) - Number(teacherAmount || 0))
     : null;
 
   return {

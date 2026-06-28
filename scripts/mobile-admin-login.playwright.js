@@ -6,7 +6,8 @@ async (page) => {
   }
 
   const baseUrl = page.url().replace(/^(https?:\/\/[^/]+).*/, '$1');
-  await page.goto(`${baseUrl}/pages/login.html`, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(`${baseUrl}/pages/login.html`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(password);
   await page.locator('#form-login').evaluate((form) => form.requestSubmit());

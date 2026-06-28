@@ -39,6 +39,8 @@ const DATA_SPECS = [
   ['messages', 'mensajes', 900, true],
   ['notifications', 'notificaciones', 900],
   ['publicLeads', 'leadsPublicos', 700],
+  ['platformConfig', 'configuracion', 200],
+  ['platformConfigHistory', 'platformConfigHistory', 300],
   ['automationEvents', 'automationEvents', 700],
   ['automationRules', 'automationRules', 500],
   ['automationRuleRuns', 'automationRuleRuns', 700],

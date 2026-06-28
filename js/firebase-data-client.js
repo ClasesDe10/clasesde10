@@ -29,6 +29,7 @@ import {
 import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
 import { recordDataAudit } from './audit-client.js?v=20260628-audit';
 import { lifecycleStatusForClassStatus } from './calendar-engine.js';
+import { getConfigValue } from './platform-config.js?v=20260628-config';
 import {
   buildFamilyPaymentPayload,
   buildTeacherPayoutPayload,
@@ -315,10 +316,12 @@ function normalizeWritePayload(table, payload, isCreate = false) {
   }
 
   if (table === 'pagos') {
+    const platformConfig = globalThis.CD10PlatformConfig || {};
+    const defaultPaymentDueDays = Number(getConfigValue(platformConfig, 'payments.defaultPaymentDueDays', 7));
     if (isCreate) {
       const normalized = isTeacherPayout(data)
         ? buildTeacherPayoutPayload(data.teacherUid || data.profesor_id || data.userUid, data)
-        : buildFamilyPaymentPayload(data);
+        : buildFamilyPaymentPayload(data, { defaultPaymentDueDays });
       Object.assign(data, normalized);
     }
     data.estado = storedPaymentStatus(data.estado || data.status || 'pendiente');
@@ -332,7 +335,7 @@ function normalizeWritePayload(table, payload, isCreate = false) {
     data.metodo = data.metodo || data.method || 'bizum';
     data.method = data.method || data.metodo;
     if (isCreate) {
-      data.dueAt = data.dueAt || data.due_at || paymentDueAtFromDate();
+      data.dueAt = data.dueAt || data.due_at || paymentDueAtFromDate(new Date(), Number.isFinite(defaultPaymentDueDays) ? defaultPaymentDueDays : 7);
       data.due_at = data.due_at || data.dueAt;
     }
     data.idempotencyKey = data.idempotencyKey || paymentFingerprint(data);
@@ -382,6 +385,7 @@ function auditModuleForTable(table) {
   if (['incidencias'].includes(table)) return 'incidents';
   if (['notificaciones', 'notificationPreferences', 'notificationTokens'].includes(table)) return 'notifications';
   if (['chats', 'mensajes'].includes(table)) return 'messaging';
+  if (['configuracion', 'configuracionPublica', 'platformConfigHistory'].includes(table)) return 'configuration';
   if ([
     'automationEvents',
     'automationRules',

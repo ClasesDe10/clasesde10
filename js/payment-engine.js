@@ -145,6 +145,8 @@ export function buildFamilyPaymentPayload(input = {}, options = {}) {
   const gateway = cleanPaymentText(input.gateway || input.provider || 'manual', 40).toLowerCase();
   const status = storedPaymentStatus(input.estado || input.status || (isAutomaticGateway({ gateway }) ? 'procesando' : 'pendiente'));
   const nowIso = options.nowIso || new Date().toISOString();
+  const dueDays = Number(options.defaultPaymentDueDays ?? options.paymentDueDays ?? 7);
+  const safeDueDays = Number.isFinite(dueDays) ? Math.max(0, dueDays) : 7;
   const classIds = Array.isArray(input.classIds) ? input.classIds.map(String).filter(Boolean) : [];
 
   return {
@@ -172,8 +174,8 @@ export function buildFamilyPaymentPayload(input = {}, options = {}) {
     reconciliationStatus: input.reconciliationStatus || (classIds.length ? 'matched' : 'pending_match'),
     verificationSource: input.verificationSource || (isAutomaticGateway({ gateway }) ? gateway : 'manual_proof'),
     verified: input.verified === true || PAID_PAYMENT_STATUSES.includes(status),
-    dueAt: input.dueAt || input.due_at || paymentDueAtFromDate(new Date(nowIso), 7),
-    due_at: input.due_at || input.dueAt || paymentDueAtFromDate(new Date(nowIso), 7),
+    dueAt: input.dueAt || input.due_at || paymentDueAtFromDate(new Date(nowIso), safeDueDays),
+    due_at: input.due_at || input.dueAt || paymentDueAtFromDate(new Date(nowIso), safeDueDays),
     idempotencyKey: input.idempotencyKey || paymentFingerprint({
       ...input,
       gateway,

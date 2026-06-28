@@ -45,6 +45,10 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3a1.5 1.5 0 00-1.5 1.5V6h-1.5A2.25 2.25 0 004.5 8.25v1.5H3a1.5 1.5 0 000 3h1.5v1.5a2.25 2.25 0 002.25 2.25h1.5v1.5a1.5 1.5 0 003 0v-1.5h1.5v1.5a1.5 1.5 0 003 0v-1.5h1.5A2.25 2.25 0 0019.5 14.25v-1.5H21a1.5 1.5 0 000-3h-1.5v-1.5A2.25 2.25 0 0017.25 6h-1.5V4.5a1.5 1.5 0 00-3 0V6h-1.5V4.5A1.5 1.5 0 009.75 3zM8 10h.01M16 10h.01M9 14h6"/></svg>
         IA Admin
       </button>
+      <button class="sidebar-link" data-section="configuracion">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Configuracion
+      </button>
       <button class="sidebar-link" data-section="clases">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Clases
@@ -190,6 +194,10 @@
       <!-- â•â• SECCIÃ“N: CLASES â•â• -->
       <section id="section-ia" class="dash-section" style="display:none">
         <div id="admin-ai-assistant" data-admin-ai-assistant></div>
+      </section>
+
+      <section id="section-configuracion" class="dash-section" style="display:none">
+        <div id="admin-platform-config" data-admin-platform-config></div>
       </section>
 
       <section id="section-clases" class="dash-section" style="display:none">
@@ -965,6 +973,8 @@ import db from '../../js/firebase-data-client.js?v=20260628-audit';
 import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-rules';
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
+import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
+import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
@@ -1019,19 +1029,32 @@ import { Calendario } from '../../js/calendario.js';
 // â”€â”€ PROTEGER RUTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const usuario = await requireAuth(['admin']);
 if (!usuario) throw new Error('No autorizado');
+let platformConfig = normalizePlatformConfig({});
+try {
+  platformConfig = (await loadPlatformConfig()).config;
+  window.CD10PlatformConfig = platformConfig;
+} catch (error) {
+  console.warn('No se pudo cargar configuracion de plataforma; usando defaults', error);
+  window.CD10PlatformConfig = platformConfig;
+}
+window.addEventListener('cd10:platform-config-updated', (event) => {
+  platformConfig = normalizePlatformConfig(event.detail?.config || {});
+  window.CD10PlatformConfig = platformConfig;
+});
 
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // â”€â”€ NAVEGACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const secciones = ['dashboard','ia','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
+const secciones = ['dashboard','ia','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
 const TITULOS = {
-  dashboard:'Dashboard', ia:'IA Admin', clases:'Clases', calendario:'Calendario',
+  dashboard:'Dashboard', ia:'IA Admin', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
   solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias', auditoria:'Auditoria',
 };
 let chatInicializado = false;
 let adminAiInicializada = false;
+let adminConfigInicializada = false;
 let profesoresCache = new Map();
 let profesoresFirestoreCache = null;
 let familiasCache = new Map();
@@ -1153,6 +1176,7 @@ function irA(seccion) {
   document.getElementById('topbar-title').textContent = TITULOS[seccion] || seccion;
   if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
   else if (seccion === 'ia') ejecutarCargaSeccion(seccion, iniciarAdminAi);
+  else if (seccion === 'configuracion') ejecutarCargaSeccion(seccion, iniciarConfiguracion);
   else if (seccion === 'clases') ejecutarCargaSeccion(seccion, cargarClases);
   else if (seccion === 'calendario') ejecutarCargaSeccion(seccion, iniciarCalendario);
   else if (seccion === 'profesores') ejecutarCargaSeccion(seccion, cargarProfesores);
@@ -1212,6 +1236,16 @@ function iniciarAdminAi() {
     actor: usuario,
   });
   adminAiInicializada = true;
+}
+
+function iniciarConfiguracion() {
+  if (adminConfigInicializada) return;
+  initAdminPlatformConfig({
+    container: document.getElementById('admin-platform-config'),
+    actor: usuario,
+    showToast,
+  });
+  adminConfigInicializada = true;
 }
 
 async function cargarDashboard() {
@@ -1703,7 +1737,7 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
     calendarUid: claseEditandoActual?.calendarUid || newCalendarUid(),
   };
   const payload = {
-    ...buildAdminClassPayload(input, claseEditandoActual || {}, { nowIso: new Date().toISOString(), calendarUid: input.calendarUid }),
+    ...buildAdminClassPayload(input, claseEditandoActual || {}, { nowIso: new Date().toISOString(), calendarUid: input.calendarUid, config: platformConfig }),
     calendarSync: calendarSyncMetadata(input),
   };
   const result = id
@@ -3617,9 +3651,16 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
       detalleProfesor.style.display = 'none';
       detalleProfesor.innerHTML = '';
     }
+    const matchingLimit = Number(getConfigValue(platformConfig, 'matching.maxCandidates', 5));
+    const matchingMinScore = Number(getConfigValue(platformConfig, 'matching.minScore', 25));
+    const includeZeroScore = getConfigValue(platformConfig, 'matching.includeZeroScoreForAdmin', true) === true;
     const aiMatches = (matches || []).length
       ? matches
-      : rankTeachersForRequest(solicitud || { materia, subject: materia }, profs || [], { limit: 5, includeZeroScore: true });
+      : rankTeachersForRequest(solicitud || { materia, subject: materia }, profs || [], {
+        limit: matchingLimit,
+        minScore: matchingMinScore,
+        includeZeroScore,
+      });
     renderAsignarMatches(aiMatches, null);
     openModal('modal-asignar');
     return;

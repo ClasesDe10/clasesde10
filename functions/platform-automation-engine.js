@@ -261,6 +261,10 @@ function classHasPaidStatus(data) {
   return ['validado', 'pagado', 'paid', 'succeeded'].includes(status);
 }
 
+function configNumber(path, fallback) {
+  return { number: { firstOf: [`config.${path}`, { const: fallback }] } };
+}
+
 const DEFAULT_AUTOMATION_RULES = [
   {
     id: 'request.created.core',
@@ -271,7 +275,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'automationEvent', summary: 'Nueva solicitud capturada y enviada a matching.', severity: 'info', payload: { subject: { path: 'computed.subject' } } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Nueva solicitud recibida', body: '{{computed.person}} solicita {{computed.subject}}.', payload: { requestId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'request_created', priority: 'high' } },
       { type: 'systemJob', jobType: 'matching.request', payload: { requestId: { path: 'computed.id' }, reason: 'request_created' }, options: { priority: 'high', key: 'matching' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'request.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'request.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'request.created', metadata: { subject: { path: 'computed.subject' }, familyUid: { path: 'computed.familyUid' } } },
     ],
   },
@@ -281,7 +285,7 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 11,
     when: { any: [{ path: 'computed.subjectMissing', operator: 'truthy' }, { path: 'computed.locationMissing', operator: 'truthy' }] },
     actions: [
-      { type: 'crmTask', title: 'Completar datos de solicitud', description: 'La solicitud ha llegado con materia o zona incompleta. Revisarla antes de asignar profesor.', options: { priority: 'high', tags: ['solicitud', 'datos_incompletos'], dueAfterMinutes: 60 } },
+      { type: 'crmTask', title: 'Completar datos de solicitud', description: 'La solicitud ha llegado con materia o zona incompleta. Revisarla antes de asignar profesor.', options: { priority: 'high', tags: ['solicitud', 'datos_incompletos'], dueAfterMinutes: configNumber('automation.incompleteRequestReviewMinutes', 60) } },
     ],
   },
   {
@@ -292,7 +296,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'automationEvent', summary: 'Solicitud sin avance detectada por barrido automatico.', severity: 'warning' },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Solicitud atascada', body: 'La solicitud {{computed.subject}} sigue sin profesor asignado.', payload: { requestId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'request_stale', priority: 'high' } },
       { type: 'systemJob', jobType: 'matching.request', payload: { requestId: { path: 'computed.id' }, reason: 'stale_request' }, options: { priority: 'high', key: 'matching_retry' } },
-      { type: 'crmTask', title: 'Resolver solicitud sin asignar', description: 'Revisar candidatos, disponibilidad y datos de contacto para desbloquear la solicitud.', options: { priority: 'high', tags: ['matching', 'solicitud'], dueAfterMinutes: 120 } },
+      { type: 'crmTask', title: 'Resolver solicitud sin asignar', description: 'Revisar candidatos, disponibilidad y datos de contacto para desbloquear la solicitud.', options: { priority: 'high', tags: ['matching', 'solicitud'], dueAfterMinutes: configNumber('automation.staleRequestReviewMinutes', 120) } },
       { type: 'audit', action: 'request.stale_detected', metadata: { status: { firstOf: ['data.status', 'data.estado'] } } },
     ],
   },
@@ -305,7 +309,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Nueva asignacion', body: 'Tienes una nueva solicitud asignada de {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'high', key: 'teacher' } },
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Profesor asignado', body: 'Ya hay profesor asignado para {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'high', key: 'family' } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Asignacion creada', body: 'Se ha asignado profesor para {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'normal', key: 'admin' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'assignment.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'assignment.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'assignment.created', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
     ],
   },
@@ -337,7 +341,7 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 42,
     when: { any: [{ path: 'computed.teacherUid', operator: 'empty' }, { path: 'computed.familyUid', operator: 'empty' }] },
     actions: [
-      { type: 'crmTask', title: 'Clase sin participantes completos', description: 'La clase no tiene profesor o familia resoluble para notificaciones automaticas.', options: { priority: 'high', tags: ['clase', 'datos_incompletos'], dueAfterMinutes: 60 } },
+      { type: 'crmTask', title: 'Clase sin participantes completos', description: 'La clase no tiene profesor o familia resoluble para notificaciones automaticas.', options: { priority: 'high', tags: ['clase', 'datos_incompletos'], dueAfterMinutes: configNumber('automation.missingClassParticipantReviewMinutes', 60) } },
     ],
   },
   {
@@ -348,7 +352,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'automationEvent', summary: 'Clase finalizada; se disparan confirmacion, pagos y reputacion.', severity: 'info' },
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Confirma la clase', body: 'Confirma si la {{computed.classLabel}} se realizo correctamente.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_confirmation_needed', priority: 'high', key: 'family' } },
       { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase finalizada', body: 'Revisa y confirma la {{computed.classLabel}} para mantener pagos y reputacion al dia.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_confirmation_needed', priority: 'high', key: 'teacher' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'class.completed' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'class.completed' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'class.completed', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' }, paid: { path: 'computed.classPaid' } } },
     ],
   },
@@ -358,7 +362,7 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 51,
     when: { path: 'computed.classPaid', operator: 'falsy' },
     actions: [
-      { type: 'crmTask', title: 'Seguimiento de pago de clase', description: 'La {{computed.classLabel}} esta finalizada y no consta como pagada.', options: { priority: 'high', tags: ['pagos', 'clase'], dueAfterMinutes: 1440 } },
+      { type: 'crmTask', title: 'Seguimiento de pago de clase', description: 'La {{computed.classLabel}} esta finalizada y no consta como pagada.', options: { priority: 'high', tags: ['pagos', 'clase'], dueAfterMinutes: configNumber('automation.unpaidClassFollowupMinutes', 1440) } },
     ],
   },
   {
@@ -371,7 +375,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Confirma si la clase se dio', body: 'La {{computed.classLabel}} termino y necesitamos confirmar si se realizo.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_unmarked_after_1h', priority: 'high', key: 'family' } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Clase sin cerrar', body: 'La {{computed.classLabel}} sigue pendiente de confirmacion.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_unmarked_after_1h', priority: 'high', key: 'admin' } },
       { type: 'patch', collection: 'clases', docId: { path: 'computed.id' }, data: { needsAttendanceConfirmation: true, lifecycleStatus: { firstOf: ['data.lifecycleStatus', { const: 'pendiente_confirmacion' }] }, lastUnmarkedReminderSource: 'platform_automation' } },
-      { type: 'crmTask', title: 'Cerrar clase pendiente', description: 'Confirmar asistencia y resolver pago de la {{computed.classLabel}}.', options: { priority: 'high', tags: ['clase', 'confirmacion'], dueAfterMinutes: 180 } },
+      { type: 'crmTask', title: 'Cerrar clase pendiente', description: 'Confirmar asistencia y resolver pago de la {{computed.classLabel}}.', options: { priority: 'high', tags: ['clase', 'confirmacion'], dueAfterMinutes: configNumber('automation.classConfirmationReviewMinutes', 180) } },
       { type: 'audit', action: 'class.confirmation_overdue', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
     ],
   },
@@ -383,7 +387,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'automationEvent', summary: 'Clase cancelada; se comunica y queda trazada.', severity: 'warning' },
       { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase cancelada', body: 'Se ha cancelado la {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_schedule_change', priority: 'high', key: 'teacher' } },
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Clase cancelada', body: 'Se ha cancelado la {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_schedule_change', priority: 'high', key: 'family' } },
-      { type: 'crmTask', title: 'Revisar cancelacion de clase', description: 'Comprobar si hay que reprogramar, devolver pago o registrar incidencia.', options: { priority: 'normal', tags: ['clase', 'cancelacion'], dueAfterMinutes: 1440 } },
+      { type: 'crmTask', title: 'Revisar cancelacion de clase', description: 'Comprobar si hay que reprogramar, devolver pago o registrar incidencia.', options: { priority: 'normal', tags: ['clase', 'cancelacion'], dueAfterMinutes: configNumber('automation.classCancellationReviewMinutes', 1440) } },
       { type: 'audit', action: 'class.cancelled', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
     ],
   },
@@ -422,7 +426,7 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 83,
     when: { path: 'computed.hasClassIds', operator: 'falsy' },
     actions: [
-      { type: 'crmTask', title: 'Conciliar pago con clase', description: 'El pago no tiene clases asociadas explicitamente. Revisar conciliacion automatica o manual.', options: { priority: 'high', tags: ['pagos', 'conciliacion'], dueAfterMinutes: 1440 } },
+      { type: 'crmTask', title: 'Conciliar pago con clase', description: 'El pago no tiene clases asociadas explicitamente. Revisar conciliacion automatica o manual.', options: { priority: 'high', tags: ['pagos', 'conciliacion'], dueAfterMinutes: configNumber('automation.paymentReconciliationMinutes', 1440) } },
     ],
   },
   {
@@ -434,7 +438,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Pago pendiente vencido', body: 'Hay un pago pendiente de {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_overdue', priority: 'critical', key: 'family' } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Pago vencido', body: 'Revisar pago vencido por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_overdue', priority: 'critical', key: 'admin' } },
       { type: 'patch', collection: 'pagos', docId: { path: 'computed.id' }, data: { status: 'vencido', estado: 'vencido', overdueDetectedBy: 'platform_automation' } },
-      { type: 'crmTask', title: 'Resolver pago vencido', description: 'Contactar o revisar el pago pendiente por {{computed.paymentAmount}}.', options: { priority: 'critical', tags: ['pagos', 'vencido'], dueAfterMinutes: 120 } },
+      { type: 'crmTask', title: 'Resolver pago vencido', description: 'Contactar o revisar el pago pendiente por {{computed.paymentAmount}}.', options: { priority: 'critical', tags: ['pagos', 'vencido'], dueAfterMinutes: configNumber('automation.overduePaymentReviewMinutes', 120) } },
       { type: 'opsAlert', alertType: 'payment_overdue', level: 'high', message: 'Pago vencido por {{computed.paymentAmount}}.' },
       { type: 'audit', action: 'payment.overdue', metadata: { amount: { path: 'computed.paymentAmount' } } },
     ],
@@ -447,7 +451,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'automationEvent', summary: 'Pago validado; se actualizan metricas y partes implicadas.', severity: 'info', payload: { amount: { path: 'computed.paymentAmount' } } },
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Pago confirmado', body: 'El pago de {{computed.paymentAmount}} queda confirmado.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_verified', priority: 'normal', key: 'family' } },
       { type: 'notification', when: { path: 'computed.teacherUid', operator: 'not_empty' }, target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Pago de clase confirmado', body: 'Se ha confirmado un pago asociado por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_verified', priority: 'normal', key: 'teacher' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'payment.verified' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'payment.verified' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'payment.verified', metadata: { amount: { path: 'computed.paymentAmount' }, verified: { path: 'computed.paymentVerified' } } },
     ],
   },
@@ -458,7 +462,7 @@ const DEFAULT_AUTOMATION_RULES = [
     actions: [
       { type: 'automationEvent', summary: 'Documento pendiente de revision.', severity: 'info' },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Documento pendiente de revision', body: '{{computed.documentLabel}} necesita revision.', payload: { documentId: { path: 'computed.id' }, ownerUid: { path: 'computed.ownerUid' }, url: '/pages/login.html' }, options: { type: 'document_review_pending', priority: 'normal', key: 'admin' } },
-      { type: 'crmTask', title: 'Revisar documento', description: 'Validar, rechazar o pedir correccion del documento subido.', options: { priority: 'normal', tags: ['documentos', 'verificacion'], dueAfterMinutes: 1440 } },
+      { type: 'crmTask', title: 'Revisar documento', description: 'Validar, rechazar o pedir correccion del documento subido.', options: { priority: 'normal', tags: ['documentos', 'verificacion'], dueAfterMinutes: configNumber('automation.documentReviewSlaMinutes', 1440) } },
       { type: 'audit', action: 'document.created', metadata: { ownerUid: { path: 'computed.ownerUid' }, documentType: { firstOf: ['data.tipo', 'data.type'] } } },
     ],
   },
@@ -469,7 +473,7 @@ const DEFAULT_AUTOMATION_RULES = [
     actions: [
       { type: 'automationEvent', summary: 'Documento pendiente demasiado tiempo.', severity: 'warning' },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Documento atascado', body: '{{computed.documentLabel}} necesita revision.', payload: { documentId: { path: 'computed.id' }, ownerUid: { path: 'computed.ownerUid' }, url: '/pages/login.html' }, options: { type: 'document_review_pending', priority: 'high', key: 'admin' } },
-      { type: 'crmTask', title: 'Resolver documento pendiente', description: 'Validar, rechazar o pedir correccion del documento subido.', options: { priority: 'high', tags: ['documentos', 'verificacion'], dueAfterMinutes: 120 } },
+      { type: 'crmTask', title: 'Resolver documento pendiente', description: 'Validar, rechazar o pedir correccion del documento subido.', options: { priority: 'high', tags: ['documentos', 'verificacion'], dueAfterMinutes: configNumber('automation.staleDocumentReviewMinutes', 120) } },
       { type: 'opsAlert', alertType: 'document_review_stale', level: 'medium', message: 'Documento pendiente de revision por demasiado tiempo.' },
       { type: 'audit', action: 'document.stale_detected', metadata: { ownerUid: { path: 'computed.ownerUid' }, documentType: { firstOf: ['data.tipo', 'data.type'] } } },
     ],
@@ -493,7 +497,7 @@ const DEFAULT_AUTOMATION_RULES = [
     actions: [
       { type: 'automationEvent', summary: 'Incidencia abierta sin resolver.', severity: 'warning' },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Incidencia atascada', body: '{{computed.incidentLabel}}', payload: { incidentId: { path: 'computed.id' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, url: '/pages/login.html' }, options: { type: 'class_incident', priority: 'critical', key: 'admin' } },
-      { type: 'crmTask', title: 'Resolver incidencia atascada', description: 'Clasificar, contactar a las partes y cerrar con resultado trazado.', options: { priority: 'critical', tags: ['incidencias'], dueAfterMinutes: 60 } },
+      { type: 'crmTask', title: 'Resolver incidencia atascada', description: 'Clasificar, contactar a las partes y cerrar con resultado trazado.', options: { priority: 'critical', tags: ['incidencias'], dueAfterMinutes: configNumber('automation.staleIncidentReviewMinutes', 60) } },
       { type: 'opsAlert', alertType: 'incident_attention_required', level: 'high', message: 'Incidencia requiere atencion administrativa.' },
       { type: 'audit', action: 'incident.stale_detected', metadata: { priority: { path: 'computed.incidentPriority' } } },
     ],
@@ -515,7 +519,7 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 131,
     when: { path: 'computed.profileStatus', operator: 'eq', value: 'pendiente' },
     actions: [
-      { type: 'crmTask', title: 'Verificar perfil actualizado', description: 'Revisar cambios, documentos y nivel de confianza antes de destacarlo.', options: { priority: 'high', tags: ['perfil', 'verificacion'], dueAfterMinutes: 1440 } },
+      { type: 'crmTask', title: 'Verificar perfil actualizado', description: 'Revisar cambios, documentos y nivel de confianza antes de destacarlo.', options: { priority: 'high', tags: ['perfil', 'verificacion'], dueAfterMinutes: configNumber('automation.profileVerificationReviewMinutes', 1440) } },
     ],
   },
   {
@@ -525,7 +529,7 @@ const DEFAULT_AUTOMATION_RULES = [
     actions: [
       { type: 'automationEvent', summary: 'Profesor activo sin actividad reciente.', severity: 'warning' },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Profesor sin actividad reciente', body: '{{computed.person}} lleva tiempo sin actividad o alumnos nuevos.', payload: { teacherId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'profile_updated', priority: 'normal', key: 'admin' } },
-      { type: 'crmTask', title: 'Reactivar profesor', description: 'Comprobar disponibilidad, actualizar perfil o pausar visibilidad si no responde.', options: { priority: 'normal', tags: ['profesores', 'reactivacion'], dueAfterMinutes: 10080 } },
+      { type: 'crmTask', title: 'Reactivar profesor', description: 'Comprobar disponibilidad, actualizar perfil o pausar visibilidad si no responde.', options: { priority: 'normal', tags: ['profesores', 'reactivacion'], dueAfterMinutes: configNumber('automation.teacherReactivationMinutes', 10080) } },
       { type: 'audit', action: 'teacher.inactive_detected', metadata: { lastActivityAt: { firstOf: ['data.lastActivityAt', 'data.updatedAt'] } } },
     ],
   },
@@ -536,7 +540,7 @@ const DEFAULT_AUTOMATION_RULES = [
     actions: [
       { type: 'automationEvent', summary: 'Usuario registrado y enviado a seguimiento operativo.', severity: 'info', payload: { role: { firstOf: ['data.role', 'data.rol'] } } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Nuevo usuario registrado', body: '{{computed.person}} se ha registrado como {{computed.userType}}.', payload: { userId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'user_registered', priority: 'normal', key: 'admin' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'user.registered' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'user.registered' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'user.registered', metadata: { role: { firstOf: ['data.role', 'data.rol'] } } },
     ],
   },
@@ -549,7 +553,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Perfil verificado', body: 'Tu perfil de profesor ya esta verificado.', payload: { teacherId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'teacher_verified', priority: 'normal', key: 'teacher' } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Profesor verificado', body: '{{computed.person}} ya puede recibir asignaciones con confianza alta.', payload: { teacherId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'teacher_verified', priority: 'normal', key: 'admin' } },
       { type: 'automationEvent', eventType: 'trust.recalculation_requested', summary: 'Recalculo de reputacion solicitado por verificacion de profesor.', severity: 'info', payload: { profileId: { path: 'computed.id' }, userType: 'profesores' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'teacher.verified' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'teacher.verified' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'teacher.verified', metadata: { teacherUid: { path: 'computed.teacherUid' } } },
     ],
   },
@@ -570,7 +574,7 @@ const DEFAULT_AUTOMATION_RULES = [
     actions: [
       { type: 'automationEvent', summary: 'Valoracion registrada; se recalcula reputacion.', severity: 'info' },
       { type: 'automationEvent', eventType: 'trust.recalculation_requested', summary: 'Recalculo de reputacion solicitado por nueva valoracion.', severity: 'info', payload: { profileId: { firstOf: ['data.teacherUid', 'data.profesor_id', 'data.reviewedUid'] }, userType: 'profesores' } },
-      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'review.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'review.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'review.created', metadata: { rating: { firstOf: ['data.rating', 'data.valoracion'] } } },
     ],
   },
@@ -586,7 +590,7 @@ const DEFAULT_AUTOMATION_RULES = [
   },
 ];
 
-function buildRuleContext(normalizedEvent) {
+function buildRuleContext(normalizedEvent, config = {}) {
   const data = normalizedEvent.data || {};
   const userType = clean(data.userType || normalizedEvent.entityType, 40);
   const profileStatus = lower(data.verificationStatus || data.estado_verificacion || data.status || data.estado);
@@ -597,6 +601,7 @@ function buildRuleContext(normalizedEvent) {
   return {
     event: normalizedEvent,
     data,
+    config: config || {},
     computed: {
       id: dataId(normalizedEvent),
       subject: subjectLabel(data),
@@ -666,7 +671,7 @@ function buildAutomationPlan(event, options = {}) {
     data: event.data || {},
   };
   const plan = createPlan(normalizedEvent);
-  const context = buildRuleContext(normalizedEvent);
+  const context = buildRuleContext(normalizedEvent, options.config || options.platformConfig || {});
   const rules = mergeRuleSets(
     options.replaceDefaultRules ? [] : DEFAULT_AUTOMATION_RULES,
     options.rules || options.externalRules || [],

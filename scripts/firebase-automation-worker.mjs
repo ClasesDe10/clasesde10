@@ -68,6 +68,8 @@ const matchingAssignmentScanLimit = Math.max(1, Number(process.env.MATCHING_ASSI
 const systemJobLimit = Math.max(1, Number(process.env.SYSTEM_JOB_LIMIT || 50));
 const systemJobMaxBackoffMs = 60 * 60 * 1000;
 let automationRulesCache = { expiresAt: 0, rules: [] };
+let platformConfigCache = { expiresAt: 0, config: {} };
+let platformConfigRuntime = {};
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -75,6 +77,19 @@ function clean(value, max = 500) {
 
 function lower(value) {
   return clean(value).toLowerCase();
+}
+
+function configValue(config, path, fallback = undefined) {
+  const value = String(path || '').split('.').reduce((current, key) => (
+    current === undefined || current === null ? undefined : current[key]
+  ), config);
+  return value === undefined || value === null || value === '' ? fallback : value;
+}
+
+function runtimeNumber(path, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
+  const number = Number(configValue(platformConfigRuntime, path, fallback));
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
 }
 
 function asArray(value) {
@@ -389,12 +404,30 @@ async function loadWorkerAutomationRules(db) {
   return automationRulesCache.rules;
 }
 
+async function loadWorkerPlatformConfig(db) {
+  if (Date.now() < platformConfigCache.expiresAt) return platformConfigCache.config;
+  try {
+    const snap = await db.collection('configuracion').doc('platform').get();
+    platformConfigCache = {
+      expiresAt: Date.now() + 60 * 1000,
+      config: snap.exists ? (snap.data().config || {}) : {},
+    };
+  } catch (error) {
+    console.warn('Could not load platform configuration; defaults will be used.', error?.message || error);
+    platformConfigCache = { expiresAt: Date.now() + 60 * 1000, config: {} };
+  }
+  return platformConfigCache.config;
+}
+
 async function materializeWorkerAutomationPlan(db, event, stats) {
-  const rules = await loadWorkerAutomationRules(db);
+  const [rules, platformConfig] = await Promise.all([
+    loadWorkerAutomationRules(db),
+    loadWorkerPlatformConfig(db),
+  ]);
   const plan = buildAutomationPlan({
     ...event,
     source: event.source || 'github_actions_worker',
-  }, { rules });
+  }, { rules, config: platformConfig });
   stats.platformAutomationPlans += 1;
   stats.platformRuleRunsEvaluated += plan.ruleRuns.length;
 
@@ -796,7 +829,7 @@ async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
 async function countActiveAssignmentsByTeacher(db) {
   const snap = await db.collection('asignaciones')
     .where('active', '==', true)
-    .limit(matchingAssignmentScanLimit)
+    .limit(runtimeNumber('matching.assignmentScanLimit', matchingAssignmentScanLimit, 1, 50000))
     .get();
   const counts = new Map();
   snap.docs.forEach((doc) => {
@@ -809,7 +842,7 @@ async function countActiveAssignmentsByTeacher(db) {
 
 async function loadAvailabilityByTeacher(db) {
   try {
-    const snap = await db.collection('disponibilidad').limit(matchingTeacherScanLimit * 5).get();
+    const snap = await db.collection('disponibilidad').limit(runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000) * 5).get();
     const slots = new Map();
     snap.docs.forEach((doc) => {
       const data = { id: doc.id, ...doc.data() };
@@ -826,8 +859,8 @@ async function loadAvailabilityByTeacher(db) {
 
 async function loadTeachers(db) {
   const [teachersSnap, usersSnap, assignmentCounts, availabilitySlots] = await Promise.all([
-    db.collection('profesores').limit(matchingTeacherScanLimit).get(),
-    db.collection('users').limit(matchingUserScanLimit).get(),
+    db.collection('profesores').limit(runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000)).get(),
+    db.collection('users').limit(runtimeNumber('matching.userScanLimit', matchingUserScanLimit, 1, 20000)).get(),
     countActiveAssignmentsByTeacher(db),
     loadAvailabilityByTeacher(db),
   ]);
@@ -1269,7 +1302,7 @@ async function markSystemJobFailed(db, job, error) {
 async function processQueuedSystemJobs(db, stats) {
   const snap = await db.collection('systemJobs')
     .where('status', '==', 'queued')
-    .limit(systemJobLimit)
+    .limit(runtimeNumber('automation.systemJobBatchLimit', systemJobLimit, 1, 500))
     .get()
     .catch(() => ({ docs: [] }));
   const dueJobs = snap.docs
@@ -2173,6 +2206,7 @@ async function main() {
 
   initFirebaseAdmin();
   const db = admin.firestore();
+  platformConfigRuntime = await loadWorkerPlatformConfig(db);
   const stats = {
     dryRun,
     trustOnly,
@@ -2229,10 +2263,10 @@ async function main() {
     platformTeacherEvents: 0,
     scaleLimits: {
       trustContextLimit,
-      matchingTeacherScanLimit,
-      matchingUserScanLimit,
-      matchingAssignmentScanLimit,
-      systemJobLimit,
+      matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
+      matchingUserScanLimit: runtimeNumber('matching.userScanLimit', matchingUserScanLimit, 1, 20000),
+      matchingAssignmentScanLimit: runtimeNumber('matching.assignmentScanLimit', matchingAssignmentScanLimit, 1, 50000),
+      systemJobLimit: runtimeNumber('automation.systemJobBatchLimit', systemJobLimit, 1, 500),
     },
   };
 

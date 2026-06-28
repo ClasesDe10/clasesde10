@@ -120,6 +120,7 @@ function checkRules() {
     'validFamilyPaymentCreate()',
     'validTeacherPayoutCreate()',
     'match /classLifecycleEvents/{eventId}',
+    'match /platformConfigHistory/{historyId}',
     'match /automationRules/{ruleId}',
     'match /automationRuleRuns/{runId}',
     'match /systemJobs/{jobId}',
@@ -195,6 +196,10 @@ function checkIndexes() {
       { fieldPath: 'ruleId', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ]],
+    ['platformConfigHistory', [
+      { fieldPath: 'configId', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
     ['metricSnapshots', [
       { fieldPath: 'scope', order: 'ASCENDING' },
       { fieldPath: 'period', order: 'ASCENDING' },
@@ -243,15 +248,23 @@ function checkFunctions() {
       fail(`Missing scalability Cloud Function export: ${exportName}.`);
     }
   }
-  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs', 'platformHealthChecks', 'automationRules', 'automationRuleRuns']) {
+  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs', 'platformHealthChecks', 'automationRules', 'automationRuleRuns', 'loadPlatformConfig', 'configuracion']) {
     if (!functionsCode.includes(needle)) fail(`Scalability function path missing: ${needle}.`);
   }
 
   const workerCode = readText('scripts/firebase-automation-worker.mjs');
-  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated', 'automationRules', 'automationRuleRuns']) {
+  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated', 'automationRules', 'automationRuleRuns', 'loadWorkerPlatformConfig']) {
     if (!workerCode.includes(needle)) fail(`GitHub automation worker scalability path missing: ${needle}.`);
   }
   if (!workerCode.includes('platformHealthChecks')) fail('GitHub automation worker must write platform health checks.');
+
+  const adminDashboard = readText('pages/dashboard/admin.html');
+  for (const needle of ['data-section="configuracion"', 'initAdminPlatformConfig', 'loadPlatformConfig']) {
+    if (!adminDashboard.includes(needle)) fail(`Admin configuration center missing: ${needle}.`);
+  }
+
+  const pwa = readText('js/pwa.js');
+  if (!pwa.includes('platform-public-runtime.js')) fail('PWA must load public platform runtime configuration.');
 }
 
 function checkSupabaseBoundary() {

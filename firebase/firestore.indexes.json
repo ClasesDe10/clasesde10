@@ -420,6 +420,14 @@
       ]
     },
     {
+      "collectionGroup": "platformConfigHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "configId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "systemJobs",
       "queryScope": "COLLECTION",
       "fields": [

@@ -943,6 +943,13 @@
     }
   });
 
+  function initPlatformRuntime() {
+    import('/js/platform-public-runtime.js?v=20260628-config')
+      .then((module) => module.initPlatformPublicRuntime?.())
+      .catch(() => {});
+  }
+
+  productUxReady(initPlatformRuntime);
   productUxReady(initProductUxLayer);
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bindViewportSignals, { once: true });
