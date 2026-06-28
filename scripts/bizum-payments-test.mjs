@@ -17,17 +17,21 @@ const [
   adminDashboard,
   rules,
   compatClient,
+  paymentEngine,
   pagosAdapter,
   contracts,
   utils,
+  automationWorker,
 ] = await Promise.all([
   read('pages/dashboard/profesor.html'),
   read('pages/dashboard/admin.html'),
   read('firebase/firestore.rules'),
   read('js/supabase-client.js'),
+  read('js/payment-engine.js'),
   read('js/adapters/pagos-adapter.js'),
   read('js/adapters/contracts.js'),
   read('js/utils.js'),
+  read('scripts/firebase-automation-worker.mjs'),
 ]);
 
 assert(professorDashboard.includes('btn-solicitar-bizum'), 'Professor dashboard must expose the Bizum request button.');
@@ -44,25 +48,42 @@ assert(
     ).includes('btn-solicitar-bizum'),
   'Bizum request UI must not be rendered in the professor classes section.',
 );
-assert(professorDashboard.includes("paymentType: 'teacher_payout'"), 'Professor Bizum request must create teacher_payout payments.');
-assert(professorDashboard.includes('teacherUid: profesorFirestoreId'), 'Teacher payout must be keyed by Firebase Auth uid.');
+assert(professorDashboard.includes('buildTeacherPayoutPayload'), 'Teacher payout must be built through the payment engine.');
+assert(paymentEngine.includes("paymentType: 'teacher_payout'"), 'Payment engine must create teacher_payout payments.');
 assert(professorDashboard.includes('classIds'), 'Teacher payout must store linked class ids.');
 
 assert(adminDashboard.includes("data-pago-estado=\"pagado\""), 'Admin dashboard must allow marking teacher payouts as paid.');
 assert(adminDashboard.includes('teacherPaymentStatus'), 'Admin paid action must update class teacher payment status.');
-assert(adminDashboard.includes('teacherPayoutId'), 'Admin paid action must link classes to the payout id.');
+assert(paymentEngine.includes('teacherPayoutId'), 'Payment engine must link classes to the payout id.');
 assert(adminDashboard.includes('Solicitudes Bizum'), 'Admin payment filters must include Bizum requests.');
+assert(adminDashboard.includes('buildPaymentValidationPayload'), 'Admin validation must use payment engine validation payloads.');
+assert(adminDashboard.includes('matchPaymentToClasses'), 'Admin validation must reconcile family payments to classes when safe.');
+assert(adminDashboard.includes('buildClassPaymentPatch'), 'Admin validation must update class payment states through the payment engine.');
+assert(adminDashboard.includes('paymentStatusForBadge'), 'Admin payment table must render normalized payment statuses.');
 
 assert(rules.includes('validTeacherPayoutCreate'), 'Firestore rules must validate teacher payout creates.');
+assert(rules.includes('validFamilyPaymentCreate'), 'Firestore rules must validate family payment creates.');
 assert(rules.includes("request.resource.data.paymentType == 'teacher_payout'"), 'Rules must require teacher_payout type.');
+assert(rules.includes("request.resource.data.paymentType == 'family_payment'"), 'Rules must require family_payment type.');
 assert(rules.includes('isTeacherParticipant(resource.data)'), 'Teachers must be able to read their own payout requests.');
 
 assert(compatClient.includes('documentId'), 'Firebase compat client must query document ids with documentId().');
-assert(compatClient.includes("['pendiente', 'solicitado'].includes"), 'Dashboard pending counter must include Bizum requests.');
+assert(compatClient.includes("'procesando'") && compatClient.includes("'vencido'"), 'Dashboard pending counter must include processing and overdue payments.');
+assert(compatClient.includes('buildFamilyPaymentPayload'), 'Firebase compat client must normalize family payments.');
+assert(compatClient.includes('buildTeacherPayoutPayload'), 'Firebase compat client must normalize teacher payouts.');
 
+assert(paymentEngine.includes('PAYMENT_GATEWAYS'), 'Payment engine must define provider-neutral gateways.');
+assert(paymentEngine.includes('buildGatewayPaymentUpdate'), 'Payment engine must support gateway/webhook updates.');
+assert(paymentEngine.includes('matchPaymentToClasses'), 'Payment engine must reconcile payments to classes.');
+assert(paymentEngine.includes('isPaymentOverdue'), 'Payment engine must detect overdue payments.');
 assert(pagosAdapter.includes('listByTeacher'), 'Payments adapter must expose listByTeacher.');
 assert(pagosAdapter.includes('requestTeacherPayout'), 'Payments adapter must expose requestTeacherPayout.');
+assert(pagosAdapter.includes('createFamilyPayment'), 'Payments adapter must expose createFamilyPayment.');
+assert(pagosAdapter.includes('applyGatewayEvent'), 'Payments adapter must expose gateway event application.');
 assert(contracts.includes("'requestTeacherPayout'"), 'Payment adapter contract must include requestTeacherPayout.');
-assert(utils.includes('solicitado') && utils.includes('pagado'), 'UI badges must support requested and paid states.');
+assert(contracts.includes("'applyGatewayEvent'"), 'Payment adapter contract must include applyGatewayEvent.');
+assert(utils.includes('solicitado') && utils.includes('pagado') && utils.includes('vencido'), 'UI badges must support requested, paid and overdue states.');
+assert(automationWorker.includes('reconcileVerifiedPayments'), 'Automation worker must reconcile verified payments.');
+assert(automationWorker.includes('paymentsMarkedOverdue'), 'Automation worker must mark overdue payments.');
 
 console.log('Bizum payment flow static validation passed.');

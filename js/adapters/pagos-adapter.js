@@ -1,5 +1,11 @@
 import { makeFirestoreAdapter } from './firebase-firestore-adapter.js';
 import { COLLECTIONS } from './contracts.js';
+import {
+  buildFamilyPaymentPayload,
+  buildGatewayPaymentUpdate,
+  buildPaymentValidationPayload,
+  buildTeacherPayoutPayload,
+} from '../payment-engine.js';
 
 const base = makeFirestoreAdapter(COLLECTIONS.pagos);
 
@@ -39,34 +45,20 @@ export const pagosAdapter = {
     });
   },
 
-  requestTeacherPayout(teacherUid, payload = {}) {
-    const amount = Number(payload.monto ?? payload.amount ?? 0);
-    const classIds = Array.isArray(payload.classIds) ? payload.classIds : [];
+  createFamilyPayment(payload = {}) {
+    return base.create(buildFamilyPaymentPayload(payload));
+  },
 
-    return base.create({
-      ...payload,
-      tipo: 'pago_profesor',
-      paymentType: 'teacher_payout',
-      teacherUid,
-      profesor_id: teacherUid,
-      requestedByUid: payload.requestedByUid || teacherUid,
-      monto: amount,
-      amount,
-      metodo: 'bizum',
-      estado: 'solicitado',
-      status: 'solicitado',
-      classIds,
-      classCount: classIds.length,
-    });
+  requestTeacherPayout(teacherUid, payload = {}) {
+    return base.create(buildTeacherPayoutPayload(teacherUid, payload));
   },
 
   validatePayment(paymentId, validatedByUid, extra = {}) {
-    return base.update(paymentId, {
-      ...extra,
-      status: 'validado',
-      validatedByUid,
-      validatedAt: new Date().toISOString(),
-    });
+    return base.update(paymentId, buildPaymentValidationPayload(extra.payment || {}, extra.status || 'validado', validatedByUid, extra));
+  },
+
+  applyGatewayEvent(paymentId, event = {}) {
+    return base.update(paymentId, buildGatewayPaymentUpdate(event));
   },
 };
 

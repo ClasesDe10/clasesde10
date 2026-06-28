@@ -393,7 +393,9 @@
             <select class="form-control" id="filtro-pago-estado" aria-label="Filtrar pagos por estado" style="width:150px">
               <option value="">Todos</option>
               <option value="pendiente">Pendientes</option>
+              <option value="procesando">Procesando</option>
               <option value="solicitado">Solicitudes Bizum</option>
+              <option value="vencido">Vencidos</option>
               <option value="pagado">Pagados</option>
               <option value="validado">Validados</option>
               <option value="rechazado">Rechazados</option>
@@ -871,6 +873,19 @@ import {
 } from '../../js/calendar-engine.js?v=20260628-calendar';
 import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calendar';
 import {
+  PAID_PAYMENT_STATUSES,
+  buildClassPaymentPatch,
+  buildPaymentValidationPayload,
+  isFamilyPayment,
+  isPaymentOverdue,
+  isPaymentVerified,
+  isTeacherPayout,
+  matchPaymentToClasses,
+  normalizePaymentStatus,
+  paymentAmount,
+  paymentStatusForBadge,
+} from '../../js/payment-engine.js';
+import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
   getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize, initNotificacionesBadge
@@ -1160,7 +1175,7 @@ async function cargarPagosPendientesDash() {
     .order('created_at').limit(40);
 
   const cont = document.getElementById('lista-pagos-pendientes');
-  const pendientes = (data || []).filter((p) => ['pendiente', 'solicitado'].includes(p.estado || p.status)).slice(0, 5);
+  const pendientes = (data || []).filter((p) => ['pendiente', 'solicitado', 'procesando', 'vencido'].includes(paymentStatusForBadge(p))).slice(0, 5);
   if (!pendientes.length) { cont.innerHTML = '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">No hay pagos pendientes</div>'; return; }
 
   cont.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Origen</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Fecha</th><th>Acción</th></tr></thead><tbody>` +
@@ -1522,7 +1537,7 @@ function statusClase(c) {
 }
 
 function statusPago(p) {
-  return String(p?.estado || p?.status || '').toLowerCase();
+  return normalizePaymentStatus(p?.estado || p?.status || p?.providerPaymentStatus || p?.gatewayStatus);
 }
 
 function statusPagoFamilia(c) {
@@ -1542,11 +1557,11 @@ function claseProgramada(c) {
 }
 
 function pagoFamiliaValidado(p) {
-  return !esPagoProfesor(p) && ['validado', 'pagado', 'paid', 'validated'].includes(statusPago(p));
+  return !esPagoProfesor(p) && isPaymentVerified(p);
 }
 
 function pagoProfesorPagado(p) {
-  return esPagoProfesor(p) && ['pagado', 'paid', 'validado'].includes(statusPago(p));
+  return esPagoProfesor(p) && isPaymentVerified(p);
 }
 
 function importePago(p) {
@@ -2686,7 +2701,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
 const PAG_PAGO = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-pagos'), onPageChange: cargarPagos });
 
 function esPagoProfesor(pago) {
-  return ['teacher_payout', 'pago_profesor'].includes(pago?.paymentType || pago?.tipo);
+  return isTeacherPayout(pago);
 }
 
 function nombreOrigenPago(pago) {
@@ -2699,14 +2714,15 @@ function nombreOrigenPago(pago) {
 }
 
 function accionesPago(pago, docButton) {
+  const estado = statusPago(pago);
   if (esPagoProfesor(pago)) {
-    return pago.estado === 'solicitado' ? `
+    return estado === 'solicitado' ? `
       <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="pagado">Pagado</button>
       <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">Rechazar</button>
     ` : (docButton || '—');
   }
 
-  const revisionButtons = pago.estado === 'pendiente' ? `
+  const revisionButtons = ['pendiente', 'vencido', 'procesando'].includes(estado) ? `
     <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="validado">✓</button>
     <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">✕</button>
   ` : '';
@@ -2718,21 +2734,22 @@ async function cargarPagos() {
   const estado = document.getElementById('filtro-pago-estado').value;
   let q = db.from('pagos')
     .select('*, familias(usuarios(nombre,apellidos)), documentos(id,nombre,storage_path)', {count:'exact'});
-  if (estado) q = q.eq('estado', estado);
+  if (estado && estado !== 'vencido') q = q.eq('estado', estado);
   q = q.order('created_at',{ascending:false}).range(PAG_PAGO.offset(), PAG_PAGO.offset()+19);
 
   const { data, count, error } = await q;
+  const pagos = estado === 'vencido' ? (data || []).filter((p) => isPaymentOverdue(p)) : (data || []);
   PAG_PAGO.setTotal(count||0);
-  document.getElementById('pago-count').textContent = `${count||0} pagos`;
+  document.getElementById('pago-count').textContent = `${estado === 'vencido' ? pagos.length : count || 0} pagos`;
 
   const tbody = document.getElementById('tbody-pagos');
   if (error) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
     return;
   }
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin pagos.</td></tr>'; return; }
+  if (!pagos.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin pagos.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(p => {
+  tbody.innerHTML = pagos.map(p => {
     const doc = Array.isArray(p.documentos) ? p.documentos[0] : p.documentos;
     const docButton = doc?.storage_path ? `
       <button class="btn btn-ghost btn-sm"
@@ -2749,10 +2766,10 @@ async function cargarPagos() {
     <td>${formatFechaCorta(p.created_at)}</td>
     <td>${sanitize(nombreOrigenPago(p))}</td>
     <td>${doc?.nombre ? sanitize(doc.nombre) : sanitize(p.concepto || '—')}</td>
-    <td><strong>${formatEuros(p.monto)}</strong></td>
+    <td><strong>${formatEuros(paymentAmount(p))}</strong></td>
     <td>${sanitize(p.metodo)}</td>
     <td style="font-family:monospace;font-size:.8rem">${sanitize(referencia)}</td>
-    <td>${badgeEstado(p.estado)}</td>
+    <td>${badgeEstado(paymentStatusForBadge(p))}</td>
     <td>${accionesPago(p, docButton)}</td>
   </tr>`;
   }).join('');
@@ -2814,27 +2831,49 @@ window.validarPago = async (id, estado) => {
   if (pagoError) { showToast('Error', pagoError.message, 'error'); return; }
 
   const fechaValidacion = new Date().toISOString();
-  const { error } = await db.from('pagos').update({
-    estado,
-    status: estado,
-    validado_por: usuario.id,
-    validatedByUid: usuario.uid || usuario.id,
-    fecha_validacion: fechaValidacion,
-    validatedAt: fechaValidacion,
-  }).eq('id', id);
+  let linkedClassIds = Array.isArray(pagoActual.classIds) ? pagoActual.classIds.map(String).filter(Boolean) : [];
+  let reconciliationStatus = pagoActual.reconciliationStatus || 'pending_match';
+  let reconciliationReason = pagoActual.reconciliationReason || '';
+
+  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizePaymentStatus(estado))) {
+    const familyUid = pagoActual.familyUid || pagoActual.familia_id;
+    const { data: clasesFamilia } = familyUid
+      ? await db.from('clases').select('*').eq('familia_id', familyUid)
+      : { data: [] };
+    const match = matchPaymentToClasses({ ...pagoActual, id }, clasesFamilia || []);
+    linkedClassIds = linkedClassIds.length ? linkedClassIds : match.classIds;
+    reconciliationStatus = match.status;
+    reconciliationReason = match.reason;
+  }
+
+  const payload = {
+    ...buildPaymentValidationPayload({ ...pagoActual, id }, estado, usuario.uid || usuario.id, { nowIso: fechaValidacion }),
+    classIds: linkedClassIds,
+    classCount: linkedClassIds.length,
+    reconciliationStatus,
+    reconciliationReason,
+  };
+  const { error } = await db.from('pagos').update(payload).eq('id', id);
   if (error) { showToast('Error', error.message, 'error'); return; }
 
   if (esPagoProfesor(pagoActual) && estado === 'pagado' && Array.isArray(pagoActual.classIds)) {
-    const updates = pagoActual.classIds.map((classId) => db.from('clases').update({
-      estado_pago_profesor: 'pagado',
-      teacherPaymentStatus: 'pagado',
-      teacherPayoutId: id,
-      teacherPayoutPaidAt: fechaValidacion,
-    }).eq('id', classId));
+    const updates = pagoActual.classIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id }, classId, { nowIso: fechaValidacion })).eq('id', classId));
     const results = await Promise.all(updates);
     const failed = results.find((result) => result.error);
     if (failed) {
       showToast('Pago actualizado', 'El Bizum se marco como pagado, pero alguna clase no pudo actualizarse.', 'warning');
+      cargarPagos();
+      cargarPagosPendientesDash();
+      return;
+    }
+  }
+
+  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizePaymentStatus(estado)) && linkedClassIds.length) {
+    const updates = linkedClassIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id, paymentType: 'family_payment' }, classId, { nowIso: fechaValidacion })).eq('id', classId));
+    const results = await Promise.all(updates);
+    const failed = results.find((result) => result.error);
+    if (failed) {
+      showToast('Pago actualizado', 'El pago se valido, pero alguna clase no pudo marcarse como cobrada.', 'warning');
       cargarPagos();
       cargarPagosPendientesDash();
       return;

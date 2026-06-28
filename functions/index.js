@@ -1,5 +1,8 @@
 const admin = require('firebase-admin');
+const Stripe = require('stripe');
+const { defineSecret } = require('firebase-functions/params');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
 
@@ -8,6 +11,8 @@ const db = admin.firestore();
 
 const REGION = 'europe-west1';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
+const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
+const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -15,6 +20,49 @@ function clean(value, max = 500) {
 
 function lower(value) {
   return clean(value).toLowerCase();
+}
+
+function normalizePaymentStatus(status) {
+  const raw = lower(status);
+  if (!raw) return 'pendiente';
+  if (raw === 'succeeded' || raw === 'paid' || raw === 'captured') return 'validado';
+  if (raw === 'processing') return 'procesando';
+  if (raw === 'requires_action' || raw === 'requires_payment_method') return 'requiere_accion';
+  if (raw === 'failed') return 'fallido';
+  if (raw === 'expired') return 'vencido';
+  if (raw === 'refunded') return 'devuelto';
+  if (raw === 'canceled' || raw === 'cancelled') return 'cancelado';
+  return raw;
+}
+
+function isTeacherPayout(data = {}) {
+  return ['teacher_payout', 'pago_profesor'].includes(data.paymentType || data.tipo);
+}
+
+function paymentAmount(data = {}) {
+  const amount = Number(data.monto ?? data.amount ?? 0);
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+}
+
+function buildClassPaymentPatch(payment, nowValue = now()) {
+  if (isTeacherPayout(payment)) {
+    return {
+      estado_pago_profesor: 'pagado',
+      teacherPaymentStatus: 'pagado',
+      teacherPayoutId: payment.id || payment.paymentId || '',
+      teacherPayoutPaidAt: nowValue,
+      updatedAt: nowValue,
+    };
+  }
+  return {
+    estado_pago: 'validado',
+    estado_pago_familia: 'validado',
+    paymentStatus: 'validado',
+    familyPaymentStatus: 'validado',
+    familyPaymentId: payment.id || payment.paymentId || '',
+    familyPaymentValidatedAt: nowValue,
+    updatedAt: nowValue,
+  };
 }
 
 function asArray(value) {
@@ -84,6 +132,101 @@ async function notifyAdmins(title, body, payload = {}) {
     createdAt: now(),
     updatedAt: now(),
   })));
+}
+
+async function findPaymentRefByStripeObject(object = {}) {
+  const metadataPaymentId = clean(object.metadata?.paymentId || object.metadata?.pagoId);
+  if (metadataPaymentId) return db.collection('pagos').doc(metadataPaymentId);
+
+  const checkoutSessionId = clean(object.object === 'checkout.session' ? object.id : object.checkout_session);
+  const paymentIntentId = clean(
+    object.payment_intent
+    || (object.object === 'payment_intent' ? object.id : '')
+    || object.paymentIntentId,
+  );
+
+  if (checkoutSessionId) {
+    const snap = await db.collection('pagos').where('checkoutSessionId', '==', checkoutSessionId).limit(1).get();
+    if (!snap.empty) return snap.docs[0].ref;
+  }
+  if (paymentIntentId) {
+    const snap = await db.collection('pagos').where('paymentIntentId', '==', paymentIntentId).limit(1).get();
+    if (!snap.empty) return snap.docs[0].ref;
+  }
+
+  const fallbackId = paymentIntentId || checkoutSessionId || clean(object.id);
+  return fallbackId ? db.collection('pagos').doc(`stripe_${fallbackId}`) : null;
+}
+
+function stripePaymentUpdate(event) {
+  const object = event.data.object || {};
+  const paymentIntentId = clean(
+    object.payment_intent
+    || (object.object === 'payment_intent' ? object.id : '')
+    || object.paymentIntentId,
+  );
+  const checkoutSessionId = clean(object.object === 'checkout.session' ? object.id : object.checkout_session);
+  const providerStatus = clean(object.payment_status || object.status || event.type, 80);
+  const status = normalizePaymentStatus(providerStatus);
+  const verified = ['validado', 'pagado'].includes(status)
+    || event.type === 'checkout.session.completed'
+    || event.type === 'checkout.session.async_payment_succeeded'
+    || event.type === 'payment_intent.succeeded';
+
+  return {
+    gateway: 'stripe',
+    provider: 'stripe',
+    providerPaymentId: paymentIntentId || checkoutSessionId || clean(object.id),
+    paymentIntentId,
+    checkoutSessionId,
+    providerPaymentStatus: providerStatus,
+    gatewayStatus: providerStatus,
+    estado: verified ? 'validado' : status,
+    status: verified ? 'validado' : status,
+    verified,
+    verificationSource: 'stripe',
+    gatewayEventId: event.id,
+    gatewayEventType: event.type,
+    gatewayVerifiedAt: verified ? now() : null,
+    fecha_validacion: verified ? new Date().toISOString() : null,
+    validatedAt: verified ? new Date().toISOString() : null,
+    updatedAt: now(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function reconcilePaymentRef(paymentRef) {
+  const snap = await paymentRef.get();
+  if (!snap.exists) return { applied: false, reason: 'payment_not_found' };
+  const payment = { id: snap.id, ...snap.data() };
+  if (payment.reconciliationStatus === 'applied') return { applied: false, reason: 'already_applied' };
+  if (!['validado', 'pagado'].includes(normalizePaymentStatus(payment.estado || payment.status))) return { applied: false, reason: 'not_verified' };
+
+  const classIds = Array.isArray(payment.classIds) ? payment.classIds.map(String).filter(Boolean) : [];
+  if (!classIds.length) {
+    await paymentRef.update({
+      reconciliationStatus: 'needs_review',
+      reconciliationReason: 'missing_class_ids',
+      updatedAt: now(),
+    });
+    return { applied: false, reason: 'missing_class_ids' };
+  }
+
+  const batch = db.batch();
+  classIds.forEach((classId) => batch.set(
+    db.collection('clases').doc(classId),
+    buildClassPaymentPatch(payment),
+    { merge: true },
+  ));
+  batch.set(paymentRef, {
+    reconciliationStatus: 'applied',
+    reconciliationReason: 'stripe_verified_explicit_class_ids',
+    reconciliationConfidence: 1,
+    reconciledAt: now(),
+    updatedAt: now(),
+  }, { merge: true });
+  await batch.commit();
+  return { applied: true, classIds };
 }
 
 function calculateTeacherPrice(data) {
@@ -478,6 +621,71 @@ exports.processPublicLead = onDocumentCreated({
     type: 'contact_lead',
     leadId,
   });
+});
+
+exports.stripeWebhook = onRequest({
+  region: REGION,
+  secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET],
+}, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method not allowed');
+    return;
+  }
+
+  const signature = req.headers['stripe-signature'];
+  if (!signature) {
+    res.status(400).send('Missing Stripe signature');
+    return;
+  }
+
+  let event;
+  try {
+    const stripe = Stripe(STRIPE_SECRET_KEY.value());
+    event = stripe.webhooks.constructEvent(req.rawBody, signature, STRIPE_WEBHOOK_SECRET.value());
+  } catch (error) {
+    logger.warn('Stripe webhook signature failed', { message: error.message });
+    res.status(400).send(`Webhook Error: ${error.message}`);
+    return;
+  }
+
+  const relevant = [
+    'checkout.session.completed',
+    'checkout.session.async_payment_succeeded',
+    'checkout.session.async_payment_failed',
+    'payment_intent.succeeded',
+    'payment_intent.payment_failed',
+    'charge.dispute.created',
+  ];
+  if (!relevant.includes(event.type)) {
+    res.json({ received: true, ignored: true });
+    return;
+  }
+
+  const paymentRef = await findPaymentRefByStripeObject(event.data.object);
+  if (!paymentRef) {
+    await db.collection('automationEvents').add({
+      type: 'stripe_webhook_unmatched',
+      gatewayEventId: event.id,
+      gatewayEventType: event.type,
+      createdAt: now(),
+    });
+    res.json({ received: true, matched: false });
+    return;
+  }
+
+  const update = stripePaymentUpdate(event);
+  await paymentRef.set(update, { merge: true });
+  const reconciliation = await reconcilePaymentRef(paymentRef);
+  await db.collection('automationEvents').doc(`stripe_${event.id}`).set({
+    type: 'stripe_webhook_processed',
+    paymentId: paymentRef.id,
+    gatewayEventId: event.id,
+    gatewayEventType: event.type,
+    reconciliation,
+    createdAt: now(),
+  }, { merge: true });
+
+  res.json({ received: true, paymentId: paymentRef.id, reconciliation });
 });
 
 exports.generateRequestMatching = onDocumentCreated({

@@ -512,6 +512,7 @@ import {
   classStatusForBadge,
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260628-calendar';
+import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
@@ -1082,7 +1083,7 @@ async function cargarPagos() {
     <td><strong>${formatEuros(p.monto)}</strong></td>
     <td>${sanitize(p.metodo)}</td>
     <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
-    <td>${badgeEstado(p.estado)}</td>
+    <td>${badgeEstado(paymentStatusForBadge(p))}</td>
     <td>${doc?.storage_path
       ? `<button class="btn btn-ghost btn-sm" data-action="ver-pago-doc" data-doc-path="${sanitize(doc.storage_path)}">Ver</button>`
       : '—'}</td>
@@ -1151,14 +1152,16 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
     documentoId = doc.id;
   }
 
-  const { error } = await db.from('pagos').insert({
-    familia_id:  familiaId,
+  const { error } = await db.from('pagos').insert(buildFamilyPaymentPayload({
+    familia_id:  familiaFirestoreId,
+    familyUid: familiaFirestoreId,
     documento_id: documentoId,
     monto,
     metodo:      document.getElementById('pago-metodo').value,
+    gateway: 'manual',
     referencia:  document.getElementById('pago-referencia').value.trim(),
     notas_familia: document.getElementById('pago-notas').value.trim(),
-  });
+  }));
   if (error) { showToast('Error', error.message, 'error'); return; }
   document.getElementById('modal-pago').classList.remove('open');
   showToast('Justificante enviado', 'Lo validaremos en breve.', 'success');

@@ -66,7 +66,7 @@ export const DOMAIN_METHODS = Object.freeze({
   asignaciones: [...BASE_ADAPTER_METHODS, 'listByTeacher', 'listByFamily', 'listByStudent'],
   solicitudes: [...BASE_ADAPTER_METHODS, 'listByFamily', 'listByStatus', 'assignTeacher'],
   clases: [...BASE_ADAPTER_METHODS, 'listByTeacher', 'listByFamily', 'listByStudent', 'setStatus'],
-  pagos: [...BASE_ADAPTER_METHODS, 'listByFamily', 'listByTeacher', 'listByStatus', 'validatePayment', 'requestTeacherPayout'],
+  pagos: [...BASE_ADAPTER_METHODS, 'listByFamily', 'listByTeacher', 'listByStatus', 'createFamilyPayment', 'validatePayment', 'requestTeacherPayout', 'applyGatewayEvent'],
   documentos: [...BASE_ADAPTER_METHODS, 'listByOwner', 'uploadForOwner', 'getDownloadUrl'],
   notificaciones: [...BASE_ADAPTER_METHODS, 'listByUser', 'watchUnread', 'markAsRead'],
   configuracion: ['getValue', 'setValue', 'getPublicValue', 'setPublicValue'],

@@ -557,6 +557,7 @@ import {
   classStatusForBadge,
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260628-calendar';
+import { buildTeacherPayoutPayload } from '../../js/payment-engine.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
@@ -1012,24 +1013,16 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
   const confirmed = window.confirm(`Solicitar Bizum por ${formatEuros(total)} para ${classIds.length} clase(s)?`);
   if (!confirmed) return;
 
-  const { error } = await db.from('pagos').insert({
-    tipo: 'pago_profesor',
-    paymentType: 'teacher_payout',
-    teacherUid: profesorFirestoreId,
-    profesor_id: profesorFirestoreId,
+  const { error } = await db.from('pagos').insert(buildTeacherPayoutPayload(profesorFirestoreId, {
     userUid: usuario.uid || usuario.id,
     requestedByUid: usuario.uid || usuario.id,
     monto: total,
-    amount: total,
-    metodo: 'bizum',
-    estado: 'solicitado',
-    status: 'solicitado',
+    gateway: 'manual',
     concepto: `Bizum profesor - ${classIds.length} clase(s)`,
     notas_profesor: `Solicitud automatica de cobro por Bizum de ${classIds.length} clase(s).`,
     telefono_bizum: perfil?.telefono || usuario.telefono || '',
     classIds,
-    classCount: classIds.length,
-  });
+  }));
 
   if (error) {
     showToast('Error', error.message || 'No se pudo solicitar el Bizum.', 'error');

@@ -25,6 +25,15 @@ import {
   uploadBytes,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
 import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
+import {
+  buildFamilyPaymentPayload,
+  buildTeacherPayoutPayload,
+  isTeacherPayout,
+  paymentAmount,
+  paymentDueAtFromDate,
+  paymentFingerprint,
+  storedPaymentStatus,
+} from './payment-engine.js';
 
 const COLLECTION_ALIASES = {
   usuarios: 'users',
@@ -234,7 +243,7 @@ async function dashboardStats() {
     ingresos_mes: pagos.reduce((sum, p) => sum + Number(p.monto || p.amount || 0), 0),
     comisiones_mes: clases.reduce((sum, c) => sum + Number(c.comision_clasesde10 || c.platformFee || 0), 0),
     solicitudes_nuevas: solicitudes.filter((s) => ['nueva', 'nuevo'].includes(s.estado || s.status)).length,
-    pagos_pendientes: pagos.filter((p) => ['pendiente', 'solicitado'].includes(p.estado || p.status)).length,
+    pagos_pendientes: pagos.filter((p) => ['pendiente', 'solicitado', 'procesando', 'vencido'].includes(storedPaymentStatus(p.estado || p.status))).length,
     incidencias_abiertas: incidencias.filter((i) => (i.estado || i.status) === 'abierta').length,
   };
 }
@@ -278,8 +287,27 @@ function normalizeWritePayload(table, payload, isCreate = false) {
   }
 
   if (table === 'pagos') {
-    data.estado = data.estado || data.status || 'pendiente';
+    if (isCreate) {
+      const normalized = isTeacherPayout(data)
+        ? buildTeacherPayoutPayload(data.teacherUid || data.profesor_id || data.userUid, data)
+        : buildFamilyPaymentPayload(data);
+      Object.assign(data, normalized);
+    }
+    data.estado = storedPaymentStatus(data.estado || data.status || 'pendiente');
     data.status = data.status || data.estado;
+    if (data.monto !== undefined || data.amount !== undefined) {
+      data.monto = paymentAmount(data);
+      data.amount = data.amount ?? data.monto;
+    }
+    data.gateway = data.gateway || data.provider || 'manual';
+    data.provider = data.provider || data.gateway;
+    data.metodo = data.metodo || data.method || 'bizum';
+    data.method = data.method || data.metodo;
+    if (isCreate) {
+      data.dueAt = data.dueAt || data.due_at || paymentDueAtFromDate();
+      data.due_at = data.due_at || data.dueAt;
+    }
+    data.idempotencyKey = data.idempotencyKey || paymentFingerprint(data);
   }
 
   if (table === 'clases') {

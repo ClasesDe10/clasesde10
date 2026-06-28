@@ -506,13 +506,75 @@ service cloud.firestore {
           'monto',
           'amount',
           'metodo',
+          'method',
+          'gateway',
+          'provider',
           'estado',
           'status',
           'concepto',
           'notas_profesor',
+          'teacherNotes',
           'telefono_bizum',
           'classIds',
           'classCount',
+          'reconciliationStatus',
+          'verificationSource',
+          'idempotencyKey',
+          'dueAt',
+          'due_at',
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at'
+        ]);
+    }
+
+    function validFamilyPaymentCreate() {
+      return hasRole('familia')
+        && request.resource.data.familyUid == request.auth.uid
+        && request.resource.data.familia_id == request.auth.uid
+        && request.resource.data.paymentType == 'family_payment'
+        && request.resource.data.tipo == 'pago_familia'
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.status == 'pendiente'
+        && request.resource.data.monto is number
+        && request.resource.data.monto > 0
+        && request.resource.data.monto <= 10000
+        && request.resource.data.amount == request.resource.data.monto
+        && request.resource.data.metodo in ['bizum', 'transferencia', 'efectivo', 'card', 'stripe_bizum', 'redsys_bizum']
+        && request.resource.data.method == request.resource.data.metodo
+        && request.resource.data.gateway in ['manual', 'stripe', 'redsys', 'bank_import']
+        && request.resource.data.provider == request.resource.data.gateway
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'tipo',
+          'paymentType',
+          'familia_id',
+          'familyUid',
+          'documento_id',
+          'documentId',
+          'monto',
+          'amount',
+          'metodo',
+          'method',
+          'gateway',
+          'provider',
+          'estado',
+          'status',
+          'referencia',
+          'reference',
+          'concepto',
+          'notas_familia',
+          'familyNotes',
+          'classIds',
+          'classCount',
+          'reconciliationStatus',
+          'verificationSource',
+          'verified',
+          'dueAt',
+          'due_at',
+          'idempotencyKey',
           'createdAt',
           'created_at',
           'updatedAt',
@@ -814,9 +876,7 @@ service cloud.firestore {
     }
 
     match /pagos/{paymentId} {
-      allow create: if (
-        hasRole('familia') && request.resource.data.familyUid == request.auth.uid
-      ) || validTeacherPayoutCreate();
+      allow create: if validFamilyPaymentCreate() || validTeacherPayoutCreate();
       allow read: if isAdmin() || isFamilyParticipant(resource.data) || isTeacherParticipant(resource.data);
       allow update, delete: if isAdmin();
     }

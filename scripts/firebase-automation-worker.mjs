@@ -17,6 +17,18 @@ import {
   isScheduledClassStatus,
   normalizeClassStatus,
 } from '../js/calendar-engine.js';
+import {
+  PAID_PAYMENT_STATUSES,
+  buildClassPaymentPatch,
+  buildPaymentValidationPayload,
+  isFamilyPayment,
+  isPaymentOverdue,
+  isPaymentVerified,
+  isTeacherPayout,
+  matchPaymentToClasses,
+  normalizePaymentStatus,
+  paymentAmount,
+} from '../js/payment-engine.js';
 
 const DEFAULT_PROJECT_ID = 'clasesde10-50add';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
@@ -892,7 +904,7 @@ async function processAttendanceConfirmations(db, stats) {
 }
 
 function paymentStatus(data) {
-  return lower(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
+  return normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
 }
 
 function isEndOfWeekWindow() {
@@ -909,18 +921,27 @@ async function processPaymentReminders(db, stats) {
   for (const doc of paymentsSnap.docs) {
     const data = doc.data();
     const status = paymentStatus(data);
-    if (!['pendiente', 'solicitado'].includes(status)) continue;
-    const isTeacherPayout = ['teacher_payout', 'pago_profesor'].includes(data.paymentType || data.tipo);
-    const title = isTeacherPayout ? 'Bizum de profesor pendiente' : 'Pago pendiente de revisar';
-    const body = isTeacherPayout
-      ? `Hay una solicitud de Bizum de profesor por ${Number(data.monto || data.amount || 0).toFixed(2)} EUR pendiente.`
-      : `Hay un pago familiar por ${Number(data.monto || data.amount || 0).toFixed(2)} EUR pendiente de validacion.`;
+    if (!['pendiente', 'solicitado', 'procesando'].includes(status)) continue;
+    const title = isTeacherPayout(data) ? 'Bizum de profesor pendiente' : 'Pago pendiente de revisar';
+    const body = isTeacherPayout(data)
+      ? `Hay una solicitud de Bizum de profesor por ${paymentAmount(data).toFixed(2)} EUR pendiente.`
+      : `Hay un pago familiar por ${paymentAmount(data).toFixed(2)} EUR pendiente de validacion.`;
     const created = await notifyAdminsOnce(db, title, body, {
-      type: isTeacherPayout ? 'teacher_payout_pending' : 'family_payment_pending',
+      type: isTeacherPayout(data) ? 'teacher_payout_pending' : 'family_payment_pending',
       paymentId: doc.id,
       url: '/pages/login.html',
     }, `payment_pending_${doc.id}`);
     stats.paymentRemindersCreated += created;
+
+    if (isPaymentOverdue(data)) {
+      await updateRef(doc.ref, {
+        estado: 'vencido',
+        status: 'vencido',
+        overdueAt: now(),
+        updatedAt: now(),
+      });
+      stats.paymentsMarkedOverdue += 1;
+    }
   }
 
   if (!isEndOfWeekWindow()) return;
@@ -956,6 +977,60 @@ async function processPaymentReminders(db, stats) {
       `weekly_payment_due_${doc.id}_admin`,
     );
     stats.weeklyPaymentRemindersCreated += created;
+  }
+}
+
+async function loadFamilyClassesForPayment(db, payment) {
+  const familyUid = clean(payment.familyUid || payment.familia_id);
+  if (!familyUid) return [];
+  const snap = await db.collection('clases').where('familyUid', '==', familyUid).limit(80).get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+async function reconcileVerifiedPayments(db, stats) {
+  const snap = await db.collection('pagos').limit(limit).get();
+  for (const doc of snap.docs) {
+    const data = { id: doc.id, ...doc.data() };
+    const status = paymentStatus(data);
+    if (!isPaymentVerified(data) && !PAID_PAYMENT_STATUSES.includes(status)) continue;
+    if (data.reconciliationStatus === 'applied') continue;
+
+    const classIds = Array.isArray(data.classIds) ? data.classIds.map(String).filter(Boolean) : [];
+    let match = { status: classIds.length ? 'matched' : 'unmatched', classIds, confidence: classIds.length ? 1 : 0, reason: 'explicit_class_ids' };
+    if (isFamilyPayment(data) && !classIds.length) {
+      const classes = await loadFamilyClassesForPayment(db, data);
+      match = matchPaymentToClasses(data, classes);
+    }
+
+    if (!match.classIds.length) {
+      await updateRef(doc.ref, {
+        reconciliationStatus: 'needs_review',
+        reconciliationReason: match.reason,
+        updatedAt: now(),
+      });
+      stats.paymentsNeedingReview += 1;
+      continue;
+    }
+
+    await Promise.all(match.classIds.map((classId) => updateRef(
+      db.collection('clases').doc(classId),
+      {
+        ...buildClassPaymentPatch(data, classId),
+        updatedAt: now(),
+      },
+    )));
+
+    await updateRef(doc.ref, {
+      ...buildPaymentValidationPayload(data, isTeacherPayout(data) ? 'pagado' : 'validado', data.validatedByUid || 'automation', { source: data.verificationSource || data.gateway || 'automation' }),
+      classIds: match.classIds,
+      classCount: match.classIds.length,
+      reconciliationStatus: 'applied',
+      reconciliationReason: match.reason,
+      reconciliationConfidence: match.confidence,
+      reconciledAt: now(),
+      updatedAt: now(),
+    });
+    stats.paymentsReconciled += 1;
   }
 }
 
@@ -1046,6 +1121,9 @@ async function main() {
     attendanceRemindersCreated: 0,
     incidentsCreated: 0,
     paymentRemindersCreated: 0,
+    paymentsMarkedOverdue: 0,
+    paymentsReconciled: 0,
+    paymentsNeedingReview: 0,
     weeklyPaymentRemindersCreated: 0,
   };
 
@@ -1055,6 +1133,7 @@ async function main() {
   await processUpcomingClassReminders(db, stats);
   await processUnmarkedClasses(db, stats);
   await processAttendanceConfirmations(db, stats);
+  await reconcileVerifiedPayments(db, stats);
   await processPaymentReminders(db, stats);
 
   console.log(JSON.stringify(stats, null, 2));
