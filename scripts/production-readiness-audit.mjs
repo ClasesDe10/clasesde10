@@ -123,6 +123,7 @@ function checkRules() {
     'match /systemJobs/{jobId}',
     'match /metricSnapshots/{snapshotId}',
     'match /opsAlerts/{alertId}',
+    'match /platformHealthChecks/{checkId}',
   ]) {
     if (!firestoreRules.includes(needle)) fail(`Firestore rules guard missing: ${needle}.`);
   }
@@ -194,6 +195,11 @@ function checkIndexes() {
       { fieldPath: 'level', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ]],
+    ['platformHealthChecks', [
+      { fieldPath: 'scope', order: 'ASCENDING' },
+      { fieldPath: 'status', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
   ];
 
   for (const [collectionGroup, fields] of required) {
@@ -227,7 +233,7 @@ function checkFunctions() {
       fail(`Missing scalability Cloud Function export: ${exportName}.`);
     }
   }
-  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs']) {
+  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs', 'platformHealthChecks']) {
     if (!functionsCode.includes(needle)) fail(`Scalability function path missing: ${needle}.`);
   }
 
@@ -235,6 +241,7 @@ function checkFunctions() {
   for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated']) {
     if (!workerCode.includes(needle)) fail(`GitHub automation worker scalability path missing: ${needle}.`);
   }
+  if (!workerCode.includes('platformHealthChecks')) fail('GitHub automation worker must write platform health checks.');
 }
 
 function checkSupabaseBoundary() {

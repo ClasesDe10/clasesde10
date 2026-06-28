@@ -598,6 +598,96 @@ function buildScaleAlerts(metrics) {
   return alerts;
 }
 
+function buildPlatformHealthCheck(metrics, alerts = [], source = 'github_actions_worker') {
+  const jobs = metrics.jobs || {};
+  const payments = metrics.payments || {};
+  const notifications = metrics.notifications || {};
+  const incidents = metrics.incidents || {};
+  const systems = [
+    {
+      id: 'database',
+      name: 'Base de datos',
+      status: 'operational',
+      what: 'Snapshot de metricas generado correctamente',
+      impact: 'Sin impacto observado.',
+      affectedUsers: 0,
+      cause: 'Conteos Firestore completados.',
+      fix: 'Mantener monitorizacion.',
+    },
+    {
+      id: 'scheduled_tasks',
+      name: 'Tareas programadas',
+      status: jobs.deadLetter > 0 ? 'outage' : jobs.queued > 250 ? 'degraded' : jobs.queued > 50 ? 'attention' : 'operational',
+      what: `${jobs.queued || 0} jobs en cola, ${jobs.deadLetter || 0} dead letters`,
+      impact: jobs.deadLetter > 0 ? 'Procesos automaticos pueden haber fallado definitivamente.' : 'Backlog bajo control.',
+      affectedUsers: 0,
+      cause: 'Estado agregado de systemJobs.',
+      fix: jobs.deadLetter > 0 ? 'Revisar deadLetters y reencolar tras corregir la causa.' : 'Mantener worker programado.',
+    },
+    {
+      id: 'payments',
+      name: 'Pagos',
+      status: payments.overdue > 0 ? 'attention' : 'operational',
+      what: `${payments.overdue || 0} pagos vencidos, ${payments.needsReview || 0} en revision`,
+      impact: payments.overdue > 0 ? 'Caja y cierre de clases pueden retrasarse.' : 'Sin impacto observado.',
+      affectedUsers: payments.overdue || 0,
+      cause: 'Conteo de pagos vencidos/pendientes de conciliacion.',
+      fix: payments.overdue > 0 ? 'Validar cobros y enviar recordatorios.' : 'Mantener conciliacion automatica.',
+    },
+    {
+      id: 'notifications',
+      name: 'Notificaciones',
+      status: notifications.tokens > 0 ? 'operational' : 'attention',
+      what: `${notifications.tokens || 0} tokens push activos`,
+      impact: notifications.tokens > 0 ? 'Push disponible.' : 'Los avisos pueden depender del centro interno.',
+      affectedUsers: 0,
+      cause: 'Conteo de notificationTokens activos.',
+      fix: notifications.tokens > 0 ? 'Mantener limpieza de tokens.' : 'Activar permisos push en la PWA.',
+    },
+    {
+      id: 'automation',
+      name: 'Procesos automaticos',
+      status: alerts.length ? 'attention' : 'operational',
+      what: `${alerts.length} alerta(s) operativas generadas`,
+      impact: alerts.length ? 'Hay riesgos detectados por el motor de escala.' : 'Sin impacto observado.',
+      affectedUsers: 0,
+      cause: 'buildScaleAlerts sobre metricas agregadas.',
+      fix: alerts.length ? 'Revisar opsAlerts abiertas.' : 'Mantener monitorizacion.',
+    },
+    {
+      id: 'incidents',
+      name: 'Incidencias',
+      status: incidents.critical > 0 ? 'degraded' : incidents.open > 0 ? 'attention' : 'operational',
+      what: `${incidents.open || 0} incidencias abiertas, ${incidents.critical || 0} criticas`,
+      impact: incidents.critical > 0 ? 'Puede haber impacto directo en usuarios.' : 'Sin impacto critico observado.',
+      affectedUsers: incidents.open || 0,
+      cause: 'Conteo de incidencias abiertas.',
+      fix: incidents.open > 0 ? 'Priorizar incidencias criticas y cerrar duplicadas.' : 'Mantener seguimiento.',
+    },
+  ];
+  const statusOrder = { operational: 0, attention: 1, degraded: 2, outage: 3 };
+  const status = systems.reduce((worst, item) => (statusOrder[item.status] > statusOrder[worst] ? item.status : worst), 'operational');
+  const weights = { operational: 100, attention: 75, degraded: 45, outage: 10 };
+  const score = Math.round(systems.reduce((sum, item) => sum + weights[item.status], 0) / systems.length);
+  return {
+    schemaVersion: 'mission_control_v1',
+    scope: 'platform',
+    source,
+    status,
+    score,
+    generated_at: isoNow(),
+    counts: {
+      operational: systems.filter((item) => item.status === 'operational').length,
+      attention: systems.filter((item) => item.status === 'attention').length,
+      degraded: systems.filter((item) => item.status === 'degraded').length,
+      outage: systems.filter((item) => item.status === 'outage').length,
+    },
+    impactedSubsystems: systems.filter((item) => item.status !== 'operational').length,
+    affectedUsers: systems.reduce((sum, item) => sum + Number(item.affectedUsers || 0), 0),
+    subsystems: systems,
+  };
+}
+
 async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
   const metrics = {
     source,
@@ -641,6 +731,7 @@ async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
     version: 'scale-engine-2026-06-28',
   };
   const alerts = buildScaleAlerts(metrics);
+  const health = buildPlatformHealthCheck(metrics, alerts, source);
   const id = isoNow().slice(0, 16).replace(/[:]/g, '-');
 
   await writeDoc(db.collection('metricSnapshots'), `platform_${id}`, {
@@ -661,6 +752,12 @@ async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
       updatedAt: now(),
     });
   }
+
+  await writeDoc(db.collection('platformHealthChecks'), `platform_${id}`, {
+    ...health,
+    createdAt: now(),
+    updatedAt: now(),
+  });
 
   return { alerts };
 }

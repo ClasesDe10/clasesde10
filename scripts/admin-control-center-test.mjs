@@ -39,6 +39,29 @@ assert(admin.includes('crm-add-note'), 'Admin dashboard must expose private note
 assert(admin.includes('crm-add-task'), 'Admin dashboard must expose task creation actions.');
 
 assert(module.includes('computeControlCenter'), 'Control center must compute aggregate metrics.');
+assert(module.includes('computeMissionControl'), 'Control center must compute Mission Control system health.');
+assert(module.includes('platformHealthChecks'), 'Control center must persist platform health snapshots.');
+assert(module.includes('Mission Control'), 'Control center must render the Mission Control hero.');
+assert(module.includes('Estado tecnico de la plataforma'), 'Mission Control must expose technical platform status.');
+assert(module.includes('Firebase'), 'Mission Control must monitor Firebase.');
+assert(module.includes('Base de datos'), 'Mission Control must monitor the database.');
+assert(module.includes('Autenticacion'), 'Mission Control must monitor authentication.');
+assert(module.includes('Cloud Functions'), 'Mission Control must monitor Cloud Functions.');
+assert(module.includes('APIs externas'), 'Mission Control must monitor external APIs.');
+assert(module.includes('Notificaciones'), 'Mission Control must monitor notifications.');
+assert(module.includes('IA'), 'Mission Control must monitor AI.');
+assert(module.includes('Matching'), 'Mission Control must monitor matching.');
+assert(module.includes('Calendario'), 'Mission Control must monitor calendar.');
+assert(module.includes('Pagos'), 'Mission Control must monitor payments.');
+assert(module.includes('Chat'), 'Mission Control must monitor chat.');
+assert(module.includes('Almacenamiento'), 'Mission Control must monitor storage.');
+assert(module.includes('PWA'), 'Mission Control must monitor PWA.');
+assert(module.includes('Backups'), 'Mission Control must monitor backups.');
+assert(module.includes('Tareas programadas'), 'Mission Control must monitor scheduled tasks.');
+assert(module.includes('Procesos automaticos'), 'Mission Control must monitor automatic processes.');
+assert(module.includes('Causa probable'), 'Mission Control must explain probable causes.');
+assert(module.includes('Como solucionarlo'), 'Mission Control must explain remediation.');
+assert(module.includes('Afectados'), 'Mission Control must show affected users.');
 assert(module.includes('forecastMonthClose'), 'Control center must forecast month close.');
 assert(module.includes('detectBusinessAnomalies'), 'Control center must detect business anomalies.');
 assert(module.includes('computeTeacherLeaderboard'), 'Control center must rank outstanding teachers.');
@@ -63,6 +86,9 @@ assert(module.includes('Familias activas'), 'Control center must render active f
 assert(module.includes('Pagos pendientes'), 'Control center must render payment risk metrics.');
 
 assert(css.includes('.control-center'), 'Dashboard CSS must style the control center shell.');
+assert(css.includes('.mission-control'), 'Dashboard CSS must style Mission Control shell.');
+assert(css.includes('.mission-system-grid'), 'Dashboard CSS must style Mission Control system grid.');
+assert(css.includes('.mission-mini-map'), 'Dashboard CSS must style Mission Control subsystem map.');
 assert(css.includes('.control-health-score'), 'Dashboard CSS must style the business health score.');
 assert(css.includes('.control-forecast-grid'), 'Dashboard CSS must style forecast cards.');
 assert(css.includes('.control-insight-card'), 'Dashboard CSS must style insight cards.');
@@ -83,5 +109,6 @@ assert(pkg.includes('test:admin-ai'), 'package.json must expose the admin AI eng
 assert(rules.includes('match /crmNotes/{noteId}'), 'Firestore rules must protect CRM notes.');
 assert(rules.includes('match /crmTasks/{taskId}'), 'Firestore rules must protect CRM tasks.');
 assert(rules.includes('match /adminAiQueries/{queryId}'), 'Firestore rules must protect admin AI query logs.');
+assert(rules.includes('match /platformHealthChecks/{checkId}'), 'Firestore rules must protect Mission Control health checks.');
 
 console.log('Admin control center validation passed.');

@@ -6,8 +6,10 @@
  */
 
 import {
+  addDoc,
   collection,
   onSnapshot,
+  serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 
@@ -27,9 +29,16 @@ const LIVE_COLLECTIONS = [
   'asignaciones',
   'matchingRuns',
   'solicitudMatches',
+  'chats',
   'classLifecycleEvents',
   'automationEvents',
   'auditLogs',
+  'adminAiQueries',
+  'systemJobs',
+  'deadLetters',
+  'metricSnapshots',
+  'opsAlerts',
+  'platformHealthChecks',
 ];
 
 function clean(value, max = 4000) {
@@ -189,14 +198,17 @@ function isPaymentDone(status) {
 }
 
 function classDate(item = {}) {
+  item = item || {};
   return first(item.fecha, item.date, item.created_at, item.createdAt);
 }
 
 function createdDate(item = {}) {
+  item = item || {};
   return first(item.created_at, item.createdAt, item.fecha, item.date, item.updated_at, item.updatedAt);
 }
 
 function updatedDate(item = {}) {
+  item = item || {};
   return first(item.lastSeenAt, item.lastLoginAt, item.ultimo_acceso, item.updated_at, item.updatedAt, item.created_at, item.createdAt);
 }
 
@@ -265,7 +277,7 @@ function activityDate(item = {}) {
   return updatedDate(item);
 }
 
-async function safeRead(label, task, fallback = []) {
+async function safeRead(label, task, fallback = [], errors = null) {
   try {
     const result = await task();
     if (Array.isArray(result)) return result;
@@ -274,6 +286,14 @@ async function safeRead(label, task, fallback = []) {
     return fallback;
   } catch (error) {
     console.warn(`Control center could not load ${label}`, error);
+    if (Array.isArray(errors)) {
+      errors.push({
+        label,
+        message: clean(error?.message || error, 500),
+        code: clean(error?.code || error?.name, 120),
+        at: new Date().toISOString(),
+      });
+    }
     return fallback;
   }
 }
@@ -285,6 +305,7 @@ async function loadRows(db, table) {
 }
 
 async function loadData(db, leadsAdapter) {
+  const loadErrors = [];
   const [
     users,
     teachers,
@@ -300,33 +321,49 @@ async function loadData(db, leadsAdapter) {
     assignments,
     matchingRuns,
     requestMatches,
+    chats,
     lifecycleEvents,
     automationEvents,
     publicLeads,
+    auditLogs,
+    adminAiQueries,
+    systemJobs,
+    deadLetters,
+    metricSnapshots,
+    opsAlerts,
+    healthChecks,
   ] = await Promise.all([
-    safeRead('users', () => loadRows(db, 'usuarios')),
-    safeRead('teachers', () => loadRows(db, 'profesores')),
-    safeRead('families', () => loadRows(db, 'familias')),
-    safeRead('students', () => loadRows(db, 'alumnos')),
-    safeRead('classes', () => loadRows(db, 'v_clases_completas')),
-    safeRead('requests', () => loadRows(db, 'solicitudes')),
-    safeRead('payments', () => loadRows(db, 'pagos')),
-    safeRead('documents', () => loadRows(db, 'documentos')),
-    safeRead('incidents', () => loadRows(db, 'incidencias')),
-    safeRead('notifications', () => loadRows(db, 'notificaciones')),
-    safeRead('notificationTokens', () => loadRows(db, 'notificationTokens')),
-    safeRead('assignments', () => loadRows(db, 'asignaciones')),
-    safeRead('matchingRuns', () => loadRows(db, 'matchingRuns')),
-    safeRead('requestMatches', () => loadRows(db, 'solicitudMatches')),
-    safeRead('lifecycleEvents', () => loadRows(db, 'classLifecycleEvents')),
-    safeRead('automationEvents', () => loadRows(db, 'automationEvents')),
+    safeRead('users', () => loadRows(db, 'usuarios'), [], loadErrors),
+    safeRead('teachers', () => loadRows(db, 'profesores'), [], loadErrors),
+    safeRead('families', () => loadRows(db, 'familias'), [], loadErrors),
+    safeRead('students', () => loadRows(db, 'alumnos'), [], loadErrors),
+    safeRead('classes', () => loadRows(db, 'v_clases_completas'), [], loadErrors),
+    safeRead('requests', () => loadRows(db, 'solicitudes'), [], loadErrors),
+    safeRead('payments', () => loadRows(db, 'pagos'), [], loadErrors),
+    safeRead('documents', () => loadRows(db, 'documentos'), [], loadErrors),
+    safeRead('incidents', () => loadRows(db, 'incidencias'), [], loadErrors),
+    safeRead('notifications', () => loadRows(db, 'notificaciones'), [], loadErrors),
+    safeRead('notificationTokens', () => loadRows(db, 'notificationTokens'), [], loadErrors),
+    safeRead('assignments', () => loadRows(db, 'asignaciones'), [], loadErrors),
+    safeRead('matchingRuns', () => loadRows(db, 'matchingRuns'), [], loadErrors),
+    safeRead('requestMatches', () => loadRows(db, 'solicitudMatches'), [], loadErrors),
+    safeRead('chats', () => loadRows(db, 'chats'), [], loadErrors),
+    safeRead('lifecycleEvents', () => loadRows(db, 'classLifecycleEvents'), [], loadErrors),
+    safeRead('automationEvents', () => loadRows(db, 'automationEvents'), [], loadErrors),
     safeRead('publicLeads', async () => {
       const result = leadsAdapter?.listPublic
         ? await leadsAdapter.listPublic({ max: 300 })
         : await loadRows(db, 'leadsPublicos');
       if (result.error) throw result.error;
       return result.data || [];
-    }),
+    }, [], loadErrors),
+    safeRead('auditLogs', () => loadRows(db, 'auditLogs'), [], loadErrors),
+    safeRead('adminAiQueries', () => loadRows(db, 'adminAiQueries'), [], loadErrors),
+    safeRead('systemJobs', () => loadRows(db, 'systemJobs'), [], loadErrors),
+    safeRead('deadLetters', () => loadRows(db, 'deadLetters'), [], loadErrors),
+    safeRead('metricSnapshots', () => loadRows(db, 'metricSnapshots'), [], loadErrors),
+    safeRead('opsAlerts', () => loadRows(db, 'opsAlerts'), [], loadErrors),
+    safeRead('platformHealthChecks', () => loadRows(db, 'platformHealthChecks'), [], loadErrors),
   ]);
 
   return {
@@ -344,9 +381,18 @@ async function loadData(db, leadsAdapter) {
     assignments,
     matchingRuns,
     requestMatches,
+    chats,
     lifecycleEvents,
     automationEvents,
     publicLeads,
+    auditLogs,
+    adminAiQueries,
+    systemJobs,
+    deadLetters,
+    metricSnapshots,
+    opsAlerts,
+    healthChecks,
+    loadErrors,
   };
 }
 
@@ -633,6 +679,652 @@ function detectBusinessAnomalies(metrics) {
   return anomalies.slice(0, 8);
 }
 
+const MISSION_STATUS_WEIGHT = {
+  operational: 100,
+  attention: 75,
+  degraded: 45,
+  outage: 10,
+};
+
+function hoursAgo(value) {
+  const date = normalizeDate(value);
+  if (!date) return Infinity;
+  return (Date.now() - date.getTime()) / (60 * 60 * 1000);
+}
+
+function latestItem(items = [], getter = createdDate) {
+  return [...items]
+    .filter((item) => normalizeDate(getter(item)))
+    .sort((a, b) => normalizeDate(getter(b)).getTime() - normalizeDate(getter(a)).getTime())[0] || null;
+}
+
+function oldestDate(items = [], getter = createdDate) {
+  const dates = items.map((item) => normalizeDate(getter(item))).filter(Boolean).sort((a, b) => a - b);
+  return dates[0] ? dates[0].toISOString() : '';
+}
+
+function recentItems(items = [], hours = 24, getter = createdDate) {
+  return items.filter((item) => hoursAgo(getter(item)) <= hours);
+}
+
+function missionTone(status) {
+  if (status === 'outage') return 'danger';
+  if (status === 'degraded') return 'danger';
+  if (status === 'attention') return 'warning';
+  return 'success';
+}
+
+function missionLabel(status) {
+  if (status === 'outage') return 'Caido';
+  if (status === 'degraded') return 'Degradado';
+  if (status === 'attention') return 'Atencion';
+  return 'Operativo';
+}
+
+function worstMissionStatus(statuses = []) {
+  if (statuses.includes('outage')) return 'outage';
+  if (statuses.includes('degraded')) return 'degraded';
+  if (statuses.includes('attention')) return 'attention';
+  return 'operational';
+}
+
+function missionScore(subsystems = []) {
+  if (!subsystems.length) return 100;
+  return Math.round(average(subsystems.map((item) => MISSION_STATUS_WEIGHT[item.status] ?? 60)));
+}
+
+function affectedUniqueUsers(items = [], fields = []) {
+  const ids = new Set();
+  items.forEach((item) => fields.forEach((field) => {
+    const value = field.split('.').reduce((acc, key) => acc?.[key], item);
+    if (value) ids.add(String(value));
+  }));
+  return ids.size;
+}
+
+function issue({
+  status = 'attention',
+  what,
+  impact,
+  cause,
+  fix,
+  affectedUsers = 0,
+  startedAt = '',
+  signals = [],
+  section = 'incidencias',
+} = {}) {
+  return {
+    status,
+    what: clean(what, 220),
+    impact: clean(impact, 260),
+    cause: clean(cause, 260),
+    fix: clean(fix, 260),
+    affectedUsers: Math.max(0, Number(affectedUsers) || 0),
+    startedAt: startedAt || '',
+    signals: signals.filter(Boolean).map((item) => clean(item, 120)).slice(0, 4),
+    section,
+  };
+}
+
+function subsystem({ id, name, description, section = 'incidencias', issues = [], okSignals = [] }) {
+  const status = worstMissionStatus(issues.map((item) => item.status));
+  const primary = issues[0] || issue({
+    status: 'operational',
+    what: 'Sin incidencias detectadas',
+    impact: 'Sin impacto operativo observado.',
+    cause: 'Las senales monitorizadas estan dentro de rango.',
+    fix: 'Mantener monitorizacion.',
+    section,
+  });
+  return {
+    id,
+    name,
+    description,
+    section,
+    status,
+    score: MISSION_STATUS_WEIGHT[status] ?? 60,
+    what: primary.what,
+    startedAt: primary.startedAt,
+    impact: primary.impact,
+    affectedUsers: Math.max(...issues.map((item) => item.affectedUsers || 0), 0),
+    cause: primary.cause,
+    fix: primary.fix,
+    signals: issues.length ? primary.signals : okSignals.slice(0, 4),
+    issues,
+  };
+}
+
+function browserRuntimeSignals() {
+  const nav = typeof navigator !== 'undefined' ? navigator : {};
+  const win = typeof window !== 'undefined' ? window : {};
+  const notificationPermission = typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+  return {
+    online: nav.onLine !== false,
+    serviceWorkerSupported: Boolean(nav.serviceWorker),
+    serviceWorkerControlled: Boolean(nav.serviceWorker?.controller),
+    cachesSupported: Boolean(win.caches),
+    notificationPermission,
+  };
+}
+
+function computeMissionControl(data, metrics) {
+  const browser = browserRuntimeSignals();
+  const totalUsers = Math.max(1, (data.users || []).length || metrics.teachersActive.length + metrics.familiesActive.length);
+  const loadErrors = data.loadErrors || [];
+  const coreLoadErrors = loadErrors.filter((item) => /users|teachers|families|students|classes|requests|payments/i.test(item.label));
+  const recentSevereAudits = recentItems(data.auditLogs || [], 24)
+    .filter((item) => ['critical', 'error', 'high'].includes(clean(item.severity).toLowerCase()));
+  const authFailures = recentItems(data.auditLogs || [], 24)
+    .filter((item) => /auth\..*(failed|blocked|error)/i.test(clean(item.action)));
+  const authSuccesses = recentItems(data.auditLogs || [], 24)
+    .filter((item) => /auth\..*success/i.test(clean(item.action)));
+  const failedJobs = (data.systemJobs || []).filter((item) => ['dead_letter', 'failed_permanently'].includes(statusOf(item)));
+  const deadLetters = data.deadLetters || [];
+  const queuedJobs = (data.systemJobs || []).filter((item) => statusOf(item) === 'queued');
+  const staleQueuedJobs = queuedJobs.filter((item) => hoursAgo(first(item.runAt, item.createdAt, item.created_at)) > 1);
+  const stuckProcessingJobs = (data.systemJobs || []).filter((item) => statusOf(item) === 'processing' && hoursAgo(first(item.startedAt, item.updatedAt, item.updated_at)) > 0.5);
+  const openOpsAlerts = (data.opsAlerts || []).filter((item) => ['open', 'abierta', 'active'].includes(statusOf(item)));
+  const latestMetricSnapshot = latestItem(data.metricSnapshots || []);
+  const latestHealthSnapshot = latestItem(data.healthChecks || []);
+  const latestAutomation = latestItem(data.automationEvents || []);
+  const apiErrors = recentItems(data.automationEvents || [], 48)
+    .filter((item) => /(api|stripe|firebase|storage|openai|gemini|supabase|webhook|http|unauthorized|permission|quota|timeout|failed|error)/i.test(clean([item.type, item.status, item.error, item.message, item.source].join(' '))));
+  const notificationFailures = apiErrors.filter((item) => /notification|push|fcm|token/i.test(clean([item.type, item.message, item.error].join(' '))));
+  const matchingErrors = recentItems([...(data.matchingRuns || []), ...(data.automationEvents || [])], 48)
+    .filter((item) => /matching|match/i.test(clean([item.type, item.status, item.error, item.message].join(' '))) && /(error|failed|empty|sin_profesor|no_match)/i.test(clean([item.status, item.error, item.message, item.result].join(' '))));
+  const aiErrors = recentItems([...(data.auditLogs || []), ...(data.adminAiQueries || []), ...(data.automationEvents || [])], 48)
+    .filter((item) => /ai|ia|admin_ai|rerank|semantic/i.test(clean([item.action, item.type, item.intent, item.source, item.error, item.message].join(' '))) && /(error|failed|timeout|quota|critical)/i.test(clean([item.severity, item.status, item.error, item.message].join(' '))));
+  const paymentReview = (data.payments || []).filter((item) => ['needs_review', 'revision', 'en_revision'].includes(clean(first(item.reconciliationStatus, item.estado_conciliacion)).toLowerCase()));
+  const activeAssignments = (data.assignments || []).filter(isActive);
+  const chatIds = new Set((data.chats || []).map((item) => clean(first(item.assignmentId, item.asignacion_id, item.id), 180)).filter(Boolean));
+  const assignmentsWithoutChat = activeAssignments.filter((item) => {
+    const id = clean(first(item.id, item.assignmentId, item.asignacion_id), 180);
+    return id && !chatIds.has(id);
+  });
+  const chatErrors = recentItems(data.auditLogs || [], 48)
+    .filter((item) => /chat|message|mensaje|messaging/i.test(clean([item.module, item.action, item.entityType].join(' '))) && ['critical', 'error', 'high'].includes(clean(item.severity).toLowerCase()));
+  const documentErrors = recentItems([...(data.auditLogs || []), ...(data.automationEvents || [])], 48)
+    .filter((item) => /storage|document|documento|upload|bucket/i.test(clean([item.module, item.action, item.type, item.error, item.message].join(' '))) && /(error|failed|bucket|permission|unauthorized|critical)/i.test(clean([item.severity, item.status, item.error, item.message].join(' '))));
+  const classesAtRisk = [...metrics.classesWithoutConfirmation, ...metrics.lifecycleBlocked];
+  const noRecentSnapshot = !latestMetricSnapshot || hoursAgo(createdDate(latestMetricSnapshot)) > 12;
+  const noRecentAutomation = !latestAutomation || hoursAgo(createdDate(latestAutomation)) > 12;
+
+  const systems = [
+    subsystem({
+      id: 'firebase',
+      name: 'Firebase',
+      description: 'SDK, Firestore y permisos de lectura del panel.',
+      section: 'auditoria',
+      issues: [
+        ...(loadErrors.length ? [issue({
+          status: coreLoadErrors.length ? 'degraded' : 'attention',
+          what: `${loadErrors.length} lectura(s) Firebase fallaron`,
+          impact: coreLoadErrors.length ? 'El admin puede ver datos incompletos.' : 'Algunos modulos secundarios pueden aparecer incompletos.',
+          affectedUsers: coreLoadErrors.length ? totalUsers : 0,
+          cause: loadErrors.map((item) => item.label).slice(0, 3).join(', '),
+          fix: 'Revisar reglas Firestore, nombres de colecciones e indices requeridos.',
+          startedAt: oldestDate(loadErrors, (item) => item.at),
+          signals: loadErrors.map((item) => `${item.label}: ${item.code || item.message}`),
+          section: 'auditoria',
+        })] : []),
+        ...(recentSevereAudits.length ? [issue({
+          status: 'attention',
+          what: `${recentSevereAudits.length} evento(s) severos en auditoria`,
+          impact: 'Puede haber operaciones recientes con errores o intervenciones criticas.',
+          affectedUsers: affectedUniqueUsers(recentSevereAudits, ['actorUid', 'entityId']),
+          cause: 'Audit logs con severidad high/error/critical en las ultimas 24h.',
+          fix: 'Abrir Auditoria y filtrar por severidad para revisar el contexto exacto.',
+          startedAt: oldestDate(recentSevereAudits),
+          signals: recentSevereAudits.map((item) => item.action),
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: ['Firestore responde', 'Reglas permiten lectura admin', `${data.auditLogs?.length || 0} eventos auditados`],
+    }),
+    subsystem({
+      id: 'database',
+      name: 'Base de datos',
+      description: 'Colecciones criticas, snapshots y consistencia de lectura.',
+      section: 'auditoria',
+      issues: [
+        ...(coreLoadErrors.length ? [issue({
+          status: 'degraded',
+          what: 'Colecciones criticas incompletas',
+          impact: 'Metricas, CRM y operaciones pueden calcularse con datos parciales.',
+          affectedUsers: totalUsers,
+          cause: coreLoadErrors.map((item) => item.label).join(', '),
+          fix: 'Validar reglas, aliases y permisos de las colecciones criticas.',
+          startedAt: oldestDate(coreLoadErrors, (item) => item.at),
+          signals: coreLoadErrors.map((item) => item.message),
+          section: 'auditoria',
+        })] : []),
+        ...(noRecentSnapshot ? [issue({
+          status: latestMetricSnapshot ? 'attention' : 'degraded',
+          what: latestMetricSnapshot ? 'Snapshot de metricas antiguo' : 'Sin snapshots de metricas',
+          impact: 'La vision historica y las alertas programadas pierden precision.',
+          affectedUsers: 0,
+          cause: latestMetricSnapshot ? `Ultimo snapshot hace ${formatHours(hoursAgo(createdDate(latestMetricSnapshot)))}` : 'No hay documentos metricSnapshots.',
+          fix: 'Ejecutar el worker programado o activar Functions cuando Blaze este disponible.',
+          startedAt: createdDate(latestMetricSnapshot),
+          signals: ['metricSnapshots'],
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: [`${data.metricSnapshots?.length || 0} snapshots`, `${data.opsAlerts?.length || 0} alertas ops`, `${data.systemJobs?.length || 0} jobs`],
+    }),
+    subsystem({
+      id: 'auth',
+      name: 'Autenticacion',
+      description: 'Accesos, bloqueos, perfiles y continuidad de sesion.',
+      section: 'auditoria',
+      issues: [
+        ...(authFailures.length >= 5 ? [issue({
+          status: authFailures.length >= 15 ? 'degraded' : 'attention',
+          what: `${authFailures.length} fallos/bloqueos de auth en 24h`,
+          impact: 'Usuarios reales podrian estar sin acceso o con perfil incompatible.',
+          affectedUsers: affectedUniqueUsers(authFailures, ['actorUid', 'entityId']),
+          cause: 'Eventos auth.failed/auth.blocked en auditoria.',
+          fix: 'Filtrar Auditoria por modulo Auth y revisar usuario, dominio y perfil Firestore.',
+          startedAt: oldestDate(authFailures),
+          signals: authFailures.map((item) => item.action),
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: [`${authSuccesses.length} accesos correctos 24h`, 'Email/Password activo', 'Google Auth preparado en cliente'],
+    }),
+    subsystem({
+      id: 'functions',
+      name: 'Cloud Functions',
+      description: 'Triggers, scheduler, webhooks y cola de jobs.',
+      section: 'auditoria',
+      issues: [
+        ...((failedJobs.length || deadLetters.length) ? [issue({
+          status: 'outage',
+          what: `${failedJobs.length + deadLetters.length} job(s) en dead letter`,
+          impact: 'Procesos automaticos pueden haber quedado sin ejecutar.',
+          affectedUsers: totalUsers,
+          cause: 'Jobs agotaron reintentos o fallaron de forma permanente.',
+          fix: 'Abrir deadLetters/systemJobs, corregir causa y reencolar el job afectado.',
+          startedAt: oldestDate([...failedJobs, ...deadLetters]),
+          signals: [...failedJobs, ...deadLetters].map((item) => first(item.type, item.id)),
+          section: 'auditoria',
+        })] : []),
+        ...((staleQueuedJobs.length || stuckProcessingJobs.length) ? [issue({
+          status: 'degraded',
+          what: `${staleQueuedJobs.length + stuckProcessingJobs.length} job(s) atascados`,
+          impact: 'Notificaciones, matching o pagos pueden retrasarse.',
+          affectedUsers: affectedUniqueUsers([...staleQueuedJobs, ...stuckProcessingJobs], ['payload.userUid', 'payload.familyUid', 'payload.teacherUid']),
+          cause: 'Cola systemJobs con runAt vencido o lease de procesamiento antiguo.',
+          fix: 'Ejecutar worker, revisar logs y liberar/reintentar jobs atascados.',
+          startedAt: oldestDate([...staleQueuedJobs, ...stuckProcessingJobs], (item) => first(item.runAt, item.startedAt, item.createdAt)),
+          signals: [...staleQueuedJobs, ...stuckProcessingJobs].map((item) => first(item.type, item.id)),
+          section: 'auditoria',
+        })] : []),
+        ...(noRecentAutomation ? [issue({
+          status: 'attention',
+          what: 'Sin actividad automatica reciente',
+          impact: 'Recordatorios, snapshots y tareas programadas podrian no estar corriendo.',
+          affectedUsers: 0,
+          cause: latestAutomation ? 'Ultimo automationEvent demasiado antiguo.' : 'No hay automationEvents registrados.',
+          fix: 'Verificar GitHub Actions worker y desplegar Functions cuando Blaze este disponible.',
+          startedAt: createdDate(latestAutomation),
+          signals: ['automationEvents', 'scheduled worker'],
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: [`${queuedJobs.length} jobs en cola`, `${data.automationEvents?.length || 0} eventos`, `${openOpsAlerts.length} alertas abiertas`],
+    }),
+    subsystem({
+      id: 'apis',
+      name: 'APIs externas',
+      description: 'Stripe/Bizum, Firebase APIs, webhooks y servicios auxiliares.',
+      section: 'incidencias',
+      issues: apiErrors.length ? [issue({
+        status: apiErrors.length > 3 ? 'degraded' : 'attention',
+        what: `${apiErrors.length} error(es) de API en 48h`,
+        impact: 'Integraciones externas pueden responder lento, fallar o requerir reintento.',
+        affectedUsers: affectedUniqueUsers(apiErrors, ['userUid', 'actorUid', 'entityId']),
+        cause: 'automationEvents/auditLogs contienen errores de API, timeout, permisos o cuota.',
+        fix: 'Revisar origen, credenciales, cuotas y reintentos de la integracion afectada.',
+        startedAt: oldestDate(apiErrors),
+        signals: apiErrors.map((item) => first(item.type, item.action, item.source)),
+        section: 'incidencias',
+      })] : [],
+      okSignals: ['Sin errores de API recientes', 'Webhooks aislados por cola', 'Auditoria activa'],
+    }),
+    subsystem({
+      id: 'notifications',
+      name: 'Notificaciones',
+      description: 'Push, notificaciones internas y backlog no leido.',
+      section: 'notificaciones',
+      issues: [
+        ...(notificationFailures.length ? [issue({
+          status: 'degraded',
+          what: `${notificationFailures.length} fallo(s) de notificacion`,
+          impact: 'Usuarios pueden no enterarse de clases, pagos o mensajes.',
+          affectedUsers: affectedUniqueUsers(notificationFailures, ['userUid', 'payload.userUid', 'actorUid']),
+          cause: 'Errores push/FCM/token en automationEvents.',
+          fix: 'Limpiar tokens invalidos y revisar permisos push del dispositivo.',
+          startedAt: oldestDate(notificationFailures),
+          signals: notificationFailures.map((item) => first(item.type, item.message)),
+          section: 'notificaciones',
+        })] : []),
+        ...(data.tokens.length === 0 && totalUsers > 1 ? [issue({
+          status: 'attention',
+          what: 'No hay dispositivos push activos',
+          impact: 'Los avisos dependen solo del centro interno de notificaciones.',
+          affectedUsers: totalUsers,
+          cause: 'notificationTokens no tiene tokens activos.',
+          fix: 'Pedir permiso push desde PWA y validar VAPID/configuracion.',
+          signals: ['notificationTokens'],
+          section: 'notificaciones',
+        })] : []),
+      ],
+      okSignals: [`${data.tokens.length} dispositivo(s) push`, `${data.notifications.length} notificaciones`, `${metrics.pushDevices.length} activas`],
+    }),
+    subsystem({
+      id: 'ai',
+      name: 'IA',
+      description: 'Asistente admin, scoring, recomendaciones y reranking.',
+      section: 'ia',
+      issues: aiErrors.length ? [issue({
+        status: aiErrors.length > 2 ? 'degraded' : 'attention',
+        what: `${aiErrors.length} incidencia(s) IA en 48h`,
+        impact: 'Respuestas o recomendaciones pueden degradarse a modo estructurado.',
+        affectedUsers: affectedUniqueUsers(aiErrors, ['actorUid', 'entityId']),
+        cause: 'Errores de IA, timeout, cuota o reranking detectados en logs.',
+        fix: 'Usar modo estructurado gratuito, revisar prompts/coste y reintentar procesos fallidos.',
+        startedAt: oldestDate(aiErrors),
+        signals: aiErrors.map((item) => first(item.action, item.type, item.intent)),
+        section: 'ia',
+      })] : [],
+      okSignals: [`${data.adminAiQueries?.length || 0} consultas admin registradas`, 'Modo estructurado disponible', 'Matching deterministic fallback activo'],
+    }),
+    subsystem({
+      id: 'matching',
+      name: 'Matching',
+      description: 'Asignacion profesor-familia y calidad de candidatos.',
+      section: 'solicitudes',
+      issues: [
+        ...(metrics.staleUnassigned.length ? [issue({
+          status: metrics.staleUnassigned.length > 3 ? 'degraded' : 'attention',
+          what: `${metrics.staleUnassigned.length} solicitud(es) sin profesor >24h`,
+          impact: 'Familias esperan respuesta y baja la conversion.',
+          affectedUsers: affectedUniqueUsers(metrics.staleUnassigned, ['familyUid', 'familia_id', 'userUid']),
+          cause: 'Falta oferta compatible, disponibilidad incompleta o matching no ejecutado.',
+          fix: 'Abrir Solicitudes, revisar matches y asignar/reentrenar criterios.',
+          startedAt: oldestDate(metrics.staleUnassigned),
+          signals: metrics.staleUnassigned.map(requestSubject),
+          section: 'solicitudes',
+        })] : []),
+        ...(matchingErrors.length ? [issue({
+          status: 'degraded',
+          what: `${matchingErrors.length} error(es) de matching`,
+          impact: 'Las sugerencias pueden no estar generandose para nuevas solicitudes.',
+          affectedUsers: affectedUniqueUsers(matchingErrors, ['requestId', 'entityId', 'payload.requestId']),
+          cause: 'matchingRuns o automationEvents reportan fallo/sin candidato.',
+          fix: 'Revisar criterios, disponibilidad de profesores y jobs matching.request.',
+          startedAt: oldestDate(matchingErrors),
+          signals: matchingErrors.map((item) => first(item.type, item.status, item.id)),
+          section: 'solicitudes',
+        })] : []),
+      ],
+      okSignals: [`${data.requestMatches.length} matches`, `${data.matchingRuns.length} ejecuciones`, `${metrics.teachersVerified.length} profesores verificados`],
+    }),
+    subsystem({
+      id: 'calendar',
+      name: 'Calendario',
+      description: 'Clases, confirmaciones, estados y recordatorios.',
+      section: 'clases',
+      issues: classesAtRisk.length ? [issue({
+        status: classesAtRisk.length > 5 ? 'degraded' : 'attention',
+        what: `${classesAtRisk.length} clase(s) requieren cierre`,
+        impact: 'Puede retrasar pagos, valoraciones y comisiones.',
+        affectedUsers: affectedUniqueUsers(classesAtRisk, ['teacherUid', 'profesor_id', 'familyUid', 'familia_id', 'studentId']),
+        cause: 'Clases pasadas siguen programadas o lifecycle bloqueado.',
+        fix: 'Abrir Clases y forzar confirmacion/asistencia/pago segun estado.',
+        startedAt: oldestDate(classesAtRisk, classDate),
+        signals: classesAtRisk.map((item) => first(item.status, item.to, item.id)),
+        section: 'clases',
+      })] : [],
+      okSignals: [`${metrics.scheduledFuture.length} futuras`, `${metrics.completedMonth.length} completadas este mes`, `${formatPercent(metrics.completionRateMonth)} finalizacion`],
+    }),
+    subsystem({
+      id: 'payments',
+      name: 'Pagos',
+      description: 'Cobros familia, pagos profesor y conciliacion.',
+      section: 'pagos',
+      issues: [
+        ...(metrics.overduePayments.length ? [issue({
+          status: metrics.overduePayments.length > 3 ? 'degraded' : 'attention',
+          what: `${metrics.overduePayments.length} pago(s) vencidos`,
+          impact: `${formatEuros(metrics.overduePaymentAmount)} pueden afectar caja y confianza.`,
+          affectedUsers: affectedUniqueUsers(metrics.overduePayments, ['familyUid', 'familia_id', 'teacherUid', 'profesor_id', 'userUid']),
+          cause: 'Pagos con estado vencido o fecha dueAt pasada.',
+          fix: 'Enviar recordatorio, validar Bizum/Stripe y actualizar estado de clase.',
+          startedAt: oldestDate(metrics.overduePayments, (item) => first(item.dueAt, item.due_at, item.createdAt)),
+          signals: metrics.overduePayments.map((item) => `${formatEuros(first(item.monto, item.amount))} ${paymentStatus(item)}`),
+          section: 'pagos',
+        })] : []),
+        ...(paymentReview.length ? [issue({
+          status: 'attention',
+          what: `${paymentReview.length} pago(s) necesitan conciliacion`,
+          impact: 'La clase puede no cerrarse automaticamente como pagada.',
+          affectedUsers: affectedUniqueUsers(paymentReview, ['familyUid', 'teacherUid', 'userUid']),
+          cause: 'Estado reconciliationStatus necesita revision.',
+          fix: 'Comparar justificante/referencia y marcar validado o rechazado.',
+          startedAt: oldestDate(paymentReview),
+          signals: paymentReview.map((item) => first(item.reference, item.referencia, item.id)),
+          section: 'pagos',
+        })] : []),
+      ],
+      okSignals: [`${formatEuros(metrics.pendingPaymentAmount)} pendiente`, `${formatPercent(metrics.classPaymentCoverage)} clases cobradas`, `${formatPercent(metrics.teacherPayoutCoverage)} profesores pagados`],
+    }),
+    subsystem({
+      id: 'chat',
+      name: 'Chat',
+      description: 'Conversaciones por asignacion y avisos de mensajes.',
+      section: 'chats',
+      issues: [
+        ...(assignmentsWithoutChat.length ? [issue({
+          status: assignmentsWithoutChat.length > 3 ? 'degraded' : 'attention',
+          what: `${assignmentsWithoutChat.length} asignacion(es) sin chat`,
+          impact: 'Familias/profesores pueden no tener canal directo.',
+          affectedUsers: affectedUniqueUsers(assignmentsWithoutChat, ['familyUid', 'familia_id', 'teacherUid', 'profesor_id']),
+          cause: 'No existe documento chats para asignaciones activas.',
+          fix: 'Abrir Chats o reasignar para crear el canal; revisar ensureChatForAssignment.',
+          startedAt: oldestDate(assignmentsWithoutChat),
+          signals: assignmentsWithoutChat.map((item) => first(item.id, item.assignmentId)),
+          section: 'chats',
+        })] : []),
+        ...(chatErrors.length ? [issue({
+          status: 'degraded',
+          what: `${chatErrors.length} error(es) de mensajeria`,
+          impact: 'Mensajes o notificaciones de chat pueden fallar.',
+          affectedUsers: affectedUniqueUsers(chatErrors, ['actorUid', 'entityId']),
+          cause: 'Audit logs de modulo messaging/chat con severidad alta.',
+          fix: 'Revisar permisos de chats/mensajes y el evento concreto en Auditoria.',
+          startedAt: oldestDate(chatErrors),
+          signals: chatErrors.map((item) => item.action),
+          section: 'chats',
+        })] : []),
+      ],
+      okSignals: [`${data.chats.length} chats`, `${activeAssignments.length} asignaciones activas`, 'Admin incluido como supervisor'],
+    }),
+    subsystem({
+      id: 'storage',
+      name: 'Almacenamiento',
+      description: 'Documentos, fotos, verificaciones y bucket Firebase Storage.',
+      section: 'documentos',
+      issues: [
+        ...(documentErrors.length ? [issue({
+          status: 'degraded',
+          what: `${documentErrors.length} fallo(s) de almacenamiento`,
+          impact: 'Subidas de documentos/fotos pueden fallar.',
+          affectedUsers: affectedUniqueUsers(documentErrors, ['actorUid', 'ownerUid', 'entityId']),
+          cause: 'Errores storage/bucket/upload detectados en logs.',
+          fix: 'Verificar bucket Firebase Storage, reglas y permisos de subida.',
+          startedAt: oldestDate(documentErrors),
+          signals: documentErrors.map((item) => first(item.action, item.type, item.error?.message)),
+          section: 'documentos',
+        })] : []),
+        ...(metrics.pendingDocs.length > 10 ? [issue({
+          status: 'attention',
+          what: `${metrics.pendingDocs.length} documentos pendientes`,
+          impact: 'La verificacion de profesores puede retrasarse.',
+          affectedUsers: affectedUniqueUsers(metrics.pendingDocs, ['ownerUid', 'userUid', 'teacherUid']),
+          cause: 'Backlog de revision documental.',
+          fix: 'Priorizar documentos pendientes y cerrar verificaciones.',
+          startedAt: oldestDate(metrics.pendingDocs),
+          signals: metrics.pendingDocs.map((item) => first(item.tipo, item.nombre, item.id)),
+          section: 'documentos',
+        })] : []),
+      ],
+      okSignals: [`${data.documents.length} documentos`, `${metrics.pendingDocs.length} pendientes`, 'Auditoria de cambios activa'],
+    }),
+    subsystem({
+      id: 'pwa',
+      name: 'PWA',
+      description: 'Service worker, offline, instalacion y permisos del dispositivo.',
+      section: 'dashboard',
+      issues: [
+        ...(!browser.online ? [issue({
+          status: 'degraded',
+          what: 'Navegador sin conexion',
+          impact: 'El admin puede ver datos antiguos o no guardar cambios.',
+          affectedUsers: 1,
+          cause: 'navigator.onLine=false.',
+          fix: 'Recuperar conexion antes de ejecutar acciones criticas.',
+          signals: ['offline'],
+          section: 'dashboard',
+        })] : []),
+        ...(!browser.serviceWorkerSupported ? [issue({
+          status: 'degraded',
+          what: 'Service worker no soportado',
+          impact: 'La PWA no tendra cache/offline/push fiable.',
+          affectedUsers: 1,
+          cause: 'El navegador no expone navigator.serviceWorker.',
+          fix: 'Usar Chrome/Safari moderno e instalar la PWA desde HTTPS.',
+          signals: ['serviceWorker unsupported'],
+          section: 'dashboard',
+        })] : []),
+        ...(browser.serviceWorkerSupported && !browser.serviceWorkerControlled ? [issue({
+          status: 'attention',
+          what: 'Service worker aun no controla esta pestana',
+          impact: 'Cache/offline se activan tras recargar o reinstalar.',
+          affectedUsers: 1,
+          cause: 'La version nueva se acaba de publicar o la pestana se abrio antes del SW.',
+          fix: 'Recargar la pagina una vez y comprobar instalacion PWA.',
+          signals: ['serviceWorker controller=false'],
+          section: 'dashboard',
+        })] : []),
+        ...(browser.notificationPermission === 'denied' ? [issue({
+          status: 'attention',
+          what: 'Permiso push denegado en este dispositivo',
+          impact: 'Este admin no recibira avisos push.',
+          affectedUsers: 1,
+          cause: 'Notification.permission=denied.',
+          fix: 'Activar notificaciones en ajustes del navegador/PWA.',
+          signals: ['push denied'],
+          section: 'notificaciones',
+        })] : []),
+      ],
+      okSignals: [browser.serviceWorkerSupported ? 'SW soportado' : 'SW no soportado', browser.cachesSupported ? 'Cache API OK' : 'Cache API no disponible', `Push: ${browser.notificationPermission}`],
+    }),
+    subsystem({
+      id: 'backups',
+      name: 'Backups',
+      description: 'Snapshots operativos y evidencia de recuperacion.',
+      section: 'auditoria',
+      issues: [
+        ...(noRecentSnapshot ? [issue({
+          status: latestMetricSnapshot ? 'attention' : 'degraded',
+          what: latestMetricSnapshot ? 'Snapshot operativo antiguo' : 'Sin snapshot operativo',
+          impact: 'Menos capacidad para reconstruir estado historico reciente.',
+          affectedUsers: totalUsers,
+          cause: latestMetricSnapshot ? 'metricSnapshots no se actualiza en rango.' : 'No hay metricSnapshots disponibles.',
+          fix: 'Ejecutar worker programado y exportar backups periodicos de Firestore.',
+          startedAt: createdDate(latestMetricSnapshot),
+          signals: ['metricSnapshots', 'platformHealthChecks'],
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: [`Ultimo snapshot: ${formatShortDate(createdDate(latestMetricSnapshot)) || '-'}`, `Health checks: ${data.healthChecks?.length || 0}`, `Ultimo health: ${formatShortDate(createdDate(latestHealthSnapshot)) || '-'}`],
+    }),
+    subsystem({
+      id: 'scheduled_tasks',
+      name: 'Tareas programadas',
+      description: 'Worker, recordatorios, reconciliacion y snapshots.',
+      section: 'auditoria',
+      issues: [
+        ...((staleQueuedJobs.length || stuckProcessingJobs.length) ? [issue({
+          status: 'degraded',
+          what: 'Backlog de tareas programadas',
+          impact: 'Recordatorios y automatizaciones pueden llegar tarde.',
+          affectedUsers: affectedUniqueUsers([...staleQueuedJobs, ...stuckProcessingJobs], ['payload.userUid', 'payload.familyUid', 'payload.teacherUid']),
+          cause: 'systemJobs con runAt vencido o lease antiguo.',
+          fix: 'Ejecutar worker, revisar GitHub Actions y reintentar tareas fallidas.',
+          startedAt: oldestDate([...staleQueuedJobs, ...stuckProcessingJobs], (item) => first(item.runAt, item.startedAt, item.createdAt)),
+          signals: [...staleQueuedJobs, ...stuckProcessingJobs].map((item) => first(item.type, item.id)),
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: [`${queuedJobs.length} en cola`, `${stuckProcessingJobs.length} procesando antiguos`, `${formatShortDate(createdDate(latestAutomation)) || '-'} ultimo evento`],
+    }),
+    subsystem({
+      id: 'automation',
+      name: 'Procesos automaticos',
+      description: 'Estados, alertas, reintentos, auditoria y autocorreccion.',
+      section: 'auditoria',
+      issues: [
+        ...(metrics.automationErrors.length ? [issue({
+          status: metrics.automationErrors.length > 5 ? 'degraded' : 'attention',
+          what: `${metrics.automationErrors.length} error(es) de automatizacion`,
+          impact: 'Algunas acciones automaticas pueden requerir intervencion admin.',
+          affectedUsers: affectedUniqueUsers(metrics.automationErrors, ['actorUid', 'userUid', 'entityId', 'payload.userUid']),
+          cause: 'automationEvents recientes contienen fallo/error/missing/unavailable.',
+          fix: 'Abrir Auditoria/Incidencias, revisar traceId y reencolar si procede.',
+          startedAt: oldestDate(metrics.automationErrors),
+          signals: metrics.automationErrors.map((item) => first(item.type, item.status, item.id)),
+          section: 'auditoria',
+        })] : []),
+        ...(openOpsAlerts.length ? [issue({
+          status: openOpsAlerts.some((item) => ['critical', 'high'].includes(clean(first(item.level, item.severity)).toLowerCase())) ? 'degraded' : 'attention',
+          what: `${openOpsAlerts.length} alerta(s) ops abiertas`,
+          impact: 'Hay riesgos detectados por la plataforma que siguen abiertos.',
+          affectedUsers: 0,
+          cause: 'opsAlerts con status open.',
+          fix: 'Resolver la causa y cerrar/actualizar la alerta operativa.',
+          startedAt: oldestDate(openOpsAlerts),
+          signals: openOpsAlerts.map((item) => first(item.type, item.title, item.id)),
+          section: 'auditoria',
+        })] : []),
+      ],
+      okSignals: [`${data.automationEvents.length} eventos`, `${openOpsAlerts.length} alertas abiertas`, 'Auditoria enlazada'],
+    }),
+  ];
+
+  const score = missionScore(systems);
+  const status = worstMissionStatus(systems.map((item) => item.status));
+  const issues = systems
+    .filter((item) => item.status !== 'operational')
+    .sort((a, b) => (MISSION_STATUS_WEIGHT[a.status] || 0) - (MISSION_STATUS_WEIGHT[b.status] || 0));
+
+  return {
+    generatedAt: new Date().toISOString(),
+    status,
+    score,
+    systems,
+    issues,
+    counts: {
+      operational: systems.filter((item) => item.status === 'operational').length,
+      attention: systems.filter((item) => item.status === 'attention').length,
+      degraded: systems.filter((item) => item.status === 'degraded').length,
+      outage: systems.filter((item) => item.status === 'outage').length,
+    },
+  };
+}
+
 function computeControlCenter(data) {
   const currentMonth = nowIsoMonth();
   const teachersActive = data.teachers.filter(isActive);
@@ -752,6 +1444,10 @@ function computeControlCenter(data) {
     teacherLeaderboard,
   };
   const anomalies = detectBusinessAnomalies(baseMetrics);
+  const missionControl = computeMissionControl(data, {
+    ...baseMetrics,
+    anomalies,
+  });
 
   const alerts = [
     ...anomalies,
@@ -919,6 +1615,7 @@ function computeControlCenter(data) {
     timing,
     forecast,
     healthScore,
+    missionControl,
     inactiveTeachers: inactive.inactiveTeachers,
     inactiveFamilies: inactive.inactiveFamilies,
     teacherLeaderboard,
@@ -1146,6 +1843,124 @@ function renderDataQuality(items) {
   </button>`).join('');
 }
 
+function renderMissionIssue(issueItem) {
+  return `<article class="mission-incident ${escapeHtml(missionTone(issueItem.status))}">
+    <div class="mission-incident-head">
+      ${renderBadge(missionLabel(issueItem.status), missionTone(issueItem.status))}
+      <span>${escapeHtml(issueItem.startedAt ? `Desde ${formatShortDate(issueItem.startedAt)}` : 'Detectado ahora')}</span>
+    </div>
+    <strong>${escapeHtml(issueItem.what)}</strong>
+    <p>${escapeHtml(issueItem.impact)}</p>
+    <div class="mission-incident-grid">
+      <div><span>Afectados</span><strong>${escapeHtml(formatNumber(issueItem.affectedUsers || 0))}</strong></div>
+      <div><span>Causa probable</span><strong>${escapeHtml(issueItem.cause || '-')}</strong></div>
+      <div><span>Solucion</span><strong>${escapeHtml(issueItem.fix || '-')}</strong></div>
+    </div>
+    ${renderActionButton(issueItem.section, 'Abrir modulo')}
+  </article>`;
+}
+
+function renderMissionSystem(item) {
+  const tone = missionTone(item.status);
+  return `<article class="mission-system ${escapeHtml(tone)}">
+    <div class="mission-system-top">
+      <div>
+        <div class="mission-system-name">${escapeHtml(item.name)}</div>
+        <div class="mission-system-desc">${escapeHtml(item.description)}</div>
+      </div>
+      ${renderBadge(missionLabel(item.status), tone)}
+    </div>
+    <div class="mission-system-what">${escapeHtml(item.what)}</div>
+    <div class="mission-system-detail">
+      <div>
+        <span>Impacto</span>
+        <strong>${escapeHtml(item.impact || '-')}</strong>
+      </div>
+      <div>
+        <span>Afectados</span>
+        <strong>${escapeHtml(formatNumber(item.affectedUsers || 0))}</strong>
+      </div>
+      <div>
+        <span>Inicio</span>
+        <strong>${escapeHtml(item.startedAt ? formatShortDate(item.startedAt) : 'Sin incidencia')}</strong>
+      </div>
+      <div>
+        <span>Causa</span>
+        <strong>${escapeHtml(item.cause || '-')}</strong>
+      </div>
+      <div class="mission-system-fix">
+        <span>Como solucionarlo</span>
+        <strong>${escapeHtml(item.fix || '-')}</strong>
+      </div>
+    </div>
+    <div class="mission-signals">
+      ${(item.signals || []).slice(0, 4).map((signal) => `<span>${escapeHtml(signal)}</span>`).join('')}
+    </div>
+    ${item.status !== 'operational' ? renderActionButton(item.section, 'Investigar') : ''}
+  </article>`;
+}
+
+function renderMissionControl(mission) {
+  if (!mission) return '';
+  const tone = missionTone(mission.status);
+  const priorityIssues = mission.issues.slice(0, 3);
+  return `<section class="mission-control">
+    <div class="mission-hero">
+      <div>
+        <div class="control-eyebrow">Mission Control</div>
+        <h2>Estado tecnico de la plataforma</h2>
+        <p>Firebase, base de datos, Auth, automatizaciones, IA, matching, calendario, pagos, chat, storage, PWA, backups y tareas programadas en una sola vista de operacion.</p>
+      </div>
+      <div class="control-health-score ${escapeHtml(tone)}" style="--score:${mission.score}">
+        <strong>${escapeHtml(String(mission.score))}</strong>
+        <span>salud sistema</span>
+      </div>
+      <div class="control-live">
+        ${renderBadge(missionLabel(mission.status), tone)}
+        <span>Actualizado ${escapeHtml(formatShortDate(mission.generatedAt) || '-')}</span>
+        <button class="btn btn-outline btn-sm" type="button" data-control-refresh>Actualizar</button>
+      </div>
+    </div>
+
+    <div class="mission-kpi-grid">
+      ${renderKpi({ label: 'Sistemas operativos', value: mission.counts.operational, tone: 'green', sub: `${mission.systems.length} monitorizados` })}
+      ${renderKpi({ label: 'Atencion', value: mission.counts.attention, tone: mission.counts.attention ? 'gold' : 'green', sub: 'requieren seguimiento' })}
+      ${renderKpi({ label: 'Degradados', value: mission.counts.degraded, tone: mission.counts.degraded ? 'red' : 'green', sub: 'impacto parcial' })}
+      ${renderKpi({ label: 'Caidos', value: mission.counts.outage, tone: mission.counts.outage ? 'red' : 'green', sub: 'impacto critico' })}
+    </div>
+
+    <div class="mission-priority-grid">
+      <section class="card control-card">
+        <div class="card-header">
+          <span class="card-title">Incidencias prioritarias</span>
+          ${renderBadge(`${mission.issues.length}`, mission.issues.length ? 'warning' : 'success')}
+        </div>
+        <div class="card-body control-stack">
+          ${priorityIssues.length ? priorityIssues.map(renderMissionIssue).join('') : '<div class="empty-state"><div class="empty-title">Sin incidencias tecnicas</div><div class="empty-desc">Los subsistemas monitorizados no muestran sintomas relevantes.</div></div>'}
+        </div>
+      </section>
+      <section class="card control-card">
+        <div class="card-header">
+          <span class="card-title">Mapa de subsistemas</span>
+          ${renderBadge('Tiempo real', 'success')}
+        </div>
+        <div class="card-body">
+          <div class="mission-mini-map">
+            ${mission.systems.map((item) => `<button type="button" data-control-nav="${escapeHtml(item.section)}" class="${escapeHtml(missionTone(item.status))}">
+              <span>${escapeHtml(item.name)}</span>
+              <strong>${escapeHtml(missionLabel(item.status))}</strong>
+            </button>`).join('')}
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="mission-system-grid">
+      ${mission.systems.map(renderMissionSystem).join('')}
+    </div>
+  </section>`;
+}
+
 function renderControlCenter(container, metrics, state) {
   const previousMonth = metrics.monthly.at(-2) || {};
   const currentMonth = metrics.monthly.at(-1) || {};
@@ -1154,6 +1969,8 @@ function renderControlCenter(container, metrics, state) {
   const healthTone = metrics.healthScore >= 80 ? 'success' : metrics.healthScore >= 60 ? 'warning' : 'danger';
 
   container.innerHTML = `<div class="control-center">
+    ${renderMissionControl(metrics.missionControl)}
+
     <div class="control-hero">
       <div>
         <div class="control-eyebrow">Inteligencia empresarial</div>
@@ -1339,6 +2156,42 @@ function renderLoading(container) {
   </div>`;
 }
 
+async function persistMissionControlSnapshot(state, mission) {
+  if (!mission || mission.persisted === true) return;
+  const now = Date.now();
+  if (state.lastHealthWriteAt && now - state.lastHealthWriteAt < 60 * 1000) return;
+  state.lastHealthWriteAt = now;
+  await addDoc(collection(firebaseDb, 'platformHealthChecks'), {
+    schemaVersion: 'mission_control_v1',
+    scope: 'platform',
+    source: 'admin_control_center',
+    status: mission.status,
+    score: mission.score,
+    generated_at: mission.generatedAt,
+    counts: mission.counts,
+    impactedSubsystems: mission.issues.length,
+    affectedUsers: mission.issues.reduce((sum, item) => sum + asNumber(item.affectedUsers), 0),
+    subsystems: mission.systems.map((item) => ({
+      id: item.id,
+      name: item.name,
+      status: item.status,
+      score: item.score,
+      what: item.what,
+      impact: item.impact,
+      affectedUsers: item.affectedUsers,
+      cause: item.cause,
+      fix: item.fix,
+      startedAt: item.startedAt || null,
+      section: item.section,
+      signals: item.signals || [],
+    })),
+    actorUid: clean(first(state.actor?.uid, state.actor?.id), 180),
+    actorEmail: clean(state.actor?.email, 220),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 function setSidebarBadge(id, value) {
   const badge = document.getElementById(id);
   if (!badge) return;
@@ -1389,6 +2242,7 @@ export async function initAdminControlCenter({
   leadsAdapter,
   navigate = () => {},
   showToast = () => {},
+  actor = null,
 }) {
   if (!container || !db) return null;
 
@@ -1400,10 +2254,12 @@ export async function initAdminControlCenter({
       leadsAdapter,
       navigate,
       showToast,
+      actor,
       live: false,
       loading: false,
       subscribed: false,
       refreshTimeout: null,
+      lastHealthWriteAt: 0,
       refresh: null,
     };
     state.refresh = async (manual = false) => {
@@ -1415,6 +2271,8 @@ export async function initAdminControlCenter({
         const metrics = computeControlCenter(data);
         updateSidebarBadges(metrics);
         renderControlCenter(container, metrics, state);
+        persistMissionControlSnapshot(state, metrics.missionControl)
+          .catch((error) => console.warn('Mission Control snapshot failed', error));
       } catch (error) {
         console.error('No se pudo cargar el centro de control', error);
         container.innerHTML = `<div class="alert alert-danger">
@@ -1437,6 +2295,7 @@ export async function initAdminControlCenter({
   } else {
     state.navigate = navigate;
     state.showToast = showToast;
+    state.actor = actor;
   }
 
   await state.refresh(false);

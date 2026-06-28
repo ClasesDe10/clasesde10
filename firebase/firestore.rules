@@ -1145,6 +1145,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /platformHealthChecks/{checkId} {
+      allow read, write: if isAdmin();
+    }
+
     match /resumenMensual/{summaryId} {
       allow read, write: if isAdmin();
     }

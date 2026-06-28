@@ -440,6 +440,15 @@
       ]
     },
     {
+      "collectionGroup": "platformHealthChecks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "scope", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "incidencias",
       "queryScope": "COLLECTION",
       "fields": [

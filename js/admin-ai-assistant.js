@@ -46,6 +46,7 @@ const DATA_SPECS = [
   ['crmNotes', 'crmNotes', 300],
   ['metricSnapshots', 'metricSnapshots', 250],
   ['opsAlerts', 'opsAlerts', 500],
+  ['platformHealthChecks', 'platformHealthChecks', 300],
 ];
 
 let cachedData = null;
