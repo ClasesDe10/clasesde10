@@ -256,6 +256,39 @@ body {
   display: flex;
   align-items: center;
 }
+.chat-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.chat-tab {
+  min-height: 36px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--gray-mid);
+  font-weight: 700;
+  cursor: pointer;
+}
+.chat-tab.active {
+  background: var(--navy);
+  color: var(--white);
+  border-color: var(--navy);
+}
+.chat-tab [data-notification-count] {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--white);
+  font-size: .68rem;
+}
 .chat-title, .chat-thread-title {
   font-weight: 700;
   color: var(--navy);
@@ -328,6 +361,54 @@ body {
   flex-direction: column;
   gap: 12px;
   background: linear-gradient(180deg, #fff, #fbfaf7);
+}
+.notifications-panel {
+  min-width: 0;
+}
+.admin-notification-form {
+  display: grid;
+  grid-template-columns: minmax(130px, 180px) minmax(180px, 1fr) minmax(220px, 1.5fr) auto;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+  background: #fbfaf7;
+}
+.notifications-list {
+  flex: 1;
+  overflow: auto;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.notification-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  background: var(--white);
+}
+.notification-item.unread {
+  border-color: rgba(232,160,48,.45);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.notification-title {
+  font-weight: 800;
+  color: var(--navy);
+}
+.notification-body {
+  margin-top: 4px;
+  color: var(--text-dark);
+  font-size: .9rem;
+  line-height: 1.35;
+}
+.notification-meta {
+  margin-top: 8px;
+  color: var(--gray-mid);
+  font-size: .76rem;
 }
 .chat-message {
   max-width: min(680px, 82%);
@@ -965,6 +1046,9 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     max-width: 94%;
   }
   .chat-compose {
+    grid-template-columns: 1fr;
+  }
+  .admin-notification-form {
     grid-template-columns: 1fr;
   }
 }

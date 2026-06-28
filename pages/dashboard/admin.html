@@ -786,7 +786,7 @@ import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
-  getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize
+  getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize, initNotificacionesBadge
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js';
 
@@ -875,11 +875,16 @@ document.addEventListener('click', (e) => {
 });
 initSidebar();
 initModals();
+initNotificacionesBadge(usuario.uid || usuario.id, db);
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (btn) closeModal(btn.dataset.closeModal);
 });
 document.getElementById('btn-logout').addEventListener('click', () => logout());
+document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
+  irA('chats');
+  setTimeout(() => document.querySelector('[data-chat-tab="notificaciones"]')?.click(), 100);
+});
 
 async function cargarBadgeLeads() {
   const { data: leadsNuevos, error } = await leads.countNew();

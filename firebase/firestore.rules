@@ -393,13 +393,28 @@ service cloud.firestore {
     }
 
     function isFamilyParticipant(data) {
-      return signedIn() && data.familyUid == request.auth.uid;
+      return signedIn()
+        && (
+          data.familyUid == request.auth.uid
+          || data.familia_id == request.auth.uid
+          || (
+            data.keys().hasAny(['studentId'])
+            && exists(/databases/$(database)/documents/alumnos/$(data.studentId))
+            && get(/databases/$(database)/documents/alumnos/$(data.studentId)).data.familyUid == request.auth.uid
+          )
+          || (
+            data.keys().hasAny(['alumno_id'])
+            && exists(/databases/$(database)/documents/alumnos/$(data.alumno_id))
+            && get(/databases/$(database)/documents/alumnos/$(data.alumno_id)).data.familyUid == request.auth.uid
+          )
+        );
     }
 
     function isTeacherParticipant(data) {
       return signedIn()
         && (
           data.teacherUid == request.auth.uid
+          || data.profesor_id == request.auth.uid
           || (data.keys().hasAny(['teacherUids']) && data.teacherUids[request.auth.uid] == true)
         );
     }
@@ -467,6 +482,42 @@ service cloud.firestore {
             && data.participantUids[request.auth.uid] == true
           )
         );
+    }
+
+    function validTeacherClassUpdate() {
+      return isTeacherParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'estado',
+          'status',
+          'notasProfesor',
+          'notas_profesor',
+          'cancelacion_motivo',
+          'teacherMarkedAt',
+          'teacherMarkedByUid',
+          'updatedAt',
+          'updated_at'
+        ])
+        && request.resource.data.estado in ['realizada', 'cancelada', 'reprogramada']
+        && (
+          !request.resource.data.keys().hasAny(['status'])
+          || request.resource.data.status == request.resource.data.estado
+        );
+    }
+
+    function validFamilyClassConfirmationUpdate() {
+      return isFamilyParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'confirmacion_familia',
+          'familyConfirmationStatus',
+          'familyConfirmedAt',
+          'familyConfirmedByUid',
+          'notas_familia',
+          'familyNotes',
+          'updatedAt',
+          'updated_at'
+        ])
+        && request.resource.data.familyConfirmationStatus in ['realizada', 'no_realizada', 'incidencia']
+        && request.resource.data.confirmacion_familia == request.resource.data.familyConfirmationStatus;
     }
 
     function validChatCreate(chatId) {
@@ -654,15 +705,8 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow read: if isAdmin() || isParticipant(resource.data);
       allow update: if isAdmin()
-        || (
-          isTeacherParticipant(resource.data)
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'estado',
-            'notasProfesor',
-            'updatedAt'
-          ])
-          && request.resource.data.estado in ['realizada', 'cancelada']
-        );
+        || validTeacherClassUpdate()
+        || validFamilyClassConfirmationUpdate();
     }
 
     match /pagos/{paymentId} {

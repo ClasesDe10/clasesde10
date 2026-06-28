@@ -11,8 +11,16 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import {
+  markAllNotificationsRead,
+  markNotificationRead,
+  requestBrowserNotificationPermission,
+  showBrowserNotification,
+  watchUserNotifications,
+} from './notifications-provider.js?v=20260627-domain-auth';
 
 function clean(value, max = 2000) {
   return String(value || '').trim().slice(0, max);
@@ -164,19 +172,23 @@ async function loadChats(dbCompat, role, profileId, usuario) {
   return chats;
 }
 
-function renderShell(container) {
+function renderShell(container, role) {
   container.innerHTML = `
     <div class="chat-layout">
       <aside class="chat-list-panel">
         <div class="chat-panel-header">
           <div>
-            <div class="chat-title">Chats</div>
+            <div class="chat-title">Chat / Notificaciones</div>
             <div class="chat-subtitle">Familias, profesores y administracion</div>
           </div>
         </div>
+        <div class="chat-tabs">
+          <button type="button" class="chat-tab active" data-chat-tab="chats">Chats</button>
+          <button type="button" class="chat-tab" data-chat-tab="notificaciones">Notificaciones <span data-notification-count></span></button>
+        </div>
         <div class="chat-list" data-chat-list></div>
       </aside>
-      <section class="chat-thread-panel">
+      <section class="chat-thread-panel" data-chat-panel="chats">
         <div class="chat-thread-header" data-chat-header>
           <div class="chat-empty-title">Selecciona una conversacion</div>
           <div class="chat-empty-subtitle">Solo aparecen chats de asignaciones activas.</div>
@@ -186,6 +198,33 @@ function renderShell(container) {
           <textarea class="form-control" data-chat-input rows="2" maxlength="2000" aria-label="Escribe un mensaje" placeholder="Escribe un mensaje..."></textarea>
           <button class="btn btn-primary" type="submit">Enviar</button>
         </form>
+      </section>
+      <section class="chat-thread-panel notifications-panel" data-chat-panel="notificaciones" style="display:none">
+        <div class="chat-thread-header">
+          <div>
+            <div class="chat-thread-title">Notificaciones</div>
+            <div class="chat-thread-subtitle">Avisos enviados por administracion y automatizaciones</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar leidas</button>
+          </div>
+        </div>
+        <form class="admin-notification-form" data-admin-notification-form style="${role === 'admin' ? '' : 'display:none'}">
+          <select class="form-control" data-admin-notification-target aria-label="Destinatarios">
+            <option value="todos">Todos</option>
+            <option value="familia">Familias</option>
+            <option value="profesor">Profesores</option>
+            <option value="alumno">Alumnos</option>
+            <option value="admin">Admins</option>
+          </select>
+          <input class="form-control" type="text" maxlength="120" data-admin-notification-title placeholder="Titulo">
+          <textarea class="form-control" rows="2" maxlength="800" data-admin-notification-body placeholder="Mensaje"></textarea>
+          <button class="btn btn-primary btn-sm" type="submit">Enviar aviso</button>
+        </form>
+        <div class="notifications-list" data-notifications-list>
+          <div class="chat-empty-state">Cargando notificaciones...</div>
+        </div>
       </section>
     </div>`;
 }
@@ -231,6 +270,47 @@ function renderMessages(container, messages, currentUid) {
   box.scrollTop = box.scrollHeight;
 }
 
+function notificationTitle(notification) {
+  return notification.title || notification.titulo || 'Notificacion';
+}
+
+function notificationBody(notification) {
+  return notification.body || notification.cuerpo || '';
+}
+
+function isNotificationUnread(notification) {
+  return !notification.readAt && notification.leida !== true;
+}
+
+function renderNotifications(container, notifications) {
+  const list = container.querySelector('[data-notifications-list]');
+  const count = notifications.filter(isNotificationUnread).length;
+  const countNode = container.querySelector('[data-notification-count]');
+  if (countNode) {
+    countNode.textContent = count > 0 ? count : '';
+    countNode.style.display = count > 0 ? '' : 'none';
+  }
+  if (!list) return;
+
+  if (!notifications.length) {
+    list.innerHTML = '<div class="chat-empty-state">No hay notificaciones todavia.</div>';
+    return;
+  }
+
+  list.innerHTML = notifications.map((notification) => {
+    const unread = isNotificationUnread(notification);
+    return `
+      <article class="notification-item ${unread ? 'unread' : ''}" data-notification-id="${escapeHtml(notification.id)}">
+        <div>
+          <div class="notification-title">${escapeHtml(notificationTitle(notification))}</div>
+          <div class="notification-body">${escapeHtml(notificationBody(notification))}</div>
+          <div class="notification-meta">${escapeHtml(formatDateTime(notification.createdAt))}</div>
+        </div>
+        ${unread ? '<button class="btn btn-ghost btn-sm" type="button" data-mark-notification>Leida</button>' : '<span class="badge badge-gray">Leida</span>'}
+      </article>`;
+  }).join('');
+}
+
 export async function initChatWidget({
   container,
   db,
@@ -240,15 +320,49 @@ export async function initChatWidget({
   showToast = () => {},
 }) {
   if (!container) return;
-  renderShell(container);
+  renderShell(container, role);
 
   const state = {
     chats: [],
+    notifications: [],
+    notificationsReady: false,
+    lastUnreadCount: 0,
     selectedChat: null,
     unsubscribe: null,
+    unsubscribeNotifications: null,
   };
   const currentUid = clean(usuario.uid || usuario.firebase_uid || usuario.id);
   const senderName = fullName(usuario.nombre, usuario.apellidos) || usuario.email || role;
+
+  async function sendAdminNotification(targetRole, title, body) {
+    if (role !== 'admin') return 0;
+    const usersQuery = targetRole && targetRole !== 'todos'
+      ? query(collection(firebaseDb, 'users'), where('role', '==', targetRole))
+      : collection(firebaseDb, 'users');
+    const snap = await getDocs(usersQuery);
+    const recipients = snap.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .filter((user) => user.active !== false);
+
+    await Promise.all(recipients.map((user) => addDoc(collection(firebaseDb, 'notificaciones'), {
+      userUid: user.id,
+      usuario_id: user.id,
+      title,
+      titulo: title,
+      body,
+      cuerpo: body,
+      type: 'admin_manual',
+      payload: { type: 'admin_manual', targetRole, url: '/pages/login.html' },
+      readAt: null,
+      leida: false,
+      fromRole: 'admin',
+      createdByUid: currentUid,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })));
+
+    return recipients.length;
+  }
 
   async function refreshChats() {
     container.querySelector('[data-chat-list]').innerHTML = '<div class="chat-empty-state">Cargando chats...</div>';
@@ -279,7 +393,49 @@ export async function initChatWidget({
     });
   }
 
+  function setPanel(panel) {
+    container.querySelectorAll('[data-chat-tab]').forEach((tab) => {
+      tab.classList.toggle('active', tab.dataset.chatTab === panel);
+    });
+    container.querySelectorAll('[data-chat-panel]').forEach((panelNode) => {
+      panelNode.style.display = panelNode.dataset.chatPanel === panel ? '' : 'none';
+    });
+  }
+
   container.addEventListener('click', (event) => {
+    const tab = event.target.closest('[data-chat-tab]');
+    if (tab) {
+      setPanel(tab.dataset.chatTab);
+      return;
+    }
+
+    const enableNotifications = event.target.closest('[data-enable-browser-notifications]');
+    if (enableNotifications) {
+      requestBrowserNotificationPermission().then((permission) => {
+        if (permission === 'granted') showToast('Avisos activados', 'Te avisaremos mientras la app este abierta o instalada.', 'success');
+        else if (permission === 'denied') showToast('Avisos bloqueados', 'Activalos desde los ajustes del navegador si quieres recibir avisos.', 'warning');
+        else showToast('Avisos no disponibles', 'Este navegador no permite notificaciones web.', 'warning');
+      });
+      return;
+    }
+
+    const markAll = event.target.closest('[data-mark-all-notifications]');
+    if (markAll) {
+      markAllNotificationsRead(state.notifications).catch((error) => {
+        showToast('No se pudieron marcar', error.message || 'Revisa permisos de notificaciones.', 'error');
+      });
+      return;
+    }
+
+    const markOne = event.target.closest('[data-mark-notification]');
+    if (markOne) {
+      const item = markOne.closest('[data-notification-id]');
+      markNotificationRead(item?.dataset.notificationId).catch((error) => {
+        showToast('No se pudo marcar', error.message || 'Revisa permisos de notificaciones.', 'error');
+      });
+      return;
+    }
+
     const item = event.target.closest('[data-chat-id]');
     if (!item) return;
     selectChat(item.dataset.chatId);
@@ -319,7 +475,46 @@ export async function initChatWidget({
     }
   });
 
+  container.querySelector('[data-admin-notification-form]')?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const target = form.querySelector('[data-admin-notification-target]').value;
+    const title = clean(form.querySelector('[data-admin-notification-title]').value, 120);
+    const body = clean(form.querySelector('[data-admin-notification-body]').value, 800);
+    if (!title || !body) {
+      showToast('Faltan datos', 'Escribe titulo y mensaje.', 'warning');
+      return;
+    }
+
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const sent = await sendAdminNotification(target, title, body);
+      form.reset();
+      showToast('Aviso enviado', `${sent} destinatario(s).`, 'success');
+    } catch (error) {
+      showToast('No se envio', error.message || 'Revisa permisos de notificaciones.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   try {
+    state.unsubscribeNotifications = watchUserNotifications(currentUid, (notifications) => {
+      const unreadCount = notifications.filter(isNotificationUnread).length;
+      const latestUnread = notifications.find(isNotificationUnread);
+      state.notifications = notifications;
+      renderNotifications(container, notifications);
+
+      if (state.notificationsReady && unreadCount > state.lastUnreadCount && latestUnread) {
+        showBrowserNotification(notificationTitle(latestUnread), notificationBody(latestUnread), {
+          url: '/pages/login.html',
+          notificationId: latestUnread.id,
+        });
+      }
+      state.notificationsReady = true;
+      state.lastUnreadCount = unreadCount;
+    });
     await refreshChats();
   } catch (error) {
     console.error('No se pudieron cargar chats', error);

@@ -313,6 +313,7 @@ export function initNotificacionesBadge(usuarioId, db) {
 
   return watchUnreadNotifications(db, usuarioId, (count) => {
     badge.style.display = count > 0 ? 'block' : 'none';
+    badge.textContent = count > 9 ? '9+' : String(count || '');
   });
 }
 

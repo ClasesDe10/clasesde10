@@ -84,6 +84,10 @@
       <button class="hamburger-btn" id="hamburger"><span></span><span></span><span></span></button>
       <h1 class="topbar-title" id="topbar-title">Inicio</h1>
       <div class="topbar-actions">
+        <button class="topbar-btn" id="btn-notificaciones" title="Notificaciones">
+          <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          <span class="badge" id="notif-badge" style="display:none"></span>
+        </button>
         <button class="btn btn-gold btn-sm" id="btn-nueva-solicitud-top">+ Solicitar profesor</button>
       </div>
     </header>
@@ -164,9 +168,9 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Hora</th><th>Hijo/a</th><th>Profesor</th><th>Materia</th><th>Duración</th><th>Estado</th></tr>
+                <tr><th>Fecha</th><th>Hora</th><th>Hijo/a</th><th>Profesor</th><th>Materia</th><th>Duración</th><th>Estado</th><th>Confirmación</th><th>Acciones</th></tr>
               </thead>
-              <tbody id="tbody-clases"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -424,7 +428,7 @@ import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://ww
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
-  formatEuros, badgeEstado, getIniciales, sanitize, fechaHoy
+  formatEuros, badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js';
 
@@ -466,6 +470,26 @@ const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
                   alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Pagos', chat:'Chat', perfil:'Mi perfil' };
 let chatInicializado = false;
 
+function claseTerminada(clase, margenMinutos = 0) {
+  if (!clase?.fecha) return false;
+  const horaFin = clase.hora_fin || clase.endTime || clase.hora_inicio || clase.startTime || '23:59';
+  const fin = new Date(`${clase.fecha}T${String(horaFin).slice(0, 5)}:00`);
+  if (Number.isNaN(fin.getTime())) return clase.fecha < fechaHoy();
+  if (!clase.hora_fin && !clase.endTime && (clase.duracion_minutos || clase.durationMinutes)) {
+    fin.setMinutes(fin.getMinutes() + Number(clase.duracion_minutos || clase.durationMinutes || 0));
+  }
+  fin.setMinutes(fin.getMinutes() + margenMinutos);
+  return fin.getTime() <= Date.now();
+}
+
+function labelConfirmacionFamilia(clase) {
+  const status = clase.familyConfirmationStatus || clase.confirmacion_familia || '';
+  if (status === 'realizada') return '<span class="badge badge-success">Confirmada</span>';
+  if (status === 'no_realizada') return '<span class="badge badge-danger">No realizada</span>';
+  if (status === 'incidencia') return '<span class="badge badge-warning">Incidencia</span>';
+  return '<span class="badge badge-gray">Pendiente</span>';
+}
+
 function irA(sec) {
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
   document.getElementById(`section-${sec}`).style.display = '';
@@ -483,6 +507,7 @@ document.addEventListener('click', (e) => {
 });
 initSidebar();
 initModals();
+initNotificacionesBadge(usuario.uid || usuario.id, db);
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (!btn) return;
@@ -490,6 +515,10 @@ document.addEventListener('click', (e) => {
   document.body.style.overflow = '';
 });
 document.getElementById('btn-logout').addEventListener('click', logout);
+document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
+  irA('chat');
+  setTimeout(() => document.querySelector('[data-chat-tab="notificaciones"]')?.click(), 100);
+});
 
 // ── INICIO ───────────────────────────────────────────────────────
 async function cargarInicio() {
@@ -616,9 +645,16 @@ async function cargarClases() {
 
   const { data } = await q;
   const tbody = document.getElementById('tbody-clases');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(c => `<tr>
+  tbody.innerHTML = data.map(c => {
+    const puedeConfirmar = claseTerminada(c, 0) && !['cancelada', 'reprogramada'].includes(c.estado);
+    const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
+    const acciones = puedeConfirmar && !yaConfirmada ? `
+      <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Realizada</button>
+      <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="incidencia">Incidencia</button>
+    ` : '—';
+    return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td>${sanitize(c.alumno_nombre)}</td>
@@ -626,10 +662,41 @@ async function cargarClases() {
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
     <td>${badgeEstado(c.estado)}</td>
-  </tr>`).join('');
+    <td>${labelConfirmacionFamilia(c)}</td>
+    <td>${acciones}</td>
+  </tr>`;
+  }).join('');
 }
 ['filtro-cl-alumno','filtro-cl-estado','filtro-cl-mes'].forEach(id => {
   document.getElementById(id).addEventListener('change', cargarClases);
+});
+
+document.getElementById('tbody-clases')?.addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-action="confirmar-clase-familia"]');
+  if (!btn) return;
+
+  const status = btn.dataset.status;
+  const notas = status === 'incidencia'
+    ? window.prompt('Cuéntanos brevemente qué pasó con la clase:') || ''
+    : '';
+
+  const { error } = await db.from('clases').update({
+    confirmacion_familia: status,
+    familyConfirmationStatus: status,
+    familyConfirmedAt: new Date().toISOString(),
+    familyConfirmedByUid: usuario.uid || usuario.id,
+    notas_familia: notas,
+    familyNotes: notas,
+  }).eq('id', btn.dataset.id);
+
+  if (error) {
+    showToast('Error', error.message || 'No se pudo confirmar la clase.', 'error');
+    return;
+  }
+
+  showToast('Clase actualizada', status === 'realizada' ? 'Confirmacion guardada.' : 'Incidencia enviada.', 'success');
+  cargarClases();
+  if (cal) cargarClasesCalendario(cal.anio, cal.mes);
 });
 
 // ── MIS HIJOS ────────────────────────────────────────────────────

@@ -79,6 +79,21 @@ self.addEventListener('fetch', (event) => {
   }
 });
 
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || '/pages/login.html';
+  event.waitUntil((async () => {
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const existing = windows.find((client) => client.url.includes(self.location.origin));
+    if (existing) {
+      await existing.focus();
+      if ('navigate' in existing) await existing.navigate(targetUrl);
+      return;
+    }
+    await self.clients.openWindow(targetUrl);
+  })());
+});
+
 async function networkFirstPage(request, event) {
   const cache = await caches.open(PAGE_CACHE);
 

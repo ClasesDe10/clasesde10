@@ -178,6 +178,7 @@ async function notifyAdmins(db, title, body, payload = {}) {
 
   await Promise.all(admins.map((user) => writeDoc(db.collection('notificaciones'), null, {
     userUid: user.id,
+    usuario_id: user.id,
     titulo: title,
     title,
     cuerpo: body,
@@ -185,9 +186,65 @@ async function notifyAdmins(db, title, body, payload = {}) {
     type: payload.type || 'automation',
     payload,
     readAt: null,
+    leida: false,
+    fromRole: 'admin',
+    fromAutomation: true,
     createdAt: now(),
     updatedAt: now(),
   })));
+}
+
+function notificationId(...parts) {
+  return parts
+    .map((part) => clean(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__')
+    .slice(0, 900);
+}
+
+async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '') {
+  const targetUid = clean(userUid, 180);
+  if (!targetUid) return false;
+
+  const id = notificationId('auto', key || payload.type || 'notification', targetUid);
+  const ref = db.collection('notificaciones').doc(id);
+  const existing = await ref.get();
+  if (existing.exists) return false;
+
+  await writeDoc(db.collection('notificaciones'), id, {
+    userUid: targetUid,
+    usuario_id: targetUid,
+    titulo: title,
+    title,
+    cuerpo: body,
+    body,
+    type: payload.type || 'automation',
+    payload,
+    readAt: null,
+    leida: false,
+    fromRole: 'admin',
+    fromAutomation: true,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+  return true;
+}
+
+async function notifyAdminsOnce(db, title, body, payload = {}, key = '') {
+  const admins = await getAdminUsers(db);
+  if (!admins.length) {
+    await addAutomationEvent(db, {
+      type: 'admin_notification_missing_recipient',
+      title,
+      body,
+      payload,
+      adminEmail: ADMIN_EMAIL,
+    });
+    return 0;
+  }
+
+  const writes = await Promise.all(admins.map((user) => notifyUserOnce(db, user.id, title, body, payload, `${key || payload.type}_${user.id}`)));
+  return writes.filter(Boolean).length;
 }
 
 async function addAutomationEvent(db, payload) {
@@ -647,6 +704,183 @@ async function processAssignedRequests(db, stats) {
   }
 }
 
+function classStatus(data) {
+  return lower(data.estado || data.status || '');
+}
+
+function classEndAt(data) {
+  const date = clean(data.fecha || data.date, 20);
+  if (!date) return null;
+  const startTime = clean(data.hora_inicio || data.startTime || '23:59', 8).slice(0, 5);
+  const endTime = clean(data.hora_fin || data.endTime || startTime || '23:59', 8).slice(0, 5);
+  const end = new Date(`${date}T${endTime || '23:59'}:00`);
+  if (Number.isNaN(end.getTime())) return null;
+
+  if (!data.hora_fin && !data.endTime && Number(data.duracion_minutos || data.durationMinutes || 0) > 0) {
+    end.setMinutes(end.getMinutes() + Number(data.duracion_minutos || data.durationMinutes || 0));
+  }
+  return end;
+}
+
+function classEndedMoreThan(data, minutes) {
+  const end = classEndAt(data);
+  if (!end) return false;
+  return Date.now() - end.getTime() >= minutes * 60 * 1000;
+}
+
+async function resolveClassRecipients(db, data) {
+  const teacherUid = clean(data.teacherUid || data.profesor_id || data.teacherUserUid);
+  let familyUid = clean(data.familyUid || data.familia_id || data.familyUserUid);
+  const studentId = clean(data.studentId || data.alumno_id || data.studentUid);
+
+  if (!familyUid && studentId) {
+    const studentDoc = await db.collection('alumnos').doc(studentId).get();
+    const student = studentDoc.exists ? studentDoc.data() : {};
+    familyUid = clean(student.familyUid || student.familia_id || student.userUid || student.usuario_id);
+  }
+
+  if (familyUid) {
+    const familyDoc = await db.collection('familias').doc(familyUid).get();
+    if (familyDoc.exists) {
+      const family = familyDoc.data();
+      familyUid = clean(family.userUid || family.usuario_id || familyUid);
+    }
+  }
+
+  return { teacherUid, familyUid, studentId };
+}
+
+function classLabel(data) {
+  const date = clean(data.fecha || data.date);
+  const time = clean(data.hora_inicio || data.startTime).slice(0, 5);
+  const subject = clean(data.materia || data.subject || 'clase');
+  return [subject, date, time].filter(Boolean).join(' · ');
+}
+
+async function processUnmarkedClasses(db, stats) {
+  const byEstado = await db.collection('clases').where('estado', '==', 'programada').limit(limit).get();
+  const byStatus = await db.collection('clases').where('status', '==', 'programada').limit(limit).get();
+  const docs = new Map();
+  [...byEstado.docs, ...byStatus.docs].forEach((doc) => docs.set(doc.id, doc));
+
+  for (const doc of docs.values()) {
+    const data = doc.data();
+    if (classStatus(data) !== 'programada') continue;
+    if (!classEndedMoreThan(data, 60)) continue;
+
+    const { teacherUid, familyUid } = await resolveClassRecipients(db, data);
+    const label = classLabel(data);
+    const payload = {
+      type: 'class_unmarked_after_1h',
+      classId: doc.id,
+      url: '/pages/login.html',
+    };
+    const key = `class_unmarked_after_1h_${doc.id}`;
+    let created = 0;
+
+    created += await notifyUserOnce(
+      db,
+      teacherUid,
+      'Clase pendiente de marcar',
+      `La clase ${label} termino hace mas de una hora y sigue sin registrarse como realizada, cancelada o reprogramada.`,
+      payload,
+      `${key}_teacher`,
+    ) ? 1 : 0;
+    created += await notifyUserOnce(
+      db,
+      familyUid,
+      'Confirma si la clase se dio',
+      `La clase ${label} termino hace mas de una hora. Confirma desde tu panel si se realizo o si hubo incidencia.`,
+      payload,
+      `${key}_family`,
+    ) ? 1 : 0;
+    created += await notifyAdminsOnce(
+      db,
+      'Clase sin registrar',
+      `La clase ${label} sigue programada una hora despues de terminar.`,
+      payload,
+      `${key}_admin`,
+    );
+
+    if (created > 0) {
+      await updateRef(doc.ref, {
+        lastUnmarkedReminderAt: now(),
+        updatedAt: now(),
+      });
+      stats.classRemindersCreated += created;
+    }
+    stats.classesChecked += 1;
+  }
+}
+
+function paymentStatus(data) {
+  return lower(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
+}
+
+function isEndOfWeekWindow() {
+  const day = new Date().getDay();
+  return day === 5 || day === 6 || day === 0;
+}
+
+function classHasPrice(data) {
+  return Number(data.precio_total || data.amount || data.familyAmount || 0) > 0;
+}
+
+async function processPaymentReminders(db, stats) {
+  const paymentsSnap = await db.collection('pagos').limit(limit).get();
+  for (const doc of paymentsSnap.docs) {
+    const data = doc.data();
+    const status = paymentStatus(data);
+    if (!['pendiente', 'solicitado'].includes(status)) continue;
+    const isTeacherPayout = ['teacher_payout', 'pago_profesor'].includes(data.paymentType || data.tipo);
+    const title = isTeacherPayout ? 'Bizum de profesor pendiente' : 'Pago pendiente de revisar';
+    const body = isTeacherPayout
+      ? `Hay una solicitud de Bizum de profesor por ${Number(data.monto || data.amount || 0).toFixed(2)} EUR pendiente.`
+      : `Hay un pago familiar por ${Number(data.monto || data.amount || 0).toFixed(2)} EUR pendiente de validacion.`;
+    const created = await notifyAdminsOnce(db, title, body, {
+      type: isTeacherPayout ? 'teacher_payout_pending' : 'family_payment_pending',
+      paymentId: doc.id,
+      url: '/pages/login.html',
+    }, `payment_pending_${doc.id}`);
+    stats.paymentRemindersCreated += created;
+  }
+
+  if (!isEndOfWeekWindow()) return;
+
+  const classesSnap = await db.collection('clases').limit(limit).get();
+  for (const doc of classesSnap.docs) {
+    const data = doc.data();
+    if (!['realizada', 'completada'].includes(classStatus(data))) continue;
+    if (!classHasPrice(data)) continue;
+    if (['pagado', 'paid', 'validado'].includes(paymentStatus(data))) continue;
+
+    const { familyUid } = await resolveClassRecipients(db, data);
+    const label = classLabel(data);
+    const payload = {
+      type: 'weekly_payment_due',
+      classId: doc.id,
+      url: '/pages/login.html',
+    };
+    let created = 0;
+    created += await notifyUserOnce(
+      db,
+      familyUid,
+      'Pago semanal pendiente',
+      `Revisa el pago de la clase ${label}. Los pagos se revisan al cierre de la semana.`,
+      payload,
+      `weekly_payment_due_${doc.id}_family`,
+    ) ? 1 : 0;
+    created += await notifyAdminsOnce(
+      db,
+      'Pago semanal pendiente',
+      `Revisar cobro de la clase ${label}.`,
+      payload,
+      `weekly_payment_due_${doc.id}_admin`,
+    );
+    stats.weeklyPaymentRemindersCreated += created;
+  }
+}
+
 async function main() {
   if (selfTest) {
     const profile = getRequestProfile({
@@ -706,11 +940,17 @@ async function main() {
     requestsSeen: 0,
     matchesGenerated: 0,
     assignmentsCreated: 0,
+    classesChecked: 0,
+    classRemindersCreated: 0,
+    paymentRemindersCreated: 0,
+    weeklyPaymentRemindersCreated: 0,
   };
 
   await processPublicLeads(db, stats);
   await processPendingRequests(db, stats);
   await processAssignedRequests(db, stats);
+  await processUnmarkedClasses(db, stats);
+  await processPaymentReminders(db, stats);
 
   console.log(JSON.stringify(stats, null, 2));
 }
