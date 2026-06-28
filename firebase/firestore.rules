@@ -1017,6 +1017,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /crmNotes/{noteId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /crmTasks/{taskId} {
+      allow read, write: if isAdmin();
+    }
+
     match /classLifecycleEvents/{eventId} {
       allow read, write: if isAdmin();
     }

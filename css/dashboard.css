@@ -1221,6 +1221,66 @@ tbody tr:hover { background: rgba(0,0,0,0.02); }
   gap: 8px 16px;
 }
 
+.crm-profile {
+  min-width: 0;
+}
+
+.crm-profile-main-grid,
+.crm-profile-side-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.crm-profile-main-grid {
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+}
+
+.crm-profile-side-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.control-timeline-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(15,31,61,.08);
+}
+
+.control-timeline-item:last-child {
+  border-bottom: 0;
+}
+
+.control-timeline-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--gray-mid);
+}
+
+.control-timeline-dot.success { background: var(--success); }
+.control-timeline-dot.warning { background: var(--warning); }
+.control-timeline-dot.danger { background: var(--danger); }
+.control-timeline-dot.info { background: var(--info); }
+
+.control-timeline-title {
+  color: var(--navy);
+  font-weight: 800;
+  font-size: .88rem;
+  overflow-wrap: anywhere;
+}
+
+.control-timeline-meta,
+.control-timeline-body {
+  margin-top: 3px;
+  color: var(--gray-mid);
+  font-size: .78rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 /* ── BOTONES ─────────────────────────────────────────────────── */
 .btn {
   display: inline-flex; align-items: center; gap: 7px;
@@ -2143,6 +2203,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .control-grid-main {
     grid-template-columns: 1fr;
   }
+  .crm-profile-main-grid,
+  .crm-profile-side-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -2220,6 +2284,14 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .trust-public-stats-compact,
   .trust-detail-grid {
     grid-template-columns: 1fr 1fr;
+  }
+  .crm-profile textarea,
+  .crm-profile input,
+  .crm-profile button {
+    max-width: 100%;
+  }
+  .crm-profile .card-body > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
   }
   .trust-component-row {
     align-items: flex-start;

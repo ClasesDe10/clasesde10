@@ -12,16 +12,28 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const [admin, module, css, pkg] = await Promise.all([
+const [admin, module, css, pkg, rules] = await Promise.all([
   read('pages/dashboard/admin.html'),
   read('js/admin-control-center.js'),
   read('css/dashboard.css'),
   read('package.json'),
+  read('firebase/firestore.rules'),
 ]);
 
 assert(admin.includes('data-admin-control-center'), 'Admin dashboard must expose the control center root.');
 assert(admin.includes('initAdminControlCenter'), 'Admin dashboard must initialize the control center module.');
 assert(admin.includes("navigate: irA"), 'Control center actions must navigate to existing admin sections.');
+assert(admin.includes('renderCrmFicha'), 'Admin dashboard must render unified CRM profiles.');
+assert(admin.includes('buildCrmDataset'), 'Admin dashboard must build CRM datasets from operational collections.');
+assert(admin.includes('recordCrmAudit'), 'Admin dashboard must write CRM audit events.');
+assert(admin.includes("collection(firebaseDb, 'crmNotes')"), 'Admin dashboard must persist private CRM notes.');
+assert(admin.includes("collection(firebaseDb, 'crmTasks')"), 'Admin dashboard must persist CRM tasks.');
+assert(admin.includes('bulk-prof-action'), 'Admin dashboard must expose professor bulk actions.');
+assert(admin.includes('bulk-fam-action'), 'Admin dashboard must expose family bulk actions.');
+assert(admin.includes('filtro-prof-riesgo'), 'Admin dashboard must expose professor CRM risk filters.');
+assert(admin.includes('filtro-fam-riesgo'), 'Admin dashboard must expose family CRM risk filters.');
+assert(admin.includes('crm-add-note'), 'Admin dashboard must expose private note actions.');
+assert(admin.includes('crm-add-task'), 'Admin dashboard must expose task creation actions.');
 
 assert(module.includes('computeControlCenter'), 'Control center must compute aggregate metrics.');
 assert(module.includes('forecastMonthClose'), 'Control center must forecast month close.');
@@ -56,8 +68,13 @@ assert(css.includes('.control-rank-row'), 'Dashboard CSS must style teacher rank
 assert(css.includes('.control-grid-main'), 'Dashboard CSS must style control center layout.');
 assert(css.includes('.control-chart'), 'Dashboard CSS must style monthly charts.');
 assert(css.includes('.control-activity-item'), 'Dashboard CSS must style activity feed.');
+assert(css.includes('.crm-profile-main-grid'), 'Dashboard CSS must style the CRM profile main layout.');
+assert(css.includes('.crm-profile-side-grid'), 'Dashboard CSS must style the CRM profile secondary layout.');
+assert(css.includes('.control-timeline-item'), 'Dashboard CSS must style CRM timeline items.');
 assert(css.includes('@media (max-width: 640px)'), 'Dashboard CSS must include mobile responsive rules.');
 
 assert(pkg.includes('test:admin-control-center'), 'package.json must expose the admin control center test.');
+assert(rules.includes('match /crmNotes/{noteId}'), 'Firestore rules must protect CRM notes.');
+assert(rules.includes('match /crmTasks/{taskId}'), 'Firestore rules must protect CRM tasks.');
 
 console.log('Admin control center validation passed.');

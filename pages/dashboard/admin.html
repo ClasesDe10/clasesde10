@@ -256,6 +256,20 @@
               <option value="verificado">Verificado</option>
               <option value="rechazado">Rechazado</option>
             </select>
+            <select class="form-control" id="filtro-prof-nivel" aria-label="Filtrar profesores por nivel de reputacion" style="width:150px">
+              <option value="">Todos los niveles</option>
+              <option value="Bronce">Bronce</option>
+              <option value="Plata">Plata</option>
+              <option value="Oro">Oro</option>
+              <option value="Platino">Platino</option>
+            </select>
+            <select class="form-control" id="filtro-prof-riesgo" aria-label="Filtrar profesores por riesgo CRM" style="width:170px">
+              <option value="">Todos los riesgos</option>
+              <option value="incidencias">Con incidencias</option>
+              <option value="documentos">Docs pendientes</option>
+              <option value="perfil">Perfil incompleto</option>
+              <option value="inactivo">Sin actividad</option>
+            </select>
           </div>
           <button class="btn btn-outline btn-sm" id="btn-export-profesores">â†“ Exportar CSV</button>
         </div>
@@ -276,7 +290,7 @@
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-profesores"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
+              <tbody id="tbody-profesores"><tr><td colspan="10" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -307,7 +321,7 @@
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-familias"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
+              <tbody id="tbody-familias"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -733,7 +747,7 @@
 
 <!-- MODAL: DETALLE PROFESOR -->
 <div class="modal-overlay" id="modal-profesor-detalle">
-  <div class="modal" style="max-width:760px">
+  <div class="modal" style="max-width:1120px">
     <div class="modal-header">
       <span class="modal-title">Perfil completo del profesor</span>
       <button class="modal-close">âœ•</button>
@@ -747,7 +761,7 @@
 
 <!-- MODAL: DETALLE FAMILIA -->
 <div class="modal-overlay" id="modal-familia-detalle">
-  <div class="modal" style="max-width:760px">
+  <div class="modal" style="max-width:1120px">
     <div class="modal-header">
       <span class="modal-title">Perfil completo de la familia</span>
       <button class="modal-close">x</button>
@@ -878,7 +892,7 @@ import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
-import { collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { addDoc, collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260628-reputation-v2';
 import {
@@ -933,10 +947,13 @@ let profesoresFirestoreCache = null;
 let familiasCache = new Map();
 let familiasFirestoreCache = null;
 let trustContextCache = null;
+const selectedProfesores = new Set();
+const selectedFamilias = new Set();
+let crmActivo = null;
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
-  profesores: { id: 'tbody-profesores', colspan: 9, countId: 'prof-count' },
-  familias: { id: 'tbody-familias', colspan: 8, countId: 'fam-count' },
+  profesores: { id: 'tbody-profesores', colspan: 10, countId: 'prof-count' },
+  familias: { id: 'tbody-familias', colspan: 9, countId: 'fam-count' },
   alumnos: { id: 'tbody-alumnos', colspan: 7, countId: 'alum-count' },
   solicitudes: { id: 'tbody-solicitudes', colspan: 9, countId: 'sol-count' },
   pagos: { id: 'tbody-pagos', colspan: 8, countId: 'pago-count' },
@@ -970,6 +987,70 @@ function ejecutarCargaSeccion(seccion, loader) {
     mostrarLegacyNoDisponible(seccion, error);
   }
 }
+
+function ensureAdminCrmUi() {
+  const profesoresSection = document.getElementById('section-profesores');
+  const familiasSection = document.getElementById('section-familias');
+  if (profesoresSection && !document.getElementById('bulk-prof-action')) {
+    const toolbar = document.createElement('div');
+    toolbar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px';
+    toolbar.innerHTML = `
+      <select class="form-control" id="bulk-prof-action" aria-label="Accion masiva profesores" style="width:180px">
+        <option value="">Accion masiva</option>
+        <option value="verificar">Verificar seleccionados</option>
+        <option value="revision">Marcar para revision</option>
+        <option value="task">Crear tarea de seguimiento</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="btn-bulk-prof-aplicar">Aplicar</button>
+      <span class="badge badge-gray" id="prof-selected-count">0 seleccionados</span>`;
+    profesoresSection.querySelector('.card')?.before(toolbar);
+  }
+  const profHeader = profesoresSection?.querySelector('thead tr');
+  if (profHeader && !document.getElementById('chk-prof-all')) {
+    profHeader.insertAdjacentHTML('afterbegin', '<th><input type="checkbox" id="chk-prof-all" aria-label="Seleccionar profesores visibles"></th>');
+  }
+  if (familiasSection && !document.getElementById('filtro-fam-nivel')) {
+    const firstBar = familiasSection.querySelector('div[style*="justify-content:space-between"]');
+    const controls = document.createElement('div');
+    controls.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap';
+    controls.innerHTML = `
+      <select class="form-control" id="filtro-fam-nivel" aria-label="Filtrar familias por nivel de reputacion" style="width:150px">
+        <option value="">Todos los niveles</option>
+        <option value="Bronce">Bronce</option>
+        <option value="Plata">Plata</option>
+        <option value="Oro">Oro</option>
+        <option value="Platino">Platino</option>
+      </select>
+      <select class="form-control" id="filtro-fam-riesgo" aria-label="Filtrar familias por riesgo CRM" style="width:170px">
+        <option value="">Todos los riesgos</option>
+        <option value="pagos">Pagos pendientes</option>
+        <option value="incidencias">Con incidencias</option>
+        <option value="sin_alumnos">Sin alumnos activos</option>
+        <option value="perfil">Perfil incompleto</option>
+      </select>`;
+    firstBar?.prepend(controls);
+  }
+  if (familiasSection && !document.getElementById('bulk-fam-action')) {
+    const toolbar = document.createElement('div');
+    toolbar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px';
+    toolbar.innerHTML = `
+      <select class="form-control" id="bulk-fam-action" aria-label="Accion masiva familias" style="width:180px">
+        <option value="">Accion masiva</option>
+        <option value="activa">Marcar activa</option>
+        <option value="revision">Marcar para revision</option>
+        <option value="task">Crear tarea de seguimiento</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="btn-bulk-fam-aplicar">Aplicar</button>
+      <span class="badge badge-gray" id="fam-selected-count">0 seleccionadas</span>`;
+    familiasSection.querySelector('.card')?.before(toolbar);
+  }
+  const famHeader = familiasSection?.querySelector('thead tr');
+  if (famHeader && !document.getElementById('chk-fam-all')) {
+    famHeader.insertAdjacentHTML('afterbegin', '<th><input type="checkbox" id="chk-fam-all" aria-label="Seleccionar familias visibles"></th>');
+  }
+}
+
+ensureAdminCrmUi();
 
 function irA(seccion) {
   secciones.forEach(s => {
@@ -1967,6 +2048,11 @@ async function cargarTrustContextFirestore() {
     assignments,
     incidents,
     students,
+    crmNotes,
+    crmTasks,
+    auditLogs,
+    notifications,
+    chats,
   ] = await Promise.all([
     safeListFirestore('clases'),
     safeListFirestore('pagos'),
@@ -1976,6 +2062,11 @@ async function cargarTrustContextFirestore() {
     safeListFirestore('asignaciones'),
     safeListFirestore('incidencias'),
     safeListFirestore('alumnos'),
+    safeListFirestore('crmNotes'),
+    safeListFirestore('crmTasks'),
+    safeListFirestore('auditLogs'),
+    safeListFirestore('notificaciones'),
+    safeListFirestore('chats'),
   ]);
 
   trustContextCache = {
@@ -1989,6 +2080,11 @@ async function cargarTrustContextFirestore() {
     incidents,
     students,
     alumnos: students,
+    crmNotes,
+    crmTasks,
+    auditLogs,
+    notifications,
+    chats,
   };
   return trustContextCache;
 }
@@ -2072,6 +2168,288 @@ function renderTrustPanel(trust) {
       ${components ? `<div class="trust-components">${components}</div>` : ''}
       ${warnings.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Senales a revisar</div>${warnings.map(sanitize).join(' Â· ')}</div></div>` : ''}
     </div>`;
+}
+
+function firstCrm(...values) {
+  return values.find((value) => value !== undefined && value !== null && String(value).trim() !== '');
+}
+
+function crmDate(value) {
+  if (!value) return '';
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString();
+  if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000).toISOString();
+  if (value instanceof Date) return value.toISOString();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : '';
+}
+
+function crmDateShort(value) {
+  const iso = crmDate(value);
+  return iso ? formatFechaCorta(iso) : '-';
+}
+
+function crmIds(entity = {}, type = 'profesor') {
+  const values = type === 'familia'
+    ? [entity.id, entity.familyUid, entity.familia_id, entity.userUid, entity.usuario_id]
+    : [entity.id, entity.teacherUid, entity.profesor_id, entity.userUid, entity.usuario_id];
+  return new Set(values.map((value) => String(value || '').trim()).filter(Boolean));
+}
+
+function crmMatch(item = {}, ids, fields) {
+  return fields.some((field) => ids.has(String(item[field] || '').trim()));
+}
+
+function crmFilterEntity(items = [], entity = {}, type = 'profesor', fieldsByType = {}) {
+  const ids = crmIds(entity, type);
+  const fields = type === 'familia'
+    ? (fieldsByType.familia || ['familyUid', 'familia_id', 'userUid', 'usuario_id', 'parentUid'])
+    : (fieldsByType.profesor || ['teacherUid', 'profesor_id', 'teacherUserUid', 'userUid', 'usuario_id']);
+  return (items || []).filter((item) => crmMatch(item, ids, fields));
+}
+
+function crmUserName(entity, type) {
+  return type === 'familia' ? nombreFamilia(entity) : nombreProfesor(entity);
+}
+
+function crmStatusTone(value) {
+  const status = String(value || '').toLowerCase();
+  if (['pagado', 'validado', 'realizada', 'verificado', 'activo', 'cerrada', 'resuelta'].includes(status)) return 'success';
+  if (['pendiente', 'programada', 'confirmada', 'en_proceso', 'revision', 'pendiente_revision'].includes(status)) return 'warning';
+  if (['vencido', 'rechazado', 'cancelada', 'abierta', 'urgente', 'alta'].includes(status)) return 'danger';
+  return 'gray';
+}
+
+function crmBadge(value) {
+  return `<span class="badge badge-${crmStatusTone(value)}">${sanitize(value || 'sin estado')}</span>`;
+}
+
+function crmTimelineItem(kind, title, date, body = '', tone = 'gray') {
+  return { kind, title: String(title || kind), date: crmDate(date), body: String(body || ''), tone };
+}
+
+function buildCrmDataset(entity = {}, type = 'profesor', context = {}) {
+  const ids = crmIds(entity, type);
+  const classes = crmFilterEntity(context.classes, entity, type);
+  const payments = crmFilterEntity(context.payments, entity, type);
+  const documents = crmFilterEntity(context.documents, entity, type, {
+    profesor: ['ownerUid', 'userUid', 'teacherUid', 'profesor_id'],
+    familia: ['ownerUid', 'userUid', 'familyUid', 'familia_id'],
+  });
+  const requests = crmFilterEntity(context.requests, entity, type);
+  const assignments = crmFilterEntity(context.assignments, entity, type);
+  const incidents = crmFilterEntity(context.incidents, entity, type, {
+    profesor: ['teacherUid', 'profesor_id', 'reportedTeacherUid', 'userUid'],
+    familia: ['familyUid', 'familia_id', 'reportedFamilyUid', 'userUid'],
+  });
+  const students = type === 'familia'
+    ? crmFilterEntity(context.students, entity, type, { familia: ['familyUid', 'familia_id', 'parentUid', 'userUid'] })
+    : (context.students || []).filter((student) => assignments.some((item) => String(firstCrm(item.studentUid, item.alumno_id, item.studentId)) === String(student.id)));
+  const notes = (context.crmNotes || []).filter((item) => item.entityType === type && ids.has(String(item.entityId || '')));
+  const tasks = (context.crmTasks || []).filter((item) => item.entityType === type && ids.has(String(item.entityId || '')));
+  const auditLogs = (context.auditLogs || []).filter((item) => item.entityType === type && ids.has(String(item.entityId || '')));
+  const notifications = crmFilterEntity(context.notifications, entity, type, {
+    profesor: ['userUid', 'teacherUid', 'profesor_id'],
+    familia: ['userUid', 'familyUid', 'familia_id'],
+  });
+  const chats = (context.chats || []).filter((item) => [...ids].some((id) => [item.teacherUid, item.profesor_id, item.familyUid, item.familia_id, item.userUid].map(String).includes(id)));
+  const timeline = [
+    crmTimelineItem('perfil', 'Perfil creado/actualizado', firstCrm(entity.updatedAt, entity.updated_at, entity.createdAt, entity.created_at), crmUserName(entity, type), 'info'),
+    ...classes.map((item) => crmTimelineItem('clase', `Clase ${firstCrm(item.materia, item.subject, '')}`, firstCrm(item.fecha, item.date, item.createdAt), firstCrm(item.status, item.estado), crmStatusTone(firstCrm(item.status, item.estado)))),
+    ...payments.map((item) => crmTimelineItem('pago', `Pago ${formatEuros(firstCrm(item.amount, item.monto, item.precio_total, 0))}`, firstCrm(item.paidAt, item.createdAt, item.created_at), firstCrm(item.status, item.estado, item.paymentStatus), crmStatusTone(firstCrm(item.status, item.estado, item.paymentStatus)))),
+    ...documents.map((item) => crmTimelineItem('documento', `Documento ${firstCrm(item.tipo, item.documentType, 'documento')}`, firstCrm(item.updatedAt, item.createdAt, item.created_at), firstCrm(item.estado, item.status), crmStatusTone(firstCrm(item.estado, item.status)))),
+    ...requests.map((item) => crmTimelineItem('solicitud', `Solicitud ${firstCrm(item.materia, item.subject, '')}`, firstCrm(item.createdAt, item.created_at), firstCrm(item.status, item.estado), crmStatusTone(firstCrm(item.status, item.estado)))),
+    ...incidents.map((item) => crmTimelineItem('incidencia', firstCrm(item.titulo, item.tipo, item.category, 'Incidencia'), firstCrm(item.updatedAt, item.createdAt, item.created_at), firstCrm(item.descripcion, item.status, item.estado), crmStatusTone(firstCrm(item.priority, item.prioridad, item.status, item.estado)))),
+    ...notifications.map((item) => crmTimelineItem('notificacion', firstCrm(item.title, item.titulo, 'Notificacion'), firstCrm(item.createdAt, item.created_at, item.readAt), firstCrm(item.body, item.mensaje, item.type), 'info')),
+    ...notes.map((item) => crmTimelineItem('nota', 'Nota privada', item.createdAt, item.body, 'info')),
+    ...tasks.map((item) => crmTimelineItem('tarea', `Tarea ${firstCrm(item.status, 'open')}`, firstCrm(item.dueAt, item.createdAt), item.title, crmStatusTone(item.status))),
+    ...auditLogs.map((item) => crmTimelineItem('audit', firstCrm(item.action, item.type, 'Cambio registrado'), item.createdAt, firstCrm(item.description, item.body), 'gray')),
+  ].filter((item) => item.date).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+  return { classes, payments, documents, requests, assignments, incidents, students, notes, tasks, auditLogs, notifications, chats, timeline };
+}
+
+function renderCrmList(items, empty, renderer) {
+  if (!items.length) return `<div class="empty-state"><div class="empty-title">${sanitize(empty)}</div></div>`;
+  return items.map(renderer).join('');
+}
+
+function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
+  const data = buildCrmDataset(entity, type, context);
+  const trust = entity.trustProfile || (type === 'familia' ? buildFamilyTrustProfile(entity, context) : buildTeacherTrustProfile(entity, context));
+  const metrics = trust.metrics || {};
+  const name = crmUserName(entity, type);
+  const email = firstCrm(entity.usuarios?.email, entity.email);
+  const phone = firstCrm(entity.usuarios?.telefono, entity.telefono);
+  const openTasks = data.tasks.filter((item) => !['done', 'cerrada', 'completada'].includes(String(item.status || 'open').toLowerCase()));
+  const openIncidents = data.incidents.filter((item) => ['abierta', 'open', 'pendiente', 'en_proceso'].includes(String(firstCrm(item.status, item.estado)).toLowerCase()));
+  const pendingPayments = data.payments.filter((item) => ['pendiente', 'pending', 'vencido', 'overdue'].includes(String(firstCrm(item.status, item.estado, item.paymentStatus)).toLowerCase()));
+  const aiSummary = type === 'profesor' ? summarizeTeacherProfile(entity) : null;
+  const entityId = sanitize(entity.id || entity.userUid || '');
+  const entityType = sanitize(type);
+
+  return `
+    <div class="crm-profile" data-crm-type="${entityType}" data-crm-id="${entityId}">
+      <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+        <div>
+          <div class="trust-kicker">Ficha CRM ${sanitize(type)}</div>
+          <h3 style="margin:4px 0;color:var(--navy)">${sanitize(name)}</h3>
+          <div style="color:var(--gray-mid);font-size:.86rem">${sanitize(email || '-')} · ${sanitize(phone || '-')}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+          ${renderTrustBadge(trust.score, trust.level)}
+          ${crmBadge(entity.estado_verificacion || entity.verificationStatus || entity.status || entity.estado || 'activo')}
+        </div>
+      </div>
+      <div class="trust-public-stats" style="margin-bottom:14px">
+        <div><strong>${sanitize(data.classes.length)}</strong><span>clases</span></div>
+        <div><strong>${sanitize(metrics.completedClasses ?? 0)}</strong><span>realizadas</span></div>
+        <div><strong>${sanitize(data.payments.length)}</strong><span>pagos</span></div>
+        <div><strong>${sanitize(pendingPayments.length)}</strong><span>pagos pendientes</span></div>
+        <div><strong>${sanitize(openIncidents.length)}</strong><span>incidencias abiertas</span></div>
+        <div><strong>${sanitize(openTasks.length)}</strong><span>tareas abiertas</span></div>
+      </div>
+      ${renderTrustPanel(trust)}
+      ${aiSummary ? `<div style="margin-top:14px">${renderProfesorAiPanel(entity)}</div>` : ''}
+      <div class="crm-profile-main-grid">
+        <section class="card" style="margin:0">
+          <div class="card-header"><span class="card-title">Cronologia operacional</span><span class="badge badge-gray">${data.timeline.length}</span></div>
+          <div class="card-body control-timeline" style="max-height:420px;overflow:auto">
+            ${renderCrmList(data.timeline.slice(0, 40), 'Sin historial todavia', (item) => `
+              <article class="control-timeline-item">
+                <div class="control-timeline-dot ${sanitize(item.tone)}"></div>
+                <div>
+                  <div class="control-timeline-title">${sanitize(item.title)}</div>
+                  <div class="control-timeline-meta">${sanitize(item.kind)} · ${crmDateShort(item.date)}</div>
+                  ${item.body ? `<div class="control-timeline-body">${sanitize(item.body)}</div>` : ''}
+                </div>
+              </article>`)}
+          </div>
+        </section>
+        <section class="card" style="margin:0">
+          <div class="card-header"><span class="card-title">Notas privadas y tareas</span></div>
+          <div class="card-body" style="display:grid;gap:12px">
+            <textarea class="form-control" id="crm-note-body" rows="3" placeholder="Anadir nota privada para operaciones..."></textarea>
+            <button class="btn btn-primary btn-sm" data-action="crm-add-note" data-crm-type="${entityType}" data-crm-id="${entityId}">Guardar nota</button>
+            <div style="display:grid;grid-template-columns:1fr 120px;gap:8px">
+              <input class="form-control" id="crm-task-title" placeholder="Nueva tarea o recordatorio">
+              <input class="form-control" id="crm-task-due" type="date">
+            </div>
+            <button class="btn btn-outline btn-sm" data-action="crm-add-task" data-crm-type="${entityType}" data-crm-id="${entityId}">Crear tarea</button>
+            <div style="display:grid;gap:8px">
+              ${renderCrmList([...openTasks, ...data.notes].slice(0, 8), 'Sin notas ni tareas', (item) => `
+                <div style="border:1px solid rgba(15,31,61,.10);border-radius:8px;padding:10px">
+                  <strong>${sanitize(item.title || item.body || 'Nota')}</strong>
+                  <div style="font-size:.78rem;color:var(--gray-mid)">${crmDateShort(firstCrm(item.dueAt, item.createdAt))} ${item.status ? `· ${sanitize(item.status)}` : ''}</div>
+                </div>`)}
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="crm-profile-side-grid">
+        <section class="card" style="margin:0">
+          <div class="card-header"><span class="card-title">Relaciones</span></div>
+          <div class="card-body" style="display:grid;gap:8px;font-size:.86rem">
+            <div><strong>Alumnos:</strong> ${data.students.map((item) => sanitize([item.nombre, item.apellidos].filter(Boolean).join(' ') || item.id)).join(', ') || '-'}</div>
+            <div><strong>Asignaciones:</strong> ${sanitize(data.assignments.length)}</div>
+            <div><strong>Solicitudes:</strong> ${sanitize(data.requests.length)}</div>
+            <div><strong>Chats:</strong> ${sanitize(data.chats.length)}</div>
+            <div><strong>Notificaciones:</strong> ${sanitize(data.notifications.length)}</div>
+          </div>
+        </section>
+        <section class="card" style="margin:0">
+          <div class="card-header"><span class="card-title">Documentos</span></div>
+          <div class="card-body" style="display:grid;gap:8px">
+            ${renderCrmList(data.documents.slice(0, 8), 'Sin documentos', (doc) => `<div style="display:flex;justify-content:space-between;gap:8px"><span>${sanitize(firstCrm(doc.tipo, doc.documentType, 'documento'))}</span>${crmBadge(firstCrm(doc.estado, doc.status, 'pendiente'))}</div>`)}
+          </div>
+        </section>
+        <section class="card" style="margin:0">
+          <div class="card-header"><span class="card-title">Alertas CRM</span></div>
+          <div class="card-body" style="display:grid;gap:8px">
+            ${pendingPayments.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Pagos pendientes</div>${pendingPayments.length} pago(s) requieren seguimiento.</div></div>` : ''}
+            ${openIncidents.length ? `<div class="alert alert-danger" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Incidencias abiertas</div>${openIncidents.length} incidencia(s) activas.</div></div>` : ''}
+            ${trust.warnings?.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Confianza</div>${trust.warnings.slice(0, 3).map(sanitize).join(', ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">OK</span><div class="alert-body"><div class="alert-title">Sin alertas criticas</div>Expediente operativo estable.</div></div>'}
+          </div>
+        </section>
+      </div>
+    </div>`;
+}
+
+async function recordCrmAudit(entityType, entityId, action, description, payload = {}) {
+  await addDoc(collection(firebaseDb, 'auditLogs'), {
+    entityType,
+    entityId,
+    action,
+    description,
+    payload,
+    actorUid: usuario.uid || usuario.id || '',
+    actorEmail: usuario.email || '',
+    createdAt: serverTimestamp(),
+  });
+}
+
+async function refreshCrmEntity() {
+  if (!crmActivo) return;
+  trustContextCache = null;
+  const context = await cargarTrustContextFirestore();
+  if (crmActivo.type === 'profesor') {
+    profesoresFirestoreCache = null;
+    const data = await cargarProfesoresFirestore();
+    const entity = data.find((item) => item.id === crmActivo.id) || profesoresCache.get(crmActivo.id);
+    crmActivo.entity = entity;
+    document.getElementById('profesor-detalle-body').innerHTML = renderCrmFicha(entity, 'profesor', context);
+  } else {
+    familiasFirestoreCache = null;
+    const data = await cargarFamiliasFirestore();
+    const entity = data.find((item) => item.id === crmActivo.id) || familiasCache.get(crmActivo.id);
+    crmActivo.entity = entity;
+    document.getElementById('familia-detalle-body').innerHTML = renderCrmFicha(entity, 'familia', context);
+  }
+}
+
+async function addCrmNote(entityType, entityId, body) {
+  const text = String(body || '').trim();
+  if (!text) {
+    showToast('Nota vacia', 'Escribe una nota antes de guardarla.', 'warning');
+    return;
+  }
+  const entity = entityType === 'profesor' ? profesoresCache.get(entityId) : familiasCache.get(entityId);
+  await addDoc(collection(firebaseDb, 'crmNotes'), {
+    entityType,
+    entityId,
+    entityName: crmUserName(entity || {}, entityType),
+    body: text.slice(0, 2000),
+    createdByUid: usuario.uid || usuario.id || '',
+    createdByEmail: usuario.email || '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await recordCrmAudit(entityType, entityId, 'crm_note_created', 'Nota privada creada', { preview: text.slice(0, 140) });
+  showToast('Nota guardada', 'La nota queda en el expediente CRM.', 'success');
+  await refreshCrmEntity();
+}
+
+async function addCrmTask(entityType, entityId, title, dueAt = '') {
+  const cleanTitle = String(title || '').trim();
+  if (!cleanTitle) {
+    showToast('Tarea vacia', 'Escribe la tarea o recordatorio.', 'warning');
+    return;
+  }
+  const entity = entityType === 'profesor' ? profesoresCache.get(entityId) : familiasCache.get(entityId);
+  await addDoc(collection(firebaseDb, 'crmTasks'), {
+    entityType,
+    entityId,
+    entityName: crmUserName(entity || {}, entityType),
+    title: cleanTitle.slice(0, 240),
+    dueAt: dueAt || '',
+    status: 'open',
+    priority: 'normal',
+    createdByUid: usuario.uid || usuario.id || '',
+    createdByEmail: usuario.email || '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await recordCrmAudit(entityType, entityId, 'crm_task_created', 'Tarea CRM creada', { title: cleanTitle, dueAt });
+  showToast('Tarea creada', 'El seguimiento queda registrado.', 'success');
+  await refreshCrmEntity();
 }
 
 function mapProfesorFirestore(docSnap) {
@@ -2241,6 +2619,8 @@ function renderProfesorDetalle(p) {
 async function cargarProfesores() {
   const busq = document.getElementById('filtro-prof-busqueda').value.trim().toLowerCase();
   const estado = document.getElementById('filtro-prof-estado').value.trim().toLowerCase();
+  const nivel = document.getElementById('filtro-prof-nivel')?.value.trim().toLowerCase() || '';
+  const riesgo = document.getElementById('filtro-prof-riesgo')?.value || '';
   const todosFirestore = await cargarProfesoresFirestore();
   const filtradoFirestore = todosFirestore.filter((p) => {
     const estadoProfesor = estadoProfesorNormalizado(p);
@@ -2248,6 +2628,13 @@ async function cargarProfesores() {
       || estadoProfesor === estado
       || (estado === 'pendiente' && estadoProfesor.startsWith('pendiente'));
     if (!cumpleEstado) return false;
+    if (nivel && String(p.trustLevel || '').toLowerCase() !== nivel) return false;
+    const metrics = p.reputationMetrics || {};
+    const warnings = p.trustProfile?.warnings || [];
+    if (riesgo === 'incidencias' && Number(metrics.openIncidents || 0) < 1) return false;
+    if (riesgo === 'documentos' && Number(metrics.pendingDocuments || 0) < 1 && !warnings.some((item) => /document/i.test(item))) return false;
+    if (riesgo === 'perfil' && Number(metrics.profileCompletionPercent ?? p.profileCompletionPercent ?? 0) >= 85) return false;
+    if (riesgo === 'inactivo' && Number(metrics.inactiveDays || 0) <= 45) return false;
     if (!busq) return true;
     return [
       nombreProfesor(p),
@@ -2255,6 +2642,8 @@ async function cargarProfesores() {
       p.telefono,
       p.ciudad,
       p.zona,
+      p.trustLevel,
+      ...(p.trustProfile?.warnings || []),
       ...(p.materias || []),
     ].join(' ').toLowerCase().includes(busq);
   });
@@ -2264,7 +2653,7 @@ async function cargarProfesores() {
 
   const tbodyProfesores = document.getElementById('tbody-profesores');
   if (!filtradoFirestore.length) {
-    tbodyProfesores.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
+    tbodyProfesores.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
     return;
   }
 
@@ -2272,6 +2661,7 @@ async function cargarProfesores() {
   const paginaFirestore = filtradoFirestore.slice(PAG_PROF.offset(), PAG_PROF.offset() + 20);
 
   tbodyProfesores.innerHTML = paginaFirestore.map(p => `<tr>
+    <td><input type="checkbox" class="crm-prof-check" data-id="${sanitize(p.id)}" ${selectedProfesores.has(p.id) ? 'checked' : ''} aria-label="Seleccionar profesor"></td>
     <td>
       <div style="display:flex;align-items:center;gap:10px">
         <div class="avatar">${getIniciales(p.usuarios?.nombre || p.nombre || p.email, p.usuarios?.apellidos || p.apellidos)}</div>
@@ -2286,20 +2676,21 @@ async function cargarProfesores() {
     <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'Ã¢â‚¬â€'}</td>
     <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
     <td>
-      ${renderTrustBadge(p.trustScore, p.trustLevel)}
-      <div class="trust-badges trust-badges-compact">${renderTrustBadges(p.trustBadges, 2)}</div>
-    </td>
-    <td>
       ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
       ${renderProfesorAiStatus(p)}
     </td>
+    <td>
+      ${renderTrustBadge(p.trustScore, p.trustLevel)}
+      <div class="trust-badges trust-badges-compact">${renderTrustBadges(p.trustBadges, 2)}</div>
+    </td>
     <td>Ã¢â‚¬â€</td>
     <td>
-      <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver perfil</button>
+      <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Abrir CRM</button>
       <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">Ã¢Å“â€œ Verificar</button>
       <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">Ã¢Å“â€¢</button>
     </td>
   </tr>`).join('');
+  updateBulkSelectionBadges();
   return;
 
   // La bÃºsqueda se hace en el servidor usando la vista + bÃºsqueda en usuarios
@@ -2357,7 +2748,94 @@ async function cargarProfesores() {
   </tr>`).join('');
 }
 
+function updateBulkSelectionBadges() {
+  const profBadge = document.getElementById('prof-selected-count');
+  const famBadge = document.getElementById('fam-selected-count');
+  if (profBadge) profBadge.textContent = `${selectedProfesores.size} seleccionados`;
+  if (famBadge) famBadge.textContent = `${selectedFamilias.size} seleccionadas`;
+}
+
+async function applyBulkProfesores() {
+  const action = document.getElementById('bulk-prof-action')?.value || '';
+  const ids = [...selectedProfesores];
+  if (!action || !ids.length) {
+    showToast('Seleccion incompleta', 'Elige profesores y una accion masiva.', 'warning');
+    return;
+  }
+  const updates = {
+    verificar: { estado_verificacion: 'verificado', verificationStatus: 'verificado', status: 'verificado', active: true },
+    revision: { estado_verificacion: 'pendiente_revision', verificationStatus: 'pendiente_revision', status: 'pendiente_revision', active: false },
+  };
+  if (action === 'task') {
+    await Promise.all(ids.map((id) => addCrmTask('profesor', id, 'Seguimiento operativo de profesor', '')));
+  } else {
+    await Promise.all(ids.map(async (id) => {
+      await updateDoc(firestoreDoc(firebaseDb, 'profesores', id), { ...updates[action], updatedAt: serverTimestamp() });
+      await recordCrmAudit('profesor', id, `bulk_${action}`, `Accion masiva: ${action}`, { ids });
+    }));
+  }
+  selectedProfesores.clear();
+  profesoresFirestoreCache = null;
+  trustContextCache = null;
+  updateBulkSelectionBadges();
+  showToast('Accion aplicada', `Profesores procesados: ${ids.length}.`, 'success');
+  await cargarProfesores();
+}
+
+async function applyBulkFamilias() {
+  const action = document.getElementById('bulk-fam-action')?.value || '';
+  const ids = [...selectedFamilias];
+  if (!action || !ids.length) {
+    showToast('Seleccion incompleta', 'Elige familias y una accion masiva.', 'warning');
+    return;
+  }
+  const updates = {
+    activa: { status: 'activo', active: true },
+    revision: { status: 'pendiente_revision', active: true },
+  };
+  if (action === 'task') {
+    await Promise.all(ids.map((id) => addCrmTask('familia', id, 'Seguimiento operativo de familia', '')));
+  } else {
+    await Promise.all(ids.map(async (id) => {
+      await updateDoc(firestoreDoc(firebaseDb, 'familias', id), { ...updates[action], updatedAt: serverTimestamp() });
+      await recordCrmAudit('familia', id, `bulk_${action}`, `Accion masiva: ${action}`, { ids });
+    }));
+  }
+  selectedFamilias.clear();
+  familiasFirestoreCache = null;
+  trustContextCache = null;
+  updateBulkSelectionBadges();
+  showToast('Accion aplicada', `Familias procesadas: ${ids.length}.`, 'success');
+  await cargarFamilias();
+}
+
+document.getElementById('btn-bulk-prof-aplicar')?.addEventListener('click', applyBulkProfesores);
+document.getElementById('btn-bulk-fam-aplicar')?.addEventListener('click', applyBulkFamilias);
+document.getElementById('chk-prof-all')?.addEventListener('change', (event) => {
+  document.querySelectorAll('.crm-prof-check').forEach((input) => {
+    input.checked = event.target.checked;
+    if (input.checked) selectedProfesores.add(input.dataset.id);
+    else selectedProfesores.delete(input.dataset.id);
+  });
+  updateBulkSelectionBadges();
+});
+document.getElementById('chk-fam-all')?.addEventListener('change', (event) => {
+  document.querySelectorAll('.crm-fam-check').forEach((input) => {
+    input.checked = event.target.checked;
+    if (input.checked) selectedFamilias.add(input.dataset.id);
+    else selectedFamilias.delete(input.dataset.id);
+  });
+  updateBulkSelectionBadges();
+});
+
 document.getElementById('tbody-profesores')?.addEventListener('click', (e) => {
+  const check = e.target.closest('.crm-prof-check');
+  if (check) {
+    if (check.checked) selectedProfesores.add(check.dataset.id);
+    else selectedProfesores.delete(check.dataset.id);
+    updateBulkSelectionBadges();
+    return;
+  }
   const verBtn = e.target.closest('[data-action="ver-profesor"]');
   if (verBtn) {
     window.verProfesor(verBtn.dataset.id);
@@ -2368,9 +2846,11 @@ document.getElementById('tbody-profesores')?.addEventListener('click', (e) => {
   window.cambiarVerificacion(btn.dataset.id, btn.dataset.estado);
 });
 
-window.verProfesor = (id) => {
+window.verProfesor = async (id) => {
   const profesor = profesoresCache.get(id);
-  document.getElementById('profesor-detalle-body').innerHTML = renderProfesorDetalle(profesor);
+  crmActivo = { type: 'profesor', id, entity: profesor };
+  const context = await cargarTrustContextFirestore();
+  document.getElementById('profesor-detalle-body').innerHTML = renderCrmFicha(profesor, 'profesor', context);
   openModal('modal-profesor-detalle');
 };
 
@@ -2389,6 +2869,7 @@ window.cambiarVerificacion = async (id, estado) => {
       active: estado === 'verificado',
       updatedAt: serverTimestamp(),
     });
+    await recordCrmAudit('profesor', id, 'verification_changed', `Verificacion cambiada a ${estado}`, { estado });
   } catch (error) {
     showToast('Error', error.message, 'error');
     return;
@@ -2399,8 +2880,8 @@ window.cambiarVerificacion = async (id, estado) => {
   cargarProfesores();
 };
 
-['filtro-prof-busqueda','filtro-prof-estado'].forEach(id => {
-  document.getElementById(id).addEventListener('input', debounce(cargarProfesores, 350));
+['filtro-prof-busqueda','filtro-prof-estado','filtro-prof-nivel','filtro-prof-riesgo'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', debounce(cargarProfesores, 350));
 });
 
 document.getElementById('btn-export-profesores').addEventListener('click', async () => {
@@ -2490,27 +2971,39 @@ async function cargarFamiliasFirestore() {
 
 async function cargarFamilias() {
   const busq = document.getElementById('filtro-fam-busqueda').value.trim().toLowerCase();
+  const nivel = document.getElementById('filtro-fam-nivel')?.value.trim().toLowerCase() || '';
+  const riesgo = document.getElementById('filtro-fam-riesgo')?.value || '';
   const todas = await cargarFamiliasFirestore();
-  const data = busq
-    ? todas.filter((f) => [
+  const data = todas.filter((f) => {
+    const metrics = f.reputationMetrics || {};
+    if (nivel && String(f.trustLevel || '').toLowerCase() !== nivel) return false;
+    if (riesgo === 'pagos' && Number(metrics.pendingPayments || 0) < 1) return false;
+    if (riesgo === 'incidencias' && Number(metrics.openIncidents || 0) < 1) return false;
+    if (riesgo === 'sin_alumnos' && Number(metrics.activeStudents || 0) > 0) return false;
+    if (riesgo === 'perfil' && Number(metrics.profileCompletionPercent ?? f.profileCompletionPercent ?? 0) >= 80) return false;
+    if (!busq) return true;
+    return [
       nombreFamilia(f),
       f.usuarios?.email,
       f.usuarios?.telefono,
       f.ciudad,
       f.zona,
       f.codigo_postal,
-    ].join(' ').toLowerCase().includes(busq))
-    : todas;
+      f.trustLevel,
+      ...(f.trustProfile?.warnings || []),
+    ].join(' ').toLowerCase().includes(busq);
+  });
 
   PAG_FAM.setTotal(data.length);
   document.getElementById('fam-count').textContent = `${data.length} familias`;
 
   const tbody = document.getElementById('tbody-familias');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>'; return; }
+  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>'; return; }
 
   const pagina = data.slice(PAG_FAM.offset(), PAG_FAM.offset() + 20);
   familiasCache = new Map(data.map((f) => [f.id, f]));
   tbody.innerHTML = pagina.map(f => `<tr>
+    <td><input type="checkbox" class="crm-fam-check" data-id="${sanitize(f.id)}" ${selectedFamilias.has(f.id) ? 'checked' : ''} aria-label="Seleccionar familia"></td>
     <td>
       <div style="font-weight:600">${sanitize(nombreFamilia(f))}</div>
       <div class="trust-badges trust-badges-compact">${renderTrustBadges(f.trustBadges, 2)}</div>
@@ -2520,9 +3013,10 @@ async function cargarFamilias() {
     <td>${sanitize([f.zona || f.zone, f.ciudad || f.city || 'Madrid', f.codigo_postal || f.postalCode].filter(Boolean).join(', '))}</td>
     <td>${f.profileCompletionPercent !== undefined ? `${sanitize(f.profileCompletionPercent)}%` : '-'}</td>
     <td>${renderTrustBadge(f.trustScore, f.trustLevel)}</td>
-    <td style="font-size:.78rem;color:var(--gray-mid)">${formatFechaCorta(f.created_at)}</td>
-    <td><button class="btn btn-ghost btn-sm" data-action="ver-familia" data-id="${sanitize(f.id)}">Ver detalle</button></td>
+    <td style="font-size:.78rem;color:var(--gray-mid)">${crmDateShort(f.created_at || f.createdAt)}</td>
+    <td><button class="btn btn-ghost btn-sm" data-action="ver-familia" data-id="${sanitize(f.id)}">Abrir CRM</button></td>
   </tr>`).join('');
+  updateBulkSelectionBadges();
 }
 function renderFamiliaDetalle(f) {
   if (!f) return '<div class="empty-state"><div class="empty-title">Familia no encontrada</div></div>';
@@ -2552,13 +3046,37 @@ function renderFamiliaDetalle(f) {
 }
 
 document.getElementById('tbody-familias')?.addEventListener('click', (e) => {
+  const check = e.target.closest('.crm-fam-check');
+  if (check) {
+    if (check.checked) selectedFamilias.add(check.dataset.id);
+    else selectedFamilias.delete(check.dataset.id);
+    updateBulkSelectionBadges();
+    return;
+  }
   const btn = e.target.closest('[data-action="ver-familia"]');
   if (!btn) return;
   const familia = familiasCache.get(btn.dataset.id);
-  document.getElementById('familia-detalle-body').innerHTML = renderFamiliaDetalle(familia);
-  openModal('modal-familia-detalle');
+  crmActivo = { type: 'familia', id: btn.dataset.id, entity: familia };
+  cargarTrustContextFirestore().then((context) => {
+    document.getElementById('familia-detalle-body').innerHTML = renderCrmFicha(familia, 'familia', context);
+    openModal('modal-familia-detalle');
+  });
 });
-document.getElementById('filtro-fam-busqueda').addEventListener('input', debounce(cargarFamilias, 350));
+['filtro-fam-busqueda','filtro-fam-nivel','filtro-fam-riesgo'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', debounce(cargarFamilias, 350));
+});
+
+document.addEventListener('click', async (event) => {
+  const noteBtn = event.target.closest('[data-action="crm-add-note"]');
+  if (noteBtn) {
+    await addCrmNote(noteBtn.dataset.crmType, noteBtn.dataset.crmId, document.getElementById('crm-note-body')?.value || '');
+    return;
+  }
+  const taskBtn = event.target.closest('[data-action="crm-add-task"]');
+  if (taskBtn) {
+    await addCrmTask(taskBtn.dataset.crmType, taskBtn.dataset.crmId, document.getElementById('crm-task-title')?.value || '', document.getElementById('crm-task-due')?.value || '');
+  }
+});
 
 document.getElementById('btn-export-familias').addEventListener('click', async () => {
   const data = await cargarFamiliasFirestore();
