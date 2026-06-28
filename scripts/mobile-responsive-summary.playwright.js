@@ -52,6 +52,7 @@ async (page) => {
       'alumnos',
       'solicitudes',
       'pagos',
+      'finanzas',
       'leads',
       'documentos',
       'chats',
