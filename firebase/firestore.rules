@@ -414,6 +414,49 @@ service cloud.firestore {
         || isStudentParticipant(data);
     }
 
+    function validTeacherPayoutCreate() {
+      return hasRole('profesor')
+        && request.resource.data.teacherUid == request.auth.uid
+        && request.resource.data.profesor_id == request.auth.uid
+        && request.resource.data.paymentType == 'teacher_payout'
+        && request.resource.data.tipo == 'pago_profesor'
+        && request.resource.data.metodo == 'bizum'
+        && request.resource.data.estado == 'solicitado'
+        && request.resource.data.status == 'solicitado'
+        && request.resource.data.monto is number
+        && request.resource.data.monto > 0
+        && request.resource.data.monto <= 5000
+        && request.resource.data.amount == request.resource.data.monto
+        && request.resource.data.classIds is list
+        && request.resource.data.classIds.size() > 0
+        && request.resource.data.classIds.size() <= 40
+        && request.resource.data.classCount == request.resource.data.classIds.size()
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.keys().hasOnly([
+          'tipo',
+          'paymentType',
+          'teacherUid',
+          'profesor_id',
+          'userUid',
+          'requestedByUid',
+          'monto',
+          'amount',
+          'metodo',
+          'estado',
+          'status',
+          'concepto',
+          'notas_profesor',
+          'telefono_bizum',
+          'classIds',
+          'classCount',
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at'
+        ]);
+    }
+
     function isChatParticipant(data) {
       return signedIn()
         && (
@@ -623,8 +666,10 @@ service cloud.firestore {
     }
 
     match /pagos/{paymentId} {
-      allow create: if hasRole('familia') && request.resource.data.familyUid == request.auth.uid;
-      allow read: if isAdmin() || isFamilyParticipant(resource.data);
+      allow create: if (
+        hasRole('familia') && request.resource.data.familyUid == request.auth.uid
+      ) || validTeacherPayoutCreate();
+      allow read: if isAdmin() || isFamilyParticipant(resource.data) || isTeacherParticipant(resource.data);
       allow update, delete: if isAdmin();
     }
 

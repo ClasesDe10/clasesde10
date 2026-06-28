@@ -10,6 +10,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
   getDoc,
   getDocs,
   query,
@@ -84,6 +85,7 @@ function toLegacyDoc(snap) {
 }
 
 function serverFilterField(field) {
+  if (field === 'id') return documentId();
   return SERVER_FIELD_ALIASES[field] || field;
 }
 
@@ -232,7 +234,7 @@ async function dashboardStats() {
     ingresos_mes: pagos.reduce((sum, p) => sum + Number(p.monto || p.amount || 0), 0),
     comisiones_mes: clases.reduce((sum, c) => sum + Number(c.comision_clasesde10 || c.platformFee || 0), 0),
     solicitudes_nuevas: solicitudes.filter((s) => ['nueva', 'nuevo'].includes(s.estado || s.status)).length,
-    pagos_pendientes: pagos.filter((p) => (p.estado || p.status) === 'pendiente').length,
+    pagos_pendientes: pagos.filter((p) => ['pendiente', 'solicitado'].includes(p.estado || p.status)).length,
     incidencias_abiertas: incidencias.filter((i) => (i.estado || i.status) === 'abierta').length,
   };
 }

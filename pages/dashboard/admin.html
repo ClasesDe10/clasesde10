@@ -386,6 +386,8 @@
             <select class="form-control" id="filtro-pago-estado" aria-label="Filtrar pagos por estado" style="width:150px">
               <option value="">Todos</option>
               <option value="pendiente">Pendientes</option>
+              <option value="solicitado">Solicitudes Bizum</option>
+              <option value="pagado">Pagados</option>
               <option value="validado">Validados</option>
               <option value="rechazado">Rechazados</option>
             </select>
@@ -398,7 +400,7 @@
               <thead>
                 <tr>
                   <th>Fecha</th>
-                  <th>Familia</th>
+                  <th>Origen</th>
                   <th>Justificante</th>
                   <th>Importe</th>
                   <th>Método</th>
@@ -1058,24 +1060,32 @@ async function cargarProximasClasesDash() {
 
 async function cargarPagosPendientesDash() {
   const { data } = await db.from('pagos')
-    .select('*, familias(usuarios(nombre,apellidos))')
-    .eq('estado','pendiente').order('created_at').limit(5);
+    .select('*, familias(usuarios(nombre,apellidos)), profesores(usuarios(nombre,apellidos))')
+    .order('created_at').limit(40);
 
   const cont = document.getElementById('lista-pagos-pendientes');
-  if (!data?.length) { cont.innerHTML = '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">No hay pagos pendientes ✓</div>'; return; }
+  const pendientes = (data || []).filter((p) => ['pendiente', 'solicitado'].includes(p.estado || p.status)).slice(0, 5);
+  if (!pendientes.length) { cont.innerHTML = '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">No hay pagos pendientes</div>'; return; }
 
-  cont.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Familia</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Fecha</th><th>Acción</th></tr></thead><tbody>` +
-    data.map(p => `<tr>
-      <td>${sanitize(p.familias?.usuarios?.nombre||'')} ${sanitize(p.familias?.usuarios?.apellidos||'')}</td>
+  cont.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Origen</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Fecha</th><th>Acción</th></tr></thead><tbody>` +
+    pendientes.map(p => {
+      const referencia = esPagoProfesor(p)
+        ? [p.telefono_bizum, p.concepto].filter(Boolean).join(' / ')
+        : (p.referencia || '—');
+      const estadoAprobado = esPagoProfesor(p) ? 'pagado' : 'validado';
+      const accionAprobado = esPagoProfesor(p) ? 'Pagado' : 'Validar';
+      return `<tr>
+      <td>${sanitize(nombreOrigenPago(p))}</td>
       <td><strong>${formatEuros(p.monto)}</strong></td>
       <td>${sanitize(p.metodo)}</td>
-      <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
+      <td style="font-family:monospace;font-size:.8rem">${sanitize(referencia)}</td>
       <td>${formatFechaCorta(p.created_at)}</td>
       <td>
-        <button class="btn btn-success btn-sm" data-action="validar-pago" data-id="${sanitize(p.id)}" data-estado="validado">Validar</button>
+        <button class="btn btn-success btn-sm" data-action="validar-pago" data-id="${sanitize(p.id)}" data-estado="${estadoAprobado}">${accionAprobado}</button>
         <button class="btn btn-ghost btn-sm" data-action="validar-pago" data-id="${sanitize(p.id)}" data-estado="rechazado">Rechazar</button>
       </td>
-    </tr>`).join('') + '</tbody></table></div>';
+    </tr>`;
+    }).join('') + '</tbody></table></div>';
 }
 
 document.getElementById('lista-pagos-pendientes')?.addEventListener('click', (e) => {
@@ -2124,6 +2134,35 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
 // ── PAGOS ────────────────────────────────────────────────────────
 const PAG_PAGO = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-pagos'), onPageChange: cargarPagos });
 
+function esPagoProfesor(pago) {
+  return ['teacher_payout', 'pago_profesor'].includes(pago?.paymentType || pago?.tipo);
+}
+
+function nombreOrigenPago(pago) {
+  if (esPagoProfesor(pago)) {
+    const nombre = [pago.profesores?.usuarios?.nombre, pago.profesores?.usuarios?.apellidos].filter(Boolean).join(' ');
+    return nombre || pago.profesor_nombre || 'Profesor';
+  }
+  const familia = [pago.familias?.usuarios?.nombre, pago.familias?.usuarios?.apellidos].filter(Boolean).join(' ');
+  return familia || pago.familia_nombre || 'Familia';
+}
+
+function accionesPago(pago, docButton) {
+  if (esPagoProfesor(pago)) {
+    return pago.estado === 'solicitado' ? `
+      <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="pagado">Pagado</button>
+      <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">Rechazar</button>
+    ` : (docButton || '—');
+  }
+
+  const revisionButtons = pago.estado === 'pendiente' ? `
+    <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="validado">✓</button>
+    <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">✕</button>
+  ` : '';
+
+  return `${docButton}${revisionButtons}` || '—';
+}
+
 async function cargarPagos() {
   const estado = document.getElementById('filtro-pago-estado').value;
   let q = db.from('pagos')
@@ -2151,20 +2190,19 @@ async function cargarPagos() {
               data-doc-nombre="${sanitize(doc.nombre || 'Justificante')}"
               data-doc-path="${sanitize(doc.storage_path)}">Ver</button>
     ` : '';
-    const revisionButtons = p.estado === 'pendiente' ? `
-      <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(p.id)}" data-pago-estado="validado">✓</button>
-      <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(p.id)}" data-pago-estado="rechazado">✕</button>
-    ` : '';
+    const referencia = esPagoProfesor(p)
+      ? [p.telefono_bizum, p.concepto].filter(Boolean).join(' / ')
+      : (p.referencia || '—');
 
     return `<tr>
     <td>${formatFechaCorta(p.created_at)}</td>
-    <td>${sanitize(p.familias?.usuarios?.nombre||'')} ${sanitize(p.familias?.usuarios?.apellidos||'')}</td>
-    <td>${doc?.nombre ? sanitize(doc.nombre) : '—'}</td>
+    <td>${sanitize(nombreOrigenPago(p))}</td>
+    <td>${doc?.nombre ? sanitize(doc.nombre) : sanitize(p.concepto || '—')}</td>
     <td><strong>${formatEuros(p.monto)}</strong></td>
     <td>${sanitize(p.metodo)}</td>
-    <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
+    <td style="font-family:monospace;font-size:.8rem">${sanitize(referencia)}</td>
     <td>${badgeEstado(p.estado)}</td>
-    <td>${docButton}${revisionButtons || (!docButton ? '—' : '')}</td>
+    <td>${accionesPago(p, docButton)}</td>
   </tr>`;
   }).join('');
 }
@@ -2184,19 +2222,20 @@ document.getElementById('tbody-pagos')?.addEventListener('click', async (e) => {
 
 document.getElementById('btn-export-pagos').addEventListener('click', async () => {
   const { data, error } = await db.from('pagos')
-    .select('*, familias(usuarios(nombre,apellidos,email)), documentos(nombre,storage_path)')
+    .select('*, familias(usuarios(nombre,apellidos,email)), profesores(usuarios(nombre,apellidos,email)), documentos(nombre,storage_path)')
     .order('created_at', {ascending:false});
   if (error) { showToast('Error', error.message, 'error'); return; }
   exportarCSV(
     (data||[]).map(p => ({
       fecha:           p.created_at ? p.created_at.split('T')[0] : '',
-      familia_nombre:  p.familias?.usuarios?.nombre || '',
-      familia_email:   p.familias?.usuarios?.email || '',
+      tipo:            esPagoProfesor(p) ? 'pago_profesor' : 'pago_familia',
+      origen:          nombreOrigenPago(p),
+      email_origen:    esPagoProfesor(p) ? (p.profesores?.usuarios?.email || '') : (p.familias?.usuarios?.email || ''),
       monto:           p.monto || '',
       metodo:          p.metodo || '',
-      referencia:      p.referencia || '',
+      referencia:      esPagoProfesor(p) ? [p.telefono_bizum, p.concepto].filter(Boolean).join(' / ') : (p.referencia || ''),
       estado:          p.estado || '',
-      notas:           p.notas_familia || '',
+      notas:           p.notas_familia || p.notas_profesor || '',
       documento:       p.documentos?.nombre || '',
       documento_path:  p.documentos?.storage_path || '',
       fecha_validacion: p.fecha_validacion ? p.fecha_validacion.split('T')[0] : '',
@@ -2204,8 +2243,9 @@ document.getElementById('btn-export-pagos').addEventListener('click', async () =
     'pagos_clasesde10.csv',
     [
       {titulo:'Fecha',          campo:'fecha'},
-      {titulo:'Familia',        campo:'familia_nombre'},
-      {titulo:'Email familia',  campo:'familia_email'},
+      {titulo:'Tipo',           campo:'tipo'},
+      {titulo:'Origen',         campo:'origen'},
+      {titulo:'Email origen',   campo:'email_origen'},
       {titulo:'Importe (€)',    campo:'monto'},
       {titulo:'Método',         campo:'metodo'},
       {titulo:'Referencia',     campo:'referencia'},
@@ -2219,12 +2259,37 @@ document.getElementById('btn-export-pagos').addEventListener('click', async () =
 });
 
 window.validarPago = async (id, estado) => {
+  const { data: pagoActual, error: pagoError } = await db.from('pagos').select('*').eq('id', id).single();
+  if (pagoError) { showToast('Error', pagoError.message, 'error'); return; }
+
+  const fechaValidacion = new Date().toISOString();
   const { error } = await db.from('pagos').update({
     estado,
+    status: estado,
     validado_por: usuario.id,
-    fecha_validacion: new Date().toISOString(),
+    validatedByUid: usuario.uid || usuario.id,
+    fecha_validacion: fechaValidacion,
+    validatedAt: fechaValidacion,
   }).eq('id', id);
   if (error) { showToast('Error', error.message, 'error'); return; }
+
+  if (esPagoProfesor(pagoActual) && estado === 'pagado' && Array.isArray(pagoActual.classIds)) {
+    const updates = pagoActual.classIds.map((classId) => db.from('clases').update({
+      estado_pago_profesor: 'pagado',
+      teacherPaymentStatus: 'pagado',
+      teacherPayoutId: id,
+      teacherPayoutPaidAt: fechaValidacion,
+    }).eq('id', classId));
+    const results = await Promise.all(updates);
+    const failed = results.find((result) => result.error);
+    if (failed) {
+      showToast('Pago actualizado', 'El Bizum se marco como pagado, pero alguna clase no pudo actualizarse.', 'warning');
+      cargarPagos();
+      cargarPagosPendientesDash();
+      return;
+    }
+  }
+
   showToast('Pago ' + estado, '', 'success');
   cargarPagos();
   cargarPagosPendientesDash();

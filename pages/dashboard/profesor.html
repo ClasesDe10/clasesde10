@@ -210,6 +210,29 @@
             <div class="stat-card-label">Comisión ClasesDe10 (mes)</div>
           </div>
         </div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <span class="card-title">Cobro por Bizum</span>
+            <button class="btn btn-primary btn-sm" id="btn-solicitar-bizum" disabled>Solicitar Bizum</button>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info" style="margin-bottom:16px">
+              <span class="alert-icon">i</span>
+              <div class="alert-body">
+                <div class="alert-title">Solicitudes de cobro</div>
+                Puedes solicitar Bizum para clases realizadas con importe de profesor configurado. El admin lo revisa y, cuando se haga el Bizum, quedara marcado como pagado.
+              </div>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Fecha</th><th>Alumno</th><th>Materia</th><th>Importe</th><th>Estado cobro</th><th>Detalle</th></tr>
+                </thead>
+                <tbody id="tbody-bizum-pendientes"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
         <div class="card">
           <div class="card-header"><span class="card-title">Detalle de ingresos por mes</span></div>
           <div class="table-wrapper">
@@ -556,6 +579,7 @@ const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Mis clases
                   alumnos:'Mis alumnos', ingresos:'Ingresos', chat:'Chat', perfil:'Mi perfil',
                   documentos:'Documentos', disponibilidad:'Disponibilidad' };
 let chatInicializado = false;
+let clasesBizumPendientes = [];
 
 function irA(sec) {
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
@@ -794,6 +818,8 @@ async function cargarIngresos() {
   document.getElementById('ing-total').textContent        = formatEuros(total);
   document.getElementById('ing-comision').textContent     = formatEuros(comMes);
 
+  await cargarBizumProfesor();
+
   const tbody = document.getElementById('tbody-ingresos');
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin datos de ingresos.</td></tr>'; return; }
 
@@ -811,6 +837,145 @@ async function cargarIngresos() {
 }
 
 // ── PERFIL ───────────────────────────────────────────────────────
+function importeProfesorClase(clase) {
+  return Number(
+    clase?.importe_profesor
+    ?? clase?.teacherAmount
+    ?? clase?.precio_profesor
+    ?? clase?.teacher_amount
+    ?? 0
+  ) || 0;
+}
+
+function estadoCobroProfesor(clase) {
+  return String(
+    clase?.estado_pago_profesor
+    || clase?.teacherPaymentStatus
+    || clase?.teacher_payment_status
+    || ''
+  ).toLowerCase();
+}
+
+function esPagoProfesorActivo(pago) {
+  const tipo = pago?.paymentType || pago?.tipo;
+  const estado = String(pago?.estado || pago?.status || '').toLowerCase();
+  return ['teacher_payout', 'pago_profesor'].includes(tipo)
+    && !['rechazado', 'cancelado', 'cancelada'].includes(estado);
+}
+
+async function cargarBizumProfesor() {
+  const tbody = document.getElementById('tbody-bizum-pendientes');
+  const btn = document.getElementById('btn-solicitar-bizum');
+  if (!tbody || !btn || !profesorId) return;
+
+  btn.disabled = true;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr>';
+
+  const [{ data: clases, error: clasesError }, { data: pagos, error: pagosError }] = await Promise.all([
+    db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId).eq('estado', 'realizada').order('fecha', { ascending: false }),
+    db.from('pagos').select('*').eq('profesor_id', profesorFirestoreId).order('created_at', { ascending: false }),
+  ]);
+
+  if (clasesError || pagosError) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--danger)">No se pudieron cargar los cobros Bizum.</td></tr>';
+    return;
+  }
+
+  const clasesConSolicitud = new Set();
+  (pagos || []).filter(esPagoProfesorActivo).forEach((pago) => {
+    (Array.isArray(pago.classIds) ? pago.classIds : []).forEach((id) => clasesConSolicitud.add(String(id)));
+  });
+
+  const realizadas = clases || [];
+  const pendientes = realizadas.filter((clase) => {
+    const estado = estadoCobroProfesor(clase);
+    return !['pagado', 'paid', 'validado'].includes(estado)
+      && !clasesConSolicitud.has(String(clase.id))
+      && importeProfesorClase(clase) > 0;
+  });
+  const sinImporte = realizadas.filter((clase) => {
+    const estado = estadoCobroProfesor(clase);
+    return !['pagado', 'paid', 'validado'].includes(estado)
+      && !clasesConSolicitud.has(String(clase.id))
+      && importeProfesorClase(clase) <= 0;
+  });
+
+  clasesBizumPendientes = pendientes;
+  const total = pendientes.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
+  btn.disabled = pendientes.length === 0;
+  btn.textContent = pendientes.length ? `Solicitar Bizum (${formatEuros(total)})` : 'Solicitar Bizum';
+
+  if (!pendientes.length && !sinImporte.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">No hay clases pendientes de cobro por Bizum.</td></tr>';
+    return;
+  }
+
+  const rows = pendientes.map((clase) => `<tr>
+    <td>${formatFechaCorta(clase.fecha)}</td>
+    <td>${sanitize(clase.alumnos?.nombre || clase.alumno_nombre || 'Alumno')}</td>
+    <td>${sanitize(clase.materia || '-')}</td>
+    <td><strong>${formatEuros(importeProfesorClase(clase))}</strong></td>
+    <td>${badgeEstado('pendiente')}</td>
+    <td>Listo para solicitar</td>
+  </tr>`);
+
+  const blockedRows = sinImporte.slice(0, 8).map((clase) => `<tr>
+    <td>${formatFechaCorta(clase.fecha)}</td>
+    <td>${sanitize(clase.alumnos?.nombre || clase.alumno_nombre || 'Alumno')}</td>
+    <td>${sanitize(clase.materia || '-')}</td>
+    <td>-</td>
+    <td>${badgeEstado('pendiente')}</td>
+    <td style="color:var(--warning)">Falta importe de profesor</td>
+  </tr>`);
+
+  tbody.innerHTML = [...rows, ...blockedRows].join('');
+}
+
+document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async () => {
+  if (!clasesBizumPendientes.length) {
+    showToast('Sin clases pendientes', 'No hay clases realizadas listas para solicitar Bizum.', 'info');
+    return;
+  }
+
+  if (!(perfil?.acepta_bizum === true || perfil?.hasBizum === true)) {
+    showToast('Completa Bizum', 'Activa la casilla de Bizum en tu perfil antes de solicitar cobros.', 'warning');
+    irA('perfil');
+    return;
+  }
+
+  const total = clasesBizumPendientes.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
+  const classIds = clasesBizumPendientes.map((clase) => String(clase.id));
+  const confirmed = window.confirm(`Solicitar Bizum por ${formatEuros(total)} para ${classIds.length} clase(s)?`);
+  if (!confirmed) return;
+
+  const { error } = await db.from('pagos').insert({
+    tipo: 'pago_profesor',
+    paymentType: 'teacher_payout',
+    teacherUid: profesorFirestoreId,
+    profesor_id: profesorFirestoreId,
+    userUid: usuario.uid || usuario.id,
+    requestedByUid: usuario.uid || usuario.id,
+    monto: total,
+    amount: total,
+    metodo: 'bizum',
+    estado: 'solicitado',
+    status: 'solicitado',
+    concepto: `Bizum profesor - ${classIds.length} clase(s)`,
+    notas_profesor: `Solicitud automatica de cobro por Bizum de ${classIds.length} clase(s).`,
+    telefono_bizum: perfil?.telefono || usuario.telefono || '',
+    classIds,
+    classCount: classIds.length,
+  });
+
+  if (error) {
+    showToast('Error', error.message || 'No se pudo solicitar el Bizum.', 'error');
+    return;
+  }
+
+  showToast('Solicitud enviada', 'El admin revisara el Bizum y marcara las clases como pagadas.', 'success');
+  await cargarBizumProfesor();
+});
+
 const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universidad','Adultos','Iniciacion','Intermedio','Avanzado','Musica','Deporte'];
 let materiasActuales = [];
 let nivelesActuales  = [];

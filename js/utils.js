@@ -334,6 +334,8 @@ const LABEL_ESTADO = {
   cancelada:     'Cancelada',
   reprogramada:  'Reprogramada',
   pendiente:     'Pendiente',
+  solicitado:    'Solicitado',
+  pagado:        'Pagado',
   validado:      'Validado',
   rechazado:     'Rechazado',
   nueva:         'Nueva',
@@ -355,7 +357,7 @@ const LABEL_ESTADO = {
 const BADGE_MAPA = {
   programada: 'badge-info', realizada: 'badge-success',
   cancelada: 'badge-danger', reprogramada: 'badge-warning',
-  pendiente: 'badge-warning', validado: 'badge-success', rechazado: 'badge-danger',
+  pendiente: 'badge-warning', solicitado: 'badge-warning', pagado: 'badge-success', validado: 'badge-success', rechazado: 'badge-danger',
   nueva: 'badge-info', asignada: 'badge-gold', completada: 'badge-success',
   abierta: 'badge-danger', en_proceso: 'badge-warning', resuelta: 'badge-success', cerrada: 'badge-gray',
   nuevo: 'badge-info', contactado: 'badge-warning', cerrado: 'badge-success', spam: 'badge-danger',
