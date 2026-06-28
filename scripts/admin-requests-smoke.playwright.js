@@ -21,6 +21,9 @@ async (page) => {
       open: await page.locator('#modal-asignar.open').count().then((count) => count > 0).catch(() => false),
       hasTeacherSelect: await page.locator('#asignar-profesor').count().then((count) => count > 0).catch(() => false),
       noAssignableTeachers: modalText.includes('No hay profesores asignables'),
+      aiMatchCards: await page.locator('[data-ai-match="teacher"]').count().catch(() => 0),
+      disabledAiMatchButtons: await page.locator('[data-ai-match="teacher"] button[disabled]').count().catch(() => 0),
+      hasAiScoring: /IA|\d+%|compatibilidad|Perfil/i.test(modalText),
       recommendationText: modalText.replace(/\s+/g, ' ').trim().slice(0, 220),
     };
   }

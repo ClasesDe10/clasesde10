@@ -780,6 +780,7 @@ import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
+import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
@@ -1271,26 +1272,39 @@ function listaCampo(valor) {
 }
 
 function incidenciasPerfilProfesor(p) {
-  const materias = listaCampo(p?.materias || p?.subjects);
-  const niveles = listaCampo(p?.niveles_educativos || p?.levels);
-  const issues = [];
-  if (!(p?.foto_url || p?.photoUrl)) issues.push('foto');
-  if (!(p?.usuarios?.email || p?.email)) issues.push('email');
-  if (!(p?.usuarios?.telefono || p?.telefono)) issues.push('telefono');
-  if (!(p?.direccion || p?.address)) issues.push('calle');
-  if (!(p?.ciudad || p?.city)) issues.push('ciudad');
-  if (!(p?.codigo_postal || p?.postalCode)) issues.push('codigo postal');
-  if (!(p?.zona || p?.zone)) issues.push('zona');
-  if (!materias.length) issues.push('materias');
-  if (!niveles.length) issues.push('niveles');
-  if (!Number(p?.tarifa_hora || p?.hourlyRate || 0)) issues.push('tarifa');
-  if (!(p?.disponibilidad_resumen || p?.availabilitySummary)) issues.push('disponibilidad');
-  if (!p?.bio || String(p.bio).trim().length < 40) issues.push('presentacion');
-  return issues;
+  return evaluateTeacherProfile(p)
+    .issues
+    .filter((issue) => issue.field !== 'verificacion')
+    .map((issue) => issue.field);
 }
 
 function perfilProfesorCompleto(p) {
-  return incidenciasPerfilProfesor(p).length === 0;
+  return evaluateTeacherProfile(p).complete;
+}
+
+function renderProfesorAiStatus(p) {
+  const ai = summarizeTeacherProfile(p);
+  const color = ai.assignable ? 'var(--success)' : ai.score >= 65 ? 'var(--warning)' : 'var(--danger)';
+  const pending = ai.nextActions.slice(0, 2).map(sanitize).join(', ');
+  return `<div style="margin-top:4px;font-size:.72rem;color:${color}">
+    IA perfil: ${ai.score}/100 - ${sanitize(ai.readiness)}${pending ? ` - ${pending}` : ''}
+  </div>`;
+}
+
+function renderProfesorAiPanel(p) {
+  const ai = summarizeTeacherProfile(p);
+  const alertClass = ai.assignable ? 'alert-success' : ai.score >= 65 ? 'alert-warning' : 'alert-danger';
+  const strengths = ai.strengths.length ? ai.strengths.map(sanitize).join(', ') : 'Sin senales fuertes todavia.';
+  const nextActions = ai.nextActions.length ? ai.nextActions.map(sanitize).join(', ') : 'Listo para asignacion.';
+  return `<div class="alert ${alertClass}" style="margin:0">
+    <span class="alert-icon">${ai.assignable ? 'OK' : '!'}</span>
+    <div class="alert-body">
+      <div class="alert-title">Diagnostico IA de perfil: ${ai.score}/100 - ${sanitize(ai.readiness)}</div>
+      <div>${sanitize(ai.summary)}</div>
+      <div style="margin-top:4px"><strong>Fortalezas:</strong> ${strengths}</div>
+      <div style="margin-top:4px"><strong>Siguiente accion:</strong> ${nextActions}</div>
+    </div>
+  </div>`;
 }
 
 function estadoProfesorNormalizado(p) {
@@ -1438,6 +1452,7 @@ function renderProfesorDetalle(p) {
       </div>
     </div>
     <div style="margin-top:16px;display:grid;gap:10px;font-size:.9rem;line-height:1.5">
+      ${renderProfesorAiPanel(p)}
       ${fila('Materias', materias.join(', '))}
       ${fila('Niveles', niveles.join(', '))}
       ${fila('Disponibilidad', p.disponibilidad_resumen || p.availabilitySummary)}
@@ -1496,9 +1511,7 @@ async function cargarProfesores() {
     <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
     <td>
       ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
-      <div style="margin-top:4px;font-size:.72rem;color:${perfilProfesorCompleto(p) ? 'var(--success)' : 'var(--warning)'}">
-        ${perfilProfesorCompleto(p) ? 'Perfil completo' : `Falta: ${incidenciasPerfilProfesor(p).slice(0, 3).map(sanitize).join(', ')}`}
-      </div>
+      ${renderProfesorAiStatus(p)}
     </td>
     <td>â€”</td>
     <td>
@@ -1549,9 +1562,7 @@ async function cargarProfesores() {
     <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
     <td>
       ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
-      <div style="margin-top:4px;font-size:.72rem;color:${perfilProfesorCompleto(p) ? 'var(--success)' : 'var(--warning)'}">
-        ${perfilProfesorCompleto(p) ? 'Perfil completo' : `Falta: ${incidenciasPerfilProfesor(p).slice(0, 3).map(sanitize).join(', ')}`}
-      </div>
+      ${renderProfesorAiStatus(p)}
     </td>
     <td>—</td>
     <td>
@@ -1874,8 +1885,8 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
       `;
     }
 
+    (profs || []).forEach((p) => profesoresCache.set(p.id, p));
     const profesoresElegibles = (profs || []).filter(profesorPuedeAparecerAsignacion);
-    profesoresElegibles.forEach((p) => profesoresCache.set(p.id, p));
     document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
       (profesoresElegibles.length ? profesoresElegibles.map((p) => {
         const completo = perfilProfesorCompleto(p);
@@ -1895,7 +1906,10 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
       detalleProfesor.style.display = 'none';
       detalleProfesor.innerHTML = '';
     }
-    renderAsignarMatches(matches || [], null);
+    const aiMatches = (matches || []).length
+      ? matches
+      : rankTeachersForRequest(solicitud || { materia, subject: materia }, profs || [], { limit: 5, includeZeroScore: true });
+    renderAsignarMatches(aiMatches, null);
     openModal('modal-asignar');
     return;
   } catch (error) {
@@ -1930,8 +1944,8 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     `;
   }
 
+  (profs || []).forEach((p) => profesoresCache.set(p.id, p));
   const profesoresElegibles = (profs || []).filter(profesorPuedeAparecerAsignacion);
-  profesoresElegibles.forEach((p) => profesoresCache.set(p.id, p));
   document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
     (profesoresElegibles.length ? profesoresElegibles.map((p) => {
       const completo = perfilProfesorCompleto(p);
@@ -1951,7 +1965,10 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     detalleProfesor.style.display = 'none';
     detalleProfesor.innerHTML = '';
   }
-  renderAsignarMatches(matches || [], matchError);
+  const aiMatches = (matches || []).length
+    ? matches
+    : rankTeachersForRequest(solicitud || { materia, subject: materia }, profs || [], { limit: 5, includeZeroScore: true });
+  renderAsignarMatches(aiMatches, matchError);
   openModal('modal-asignar');
 };
 
@@ -1963,25 +1980,35 @@ function renderAsignarMatches(matches, error) {
     return;
   }
   if (!matches.length) {
-    box.innerHTML = 'Sin recomendaciones calculadas todavia. La automatizacion las genera al entrar una solicitud nueva y revisa pendientes cada hora. Mientras tanto puedes asignar manualmente solo profesores activos/verificados con perfil completo.';
+    box.innerHTML = 'No hay datos suficientes para calcular recomendaciones. Puedes asignar manualmente solo profesores activos/verificados con perfil completo.';
     return;
   }
   box.innerHTML = matches.map((m) => {
+    const teacherId = String(m.profesor_id || m.teacherUid || '');
+    const profesor = profesoresCache.get(teacherId);
+    const profileQuality = profesor ? evaluateTeacherProfile(profesor) : null;
+    const assignable = m.assignable ?? (profileQuality ? profileQuality.assignable : true);
+    const score = Number.isFinite(Number(m.score)) ? Number(m.score) : 0;
+    const badgeClass = assignable && score >= 65 ? 'badge-success' : score >= 45 ? 'badge-warning' : 'badge-danger';
     const reasons = (m.reasons || []).slice(0, 2).map(sanitize).join(' ');
     const risks = (m.risks || []).slice(0, 2).map(sanitize).join(' ');
+    const profileIssues = (m.profileIssues || profileQuality?.issueLabels || []).slice(0, 3).map(sanitize).join(', ');
+    const notes = [reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
     return `
-      <div style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
+      <div data-ai-match="teacher" style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-          <strong>${sanitize(m.teacherName || m.nombreProfesor || m.teacherEmail || m.profesor_id || 'Profesor')}</strong>
-          <span class="badge badge-success">${Number(m.score || 0)}%</span>
+          <strong>${sanitize(m.teacherName || m.nombreProfesor || m.teacherEmail || teacherId || 'Profesor')}</strong>
+          <span class="badge ${badgeClass}">${score}%</span>
         </div>
         <div style="margin-top:6px">${reasons || 'Candidato propuesto por compatibilidad general.'}</div>
         ${risks ? `<div style="margin-top:4px;color:var(--gray-mid)">A revisar: ${risks}</div>` : ''}
+        ${profileIssues ? `<div style="margin-top:4px;color:${assignable ? 'var(--gray-mid)' : 'var(--warning)'}">Perfil: ${profileIssues}</div>` : ''}
         <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px"
                 data-action="seleccionar-match"
-                data-profesor-id="${sanitize(m.profesor_id || m.teacherUid)}"
-                data-match-notas="${sanitize([reasons, risks && `A revisar: ${risks}`].filter(Boolean).join(' '))}">
-          Usar este profesor
+                data-profesor-id="${sanitize(teacherId)}"
+                data-match-notas="${sanitize(notes)}"
+                ${assignable && teacherId ? '' : 'disabled'}>
+          ${assignable ? 'Usar este profesor' : 'Completar perfil antes'}
         </button>
       </div>`;
   }).join('');

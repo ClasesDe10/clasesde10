@@ -15,6 +15,7 @@ async (page) => {
     countText,
     rowCount,
     profileButtons,
+    hasAiProfileStatus: tableText.includes('IA perfil:'),
     legacyUnavailable: tableText.includes('No hay datos disponibles para este modulo'),
     empty: tableText.includes('Sin resultados.'),
     firstRow: tableText.replace(/\s+/g, ' ').trim().slice(0, 180),
