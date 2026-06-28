@@ -49,6 +49,10 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16V9m4 7V7m4 9v-4m4 4V8"/></svg>
         Analitica
       </button>
+      <button class="sidebar-link" data-section="experimentos">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 4H6a2 2 0 00-2 2v4m16 0V6a2 2 0 00-2-2h-4m0 16h4a2 2 0 002-2v-4M4 14v4a2 2 0 002 2h4m2-12v8m-4-4h8"/></svg>
+        Experimentos
+      </button>
       <button class="sidebar-link" data-section="configuracion">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Configuracion
@@ -294,6 +298,10 @@
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="section-experimentos" class="dash-section" style="display:none">
+        <div id="admin-experimentation" data-admin-experimentation></div>
       </section>
 
       <section id="section-configuracion" class="dash-section" style="display:none">
@@ -1173,6 +1181,7 @@ import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-rules';
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
 import { initAdminAnalytics } from '../../js/admin-analytics.js?v=20260628-analytics';
+import { initAdminExperimentation } from '../../js/admin-experimentation.js?v=20260628-experiments';
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
 import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
@@ -1253,15 +1262,16 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // â”€â”€ NAVEGACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const secciones = ['dashboard','ia','analitica','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
+const secciones = ['dashboard','ia','analitica','experimentos','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
 const TITULOS = {
-  dashboard:'Dashboard', ia:'IA Admin', analitica:'Analitica', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
+  dashboard:'Dashboard', ia:'IA Admin', analitica:'Analitica', experimentos:'Experimentos', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
   solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias', auditoria:'Auditoria',
 };
 let chatInicializado = false;
 let adminAiInicializada = false;
 let adminAnalyticsInicializada = false;
+let adminExperimentationInicializada = false;
 let adminConfigInicializada = false;
 let adminIncidentsInicializada = false;
 let profesoresCache = new Map();
@@ -1387,6 +1397,7 @@ function irA(seccion) {
   if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
   else if (seccion === 'ia') ejecutarCargaSeccion(seccion, iniciarAdminAi);
   else if (seccion === 'analitica') ejecutarCargaSeccion(seccion, iniciarAnalitica);
+  else if (seccion === 'experimentos') ejecutarCargaSeccion(seccion, iniciarExperimentacion);
   else if (seccion === 'configuracion') ejecutarCargaSeccion(seccion, iniciarConfiguracion);
   else if (seccion === 'clases') ejecutarCargaSeccion(seccion, cargarClases);
   else if (seccion === 'calendario') ejecutarCargaSeccion(seccion, iniciarCalendario);
@@ -1459,6 +1470,20 @@ async function iniciarAnalitica() {
     debounce,
   });
   adminAnalyticsInicializada = true;
+  return api;
+}
+
+async function iniciarExperimentacion() {
+  if (adminExperimentationInicializada) return;
+  const api = await initAdminExperimentation({
+    container: document.getElementById('admin-experimentation'),
+    firebaseDb,
+    actor: usuario,
+    showToast,
+    exportarCSV,
+    debounce,
+  });
+  adminExperimentationInicializada = true;
   return api;
 }
 

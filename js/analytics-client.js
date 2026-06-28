@@ -144,6 +144,23 @@ function currentActor(payload = {}) {
   };
 }
 
+function experimentContext(payload = {}) {
+  const active = globalThis.CD10ExperimentAssignments || {};
+  const experiments = {
+    ...(active && typeof active === 'object' ? active : {}),
+    ...(payload.experiments && typeof payload.experiments === 'object' ? payload.experiments : {}),
+    ...(payload.metadata?.experiments && typeof payload.metadata.experiments === 'object' ? payload.metadata.experiments : {}),
+  };
+  const firstKey = clean(payload.experimentKey || payload.metadata?.experimentKey || Object.keys(experiments)[0] || '', 120);
+  const firstVariant = clean(payload.variant || payload.metadata?.variant || (firstKey ? experiments[firstKey] : '') || '', 80);
+  return {
+    experimentId: clean(payload.experimentId || payload.metadata?.experimentId || '', 180),
+    experimentKey: firstKey,
+    variant: firstVariant,
+    experiments,
+  };
+}
+
 function canonicalEventName(eventName) {
   return clean(eventName, MAX_EVENT_NAME).toLowerCase().replace(/[^a-z0-9_.:-]/g, '_') || 'event.unknown';
 }
@@ -155,6 +172,7 @@ export async function trackAnalyticsEvent(eventName, payload = {}) {
     const now = new Date();
     const ctx = pageContext();
     const actor = currentActor(payload);
+    const experiment = experimentContext(payload);
     const event = {
       schemaVersion: ANALYTICS_EVENT_SCHEMA_VERSION,
       analyticsVersion: ANALYTICS_ENGINE_VERSION,
@@ -168,6 +186,9 @@ export async function trackAnalyticsEvent(eventName, payload = {}) {
       sessionId: analyticsSessionId(),
       entityType: clean(payload.entityType || '', 80),
       entityId: clean(payload.entityId || '', 180),
+      experimentId: experiment.experimentId,
+      experimentKey: experiment.experimentKey,
+      variant: experiment.variant,
       pagePath: clean(payload.pagePath || ctx.pagePath, 240),
       pageUrl: clean(payload.pageUrl || ctx.pageUrl, 500),
       referrer: clean(payload.referrer || ctx.referrer, 500),
@@ -179,10 +200,14 @@ export async function trackAnalyticsEvent(eventName, payload = {}) {
       severity: clean(payload.severity || (name.includes('error') || name.includes('failed') ? 'error' : 'info'), 20),
       durationMs: Number.isFinite(Number(payload.durationMs)) ? Math.max(0, Math.round(Number(payload.durationMs))) : 0,
       value: Number.isFinite(Number(payload.value)) ? Number(payload.value) : 0,
-      metadata: safeObject(payload.metadata || {}, MAX_METADATA_KEYS),
+      metadata: safeObject({
+        ...(payload.metadata || {}),
+        experiments: experiment.experiments,
+      }, MAX_METADATA_KEYS),
       context: safeObject({
         standalone: ctx.standalone,
         path: ctx.pagePath,
+        experiments: experiment.experiments,
         ...payload.context,
       }, MAX_CONTEXT_KEYS),
       day: now.toISOString().slice(0, 10),

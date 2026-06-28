@@ -39,6 +39,8 @@ const LIVE_COLLECTIONS = [
   'auditLogs',
   'analyticsEvents',
   'analyticsDailyRollups',
+  'experiments',
+  'experimentsPublic',
   'adminAiQueries',
   'systemJobs',
   'deadLetters',

@@ -216,6 +216,9 @@ service cloud.firestore {
           'sessionId',
           'entityType',
           'entityId',
+          'experimentId',
+          'experimentKey',
+          'variant',
           'pagePath',
           'pageUrl',
           'referrer',
@@ -292,6 +295,9 @@ service cloud.firestore {
         && optionalAnalyticsString('actorRole', 80)
         && optionalAnalyticsString('entityType', 80)
         && optionalAnalyticsString('entityId', 180)
+        && optionalAnalyticsString('experimentId', 180)
+        && optionalAnalyticsString('experimentKey', 120)
+        && optionalAnalyticsString('variant', 80)
         && optionalAnalyticsString('pageUrl', 500)
         && optionalAnalyticsString('referrer', 500)
         && optionalAnalyticsString('userAgent', 500)
@@ -1262,6 +1268,15 @@ service cloud.firestore {
 
     match /analyticsDailyRollups/{rollupId} {
       allow read, write: if isAdmin();
+    }
+
+    match /experiments/{experimentId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /experimentsPublic/{experimentId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /crmNotes/{noteId} {

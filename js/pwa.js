@@ -1078,7 +1078,14 @@
       .catch(() => {});
   }
 
+  function initExperimentationRuntime() {
+    import('/js/experimentation-client.js?v=20260628-experiments')
+      .then((module) => module.initExperimentationRuntime?.())
+      .catch(() => {});
+  }
+
   productUxReady(initPlatformRuntime);
+  productUxReady(initExperimentationRuntime);
   productUxReady(initProductUxLayer);
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bindViewportSignals, { once: true });

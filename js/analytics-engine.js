@@ -39,6 +39,7 @@ export const ANALYTICS_EVENT_CATALOG = Object.freeze([
   'incident.created',
   'review.created',
   'ai.used',
+  'experiment.exposed',
   'error.captured',
 ]);
 

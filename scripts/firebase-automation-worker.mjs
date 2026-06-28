@@ -58,6 +58,10 @@ import {
   ANALYTICS_ENGINE_VERSION,
   buildAnalyticsReport,
 } from '../js/analytics-engine.js';
+import {
+  EXPERIMENTATION_ENGINE_VERSION,
+  buildExperimentResults,
+} from '../js/experimentation-engine.js';
 import { buildNotificationDocument } from '../js/notification-engine.js';
 
 const require = createRequire(import.meta.url);
@@ -860,6 +864,7 @@ async function writeAnalyticsRollup(db, stats) {
     classes,
     payments,
     incidents,
+    experiments,
   ] = await Promise.all([
     listCollection(db, 'analyticsEvents', Math.max(limit * 20, 1000)),
     listCollection(db, 'leadsPublicos', limit * 4),
@@ -871,6 +876,7 @@ async function writeAnalyticsRollup(db, stats) {
     listCollection(db, 'clases', limit * 6),
     listCollection(db, 'pagos', limit * 6),
     listCollection(db, 'incidencias', limit * 4),
+    listCollection(db, 'experiments', limit * 2),
   ]);
 
   const generatedAt = isoNow();
@@ -889,6 +895,9 @@ async function writeAnalyticsRollup(db, stats) {
     month: generatedAt.slice(0, 7),
     nowIso: generatedAt,
   });
+  const experimentResults = buildExperimentResults(experiments, events, {
+    minSampleSize: runtimeNumber('experimentation.minimumSampleSize', 20, 1, 100000),
+  });
 
   await writeDoc(db.collection('analyticsDailyRollups'), generatedAt.slice(0, 10), {
     scope: 'product_analytics',
@@ -896,12 +905,14 @@ async function writeAnalyticsRollup(db, stats) {
     day: generatedAt.slice(0, 10),
     month: generatedAt.slice(0, 7),
     analyticsVersion: ANALYTICS_ENGINE_VERSION,
+    experimentationVersion: EXPERIMENTATION_ENGINE_VERSION,
     generatedAt,
     metrics: report.totals,
     funnels: report.funnels,
     insights: report.insights,
     demand: report.demand,
     monthly: report.monthly,
+    experiments: experimentResults,
     createdAt: now(),
     updatedAt: now(),
   });
@@ -909,6 +920,8 @@ async function writeAnalyticsRollup(db, stats) {
   stats.analyticsEventsEvaluated = events.length;
   stats.analyticsRollupsCreated += 1;
   stats.analyticsEngineVersion = ANALYTICS_ENGINE_VERSION;
+  stats.experimentationEngineVersion = EXPERIMENTATION_ENGINE_VERSION;
+  stats.experimentsEvaluated = experimentResults.length;
   return report;
 }
 
@@ -2461,6 +2474,8 @@ async function main() {
     analyticsEventsEvaluated: 0,
     analyticsRollupsCreated: 0,
     analyticsEngineVersion: ANALYTICS_ENGINE_VERSION,
+    experimentsEvaluated: 0,
+    experimentationEngineVersion: EXPERIMENTATION_ENGINE_VERSION,
     opsAlertsCreated: 0,
     platformAutomationPlans: 0,
     platformRuleRunsEvaluated: 0,
