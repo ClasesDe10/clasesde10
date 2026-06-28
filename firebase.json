@@ -34,7 +34,6 @@
       "functions/**",
       "supabase/**",
       "firebase/**",
-      "clases-particulares/_gen.py",
       "clases-particulares/_generar-paginas.js"
     ],
     "cleanUrls": true,
