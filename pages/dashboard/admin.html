@@ -778,6 +778,8 @@ import { leads } from '../../js/adapters/index.js';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
+import { collection, doc as firestoreDoc, getDocs, serverTimestamp, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
@@ -801,6 +803,7 @@ const TITULOS = {
 };
 let chatInicializado = false;
 let profesoresCache = new Map();
+let profesoresFirestoreCache = null;
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
   profesores: { id: 'tbody-profesores', colspan: 8, countId: 'prof-count' },
@@ -1301,6 +1304,46 @@ function profesorPuedeAparecerAsignacion(p) {
   return p?.active === true || p?.activo === true || ['verificado', 'verified', 'activo', 'active'].includes(estado);
 }
 
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value === 'string') return Date.parse(value) || 0;
+  if (typeof value.seconds === 'number') return value.seconds * 1000;
+  return 0;
+}
+
+function mapProfesorFirestore(docSnap) {
+  const data = docSnap.data();
+  const nombre = data.nombre || data.displayName || '';
+  const apellidos = data.apellidos || '';
+  return {
+    id: docSnap.id,
+    ...data,
+    usuarios: {
+      nombre,
+      apellidos,
+      email: data.email || '',
+      telefono: data.telefono || '',
+    },
+    estado_verificacion: data.estado_verificacion || data.verificationStatus || data.status || 'pendiente',
+    verificationStatus: data.verificationStatus || data.estado_verificacion || data.status || 'pendiente',
+    materias: listaCampo(data.materias || data.subjects || data.materiasTexto),
+    niveles_educativos: listaCampo(data.niveles_educativos || data.levels || data.niveles),
+    tarifa_hora: Number(data.tarifa_hora || data.hourlyRate || data.tarifaHora || 0),
+    ciudad: data.ciudad || data.city || 'Madrid',
+    createdSort: timestampMillis(data.createdAt || data.importedAt || data.updatedAt),
+  };
+}
+
+async function cargarProfesoresFirestore() {
+  if (profesoresFirestoreCache) return profesoresFirestoreCache;
+  const snap = await getDocs(collection(firebaseDb, 'profesores'));
+  profesoresFirestoreCache = snap.docs
+    .map(mapProfesorFirestore)
+    .sort((a, b) => b.createdSort - a.createdSort);
+  return profesoresFirestoreCache;
+}
+
 function renderProfesorDetalle(p) {
   if (!p) return '<div class="empty-state"><div class="empty-title">Profesor no encontrado</div></div>';
   const issues = incidenciasPerfilProfesor(p);
@@ -1334,12 +1377,70 @@ function renderProfesorDetalle(p) {
 }
 
 async function cargarProfesores() {
-  const busq   = document.getElementById('filtro-prof-busqueda').value.trim();
-  const estado = document.getElementById('filtro-prof-estado').value;
+  const busq = document.getElementById('filtro-prof-busqueda').value.trim().toLowerCase();
+  const estado = document.getElementById('filtro-prof-estado').value.trim().toLowerCase();
+  const todosFirestore = await cargarProfesoresFirestore();
+  const filtradoFirestore = todosFirestore.filter((p) => {
+    const estadoProfesor = estadoProfesorNormalizado(p);
+    const cumpleEstado = !estado
+      || estadoProfesor === estado
+      || (estado === 'pendiente' && estadoProfesor.startsWith('pendiente'));
+    if (!cumpleEstado) return false;
+    if (!busq) return true;
+    return [
+      nombreProfesor(p),
+      p.email,
+      p.telefono,
+      p.ciudad,
+      p.zona,
+      ...(p.materias || []),
+    ].join(' ').toLowerCase().includes(busq);
+  });
+
+  PAG_PROF.setTotal(filtradoFirestore.length);
+  document.getElementById('prof-count').textContent = `${filtradoFirestore.length} profesores`;
+
+  const tbodyProfesores = document.getElementById('tbody-profesores');
+  if (!filtradoFirestore.length) {
+    tbodyProfesores.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
+    return;
+  }
+
+  profesoresCache = new Map(filtradoFirestore.map((p) => [p.id, p]));
+  const paginaFirestore = filtradoFirestore.slice(PAG_PROF.offset(), PAG_PROF.offset() + 20);
+
+  tbodyProfesores.innerHTML = paginaFirestore.map(p => `<tr>
+    <td>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="avatar">${getIniciales(p.usuarios?.nombre || p.nombre || p.email, p.usuarios?.apellidos || p.apellidos)}</div>
+        <div>
+          <div style="font-weight:600">${sanitize(p.usuarios?.nombre || p.nombre || p.email || 'Profesor')} ${sanitize(p.usuarios?.apellidos || p.apellidos || '')}</div>
+          <div style="font-size:.75rem;color:var(--gray-mid)">${sanitize(p.ciudad||'Madrid')}</div>
+        </div>
+      </div>
+    </td>
+    <td>${sanitize(p.usuarios?.email || p.email || '')}</td>
+    <td>${sanitize(p.usuarios?.telefono || p.telefono || 'â€”')}</td>
+    <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'â€”'}</td>
+    <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
+    <td>
+      ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
+      <div style="margin-top:4px;font-size:.72rem;color:${perfilProfesorCompleto(p) ? 'var(--success)' : 'var(--warning)'}">
+        ${perfilProfesorCompleto(p) ? 'Perfil completo' : `Falta: ${incidenciasPerfilProfesor(p).slice(0, 3).map(sanitize).join(', ')}`}
+      </div>
+    </td>
+    <td>â€”</td>
+    <td>
+      <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver perfil</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">âœ“ Verificar</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">âœ•</button>
+    </td>
+  </tr>`).join('');
+  return;
 
   // La búsqueda se hace en el servidor usando la vista + búsqueda en usuarios
   // Para que la paginación sea correcta con búsqueda, filtramos vía subquery
-  let q = db.from('profesores')
+  let q = null
     .select('*, usuarios!inner(nombre,apellidos,email,telefono)', {count:'exact'});
   if (estado) q = q.eq('estado_verificacion', estado);
   if (busq) {
@@ -1414,12 +1515,19 @@ window.cambiarVerificacion = async (id, estado) => {
     window.verProfesor(id);
     return;
   }
-  const { error } = await db.from('profesores').update({
-    estado_verificacion: estado,
-    verificationStatus: estado,
-    status: estado === 'verificado' ? 'verificado' : estado,
-  }).eq('id', id);
-  if (error) { showToast('Error', error.message, 'error'); return; }
+  try {
+    await updateDoc(firestoreDoc(firebaseDb, 'profesores', id), {
+      estado_verificacion: estado,
+      verificationStatus: estado,
+      status: estado === 'verificado' ? 'verificado' : estado,
+      active: estado === 'verificado',
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    showToast('Error', error.message, 'error');
+    return;
+  }
+  profesoresFirestoreCache = null;
   showToast('Actualizado', `Profesor ${estado}.`, 'success');
   cargarProfesores();
 };
@@ -1429,8 +1537,8 @@ window.cambiarVerificacion = async (id, estado) => {
 });
 
 document.getElementById('btn-export-profesores').addEventListener('click', async () => {
-  const { data } = await db.from('profesores').select('*, usuarios(nombre,apellidos,email,telefono)');
-  exportarCSV(data?.map(p=>({...p, nombre:p.usuarios?.nombre, apellidos:p.usuarios?.apellidos, email:p.usuarios?.email}))||[],
+  const data = await cargarProfesoresFirestore();
+  exportarCSV(data.map(p=>({...p, nombre:p.usuarios?.nombre, apellidos:p.usuarios?.apellidos, email:p.usuarios?.email, telefono:p.usuarios?.telefono}))||[],
     'profesores_clasesde10.csv', [
       {titulo:'Nombre',campo:'nombre'},{titulo:'Apellidos',campo:'apellidos'},
       {titulo:'Email',campo:'email'},{titulo:'Teléfono',campo:'telefono'},

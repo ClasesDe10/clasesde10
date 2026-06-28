@@ -57,6 +57,7 @@ Comprobaciones ejecutadas:
 | Normalizar profesores Firestore | Completado | 26 profesores actualizados con aliases seguros (`subjects`, `levels`, `hourlyRate`, `profileIssues`, `profileComplete`). Dry-run posterior: `teachersToUpdate=0`. |
 | Matching lee aliases importados | Completado | `functions/index.js` ahora reconoce `subjects`, `levels`, `hourlyRate` y `tarifaHora`. |
 | Desplegar Functions con cambio de matching | Bloqueado por facturacion | `firebase deploy --only functions` exige Blaze para habilitar `cloudbuild.googleapis.com` y `artifactregistry.googleapis.com`. |
+| Migrar admin Profesores a Firestore | Completado y desplegado | `pages/dashboard/admin.html` lista, filtra, exporta y cambia verificacion de profesores desde Firestore. Smoke produccion: `26 profesores`, `20` filas, sin fallback legacy. |
 
 ## 3. Arquitectura actual
 

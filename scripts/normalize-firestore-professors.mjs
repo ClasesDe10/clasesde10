@@ -104,9 +104,12 @@ function buildPatch(data) {
   const issues = profileIssues({ ...data, subjects, levels, hourlyRate });
   const complete = issues.length === 0;
   const status = clean(data.status || data.estado_verificacion || data.verificationStatus) || 'pendiente_perfil';
+  const legacyImported = Boolean(data.legacyId || data.source === 'google_sheets_profesores');
+  const hasFullNameInNombre = legacyImported && names.nombre && names.apellidos && clean(data.nombre).includes(names.apellidos);
 
-  if (!data.nombre && names.nombre) patch.nombre = names.nombre;
-  if (!data.apellidos && names.apellidos) patch.apellidos = names.apellidos;
+  if (legacyImported && data.nombre && !data.displayName) patch.displayName = clean(data.nombre, 160);
+  if ((!data.nombre || hasFullNameInNombre) && names.nombre) patch.nombre = names.nombre;
+  if ((!data.apellidos || hasFullNameInNombre) && names.apellidos) patch.apellidos = names.apellidos;
   if (subjects.length) {
     patch.subjects = subjects;
     patch.materias = subjects;
