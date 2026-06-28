@@ -22,6 +22,7 @@ const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 let adminUsersCache = { expiresAt: 0, users: [] };
 let notificationSettingsCache = { expiresAt: 0, settings: null };
+let automationRulesCache = { expiresAt: 0, rules: [] };
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -515,6 +516,25 @@ async function setDocumentOnce(collectionName, id, payload) {
   return true;
 }
 
+async function loadAutomationRules() {
+  if (automationRulesCache.expiresAt > Date.now()) return automationRulesCache.rules;
+  try {
+    const snap = await db.collection('automationRules').limit(500).get();
+    automationRulesCache = {
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      rules: snap.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        source: 'firestore',
+      })),
+    };
+  } catch (error) {
+    logger.warn('Could not load automationRules; default rules will be used.', error);
+    automationRulesCache = { expiresAt: Date.now() + 60 * 1000, rules: [] };
+  }
+  return automationRulesCache.rules;
+}
+
 async function writePlannedNotification(notification) {
   const payload = notification.payload || { type: notification.type || 'automation' };
   const extra = {
@@ -567,14 +587,16 @@ async function writePlannedNotification(notification) {
 }
 
 async function materializeAutomationPlan(event, extra = {}) {
+  const rules = await loadAutomationRules();
   const plan = buildAutomationPlan({
     ...event,
     source: event.source || extra.source || 'functions',
-  });
+  }, { rules });
   const counts = {
     automationEvents: 0,
     notifications: 0,
     systemJobs: 0,
+    ruleRuns: 0,
     auditLogs: 0,
     crmTasks: 0,
     opsAlerts: 0,
@@ -606,6 +628,17 @@ async function materializeAutomationPlan(event, extra = {}) {
     });
     if (result.created) counts.systemJobs += 1;
   }
+
+  await Promise.all(plan.ruleRuns.map(async (item) => {
+    const created = await setDocumentOnce('automationRuleRuns', item.id, {
+      ...item,
+      trace: extra.trace || null,
+      source: 'platform_automation',
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    if (created) counts.ruleRuns += 1;
+  }));
 
   await Promise.all(plan.auditLogs.map(async (item) => {
     const created = await setDocumentOnce('auditLogs', item.id, {

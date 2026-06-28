@@ -32,6 +32,8 @@ const LIVE_COLLECTIONS = [
   'chats',
   'classLifecycleEvents',
   'automationEvents',
+  'automationRules',
+  'automationRuleRuns',
   'auditLogs',
   'adminAiQueries',
   'systemJobs',
@@ -324,6 +326,8 @@ async function loadData(db, leadsAdapter) {
     chats,
     lifecycleEvents,
     automationEvents,
+    automationRules,
+    automationRuleRuns,
     publicLeads,
     auditLogs,
     adminAiQueries,
@@ -350,6 +354,8 @@ async function loadData(db, leadsAdapter) {
     safeRead('chats', () => loadRows(db, 'chats'), [], loadErrors),
     safeRead('lifecycleEvents', () => loadRows(db, 'classLifecycleEvents'), [], loadErrors),
     safeRead('automationEvents', () => loadRows(db, 'automationEvents'), [], loadErrors),
+    safeRead('automationRules', () => loadRows(db, 'automationRules'), [], loadErrors),
+    safeRead('automationRuleRuns', () => loadRows(db, 'automationRuleRuns'), [], loadErrors),
     safeRead('publicLeads', async () => {
       const result = leadsAdapter?.listPublic
         ? await leadsAdapter.listPublic({ max: 300 })
@@ -384,6 +390,8 @@ async function loadData(db, leadsAdapter) {
     chats,
     lifecycleEvents,
     automationEvents,
+    automationRules,
+    automationRuleRuns,
     publicLeads,
     auditLogs,
     adminAiQueries,

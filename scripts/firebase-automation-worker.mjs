@@ -67,6 +67,7 @@ const matchingUserScanLimit = Math.max(1, Number(process.env.MATCHING_USER_SCAN_
 const matchingAssignmentScanLimit = Math.max(1, Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000));
 const systemJobLimit = Math.max(1, Number(process.env.SYSTEM_JOB_LIMIT || 50));
 const systemJobMaxBackoffMs = 60 * 60 * 1000;
+let automationRulesCache = { expiresAt: 0, rules: [] };
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -373,12 +374,29 @@ async function enqueueWorkerSystemJob(db, job, sourceEventType) {
   return true;
 }
 
+async function loadWorkerAutomationRules(db) {
+  if (Date.now() < automationRulesCache.expiresAt) return automationRulesCache.rules;
+  try {
+    const snap = await db.collection('automationRules').limit(500).get();
+    automationRulesCache = {
+      expiresAt: Date.now() + 5 * 60 * 1000,
+      rules: snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), source: 'firestore' })),
+    };
+  } catch (error) {
+    console.warn('Could not load automationRules; default rules will be used.', error?.message || error);
+    automationRulesCache = { expiresAt: Date.now() + 60 * 1000, rules: [] };
+  }
+  return automationRulesCache.rules;
+}
+
 async function materializeWorkerAutomationPlan(db, event, stats) {
+  const rules = await loadWorkerAutomationRules(db);
   const plan = buildAutomationPlan({
     ...event,
     source: event.source || 'github_actions_worker',
-  });
+  }, { rules });
   stats.platformAutomationPlans += 1;
+  stats.platformRuleRunsEvaluated += plan.ruleRuns.length;
 
   for (const item of plan.automationEvents) {
     const ref = db.collection('automationEvents').doc(item.id);
@@ -442,6 +460,19 @@ async function materializeWorkerAutomationPlan(db, event, stats) {
       updatedAt: now(),
     }, { merge: false });
     stats.platformAuditLogsCreated += 1;
+  }
+
+  for (const run of plan.ruleRuns) {
+    const ref = db.collection('automationRuleRuns').doc(run.id);
+    const existing = await ref.get();
+    if (existing.exists) continue;
+    await writeDoc(db.collection('automationRuleRuns'), run.id, {
+      ...run,
+      source: 'github_actions_platform_automation',
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: false });
+    stats.platformRuleRunsCreated += 1;
   }
 
   for (const task of plan.crmTasks) {
@@ -2175,6 +2206,8 @@ async function main() {
     metricSnapshotsCreated: 0,
     opsAlertsCreated: 0,
     platformAutomationPlans: 0,
+    platformRuleRunsEvaluated: 0,
+    platformRuleRunsCreated: 0,
     platformAutomationEvents: 0,
     platformNotificationsCreated: 0,
     platformSystemJobsQueued: 0,

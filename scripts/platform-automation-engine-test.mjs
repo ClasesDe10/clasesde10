@@ -6,6 +6,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const {
   AUTOMATION_ORCHESTRATION_VERSION,
+  DEFAULT_AUTOMATION_RULES,
+  EVENT_CATALOG,
+  RULE_ENGINE_VERSION,
   buildAutomationPlan,
 } = require('../functions/platform-automation-engine.js');
 
@@ -41,6 +44,7 @@ assert.equal(requestPlan.version, AUTOMATION_ORCHESTRATION_VERSION);
 assertHas(requestPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'request_created', 'request.created must notify admins');
 assertHas(requestPlan.systemJobs, (item) => item.type === 'matching.request' && item.payload.requestId === 'req_1', 'request.created must enqueue matching');
 assertHas(requestPlan.auditLogs, (item) => item.action === 'request.created', 'request.created must create audit log');
+assertHas(requestPlan.ruleRuns, (item) => item.ruleId === 'request.created.core' && item.engineVersion === RULE_ENGINE_VERSION, 'request.created must record the rule that fired');
 assertOnlySupportedJobs(requestPlan);
 
 const assignmentPlan = buildAutomationPlan({
@@ -115,8 +119,32 @@ assertOnlySupportedJobs(profilePlan);
 const eventIds = new Set(requestPlan.automationEvents.map((item) => item.id));
 assert.equal(eventIds.size, requestPlan.automationEvents.length, 'automation event IDs must be unique per plan');
 
+const defaultRuleIds = DEFAULT_AUTOMATION_RULES.map((rule) => rule.id);
+assert.equal(new Set(defaultRuleIds).size, defaultRuleIds.length, 'default automation rules must have stable unique IDs');
+
+for (const eventType of [
+  'user.registered',
+  'teacher.verified',
+  'request.created',
+  'class.scheduled',
+  'class.rescheduled',
+  'class.cancelled',
+  'class.completed',
+  'payment.verified',
+  'payment.overdue',
+  'message.received',
+  'profile.updated',
+  'incident.created',
+  'document.created',
+  'review.created',
+]) {
+  assertHas(EVENT_CATALOG, (item) => item.type === eventType, `Event catalog must include ${eventType}`);
+}
+
 console.log(JSON.stringify({
   ok: true,
   version: AUTOMATION_ORCHESTRATION_VERSION,
+  ruleEngineVersion: RULE_ENGINE_VERSION,
+  rules: DEFAULT_AUTOMATION_RULES.length,
   coveredEvents: ['request.created', 'assignment.created', 'class.confirmation_overdue', 'payment.overdue', 'profile.updated'],
 }, null, 2));

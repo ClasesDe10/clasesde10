@@ -40,6 +40,8 @@ const DATA_SPECS = [
   ['notifications', 'notificaciones', 900],
   ['publicLeads', 'leadsPublicos', 700],
   ['automationEvents', 'automationEvents', 700],
+  ['automationRules', 'automationRules', 500],
+  ['automationRuleRuns', 'automationRuleRuns', 700],
   ['auditLogs', 'auditLogs', 1000],
   ['lifecycleEvents', 'classLifecycleEvents', 900],
   ['crmTasks', 'crmTasks', 500],

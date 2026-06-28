@@ -120,6 +120,8 @@ function checkRules() {
     'validFamilyPaymentCreate()',
     'validTeacherPayoutCreate()',
     'match /classLifecycleEvents/{eventId}',
+    'match /automationRules/{ruleId}',
+    'match /automationRuleRuns/{runId}',
     'match /systemJobs/{jobId}',
     'match /metricSnapshots/{snapshotId}',
     'match /opsAlerts/{alertId}',
@@ -185,6 +187,14 @@ function checkIndexes() {
       { fieldPath: 'runAt', order: 'ASCENDING' },
       { fieldPath: 'priority', order: 'DESCENDING' },
     ]],
+    ['automationRules', [
+      { fieldPath: 'active', order: 'ASCENDING' },
+      { fieldPath: 'priority', order: 'ASCENDING' },
+    ]],
+    ['automationRuleRuns', [
+      { fieldPath: 'ruleId', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
     ['metricSnapshots', [
       { fieldPath: 'scope', order: 'ASCENDING' },
       { fieldPath: 'period', order: 'ASCENDING' },
@@ -233,12 +243,12 @@ function checkFunctions() {
       fail(`Missing scalability Cloud Function export: ${exportName}.`);
     }
   }
-  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs', 'platformHealthChecks']) {
+  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs', 'platformHealthChecks', 'automationRules', 'automationRuleRuns']) {
     if (!functionsCode.includes(needle)) fail(`Scalability function path missing: ${needle}.`);
   }
 
   const workerCode = readText('scripts/firebase-automation-worker.mjs');
-  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated']) {
+  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated', 'automationRules', 'automationRuleRuns']) {
     if (!workerCode.includes(needle)) fail(`GitHub automation worker scalability path missing: ${needle}.`);
   }
   if (!workerCode.includes('platformHealthChecks')) fail('GitHub automation worker must write platform health checks.');

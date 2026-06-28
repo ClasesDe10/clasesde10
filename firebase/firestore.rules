@@ -1129,6 +1129,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /automationRules/{ruleId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /automationRuleRuns/{runId} {
+      allow read, write: if isAdmin();
+    }
+
     match /systemJobs/{jobId} {
       allow read, write: if isAdmin();
     }

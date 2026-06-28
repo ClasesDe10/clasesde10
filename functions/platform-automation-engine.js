@@ -1,5 +1,12 @@
 'use strict';
 
+const {
+  EVENT_CATALOG,
+  RULE_ENGINE_VERSION,
+  applyAutomationRules,
+  mergeRuleSets,
+} = require('./rules-engine.js');
+
 const AUTOMATION_ORCHESTRATION_VERSION = 'platform-automation-2026-06-28';
 
 function clean(value, max = 500) {
@@ -46,6 +53,7 @@ function createPlan(event) {
     crmTasks: [],
     opsAlerts: [],
     patches: [],
+    ruleRuns: [],
   };
 }
 
@@ -57,6 +65,10 @@ function finalizePlan(plan) {
   plan.crmTasks = uniqueById(plan.crmTasks);
   plan.opsAlerts = uniqueById(plan.opsAlerts);
   plan.patches = uniqueById(plan.patches);
+  plan.ruleRuns = uniqueById(plan.ruleRuns.map((item) => ({
+    id: slug('rule_run', item.ruleId, item.eventType, item.entityType, item.entityId),
+    ...item,
+  })));
   return plan;
 }
 
@@ -249,7 +261,403 @@ function classHasPaidStatus(data) {
   return ['validado', 'pagado', 'paid', 'succeeded'].includes(status);
 }
 
-function buildAutomationPlan(event) {
+const DEFAULT_AUTOMATION_RULES = [
+  {
+    id: 'request.created.core',
+    name: 'Nueva solicitud: matching, admin y auditoria',
+    eventTypes: ['request.created'],
+    priority: 10,
+    actions: [
+      { type: 'automationEvent', summary: 'Nueva solicitud capturada y enviada a matching.', severity: 'info', payload: { subject: { path: 'computed.subject' } } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Nueva solicitud recibida', body: '{{computed.person}} solicita {{computed.subject}}.', payload: { requestId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'request_created', priority: 'high' } },
+      { type: 'systemJob', jobType: 'matching.request', payload: { requestId: { path: 'computed.id' }, reason: 'request_created' }, options: { priority: 'high', key: 'matching' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'request.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'request.created', metadata: { subject: { path: 'computed.subject' }, familyUid: { path: 'computed.familyUid' } } },
+    ],
+  },
+  {
+    id: 'request.created.incomplete-data',
+    eventTypes: ['request.created'],
+    priority: 11,
+    when: { any: [{ path: 'computed.subjectMissing', operator: 'truthy' }, { path: 'computed.locationMissing', operator: 'truthy' }] },
+    actions: [
+      { type: 'crmTask', title: 'Completar datos de solicitud', description: 'La solicitud ha llegado con materia o zona incompleta. Revisarla antes de asignar profesor.', options: { priority: 'high', tags: ['solicitud', 'datos_incompletos'], dueAfterMinutes: 60 } },
+    ],
+  },
+  {
+    id: 'request.stale.core',
+    eventTypes: ['request.stale'],
+    priority: 20,
+    actions: [
+      { type: 'automationEvent', summary: 'Solicitud sin avance detectada por barrido automatico.', severity: 'warning' },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Solicitud atascada', body: 'La solicitud {{computed.subject}} sigue sin profesor asignado.', payload: { requestId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'request_stale', priority: 'high' } },
+      { type: 'systemJob', jobType: 'matching.request', payload: { requestId: { path: 'computed.id' }, reason: 'stale_request' }, options: { priority: 'high', key: 'matching_retry' } },
+      { type: 'crmTask', title: 'Resolver solicitud sin asignar', description: 'Revisar candidatos, disponibilidad y datos de contacto para desbloquear la solicitud.', options: { priority: 'high', tags: ['matching', 'solicitud'], dueAfterMinutes: 120 } },
+      { type: 'audit', action: 'request.stale_detected', metadata: { status: { firstOf: ['data.status', 'data.estado'] } } },
+    ],
+  },
+  {
+    id: 'assignment.created.core',
+    eventTypes: ['assignment.created'],
+    priority: 30,
+    actions: [
+      { type: 'automationEvent', summary: 'Asignacion creada y comunicada a las partes.', severity: 'info', payload: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Nueva asignacion', body: 'Tienes una nueva solicitud asignada de {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'high', key: 'teacher' } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Profesor asignado', body: 'Ya hay profesor asignado para {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'high', key: 'family' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Asignacion creada', body: 'Se ha asignado profesor para {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'normal', key: 'admin' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'assignment.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'assignment.created', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
+    ],
+  },
+  {
+    id: 'class.scheduled.core',
+    eventTypes: ['class.scheduled'],
+    priority: 40,
+    actions: [
+      { type: 'automationEvent', summary: 'Clase programada y comunicada.', severity: 'info' },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase programada', body: 'Tienes programada la {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_reminder', priority: 'normal', key: 'teacher' } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Clase programada', body: 'La clase queda programada: {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_reminder', priority: 'normal', key: 'family' } },
+      { type: 'audit', action: 'class.scheduled', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' }, label: { path: 'computed.classLabel' } } },
+    ],
+  },
+  {
+    id: 'class.rescheduled.core',
+    eventTypes: ['class.rescheduled'],
+    priority: 41,
+    actions: [
+      { type: 'automationEvent', summary: 'Cambio de horario comunicado.', severity: 'info' },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase reprogramada', body: 'Nuevo horario para la {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_schedule_change', priority: 'high', key: 'teacher' } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Clase reprogramada', body: 'Nuevo horario para {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_schedule_change', priority: 'high', key: 'family' } },
+      { type: 'audit', action: 'class.rescheduled', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' }, label: { path: 'computed.classLabel' } } },
+    ],
+  },
+  {
+    id: 'class.participants-required',
+    eventTypes: ['class.scheduled', 'class.rescheduled'],
+    priority: 42,
+    when: { any: [{ path: 'computed.teacherUid', operator: 'empty' }, { path: 'computed.familyUid', operator: 'empty' }] },
+    actions: [
+      { type: 'crmTask', title: 'Clase sin participantes completos', description: 'La clase no tiene profesor o familia resoluble para notificaciones automaticas.', options: { priority: 'high', tags: ['clase', 'datos_incompletos'], dueAfterMinutes: 60 } },
+    ],
+  },
+  {
+    id: 'class.completed.core',
+    eventTypes: ['class.completed'],
+    priority: 50,
+    actions: [
+      { type: 'automationEvent', summary: 'Clase finalizada; se disparan confirmacion, pagos y reputacion.', severity: 'info' },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Confirma la clase', body: 'Confirma si la {{computed.classLabel}} se realizo correctamente.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_confirmation_needed', priority: 'high', key: 'family' } },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase finalizada', body: 'Revisa y confirma la {{computed.classLabel}} para mantener pagos y reputacion al dia.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_confirmation_needed', priority: 'high', key: 'teacher' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'class.completed' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'class.completed', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' }, paid: { path: 'computed.classPaid' } } },
+    ],
+  },
+  {
+    id: 'class.completed.unpaid-followup',
+    eventTypes: ['class.completed'],
+    priority: 51,
+    when: { path: 'computed.classPaid', operator: 'falsy' },
+    actions: [
+      { type: 'crmTask', title: 'Seguimiento de pago de clase', description: 'La {{computed.classLabel}} esta finalizada y no consta como pagada.', options: { priority: 'high', tags: ['pagos', 'clase'], dueAfterMinutes: 1440 } },
+    ],
+  },
+  {
+    id: 'class.confirmation-overdue.core',
+    eventTypes: ['class.confirmation_overdue'],
+    priority: 60,
+    actions: [
+      { type: 'automationEvent', summary: 'Clase terminada sin confirmacion de asistencia.', severity: 'warning' },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase pendiente de marcar', body: 'La {{computed.classLabel}} termino y sigue sin cierre completo.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_unmarked_after_1h', priority: 'high', key: 'teacher' } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Confirma si la clase se dio', body: 'La {{computed.classLabel}} termino y necesitamos confirmar si se realizo.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_unmarked_after_1h', priority: 'high', key: 'family' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Clase sin cerrar', body: 'La {{computed.classLabel}} sigue pendiente de confirmacion.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_unmarked_after_1h', priority: 'high', key: 'admin' } },
+      { type: 'patch', collection: 'clases', docId: { path: 'computed.id' }, data: { needsAttendanceConfirmation: true, lifecycleStatus: { firstOf: ['data.lifecycleStatus', { const: 'pendiente_confirmacion' }] }, lastUnmarkedReminderSource: 'platform_automation' } },
+      { type: 'crmTask', title: 'Cerrar clase pendiente', description: 'Confirmar asistencia y resolver pago de la {{computed.classLabel}}.', options: { priority: 'high', tags: ['clase', 'confirmacion'], dueAfterMinutes: 180 } },
+      { type: 'audit', action: 'class.confirmation_overdue', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
+    ],
+  },
+  {
+    id: 'class.cancelled.core',
+    eventTypes: ['class.cancelled'],
+    priority: 70,
+    actions: [
+      { type: 'automationEvent', summary: 'Clase cancelada; se comunica y queda trazada.', severity: 'warning' },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Clase cancelada', body: 'Se ha cancelado la {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_schedule_change', priority: 'high', key: 'teacher' } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Clase cancelada', body: 'Se ha cancelado la {{computed.classLabel}}.', payload: { classId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'class_schedule_change', priority: 'high', key: 'family' } },
+      { type: 'crmTask', title: 'Revisar cancelacion de clase', description: 'Comprobar si hay que reprogramar, devolver pago o registrar incidencia.', options: { priority: 'normal', tags: ['clase', 'cancelacion'], dueAfterMinutes: 1440 } },
+      { type: 'audit', action: 'class.cancelled', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
+    ],
+  },
+  {
+    id: 'payment.created.core',
+    eventTypes: ['payment.created'],
+    priority: 80,
+    actions: [
+      { type: 'automationEvent', summary: 'Pago o solicitud de Bizum registrada.', severity: 'info', payload: { amount: { path: 'computed.paymentAmount' } } },
+      { type: 'audit', action: 'payment.created', metadata: { amount: { path: 'computed.paymentAmount' }, payout: { path: 'computed.payout' } } },
+    ],
+  },
+  {
+    id: 'payment.created.family',
+    eventTypes: ['payment.created'],
+    priority: 81,
+    when: { path: 'computed.payout', operator: 'falsy' },
+    actions: [
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Pago pendiente', body: 'Pago familiar registrado por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'family_payment_pending', priority: 'high', key: 'admin' } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Pago registrado', body: 'Hemos registrado un pago pendiente de validar por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'family_payment_pending', priority: 'normal', key: 'family' } },
+    ],
+  },
+  {
+    id: 'payment.created.payout',
+    eventTypes: ['payment.created'],
+    priority: 82,
+    when: { path: 'computed.payout', operator: 'truthy' },
+    actions: [
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Bizum de profesor pendiente', body: 'Profesor solicita Bizum por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'teacher_payout_pending', priority: 'high', key: 'admin' } },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Solicitud de Bizum registrada', body: 'Tu solicitud de Bizum por {{computed.paymentAmount}} queda pendiente de revision.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'teacher_payout_pending', priority: 'normal', key: 'teacher' } },
+    ],
+  },
+  {
+    id: 'payment.created.needs-class-link',
+    eventTypes: ['payment.created'],
+    priority: 83,
+    when: { path: 'computed.hasClassIds', operator: 'falsy' },
+    actions: [
+      { type: 'crmTask', title: 'Conciliar pago con clase', description: 'El pago no tiene clases asociadas explicitamente. Revisar conciliacion automatica o manual.', options: { priority: 'high', tags: ['pagos', 'conciliacion'], dueAfterMinutes: 1440 } },
+    ],
+  },
+  {
+    id: 'payment.overdue.core',
+    eventTypes: ['payment.overdue'],
+    priority: 90,
+    actions: [
+      { type: 'automationEvent', summary: 'Pago vencido detectado automaticamente.', severity: 'warning', payload: { amount: { path: 'computed.paymentAmount' } } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Pago pendiente vencido', body: 'Hay un pago pendiente de {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_overdue', priority: 'critical', key: 'family' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Pago vencido', body: 'Revisar pago vencido por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_overdue', priority: 'critical', key: 'admin' } },
+      { type: 'patch', collection: 'pagos', docId: { path: 'computed.id' }, data: { status: 'vencido', estado: 'vencido', overdueDetectedBy: 'platform_automation' } },
+      { type: 'crmTask', title: 'Resolver pago vencido', description: 'Contactar o revisar el pago pendiente por {{computed.paymentAmount}}.', options: { priority: 'critical', tags: ['pagos', 'vencido'], dueAfterMinutes: 120 } },
+      { type: 'opsAlert', alertType: 'payment_overdue', level: 'high', message: 'Pago vencido por {{computed.paymentAmount}}.' },
+      { type: 'audit', action: 'payment.overdue', metadata: { amount: { path: 'computed.paymentAmount' } } },
+    ],
+  },
+  {
+    id: 'payment.verified.core',
+    eventTypes: ['payment.verified'],
+    priority: 100,
+    actions: [
+      { type: 'automationEvent', summary: 'Pago validado; se actualizan metricas y partes implicadas.', severity: 'info', payload: { amount: { path: 'computed.paymentAmount' } } },
+      { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Pago confirmado', body: 'El pago de {{computed.paymentAmount}} queda confirmado.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_verified', priority: 'normal', key: 'family' } },
+      { type: 'notification', when: { path: 'computed.teacherUid', operator: 'not_empty' }, target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Pago de clase confirmado', body: 'Se ha confirmado un pago asociado por {{computed.paymentAmount}}.', payload: { paymentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'payment_verified', priority: 'normal', key: 'teacher' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'payment.verified' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'payment.verified', metadata: { amount: { path: 'computed.paymentAmount' }, verified: { path: 'computed.paymentVerified' } } },
+    ],
+  },
+  {
+    id: 'document.created.core',
+    eventTypes: ['document.created'],
+    priority: 110,
+    actions: [
+      { type: 'automationEvent', summary: 'Documento pendiente de revision.', severity: 'info' },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Documento pendiente de revision', body: '{{computed.documentLabel}} necesita revision.', payload: { documentId: { path: 'computed.id' }, ownerUid: { path: 'computed.ownerUid' }, url: '/pages/login.html' }, options: { type: 'document_review_pending', priority: 'normal', key: 'admin' } },
+      { type: 'crmTask', title: 'Revisar documento', description: 'Validar, rechazar o pedir correccion del documento subido.', options: { priority: 'normal', tags: ['documentos', 'verificacion'], dueAfterMinutes: 1440 } },
+      { type: 'audit', action: 'document.created', metadata: { ownerUid: { path: 'computed.ownerUid' }, documentType: { firstOf: ['data.tipo', 'data.type'] } } },
+    ],
+  },
+  {
+    id: 'document.stale.core',
+    eventTypes: ['document.stale'],
+    priority: 111,
+    actions: [
+      { type: 'automationEvent', summary: 'Documento pendiente demasiado tiempo.', severity: 'warning' },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Documento atascado', body: '{{computed.documentLabel}} necesita revision.', payload: { documentId: { path: 'computed.id' }, ownerUid: { path: 'computed.ownerUid' }, url: '/pages/login.html' }, options: { type: 'document_review_pending', priority: 'high', key: 'admin' } },
+      { type: 'crmTask', title: 'Resolver documento pendiente', description: 'Validar, rechazar o pedir correccion del documento subido.', options: { priority: 'high', tags: ['documentos', 'verificacion'], dueAfterMinutes: 120 } },
+      { type: 'opsAlert', alertType: 'document_review_stale', level: 'medium', message: 'Documento pendiente de revision por demasiado tiempo.' },
+      { type: 'audit', action: 'document.stale_detected', metadata: { ownerUid: { path: 'computed.ownerUid' }, documentType: { firstOf: ['data.tipo', 'data.type'] } } },
+    ],
+  },
+  {
+    id: 'incident.created.core',
+    eventTypes: ['incident.created'],
+    priority: 120,
+    actions: [
+      { type: 'automationEvent', summary: 'Incidencia registrada.', severity: { path: 'computed.incidentSeverity' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Nueva incidencia', body: '{{computed.incidentLabel}}', payload: { incidentId: { path: 'computed.id' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, url: '/pages/login.html' }, options: { type: 'class_incident', priority: { path: 'computed.incidentNotificationPriority' }, key: 'admin' } },
+      { type: 'crmTask', title: 'Gestionar incidencia', description: 'Clasificar, contactar a las partes y cerrar con resultado trazado.', options: { priority: { path: 'computed.incidentTaskPriority' }, tags: ['incidencias'], dueAfterMinutes: { path: 'computed.incidentDueMinutes' } } },
+      { type: 'opsAlert', when: { path: 'computed.incidentCritical', operator: 'truthy' }, alertType: 'incident_attention_required', level: 'medium', message: 'Incidencia requiere atencion administrativa.' },
+      { type: 'audit', action: 'incident.created', metadata: { priority: { path: 'computed.incidentPriority' } } },
+    ],
+  },
+  {
+    id: 'incident.stale.core',
+    eventTypes: ['incident.stale'],
+    priority: 121,
+    actions: [
+      { type: 'automationEvent', summary: 'Incidencia abierta sin resolver.', severity: 'warning' },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Incidencia atascada', body: '{{computed.incidentLabel}}', payload: { incidentId: { path: 'computed.id' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, url: '/pages/login.html' }, options: { type: 'class_incident', priority: 'critical', key: 'admin' } },
+      { type: 'crmTask', title: 'Resolver incidencia atascada', description: 'Clasificar, contactar a las partes y cerrar con resultado trazado.', options: { priority: 'critical', tags: ['incidencias'], dueAfterMinutes: 60 } },
+      { type: 'opsAlert', alertType: 'incident_attention_required', level: 'high', message: 'Incidencia requiere atencion administrativa.' },
+      { type: 'audit', action: 'incident.stale_detected', metadata: { priority: { path: 'computed.incidentPriority' } } },
+    ],
+  },
+  {
+    id: 'profile.updated.core',
+    eventTypes: ['profile.updated'],
+    priority: 130,
+    actions: [
+      { type: 'automationEvent', summary: 'Perfil actualizado; se solicita revision y recalculo reputacional.', severity: 'info', payload: { userType: { path: 'computed.userType' } } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Perfil actualizado', body: '{{computed.userLabel}} modifico datos relevantes del perfil.', payload: { profileId: { path: 'computed.id' }, userType: { path: 'computed.userType' }, url: '/pages/login.html' }, options: { type: { path: 'computed.profileNotificationType' }, priority: { path: 'computed.profileNotificationPriority' }, key: 'admin' } },
+      { type: 'automationEvent', eventType: 'trust.recalculation_requested', summary: 'Recalculo de reputacion solicitado por cambio de perfil.', severity: 'info', payload: { profileId: { path: 'computed.id' }, userType: { path: 'computed.userType' } } },
+      { type: 'audit', action: 'profile.updated', metadata: { userType: { path: 'computed.userType' }, verificationStatus: { path: 'computed.profileStatus' } } },
+    ],
+  },
+  {
+    id: 'profile.updated.pending-verification',
+    eventTypes: ['profile.updated'],
+    priority: 131,
+    when: { path: 'computed.profileStatus', operator: 'eq', value: 'pendiente' },
+    actions: [
+      { type: 'crmTask', title: 'Verificar perfil actualizado', description: 'Revisar cambios, documentos y nivel de confianza antes de destacarlo.', options: { priority: 'high', tags: ['perfil', 'verificacion'], dueAfterMinutes: 1440 } },
+    ],
+  },
+  {
+    id: 'teacher.inactive.core',
+    eventTypes: ['teacher.inactive'],
+    priority: 140,
+    actions: [
+      { type: 'automationEvent', summary: 'Profesor activo sin actividad reciente.', severity: 'warning' },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Profesor sin actividad reciente', body: '{{computed.person}} lleva tiempo sin actividad o alumnos nuevos.', payload: { teacherId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'profile_updated', priority: 'normal', key: 'admin' } },
+      { type: 'crmTask', title: 'Reactivar profesor', description: 'Comprobar disponibilidad, actualizar perfil o pausar visibilidad si no responde.', options: { priority: 'normal', tags: ['profesores', 'reactivacion'], dueAfterMinutes: 10080 } },
+      { type: 'audit', action: 'teacher.inactive_detected', metadata: { lastActivityAt: { firstOf: ['data.lastActivityAt', 'data.updatedAt'] } } },
+    ],
+  },
+  {
+    id: 'user.registered.core',
+    eventTypes: ['user.registered'],
+    priority: 150,
+    actions: [
+      { type: 'automationEvent', summary: 'Usuario registrado y enviado a seguimiento operativo.', severity: 'info', payload: { role: { firstOf: ['data.role', 'data.rol'] } } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Nuevo usuario registrado', body: '{{computed.person}} se ha registrado como {{computed.userType}}.', payload: { userId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'user_registered', priority: 'normal', key: 'admin' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'user.registered' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'user.registered', metadata: { role: { firstOf: ['data.role', 'data.rol'] } } },
+    ],
+  },
+  {
+    id: 'teacher.verified.core',
+    eventTypes: ['teacher.verified'],
+    priority: 160,
+    actions: [
+      { type: 'automationEvent', summary: 'Profesor verificado; reputacion y metricas deben actualizarse.', severity: 'info' },
+      { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Perfil verificado', body: 'Tu perfil de profesor ya esta verificado.', payload: { teacherId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'teacher_verified', priority: 'normal', key: 'teacher' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Profesor verificado', body: '{{computed.person}} ya puede recibir asignaciones con confianza alta.', payload: { teacherId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'teacher_verified', priority: 'normal', key: 'admin' } },
+      { type: 'automationEvent', eventType: 'trust.recalculation_requested', summary: 'Recalculo de reputacion solicitado por verificacion de profesor.', severity: 'info', payload: { profileId: { path: 'computed.id' }, userType: 'profesores' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'teacher.verified' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'teacher.verified', metadata: { teacherUid: { path: 'computed.teacherUid' } } },
+    ],
+  },
+  {
+    id: 'message.received.core',
+    eventTypes: ['message.received'],
+    priority: 170,
+    actions: [
+      { type: 'automationEvent', summary: 'Mensaje recibido y canalizado a notificacion interna.', severity: 'info' },
+      { type: 'notification', target: { userUid: { firstOf: ['data.recipientUid', 'data.toUid', 'data.userUid'] }, role: { firstOf: ['data.recipientRole', 'data.role'] } }, title: 'Nuevo mensaje', body: '{{computed.messagePreview}}', payload: { chatId: { firstOf: ['data.chatId', 'data.threadId', 'data.id'] }, url: '/pages/login.html' }, options: { type: 'chat_message', priority: 'normal', key: 'recipient' } },
+      { type: 'audit', action: 'message.received', metadata: { chatId: { firstOf: ['data.chatId', 'data.threadId'] } } },
+    ],
+  },
+  {
+    id: 'review.created.core',
+    eventTypes: ['review.created'],
+    priority: 180,
+    actions: [
+      { type: 'automationEvent', summary: 'Valoracion registrada; se recalcula reputacion.', severity: 'info' },
+      { type: 'automationEvent', eventType: 'trust.recalculation_requested', summary: 'Recalculo de reputacion solicitado por nueva valoracion.', severity: 'info', payload: { profileId: { firstOf: ['data.teacherUid', 'data.profesor_id', 'data.reviewedUid'] }, userType: 'profesores' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'review.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: 5 } },
+      { type: 'audit', action: 'review.created', metadata: { rating: { firstOf: ['data.rating', 'data.valoracion'] } } },
+    ],
+  },
+  {
+    id: 'automation.fallback',
+    eventTypes: ['*'],
+    priority: 10000,
+    fallback: true,
+    actions: [
+      { type: 'automationEvent', summary: 'Evento {{event.type}} registrado sin reglas especificas.', severity: 'info' },
+      { type: 'audit', action: 'automation.event_recorded', metadata: { sourceEventType: { path: 'event.type' } } },
+    ],
+  },
+];
+
+function buildRuleContext(normalizedEvent) {
+  const data = normalizedEvent.data || {};
+  const userType = clean(data.userType || normalizedEvent.entityType, 40);
+  const profileStatus = lower(data.verificationStatus || data.estado_verificacion || data.status || data.estado);
+  const incidentPriority = lower(data.priority || data.prioridad || '');
+  const incidentCritical = ['critical', 'critica', 'alta', '1', '2'].includes(incidentPriority);
+  const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id', 'userUid', 'usuario_id']);
+  const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id', 'userUid', 'usuario_id']);
+  return {
+    event: normalizedEvent,
+    data,
+    computed: {
+      id: dataId(normalizedEvent),
+      subject: subjectLabel(data),
+      subjectMissing: !firstPresent(data, ['materia', 'subject']),
+      locationMissing: !firstPresent(data, ['zona', 'city', 'ciudad']),
+      person: personLabel(data, 'Una familia'),
+      classLabel: classLabel(data),
+      paymentAmount: paymentAmountLabel(data),
+      paymentVerified: isVerifiedPaymentStatus(data),
+      payout: isTeacherPayout(data),
+      hasClassIds: Array.isArray(data.classIds) && data.classIds.length > 0,
+      classPaid: classHasPaidStatus(data),
+      teacherUid,
+      familyUid,
+      ownerUid: firstPresent(data, ['ownerUid', 'userUid', 'usuario_id']),
+      documentLabel: firstPresent(data, ['nombre', 'tipo', 'type']) || 'Documento',
+      userType,
+      userLabel: personLabel(data, userType === 'profesores' ? 'Profesor' : 'Familia'),
+      profileStatus,
+      profileNotificationType: profileStatus === 'pendiente' ? 'verification_pending' : 'profile_updated',
+      profileNotificationPriority: profileStatus === 'pendiente' ? 'high' : 'normal',
+      incidentPriority,
+      incidentCritical,
+      incidentSeverity: incidentCritical ? 'warning' : 'info',
+      incidentNotificationPriority: incidentCritical ? 'critical' : 'high',
+      incidentTaskPriority: incidentCritical ? 'critical' : 'high',
+      incidentDueMinutes: incidentCritical ? 60 : 1440,
+      incidentLabel: clean(data.titulo || data.title || data.descripcion || data.description || 'Incidencia pendiente de revision.', 240),
+      messagePreview: clean(data.preview || data.text || data.message || data.body || 'Tienes un nuevo mensaje.', 240),
+    },
+  };
+}
+
+function buildActionHandlers(plan) {
+  return {
+    automationEvent(action, { event }) {
+      const eventForAction = action.eventType ? { ...event, type: action.eventType } : event;
+      addAutomationEvent(plan, eventForAction, action.summary, action.severity || 'info', action.payload || {});
+    },
+    notification(action, { event }) {
+      addNotification(plan, event, action.target || {}, action.title, action.body, action.payload || {}, action.options || {});
+    },
+    systemJob(action, { event }) {
+      addSystemJob(plan, event, action.jobType || action.typeName, action.payload || {}, action.options || {});
+    },
+    audit(action, { event }) {
+      addAudit(plan, event, action.action, action.metadata || {}, action.actorUid || 'system');
+    },
+    crmTask(action, { event }) {
+      addCrmTask(plan, event, action.title, action.description, action.options || {});
+    },
+    opsAlert(action, { event }) {
+      addOpsAlert(plan, event, action.alertType || action.typeName, action.level || 'medium', action.message, action.options || {});
+    },
+    patch(action, { event }) {
+      addPatch(plan, event, action.collection, action.docId, action.data, action.options || {});
+    },
+  };
+}
+
+function buildAutomationPlan(event, options = {}) {
   const normalizedEvent = {
     ...event,
     type: clean(event.type, 120),
@@ -257,375 +665,32 @@ function buildAutomationPlan(event) {
     entityId: dataId(event),
     data: event.data || {},
   };
-  const data = normalizedEvent.data;
   const plan = createPlan(normalizedEvent);
-  const id = dataId(normalizedEvent);
+  const context = buildRuleContext(normalizedEvent);
+  const rules = mergeRuleSets(
+    options.replaceDefaultRules ? [] : DEFAULT_AUTOMATION_RULES,
+    options.rules || options.externalRules || [],
+  );
+  const matches = applyAutomationRules({
+    event: normalizedEvent,
+    context,
+    plan,
+    rules,
+    handlers: buildActionHandlers(plan),
+  });
 
-  switch (normalizedEvent.type) {
-    case 'request.created': {
-      addAutomationEvent(plan, normalizedEvent, 'Nueva solicitud capturada y enviada a matching.', 'info', {
-        subject: subjectLabel(data),
-      });
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Nueva solicitud recibida', `${personLabel(data, 'Una familia')} solicita ${subjectLabel(data)}.`, {
-        requestId: id,
-        url: '/pages/login.html',
-      }, { type: 'request_created', priority: 'high' });
-      addSystemJob(plan, normalizedEvent, 'matching.request', {
-        requestId: id,
-        reason: 'request_created',
-      }, { priority: 'high', key: 'matching' });
-      addSystemJob(plan, normalizedEvent, 'metrics.snapshot', {
-        source: 'request.created',
-      }, { priority: 'low', key: 'metrics', runAfterMinutes: 5 });
-      addAudit(plan, normalizedEvent, 'request.created', {
-        subject: subjectLabel(data),
-        familyUid: userUid(data, ['familyUid', 'familia_id', 'familyUserUid']),
-      });
-      if (!firstPresent(data, ['materia', 'subject']) || !firstPresent(data, ['zona', 'city', 'ciudad'])) {
-        addCrmTask(plan, normalizedEvent, 'Completar datos de solicitud', 'La solicitud ha llegado con materia o zona incompleta. Revisarla antes de asignar profesor.', {
-          priority: 'high',
-          tags: ['solicitud', 'datos_incompletos'],
-          dueAfterMinutes: 60,
-        });
-      }
-      break;
-    }
-
-    case 'request.stale': {
-      addAutomationEvent(plan, normalizedEvent, 'Solicitud sin avance detectada por barrido automatico.', 'warning');
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Solicitud atascada', `La solicitud ${subjectLabel(data)} sigue sin profesor asignado.`, {
-        requestId: id,
-        url: '/pages/login.html',
-      }, { type: 'request_stale', priority: 'high' });
-      addSystemJob(plan, normalizedEvent, 'matching.request', {
-        requestId: id,
-        reason: 'stale_request',
-      }, { priority: 'high', key: 'matching_retry' });
-      addCrmTask(plan, normalizedEvent, 'Resolver solicitud sin asignar', 'Revisar candidatos, disponibilidad y datos de contacto para desbloquear la solicitud.', {
-        priority: 'high',
-        tags: ['matching', 'solicitud'],
-        dueAfterMinutes: 120,
-      });
-      addAudit(plan, normalizedEvent, 'request.stale_detected', { status: data.status || data.estado || '' });
-      break;
-    }
-
-    case 'assignment.created': {
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      addAutomationEvent(plan, normalizedEvent, 'Asignacion creada y comunicada a las partes.', 'info', {
-        teacherUid,
-        familyUid,
-      });
-      addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, 'Nueva asignacion', `Tienes una nueva solicitud asignada de ${subjectLabel(data)}.`, {
-        requestId: data.requestId || data.solicitud_id || '',
-        assignmentId: id,
-        url: '/pages/login.html',
-      }, { type: 'assignment_created', priority: 'high', key: 'teacher' });
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Profesor asignado', `Ya hay profesor asignado para ${subjectLabel(data)}.`, {
-        requestId: data.requestId || data.solicitud_id || '',
-        assignmentId: id,
-        url: '/pages/login.html',
-      }, { type: 'assignment_created', priority: 'high', key: 'family' });
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Asignacion creada', `Se ha asignado profesor para ${subjectLabel(data)}.`, {
-        requestId: data.requestId || data.solicitud_id || '',
-        assignmentId: id,
-        url: '/pages/login.html',
-      }, { type: 'assignment_created', priority: 'normal', key: 'admin' });
-      addSystemJob(plan, normalizedEvent, 'metrics.snapshot', {
-        source: 'assignment.created',
-      }, { priority: 'low', key: 'metrics', runAfterMinutes: 5 });
-      addAudit(plan, normalizedEvent, 'assignment.created', { teacherUid, familyUid });
-      break;
-    }
-
-    case 'class.scheduled':
-    case 'class.rescheduled': {
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      const label = classLabel(data);
-      const rescheduled = normalizedEvent.type === 'class.rescheduled';
-      addAutomationEvent(plan, normalizedEvent, rescheduled ? 'Cambio de horario comunicado.' : 'Clase programada y comunicada.', 'info');
-      addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, rescheduled ? 'Clase reprogramada' : 'Clase programada', `${rescheduled ? 'Nuevo horario para' : 'Tienes programada'} la ${label}.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: rescheduled ? 'class_schedule_change' : 'class_reminder', priority: rescheduled ? 'high' : 'normal', key: 'teacher' });
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, rescheduled ? 'Clase reprogramada' : 'Clase programada', `${rescheduled ? 'Nuevo horario para' : 'La clase queda programada:'} ${label}.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: rescheduled ? 'class_schedule_change' : 'class_reminder', priority: rescheduled ? 'high' : 'normal', key: 'family' });
-      addAudit(plan, normalizedEvent, rescheduled ? 'class.rescheduled' : 'class.scheduled', {
-        teacherUid,
-        familyUid,
-        label,
-      });
-      if (!teacherUid || !familyUid) {
-        addCrmTask(plan, normalizedEvent, 'Clase sin participantes completos', 'La clase no tiene profesor o familia resoluble para notificaciones automaticas.', {
-          priority: 'high',
-          tags: ['clase', 'datos_incompletos'],
-          dueAfterMinutes: 60,
-        });
-      }
-      break;
-    }
-
-    case 'class.completed': {
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      const label = classLabel(data);
-      addAutomationEvent(plan, normalizedEvent, 'Clase finalizada; se disparan confirmacion, pagos y reputacion.', 'info');
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Confirma la clase', `Confirma si la ${label} se realizo correctamente.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_confirmation_needed', priority: 'high', key: 'family' });
-      addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, 'Clase finalizada', `Revisa y confirma la ${label} para mantener pagos y reputacion al dia.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_confirmation_needed', priority: 'high', key: 'teacher' });
-      if (!classHasPaidStatus(data)) {
-        addCrmTask(plan, normalizedEvent, 'Seguimiento de pago de clase', `La ${label} esta finalizada y no consta como pagada.`, {
-          priority: 'high',
-          tags: ['pagos', 'clase'],
-          dueAfterMinutes: 24 * 60,
-        });
-      }
-      addSystemJob(plan, normalizedEvent, 'metrics.snapshot', {
-        source: 'class.completed',
-      }, { priority: 'low', key: 'metrics', runAfterMinutes: 5 });
-      addAudit(plan, normalizedEvent, 'class.completed', { teacherUid, familyUid, paid: classHasPaidStatus(data) });
-      break;
-    }
-
-    case 'class.confirmation_overdue': {
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      const label = classLabel(data);
-      addAutomationEvent(plan, normalizedEvent, 'Clase terminada sin confirmacion de asistencia.', 'warning');
-      addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, 'Clase pendiente de marcar', `La ${label} termino y sigue sin cierre completo.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_unmarked_after_1h', priority: 'high', key: 'teacher' });
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Confirma si la clase se dio', `La ${label} termino y necesitamos confirmar si se realizo.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_unmarked_after_1h', priority: 'high', key: 'family' });
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Clase sin cerrar', `La ${label} sigue pendiente de confirmacion.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_unmarked_after_1h', priority: 'high', key: 'admin' });
-      addPatch(plan, normalizedEvent, 'clases', id, {
-        needsAttendanceConfirmation: true,
-        lifecycleStatus: data.lifecycleStatus || 'pendiente_confirmacion',
-        lastUnmarkedReminderSource: 'platform_automation',
-      });
-      addCrmTask(plan, normalizedEvent, 'Cerrar clase pendiente', `Confirmar asistencia y resolver pago de la ${label}.`, {
-        priority: 'high',
-        tags: ['clase', 'confirmacion'],
-        dueAfterMinutes: 180,
-      });
-      addAudit(plan, normalizedEvent, 'class.confirmation_overdue', { teacherUid, familyUid });
-      break;
-    }
-
-    case 'class.cancelled': {
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      addAutomationEvent(plan, normalizedEvent, 'Clase cancelada; se comunica y queda trazada.', 'warning');
-      addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, 'Clase cancelada', `Se ha cancelado la ${classLabel(data)}.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_schedule_change', priority: 'high', key: 'teacher' });
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Clase cancelada', `Se ha cancelado la ${classLabel(data)}.`, {
-        classId: id,
-        url: '/pages/login.html',
-      }, { type: 'class_schedule_change', priority: 'high', key: 'family' });
-      addCrmTask(plan, normalizedEvent, 'Revisar cancelacion de clase', 'Comprobar si hay que reprogramar, devolver pago o registrar incidencia.', {
-        priority: 'normal',
-        tags: ['clase', 'cancelacion'],
-        dueAfterMinutes: 24 * 60,
-      });
-      addAudit(plan, normalizedEvent, 'class.cancelled', { teacherUid, familyUid });
-      break;
-    }
-
-    case 'payment.created': {
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const amount = paymentAmountLabel(data);
-      const payout = isTeacherPayout(data);
-      addAutomationEvent(plan, normalizedEvent, 'Pago o solicitud de Bizum registrada.', 'info', { amount });
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, payout ? 'Bizum de profesor pendiente' : 'Pago pendiente', `${payout ? 'Profesor solicita Bizum' : 'Pago familiar registrado'} por ${amount}.`, {
-        paymentId: id,
-        url: '/pages/login.html',
-      }, { type: payout ? 'teacher_payout_pending' : 'family_payment_pending', priority: 'high', key: 'admin' });
-      if (!payout) {
-        addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Pago registrado', `Hemos registrado un pago pendiente de validar por ${amount}.`, {
-          paymentId: id,
-          url: '/pages/login.html',
-        }, { type: 'family_payment_pending', priority: 'normal', key: 'family' });
-      } else {
-        addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, 'Solicitud de Bizum registrada', `Tu solicitud de Bizum por ${amount} queda pendiente de revision.`, {
-          paymentId: id,
-          url: '/pages/login.html',
-        }, { type: 'teacher_payout_pending', priority: 'normal', key: 'teacher' });
-      }
-      addAudit(plan, normalizedEvent, 'payment.created', { amount, payout });
-      if (!Array.isArray(data.classIds) || !data.classIds.length) {
-        addCrmTask(plan, normalizedEvent, 'Conciliar pago con clase', 'El pago no tiene clases asociadas explicitamente. Revisar conciliacion automatica o manual.', {
-          priority: 'high',
-          tags: ['pagos', 'conciliacion'],
-          dueAfterMinutes: 24 * 60,
-        });
-      }
-      break;
-    }
-
-    case 'payment.overdue': {
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      const amount = paymentAmountLabel(data);
-      addAutomationEvent(plan, normalizedEvent, 'Pago vencido detectado automaticamente.', 'warning', { amount });
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Pago pendiente vencido', `Hay un pago pendiente de ${amount}.`, {
-        paymentId: id,
-        url: '/pages/login.html',
-      }, { type: 'payment_overdue', priority: 'critical', key: 'family' });
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Pago vencido', `Revisar pago vencido por ${amount}.`, {
-        paymentId: id,
-        url: '/pages/login.html',
-      }, { type: 'payment_overdue', priority: 'critical', key: 'admin' });
-      addPatch(plan, normalizedEvent, 'pagos', id, {
-        status: 'vencido',
-        estado: 'vencido',
-        overdueDetectedBy: 'platform_automation',
-      });
-      addCrmTask(plan, normalizedEvent, 'Resolver pago vencido', `Contactar o revisar el pago pendiente por ${amount}.`, {
-        priority: 'critical',
-        tags: ['pagos', 'vencido'],
-        dueAfterMinutes: 120,
-      });
-      addOpsAlert(plan, normalizedEvent, 'payment_overdue', 'high', `Pago vencido por ${amount}.`);
-      addAudit(plan, normalizedEvent, 'payment.overdue', { amount });
-      break;
-    }
-
-    case 'payment.verified': {
-      const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id']);
-      const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id']);
-      const amount = paymentAmountLabel(data);
-      addAutomationEvent(plan, normalizedEvent, 'Pago validado; se actualizan metricas y partes implicadas.', 'info', { amount });
-      addNotification(plan, normalizedEvent, { userUid: familyUid, role: 'familia' }, 'Pago confirmado', `El pago de ${amount} queda confirmado.`, {
-        paymentId: id,
-        url: '/pages/login.html',
-      }, { type: 'payment_verified', priority: 'normal', key: 'family' });
-      if (teacherUid) {
-        addNotification(plan, normalizedEvent, { userUid: teacherUid, role: 'profesor' }, 'Pago de clase confirmado', `Se ha confirmado un pago asociado por ${amount}.`, {
-          paymentId: id,
-          url: '/pages/login.html',
-        }, { type: 'payment_verified', priority: 'normal', key: 'teacher' });
-      }
-      addSystemJob(plan, normalizedEvent, 'metrics.snapshot', {
-        source: 'payment.verified',
-      }, { priority: 'low', key: 'metrics', runAfterMinutes: 5 });
-      addAudit(plan, normalizedEvent, 'payment.verified', { amount, verified: isVerifiedPaymentStatus(data) });
-      break;
-    }
-
-    case 'document.created':
-    case 'document.stale': {
-      const stale = normalizedEvent.type === 'document.stale';
-      addAutomationEvent(plan, normalizedEvent, stale ? 'Documento pendiente demasiado tiempo.' : 'Documento pendiente de revision.', stale ? 'warning' : 'info');
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, stale ? 'Documento atascado' : 'Documento pendiente de revision', `${data.nombre || data.tipo || 'Documento'} necesita revision.`, {
-        documentId: id,
-        ownerUid: data.ownerUid || data.userUid || data.usuario_id || '',
-        url: '/pages/login.html',
-      }, { type: 'document_review_pending', priority: stale ? 'high' : 'normal', key: 'admin' });
-      addCrmTask(plan, normalizedEvent, stale ? 'Resolver documento pendiente' : 'Revisar documento', 'Validar, rechazar o pedir correccion del documento subido.', {
-        priority: stale ? 'high' : 'normal',
-        tags: ['documentos', 'verificacion'],
-        dueAfterMinutes: stale ? 120 : 24 * 60,
-      });
-      if (stale) addOpsAlert(plan, normalizedEvent, 'document_review_stale', 'medium', 'Documento pendiente de revision por demasiado tiempo.');
-      addAudit(plan, normalizedEvent, stale ? 'document.stale_detected' : 'document.created', {
-        ownerUid: data.ownerUid || data.userUid || data.usuario_id || '',
-        documentType: data.tipo || data.type || '',
-      });
-      break;
-    }
-
-    case 'incident.created':
-    case 'incident.stale': {
-      const stale = normalizedEvent.type === 'incident.stale';
-      const priority = lower(data.priority || data.prioridad || '');
-      const critical = ['critical', 'critica', 'alta', '1', '2'].includes(priority);
-      addAutomationEvent(plan, normalizedEvent, stale ? 'Incidencia abierta sin resolver.' : 'Incidencia registrada.', critical || stale ? 'warning' : 'info');
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, stale ? 'Incidencia atascada' : 'Nueva incidencia', clean(data.titulo || data.title || data.descripcion || data.description || 'Incidencia pendiente de revision.', 240), {
-        incidentId: id,
-        classId: data.classId || data.clase_id || '',
-        url: '/pages/login.html',
-      }, { type: 'class_incident', priority: critical || stale ? 'critical' : 'high', key: 'admin' });
-      addCrmTask(plan, normalizedEvent, stale ? 'Resolver incidencia atascada' : 'Gestionar incidencia', 'Clasificar, contactar a las partes y cerrar con resultado trazado.', {
-        priority: critical || stale ? 'critical' : 'high',
-        tags: ['incidencias'],
-        dueAfterMinutes: critical ? 60 : 24 * 60,
-      });
-      if (critical || stale) addOpsAlert(plan, normalizedEvent, 'incident_attention_required', stale ? 'high' : 'medium', 'Incidencia requiere atencion administrativa.');
-      addAudit(plan, normalizedEvent, stale ? 'incident.stale_detected' : 'incident.created', { priority });
-      break;
-    }
-
-    case 'profile.updated': {
-      const userType = clean(data.userType || normalizedEvent.entityType, 40);
-      const userLabel = personLabel(data, userType === 'profesores' ? 'Profesor' : 'Familia');
-      const status = lower(data.verificationStatus || data.estado_verificacion || data.status || data.estado);
-      addAutomationEvent(plan, normalizedEvent, 'Perfil actualizado; se solicita revision y recalculo reputacional.', 'info', { userType });
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Perfil actualizado', `${userLabel} modifico datos relevantes del perfil.`, {
-        profileId: id,
-        userType,
-        url: '/pages/login.html',
-      }, { type: status === 'pendiente' ? 'verification_pending' : 'profile_updated', priority: status === 'pendiente' ? 'high' : 'normal', key: 'admin' });
-      addAutomationEvent(plan, { ...normalizedEvent, type: 'trust.recalculation_requested' }, 'Recalculo de reputacion solicitado por cambio de perfil.', 'info', { profileId: id, userType });
-      if (status === 'pendiente') {
-        addCrmTask(plan, normalizedEvent, 'Verificar perfil actualizado', 'Revisar cambios, documentos y nivel de confianza antes de destacarlo.', {
-          priority: 'high',
-          tags: ['perfil', 'verificacion'],
-          dueAfterMinutes: 24 * 60,
-        });
-      }
-      addAudit(plan, normalizedEvent, 'profile.updated', {
-        userType,
-        verificationStatus: status,
-      });
-      break;
-    }
-
-    case 'teacher.inactive': {
-      addAutomationEvent(plan, normalizedEvent, 'Profesor activo sin actividad reciente.', 'warning');
-      addNotification(plan, normalizedEvent, { targetRole: 'admin', role: 'admin' }, 'Profesor sin actividad reciente', `${personLabel(data, 'Un profesor')} lleva tiempo sin actividad o alumnos nuevos.`, {
-        teacherId: id,
-        url: '/pages/login.html',
-      }, { type: 'profile_updated', priority: 'normal', key: 'admin' });
-      addCrmTask(plan, normalizedEvent, 'Reactivar profesor', 'Comprobar disponibilidad, actualizar perfil o pausar visibilidad si no responde.', {
-        priority: 'normal',
-        tags: ['profesores', 'reactivacion'],
-        dueAfterMinutes: 7 * 24 * 60,
-      });
-      addAudit(plan, normalizedEvent, 'teacher.inactive_detected', {
-        lastActivityAt: data.lastActivityAt || data.updatedAt || '',
-      });
-      break;
-    }
-
-    default: {
-      addAutomationEvent(plan, normalizedEvent, `Evento ${normalizedEvent.type} registrado sin reglas especificas.`, 'info');
-      addAudit(plan, normalizedEvent, 'automation.event_recorded', {
-        sourceEventType: normalizedEvent.type,
-      });
-    }
-  }
-
+  plan.ruleRuns.push(...matches.map((match) => ({
+    ...match,
+    engineVersion: RULE_ENGINE_VERSION,
+    orchestrationVersion: AUTOMATION_ORCHESTRATION_VERSION,
+  })));
   return finalizePlan(plan);
 }
 
 module.exports = {
   AUTOMATION_ORCHESTRATION_VERSION,
+  DEFAULT_AUTOMATION_RULES,
+  EVENT_CATALOG,
+  RULE_ENGINE_VERSION,
   buildAutomationPlan,
 };

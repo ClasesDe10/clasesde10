@@ -382,7 +382,16 @@ function auditModuleForTable(table) {
   if (['incidencias'].includes(table)) return 'incidents';
   if (['notificaciones', 'notificationPreferences', 'notificationTokens'].includes(table)) return 'notifications';
   if (['chats', 'mensajes'].includes(table)) return 'messaging';
-  if (['automationEvents', 'systemJobs', 'deadLetters', 'metricSnapshots', 'opsAlerts', 'platformHealthChecks'].includes(table)) return 'automation';
+  if ([
+    'automationEvents',
+    'automationRules',
+    'automationRuleRuns',
+    'systemJobs',
+    'deadLetters',
+    'metricSnapshots',
+    'opsAlerts',
+    'platformHealthChecks',
+  ].includes(table)) return 'automation';
   return 'data';
 }
 
