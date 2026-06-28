@@ -274,8 +274,27 @@ nav.scrolled { box-shadow: 0 4px 30px rgba(0,0,0,0.3); }
   transition: border-color .2s, background .2s, transform .15s;
 }
 .btn-ghost:hover { border-color: rgba(255,255,255,.8); background: rgba(255,255,255,.07); transform: translateY(-2px); }
+button[aria-busy="true"],
+.btn-primary[aria-busy="true"],
+.btn-secondary[aria-busy="true"],
+.btn-ghost[aria-busy="true"] {
+  cursor: progress;
+  opacity: .78;
+}
 
 /* Forms */
+.field-invalid {
+  border-color: #c0392b !important;
+  background: rgba(192,57,43,.035) !important;
+  box-shadow: 0 0 0 3px rgba(192,57,43,.09) !important;
+}
+.field-error-message {
+  margin-top: 6px;
+  color: #a43125;
+  font-size: .78rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
 .cf-check {
   display: flex;
   align-items: flex-start;

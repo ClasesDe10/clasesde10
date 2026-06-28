@@ -17,7 +17,7 @@
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="../css/dashboard.css?v=20260627-mobile">
 <style>
-body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
+body { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:calc(var(--app-vh, 1vh) * 100); padding:20px;
        background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%); }
 .auth-card {
   background: var(--white); border-radius: var(--radius);
@@ -176,7 +176,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   }
   .btn {
     max-width: 100%;
-    min-height: 42px;
+    min-height: 44px;
     white-space: normal;
   }
   .google-auth-btn {
@@ -298,7 +298,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 
 <script type="module">
 import { loginWithGoogle, redirectByRole, register } from '../js/auth-provider.js?v=20260627-domain-auth';
-import { validarEmail, sanitize } from '../js/utils.js';
+import { focusFirstInvalidField, validarEmail, sanitize } from '../js/utils.js';
 import { trackRegistro } from '../js/analytics.js';
 
 const errorBanner    = document.getElementById('error-banner');
@@ -309,6 +309,10 @@ const cardProfesor   = document.getElementById('card-profesor');
 const profesorExtra  = document.getElementById('profesor-extra');
 const googleBlock    = document.getElementById('google-register-block');
 const pwdBar         = document.getElementById('pwd-bar');
+const formRegistro   = document.getElementById('form-registro');
+const emailInput     = document.getElementById('email');
+const passwordInput  = document.getElementById('password');
+const password2Input = document.getElementById('password2');
 let rolSeleccionado  = 'familia';
 const params = new URLSearchParams(window.location.search);
 const alumnoToken = params.get('token') || '';
@@ -327,6 +331,9 @@ if (params.get('rol') === 'alumno' && alumnoToken) {
 function showError(msg) {
   errorBanner.textContent = msg;
   errorBanner.style.display = 'block';
+  errorBanner.tabIndex = -1;
+  errorBanner.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => errorBanner.focus({ preventScroll: true }), 120);
 }
 function hideError() { errorBanner.style.display = 'none'; }
 
@@ -349,12 +356,22 @@ function setRol(rol) {
 });
 setRol(rolSeleccionado);
 
+function validatePasswordMatch() {
+  const mismatch = Boolean(password2Input.value) && passwordInput.value !== password2Input.value;
+  password2Input.setCustomValidity(mismatch ? 'Las contrasenas no coinciden.' : '');
+}
+
+emailInput.addEventListener('input', () => emailInput.setCustomValidity(''));
+passwordInput.addEventListener('input', validatePasswordMatch);
+password2Input.addEventListener('input', validatePasswordMatch);
+
 document.getElementById('btn-google-registro').addEventListener('click', async () => {
   hideError();
   const btn = document.getElementById('btn-google-registro');
   const text = document.getElementById('btn-google-registro-text');
   const defaultText = text.textContent;
   btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
   text.textContent = 'Abriendo Google...';
 
   const { error, usuario } = await loginWithGoogle(rolSeleccionado);
@@ -362,6 +379,7 @@ document.getElementById('btn-google-registro').addEventListener('click', async (
   if (error) {
     showError(error.message);
     btn.disabled = false;
+    btn.removeAttribute('aria-busy');
     text.textContent = defaultText;
     return;
   }
@@ -371,7 +389,7 @@ document.getElementById('btn-google-registro').addEventListener('click', async (
 });
 
 // Indicador fortaleza contraseña
-document.getElementById('password').addEventListener('input', (e) => {
+passwordInput.addEventListener('input', (e) => {
   const v = e.target.value;
   let puntos = 0;
   if (v.length >= 8) puntos++;
@@ -383,24 +401,30 @@ document.getElementById('password').addEventListener('input', (e) => {
   pwdBar.style.background = colores[puntos - 1] || '#e5e7eb';
 });
 
-document.getElementById('form-registro').addEventListener('submit', async (e) => {
+formRegistro.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideError();
-  if (!e.currentTarget.reportValidity()) return;
+  validatePasswordMatch();
+  if (!formRegistro.checkValidity()) {
+    focusFirstInvalidField(formRegistro);
+    return;
+  }
 
   const nombre    = document.getElementById('nombre').value.trim();
   const apellidos = document.getElementById('apellidos').value.trim();
-  const email     = document.getElementById('email').value.trim();
+  const email     = emailInput.value.trim();
   const telefono  = document.getElementById('telefono').value.trim();
-  const password  = document.getElementById('password').value;
-  const password2 = document.getElementById('password2').value;
+  const password  = passwordInput.value;
+  const password2 = password2Input.value;
   const privacidad = document.getElementById('acepta-privacidad').checked;
 
   if (!nombre || !apellidos || !email || !password) {
     showError('Completa todos los campos obligatorios.'); return;
   }
   if (!validarEmail(email)) {
-    showError('Introduce un email válido.'); return;
+    emailInput.setCustomValidity('Introduce un email valido.');
+    focusFirstInvalidField(formRegistro);
+    return;
   }
   if (password.length < 8) {
     showError('La contraseña debe tener al menos 8 caracteres.'); return;
@@ -418,6 +442,7 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
   const text = document.getElementById('btn-text');
   const load = document.getElementById('btn-load');
   btn.disabled = true; text.style.display = 'none'; load.style.display = '';
+  btn.setAttribute('aria-busy', 'true');
 
   const { data, error } = await register({
     email,
@@ -436,6 +461,7 @@ document.getElementById('form-registro').addEventListener('submit', async (e) =>
       : error.message;
     showError(msg);
     btn.disabled = false; text.style.display = ''; load.style.display = 'none';
+    btn.removeAttribute('aria-busy');
     return;
   }
 

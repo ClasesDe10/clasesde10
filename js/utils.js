@@ -116,11 +116,133 @@ export function initResponsiveTables() {
   responsiveTablesObserver.observe(document.body, { childList: true, subtree: true });
 }
 
+function isFormField(field) {
+  return field instanceof HTMLElement
+    && field.matches('input, select, textarea')
+    && field.type !== 'hidden'
+    && !field.disabled;
+}
+
+function isVisibleField(field) {
+  return Boolean(field.offsetWidth || field.offsetHeight || field.getClientRects().length);
+}
+
+function getFieldLabel(field) {
+  const explicit = field.id ? document.querySelector(`label[for="${CSS.escape(field.id)}"]`) : null;
+  const implicit = field.closest('label');
+  const raw = field.getAttribute('aria-label')
+    || explicit?.textContent
+    || implicit?.textContent
+    || field.placeholder
+    || field.name
+    || 'este campo';
+  return raw.replace(/\*/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function getValidationMessage(field) {
+  const label = getFieldLabel(field);
+  if (field.validity.valueMissing) {
+    if (field.type === 'checkbox') return 'Debes aceptar este punto para continuar.';
+    return `Completa ${label}.`;
+  }
+  if (field.validity.typeMismatch) return `Introduce un ${label.toLowerCase()} valido.`;
+  if (field.validity.tooShort) return `Usa al menos ${field.minLength} caracteres.`;
+  if (field.validity.patternMismatch) return `Revisa el formato de ${label.toLowerCase()}.`;
+  if (field.validity.customError) return field.validationMessage;
+  return field.validationMessage || `Revisa ${label}.`;
+}
+
+export function clearFieldError(field) {
+  if (!isFormField(field)) return;
+  field.classList.remove('field-invalid', 'error');
+  field.removeAttribute('aria-invalid');
+  const errorId = field.dataset.errorId;
+  if (errorId) document.getElementById(errorId)?.remove();
+}
+
+export function setFieldError(field, message = '') {
+  if (!isFormField(field)) return null;
+
+  const idBase = field.id || field.name || `field-${Math.random().toString(36).slice(2)}`;
+  const errorId = field.dataset.errorId || `${idBase}-error`;
+  field.dataset.errorId = errorId;
+  field.classList.add('field-invalid');
+  field.setAttribute('aria-invalid', 'true');
+
+  const describedBy = new Set((field.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+  describedBy.add(errorId);
+  field.setAttribute('aria-describedby', Array.from(describedBy).join(' '));
+
+  let error = document.getElementById(errorId);
+  if (!error) {
+    error = document.createElement('div');
+    error.id = errorId;
+    error.className = 'field-error-message';
+    const host = field.closest('.form-group, .cf-field, .auth-check, label') || field.parentElement;
+    host?.appendChild(error);
+  }
+  error.textContent = message || getValidationMessage(field);
+  return error;
+}
+
+export function focusFirstInvalidField(form) {
+  const fields = Array.from(form.elements || []).filter(isFormField);
+  fields.forEach((field) => {
+    if (field.checkValidity()) clearFieldError(field);
+    else setFieldError(field);
+  });
+
+  const firstInvalid = fields.find((field) => !field.checkValidity() && isVisibleField(field))
+    || fields.find((field) => !field.checkValidity());
+  if (!firstInvalid) return null;
+
+  firstInvalid.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => firstInvalid.focus({ preventScroll: true }), 120);
+  return firstInvalid;
+}
+
+let formValidationFeedbackReady = false;
+
+export function initFormValidationFeedback(root = document) {
+  if (typeof document === 'undefined' || formValidationFeedbackReady) return;
+  formValidationFeedbackReady = true;
+
+  document.addEventListener('invalid', (event) => {
+    if (isFormField(event.target)) setFieldError(event.target);
+  }, true);
+
+  document.addEventListener('input', (event) => {
+    if (isFormField(event.target) && event.target.checkValidity()) clearFieldError(event.target);
+  }, true);
+
+  document.addEventListener('change', (event) => {
+    if (isFormField(event.target) && event.target.checkValidity()) clearFieldError(event.target);
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement) || form.dataset.uxSkipValidation === 'true') return;
+    if (form.checkValidity()) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    focusFirstInvalidField(form);
+  }, true);
+
+  root.querySelectorAll?.('form').forEach((form) => {
+    if (!form.hasAttribute('aria-live')) form.setAttribute('aria-live', 'polite');
+  });
+}
+
+function initPageUtilities() {
+  initResponsiveTables();
+  initFormValidationFeedback();
+}
+
 if (typeof document !== 'undefined') {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initResponsiveTables, { once: true });
+    document.addEventListener('DOMContentLoaded', initPageUtilities, { once: true });
   } else {
-    initResponsiveTables();
+    initPageUtilities();
   }
 }
 
@@ -137,6 +259,9 @@ function getToastContainer() {
   if (!toastContainer) {
     toastContainer = document.createElement('div');
     toastContainer.className = 'toast-container';
+    toastContainer.setAttribute('role', 'status');
+    toastContainer.setAttribute('aria-live', 'polite');
+    toastContainer.setAttribute('aria-atomic', 'false');
     document.body.appendChild(toastContainer);
   }
   return toastContainer;
@@ -149,33 +274,58 @@ const TOAST_ICONS = {
   info:    'ℹ',
 };
 
+function dismissToast(toast) {
+  if (!toast || toast.dataset.dismissing === 'true') return;
+  toast.dataset.dismissing = 'true';
+  toast.style.opacity = '0';
+  toast.style.transform = 'translateX(20px)';
+  toast.style.transition = 'all .3s';
+  setTimeout(() => toast.remove(), 300);
+}
+
 export function showToast(titulo, mensaje = '', tipo = 'info', duracion = 4000) {
   const container = getToastContainer();
   const toast = document.createElement('div');
   toast.className = `toast ${tipo}`;
+  toast.setAttribute('role', tipo === 'error' || tipo === 'warning' ? 'alert' : 'status');
+  toast.setAttribute('aria-atomic', 'true');
   toast.innerHTML = `
     <div class="toast-icon">${TOAST_ICONS[tipo] || 'ℹ'}</div>
-    <div>
+    <div class="toast-content">
       <div class="toast-title">${sanitize(titulo)}</div>
       ${mensaje ? `<div class="toast-msg">${sanitize(mensaje)}</div>` : ''}
     </div>
+    <button type="button" class="toast-close" aria-label="Cerrar aviso">x</button>
   `;
   container.appendChild(toast);
+  toast.querySelector('.toast-close')?.addEventListener('click', () => dismissToast(toast));
+
+  while (container.children.length > 4) {
+    container.firstElementChild?.remove();
+  }
 
   setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transform = 'translateX(20px)';
-    toast.style.transition = 'all .3s';
-    setTimeout(() => toast.remove(), 300);
+    dismissToast(toast);
   }, duracion);
 }
 
 // ─── MODAL ──────────────────────────────────────────────────────
+let lastModalFocus = null;
+
+function focusModalPanel(modal) {
+  const panel = modal.querySelector('.modal') || modal;
+  if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
+  setTimeout(() => panel.focus({ preventScroll: true }), 30);
+}
+
 export function openModal(id) {
   const modal = document.getElementById(id);
   if (modal) {
+    lastModalFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     modal.classList.add('open');
+    modal.setAttribute('aria-modal', 'true');
     document.body.style.overflow = 'hidden';
+    focusModalPanel(modal);
   }
 }
 
@@ -183,22 +333,39 @@ export function closeModal(id) {
   const modal = document.getElementById(id);
   if (modal) {
     modal.classList.remove('open');
-    document.body.style.overflow = '';
+    modal.removeAttribute('aria-modal');
+    if (!document.querySelector('.modal-overlay.open')) {
+      document.body.style.overflow = '';
+    }
+    lastModalFocus?.focus?.({ preventScroll: true });
+    lastModalFocus = null;
   }
 }
 
 export function initModals() {
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    if (overlay.dataset.modalUxBound === 'true') return;
+    overlay.dataset.modalUxBound = 'true';
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) overlay.classList.remove('open');
+      if (e.target === overlay && overlay.id) closeModal(overlay.id);
     });
   });
   document.querySelectorAll('.modal-close').forEach(btn => {
+    if (btn.dataset.modalUxBound === 'true') return;
+    btn.dataset.modalUxBound = 'true';
     btn.addEventListener('click', () => {
-      btn.closest('.modal-overlay').classList.remove('open');
-      document.body.style.overflow = '';
+      const overlay = btn.closest('.modal-overlay');
+      if (overlay?.id) closeModal(overlay.id);
     });
   });
+  if (!document.body.dataset.modalEscapeBound) {
+    document.body.dataset.modalEscapeBound = 'true';
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      const openOverlay = document.querySelector('.modal-overlay.open');
+      if (openOverlay?.id) closeModal(openOverlay.id);
+    });
+  }
 }
 
 // ─── TABLA: ORDENAR Y FILTRAR ────────────────────────────────────
@@ -289,20 +456,32 @@ export function initSidebar() {
 
   if (!sidebar || !hamburger) return;
 
+  const setOpen = (open) => {
+    sidebar.classList.toggle('open', open);
+    overlay?.classList.toggle('open', open);
+    hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.body.classList.toggle('sidebar-open', open);
+  };
+
+  hamburger.setAttribute('aria-expanded', sidebar.classList.contains('open') ? 'true' : 'false');
+  hamburger.setAttribute('aria-controls', sidebar.id || 'sidebar');
+  if (!sidebar.id) sidebar.id = 'sidebar';
+
   hamburger.addEventListener('click', () => {
-    sidebar.classList.toggle('open');
-    overlay?.classList.toggle('open');
+    setOpen(!sidebar.classList.contains('open'));
   });
   overlay?.addEventListener('click', () => {
-    sidebar.classList.remove('open');
-    overlay.classList.remove('open');
+    setOpen(false);
   });
 
   document.querySelectorAll('.sidebar-link').forEach(link => {
     link.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      overlay?.classList.remove('open');
+      setOpen(false);
     });
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') setOpen(false);
   });
 }
 

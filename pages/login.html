@@ -230,7 +230,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 
 <script type="module">
 import { login, loginWithGoogle, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260627-domain-auth';
-import { showToast } from '../js/utils.js';
+import { focusFirstInvalidField, showToast, validarEmail } from '../js/utils.js';
 import { trackLogin } from '../js/analytics.js';
 
 const errorBanner = document.getElementById('error-banner');
@@ -243,6 +243,9 @@ const goForgot    = document.getElementById('go-forgot');
 function showError(msg) {
   errorBanner.textContent = msg;
   errorBanner.style.display = 'block';
+  errorBanner.tabIndex = -1;
+  errorBanner.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => errorBanner.focus({ preventScroll: true }), 120);
 }
 function hideError() {
   errorBanner.style.display = 'none';
@@ -270,20 +273,34 @@ function setTab(tab) {
 tabLogin.addEventListener('click', () => setTab('login'));
 tabForgot.addEventListener('click', () => setTab('forgot'));
 goForgot.addEventListener('click', (e) => { e.preventDefault(); setTab('forgot'); });
+document.getElementById('email').addEventListener('input', (event) => event.target.setCustomValidity(''));
+document.getElementById('email-forgot').addEventListener('input', (event) => event.target.setCustomValidity(''));
 
 formLogin.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideError();
+  if (!formLogin.checkValidity()) {
+    focusFirstInvalidField(formLogin);
+    return;
+  }
 
-  const email    = document.getElementById('email').value.trim();
+  const emailInput = document.getElementById('email');
+  const email    = emailInput.value.trim();
   const password = document.getElementById('password').value;
   const btnText  = document.getElementById('btn-login-text');
   const btnLoad  = document.getElementById('btn-login-loading');
   const btn      = document.getElementById('btn-login');
 
+  if (!validarEmail(email)) {
+    emailInput.setCustomValidity('Introduce un email valido.');
+    focusFirstInvalidField(formLogin);
+    return;
+  }
+
   btnText.style.display = 'none';
   btnLoad.style.display = '';
   btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
 
   const { error, usuario } = await login(email, password);
 
@@ -295,6 +312,7 @@ formLogin.addEventListener('submit', async (e) => {
     btnText.style.display = '';
     btnLoad.style.display = 'none';
     btn.disabled = false;
+    btn.removeAttribute('aria-busy');
     return;
   }
 
@@ -308,6 +326,7 @@ document.getElementById('btn-google-login').addEventListener('click', async () =
   const text = document.getElementById('btn-google-login-text');
   const defaultText = text.textContent;
   btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
   text.textContent = 'Abriendo Google...';
 
   const { error, usuario } = await loginWithGoogle();
@@ -315,6 +334,7 @@ document.getElementById('btn-google-login').addEventListener('click', async () =
   if (error) {
     showError(error.message);
     btn.disabled = false;
+    btn.removeAttribute('aria-busy');
     text.textContent = defaultText;
     return;
   }
@@ -326,8 +346,19 @@ document.getElementById('btn-google-login').addEventListener('click', async () =
 formForgot.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideError();
-  const email = document.getElementById('email-forgot').value.trim();
+  if (!formForgot.checkValidity()) {
+    focusFirstInvalidField(formForgot);
+    return;
+  }
+  const emailInput = document.getElementById('email-forgot');
+  const email = emailInput.value.trim();
   if (!email) { showError('Introduce tu correo electrónico.'); return; }
+
+  if (!validarEmail(email)) {
+    emailInput.setCustomValidity('Introduce un email valido.');
+    focusFirstInvalidField(formForgot);
+    return;
+  }
 
   const { error } = await resetPassword(email);
   if (error) { showError(error.message); return; }

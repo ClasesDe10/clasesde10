@@ -301,7 +301,7 @@ textarea {
   border-bottom: 1px solid rgba(0,0,0,0.08);
 }
 .chat-tab {
-  min-height: 36px;
+  min-height: 44px;
   border: 1px solid rgba(0,0,0,0.08);
   border-radius: 8px;
   background: var(--white);
@@ -971,6 +971,11 @@ tbody tr:hover { background: rgba(0,0,0,0.02); }
 .btn-sm { padding: 6px 12px; font-size: .8rem; }
 .btn-lg { padding: 13px 28px; font-size: 1rem; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn[aria-busy="true"],
+button[aria-busy="true"] {
+  cursor: progress;
+  opacity: .78;
+}
 .btn-icon { padding: 8px; border-radius: 8px; }
 
 /* ── FORMULARIOS ─────────────────────────────────────────────── */
@@ -998,8 +1003,21 @@ tbody tr:hover { background: rgba(0,0,0,0.02); }
   box-shadow: 0 0 0 3px rgba(15,31,61,.1);
 }
 .form-control::placeholder { color: var(--gray-mid); }
-.form-control.error { border-color: var(--danger); }
+.form-control.error,
+.form-control.field-invalid,
+.field-invalid {
+  border-color: var(--danger) !important;
+  background: rgba(220,38,38,.035);
+  box-shadow: 0 0 0 3px rgba(220,38,38,.08);
+}
 .form-error { font-size: .78rem; color: var(--danger); margin-top: 4px; }
+.field-error-message {
+  margin-top: 6px;
+  color: var(--danger);
+  font-size: .78rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
 .form-hint  { font-size: .78rem; color: var(--gray-mid); margin-top: 4px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
@@ -1177,12 +1195,13 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   background: var(--white);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-lg);
-  padding: 14px 18px;
+  padding: 14px 14px 14px 18px;
   display: flex; align-items: flex-start; gap: 12px;
   max-width: 360px;
   border-left: 4px solid var(--info);
   animation: toastIn .25s ease;
   pointer-events: all;
+  min-width: 0;
 }
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(20px); }
@@ -1192,8 +1211,27 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 .toast.warning { border-color: var(--warning); }
 .toast.error   { border-color: var(--danger); }
 .toast-icon { flex-shrink: 0; margin-top: 1px; }
+.toast-content { flex: 1 1 auto; min-width: 0; }
 .toast-title { font-weight: 700; font-size: .85rem; margin-bottom: 2px; }
-.toast-msg   { font-size: .8rem; color: var(--gray-mid); }
+.toast-msg   { font-size: .8rem; color: var(--gray-mid); overflow-wrap: anywhere; }
+.toast-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--gray-mid);
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-weight: 800;
+  line-height: 1;
+}
+.toast-close:hover,
+.toast-close:focus-visible {
+  background: var(--gray-soft);
+  color: var(--text-dark);
+  outline: none;
+}
 
 /* ── UPLOAD ZONE ─────────────────────────────────────────────── */
 .upload-zone {
