@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import admin from 'firebase-admin';
+import { createRequire } from 'node:module';
 import {
   CLASS_LIFECYCLE_VERSION,
   buildClassLifecycleTransition,
@@ -45,6 +46,12 @@ import {
   paymentAmount,
 } from '../js/payment-engine.js';
 import { buildNotificationDocument } from '../js/notification-engine.js';
+
+const require = createRequire(import.meta.url);
+const {
+  AUTOMATION_ORCHESTRATION_VERSION,
+  buildAutomationPlan,
+} = require('../functions/platform-automation-engine.js');
 
 const DEFAULT_PROJECT_ID = 'clasesde10-50add';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
@@ -322,6 +329,142 @@ async function addAutomationEvent(db, payload) {
   });
 }
 
+function workerJobPriority(priority) {
+  const numeric = Number(priority);
+  if (Number.isFinite(numeric)) return Math.max(0, Math.min(100, Math.round(numeric)));
+  const value = lower(priority);
+  if (value === 'critical') return 100;
+  if (value === 'high') return 75;
+  if (value === 'low') return 25;
+  return 50;
+}
+
+function normalizeWorkerJobStatus(status) {
+  const value = lower(status || 'queued');
+  if (['dead_letter', 'dead-letter', 'failed_permanently'].includes(value)) return 'dead_letter';
+  if (['cancelled', 'canceled'].includes(value)) return 'cancelled';
+  if (['completed', 'done', 'success'].includes(value)) return 'completed';
+  if (['processing', 'running', 'leased'].includes(value)) return 'processing';
+  return 'queued';
+}
+
+async function enqueueWorkerSystemJob(db, job, sourceEventType) {
+  const id = notificationId('system_job', job.type, job.idempotencyKey || job.id);
+  const ref = db.collection('systemJobs').doc(id);
+  const existing = await ref.get();
+  if (existing.exists && !['dead_letter', 'cancelled'].includes(normalizeWorkerJobStatus(existing.data().status))) {
+    return false;
+  }
+
+  await writeDoc(db.collection('systemJobs'), id, {
+    type: job.type,
+    payload: job.payload || {},
+    status: 'queued',
+    priority: workerJobPriority(job.priority),
+    runAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + Math.max(0, Number(job.runAfterMinutes || 0)) * 60 * 1000)),
+    attempts: 0,
+    maxAttempts: Math.max(1, Number(job.maxAttempts || 5)),
+    idempotencyKey: clean(job.idempotencyKey || job.id, 300),
+    source: `github_actions.${sourceEventType || 'platform_automation'}`,
+    version: AUTOMATION_ORCHESTRATION_VERSION,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+  return true;
+}
+
+async function materializeWorkerAutomationPlan(db, event, stats) {
+  const plan = buildAutomationPlan({
+    ...event,
+    source: event.source || 'github_actions_worker',
+  });
+  stats.platformAutomationPlans += 1;
+
+  for (const item of plan.automationEvents) {
+    const ref = db.collection('automationEvents').doc(item.id);
+    const existing = await ref.get();
+    if (existing.exists) continue;
+    await writeDoc(db.collection('automationEvents'), item.id, {
+      ...item,
+      worker: 'github-actions',
+      dryRun,
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: false });
+    stats.platformAutomationEvents += 1;
+  }
+
+  for (const notification of plan.notifications) {
+    const payload = notification.payload || { type: notification.type || 'automation' };
+    if (notification.userUid) {
+      const created = await notifyUserOnce(db, notification.userUid, notification.title, notification.body, payload, notification.id);
+      if (created) stats.platformNotificationsCreated += 1;
+      continue;
+    }
+    if (notification.targetRole === 'admin' || notification.role === 'admin') {
+      stats.platformNotificationsCreated += await notifyAdminsOnce(db, notification.title, notification.body, payload, notification.id);
+    }
+  }
+
+  for (const job of plan.systemJobs) {
+    const created = await enqueueWorkerSystemJob(db, job, plan.event.type);
+    if (created) stats.platformSystemJobsQueued += 1;
+  }
+
+  for (const audit of plan.auditLogs) {
+    const ref = db.collection('auditLogs').doc(audit.id);
+    const existing = await ref.get();
+    if (existing.exists) continue;
+    await writeDoc(db.collection('auditLogs'), audit.id, {
+      actorUid: audit.actorUid || 'system',
+      action: audit.action,
+      entityType: audit.entityType,
+      entityId: audit.entityId || null,
+      metadata: audit.metadata || {},
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: false });
+    stats.platformAuditLogsCreated += 1;
+  }
+
+  for (const task of plan.crmTasks) {
+    const ref = db.collection('crmTasks').doc(task.id);
+    const existing = await ref.get();
+    if (existing.exists) continue;
+    await writeDoc(db.collection('crmTasks'), task.id, {
+      ...task,
+      dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + Math.max(0, Number(task.dueAfterMinutes || 0)) * 60 * 1000)),
+      source: 'github_actions_platform_automation',
+      version: AUTOMATION_ORCHESTRATION_VERSION,
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: false });
+    stats.platformCrmTasksCreated += 1;
+  }
+
+  for (const alert of plan.opsAlerts) {
+    const ref = db.collection('opsAlerts').doc(alert.id);
+    const existing = await ref.get();
+    if (existing.exists) continue;
+    await writeDoc(db.collection('opsAlerts'), alert.id, {
+      ...alert,
+      source: 'github_actions_platform_automation',
+      version: AUTOMATION_ORCHESTRATION_VERSION,
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: false });
+    stats.platformOpsAlertsCreated += 1;
+  }
+
+  for (const patch of plan.patches) {
+    await writeDoc(db.collection(patch.collection), patch.docId, {
+      ...patch.data,
+      updatedAt: now(),
+    });
+    stats.platformPatchesApplied += 1;
+  }
+}
+
 async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
   const snap = await db.collection(collectionName).limit(maxDocs).get();
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
@@ -383,6 +526,27 @@ function dateFromFirestore(value) {
   if (typeof value.toDate === 'function') return value.toDate();
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function createdAtFromData(data = {}) {
+  return dateFromFirestore(data.createdAt || data.created_at || data.fecha_creacion || data.updatedAt);
+}
+
+function isOlderThanMs(data = {}, ms) {
+  const createdAt = createdAtFromData(data);
+  return Boolean(createdAt && Date.now() - createdAt.getTime() >= ms);
+}
+
+function profileActivityDate(data = {}) {
+  return dateFromFirestore(data.lastActivityAt || data.lastLoginAt || data.lastClassAt || data.updatedAt || data.createdAt);
+}
+
+function isInactiveTeacher(data = {}) {
+  if (data.active === false || data.activo === false) return false;
+  const status = normalizeStatus(data);
+  if (status && !['verificado', 'activo', 'active', 'verified'].includes(status)) return false;
+  const lastActivity = profileActivityDate(data);
+  return Boolean(lastActivity && Date.now() - lastActivity.getTime() >= 30 * 24 * 60 * 60 * 1000);
 }
 
 function retryDelayMs(attempts) {
@@ -1087,6 +1251,39 @@ async function resolveClassRecipients(db, data) {
   return { teacherUid, familyUid, studentId };
 }
 
+async function resolveProfileUserUid(db, collectionName, profileId, fallback = '') {
+  const id = clean(profileId, 180);
+  if (!id) return clean(fallback, 180);
+  const snap = await db.collection(collectionName).doc(id).get().catch(() => null);
+  if (!snap?.exists) return clean(fallback || id, 180);
+  const data = snap.data();
+  return clean(data.userUid || data.firebase_uid || data.usuario_id || fallback || id, 180);
+}
+
+async function enrichWorkerClassData(db, data = {}) {
+  const recipients = await resolveClassRecipients(db, data);
+  const teacherUserUid = await resolveProfileUserUid(db, 'profesores', recipients.teacherUid, data.teacherUserUid || recipients.teacherUid);
+  return {
+    ...data,
+    teacherUserUid,
+    familyUserUid: recipients.familyUid || data.familyUserUid || '',
+  };
+}
+
+async function enrichWorkerPaymentData(db, data = {}) {
+  const teacherProfileId = clean(data.teacherUid || data.profesor_id || data.teacherId, 180);
+  const familyProfileId = clean(data.familyUid || data.familia_id || data.familyId, 180);
+  const [teacherUserUid, familyUserUid] = await Promise.all([
+    resolveProfileUserUid(db, 'profesores', teacherProfileId, data.teacherUserUid || teacherProfileId),
+    resolveProfileUserUid(db, 'familias', familyProfileId, data.familyUserUid || familyProfileId),
+  ]);
+  return {
+    ...data,
+    teacherUserUid,
+    familyUserUid,
+  };
+}
+
 function classLabel(data) {
   const date = clean(data.fecha || data.date);
   const time = clean(data.hora_inicio || data.startTime).slice(0, 5);
@@ -1508,6 +1705,105 @@ async function processPaymentReminders(db, stats) {
   }
 }
 
+async function processPlatformAutomationSweep(db, stats) {
+  const [classes, payments, requests, documents, incidents, teachers] = await Promise.all([
+    listCollection(db, 'clases', limit),
+    listCollection(db, 'pagos', limit),
+    listCollection(db, 'solicitudes', limit),
+    listCollection(db, 'documentos', limit),
+    listCollection(db, 'incidencias', limit),
+    listCollection(db, 'profesores', limit),
+  ]);
+
+  for (const item of classes) {
+    stats.platformClassesChecked += 1;
+    if (!isScheduledClassStatus(item.estado || item.status)) continue;
+    if (!classEnded(item, 60)) continue;
+    const enriched = await enrichWorkerClassData(db, item);
+    await materializeWorkerAutomationPlan(db, {
+      type: 'class.confirmation_overdue',
+      entityType: 'clases',
+      entityId: item.id,
+      data: { id: item.id, ...enriched },
+      source: 'githubActionsSweep',
+    }, stats);
+    stats.platformClassEvents += 1;
+  }
+
+  for (const item of payments) {
+    stats.platformPaymentsChecked += 1;
+    if (!isPaymentOverdue(item)) continue;
+    const enriched = await enrichWorkerPaymentData(db, item);
+    await materializeWorkerAutomationPlan(db, {
+      type: 'payment.overdue',
+      entityType: 'pagos',
+      entityId: item.id,
+      data: { id: item.id, ...enriched },
+      source: 'githubActionsSweep',
+    }, stats);
+    stats.platformPaymentEvents += 1;
+  }
+
+  for (const item of requests) {
+    stats.platformRequestsChecked += 1;
+    const status = lower(item.status || item.estado);
+    if (!['nueva', 'pendiente', 'pending'].includes(status)) continue;
+    if (item.matchStatus === 'ready' || item.assignedTeacherUid || item.profesor_asignado_id) continue;
+    if (!isOlderThanMs(item, 12 * 60 * 60 * 1000)) continue;
+    await materializeWorkerAutomationPlan(db, {
+      type: 'request.stale',
+      entityType: 'solicitudes',
+      entityId: item.id,
+      data: { id: item.id, ...item },
+      source: 'githubActionsSweep',
+    }, stats);
+    stats.platformRequestEvents += 1;
+  }
+
+  for (const item of documents) {
+    stats.platformDocumentsChecked += 1;
+    const status = lower(item.status || item.estado);
+    if (!['pendiente', 'pending', 'revision'].includes(status)) continue;
+    if (!isOlderThanMs(item, 24 * 60 * 60 * 1000)) continue;
+    await materializeWorkerAutomationPlan(db, {
+      type: 'document.stale',
+      entityType: 'documentos',
+      entityId: item.id,
+      data: { id: item.id, ...item },
+      source: 'githubActionsSweep',
+    }, stats);
+    stats.platformDocumentEvents += 1;
+  }
+
+  for (const item of incidents) {
+    stats.platformIncidentsChecked += 1;
+    const status = lower(item.status || item.estado);
+    if (!['abierta', 'open', 'pendiente'].includes(status)) continue;
+    if (!isOlderThanMs(item, 48 * 60 * 60 * 1000)) continue;
+    await materializeWorkerAutomationPlan(db, {
+      type: 'incident.stale',
+      entityType: 'incidencias',
+      entityId: item.id,
+      data: { id: item.id, ...item },
+      source: 'githubActionsSweep',
+    }, stats);
+    stats.platformIncidentEvents += 1;
+  }
+
+  for (const item of teachers) {
+    stats.platformTeachersChecked += 1;
+    if (!isInactiveTeacher(item)) continue;
+    await materializeWorkerAutomationPlan(db, {
+      type: 'teacher.inactive',
+      entityType: 'profesores',
+      entityId: item.id,
+      data: { id: item.id, ...item },
+      source: 'githubActionsSweep',
+    }, stats);
+    stats.platformTeacherEvents += 1;
+  }
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -1728,6 +2024,26 @@ async function main() {
     systemJobsFailed: 0,
     metricSnapshotsCreated: 0,
     opsAlertsCreated: 0,
+    platformAutomationPlans: 0,
+    platformAutomationEvents: 0,
+    platformNotificationsCreated: 0,
+    platformSystemJobsQueued: 0,
+    platformAuditLogsCreated: 0,
+    platformCrmTasksCreated: 0,
+    platformOpsAlertsCreated: 0,
+    platformPatchesApplied: 0,
+    platformClassesChecked: 0,
+    platformClassEvents: 0,
+    platformPaymentsChecked: 0,
+    platformPaymentEvents: 0,
+    platformRequestsChecked: 0,
+    platformRequestEvents: 0,
+    platformDocumentsChecked: 0,
+    platformDocumentEvents: 0,
+    platformIncidentsChecked: 0,
+    platformIncidentEvents: 0,
+    platformTeachersChecked: 0,
+    platformTeacherEvents: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit,
@@ -1743,6 +2059,7 @@ async function main() {
     return;
   }
 
+  await processPlatformAutomationSweep(db, stats);
   await processQueuedSystemJobs(db, stats);
   await processPublicLeads(db, stats);
   await processTrustReputation(db, stats);

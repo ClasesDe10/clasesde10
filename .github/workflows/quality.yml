@@ -64,4 +64,4 @@ jobs:
         run: npm audit --omit=dev
 
       - name: Syntax check functions
-        run: node --check index.js
+        run: node --check index.js && node --check platform-automation-engine.js

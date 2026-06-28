@@ -5,6 +5,10 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
+const {
+  AUTOMATION_ORCHESTRATION_VERSION,
+  buildAutomationPlan,
+} = require('./platform-automation-engine');
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -144,7 +148,9 @@ const NOTIFICATION_DEFINITIONS = {
   family_payment_pending: { category: 'pagos', priority: 'high', channels: ['internal', 'browser', 'push'] },
   teacher_payout_pending: { category: 'pagos', priority: 'high', channels: ['internal', 'browser', 'push'] },
   payment_overdue: { category: 'pagos', priority: 'critical', channels: ['internal', 'browser', 'push'] },
+  payment_verified: { category: 'pagos', priority: 'normal', channels: ['internal', 'browser', 'push'] },
   request_created: { category: 'solicitudes', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  request_stale: { category: 'solicitudes', priority: 'high', channels: ['internal', 'browser', 'push'] },
   matching_ready: { category: 'matching', priority: 'normal', channels: ['internal', 'browser', 'push'] },
   matching_no_match: { category: 'matching', priority: 'high', channels: ['internal', 'browser', 'push'] },
   assignment_created: { category: 'matching', priority: 'high', channels: ['internal', 'browser', 'push'] },
@@ -494,6 +500,245 @@ async function enqueueSystemJob(type, payload = {}, options = {}) {
   return { id: ref.id, created: true };
 }
 
+function minutesFromNow(minutes) {
+  const safeMinutes = Math.max(0, Number(minutes || 0));
+  return new Date(Date.now() + safeMinutes * 60 * 1000);
+}
+
+async function setDocumentOnce(collectionName, id, payload) {
+  const docId = clean(id, 900);
+  if (!collectionName || !docId) return false;
+  const ref = db.collection(collectionName).doc(docId);
+  const snap = await ref.get();
+  if (snap.exists) return false;
+  await ref.set(payload, { merge: false });
+  return true;
+}
+
+async function writePlannedNotification(notification) {
+  const payload = notification.payload || { type: notification.type || 'automation' };
+  const extra = {
+    role: notification.role || notification.targetRole || '',
+    priority: notification.priority || '',
+    channels: notification.channels || null,
+    actionUrl: notification.actionUrl || payload.url || '/pages/login.html',
+    fromRole: 'automation',
+  };
+
+  if (notification.userUid) {
+    const created = await writeNotificationOnce(
+      notification.userUid,
+      notification.title,
+      notification.body,
+      payload,
+      notification.id,
+      extra,
+    );
+    return created ? 1 : 0;
+  }
+
+  if (notification.targetRole === 'admin' || notification.role === 'admin') {
+    const admins = await getAdminUsers();
+    if (!admins.length) {
+      await db.collection('automationEvents').doc(`${notification.id}__missing_admin`).set({
+        type: 'admin_notification_missing_recipient',
+        title: notification.title,
+        body: notification.body,
+        payload,
+        adminEmail: ADMIN_EMAIL,
+        source: 'platform_automation',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: true });
+      return 0;
+    }
+    const results = await Promise.all(admins.map((user) => writeNotificationOnce(
+      user.id,
+      notification.title,
+      notification.body,
+      payload,
+      `${notification.id}_${user.id}`,
+      { ...extra, role: user.role || 'admin' },
+    )));
+    return results.filter(Boolean).length;
+  }
+
+  return 0;
+}
+
+async function materializeAutomationPlan(event, extra = {}) {
+  const plan = buildAutomationPlan({
+    ...event,
+    source: event.source || extra.source || 'functions',
+  });
+  const counts = {
+    automationEvents: 0,
+    notifications: 0,
+    systemJobs: 0,
+    auditLogs: 0,
+    crmTasks: 0,
+    opsAlerts: 0,
+    patches: 0,
+  };
+
+  await Promise.all(plan.automationEvents.map(async (item) => {
+    const created = await setDocumentOnce('automationEvents', item.id, {
+      ...item,
+      trace: extra.trace || null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    if (created) counts.automationEvents += 1;
+  }));
+
+  for (const notification of plan.notifications) {
+    counts.notifications += await writePlannedNotification(notification);
+  }
+
+  for (const job of plan.systemJobs) {
+    const result = await enqueueSystemJob(job.type, job.payload, {
+      priority: job.priority,
+      idempotencyKey: job.idempotencyKey || job.id,
+      runAt: minutesFromNow(job.runAfterMinutes),
+      maxAttempts: job.maxAttempts,
+      source: `platform_automation.${plan.event.type}`,
+      trace: extra.trace || traceContext('platform_automation', plan.event.entityType, plan.event.entityId),
+    });
+    if (result.created) counts.systemJobs += 1;
+  }
+
+  await Promise.all(plan.auditLogs.map(async (item) => {
+    const created = await setDocumentOnce('auditLogs', item.id, {
+      actorUid: item.actorUid || 'system',
+      action: item.action,
+      entityType: item.entityType,
+      entityId: item.entityId || null,
+      metadata: item.metadata || {},
+      trace: extra.trace || null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    if (created) counts.auditLogs += 1;
+  }));
+
+  await Promise.all(plan.crmTasks.map(async (item) => {
+    const created = await setDocumentOnce('crmTasks', item.id, {
+      ...item,
+      dueAt: timestampAfter(Math.max(0, Number(item.dueAfterMinutes || 0)) * 60 * 1000),
+      source: 'platform_automation',
+      version: AUTOMATION_ORCHESTRATION_VERSION,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    if (created) counts.crmTasks += 1;
+  }));
+
+  await Promise.all(plan.opsAlerts.map(async (item) => {
+    const created = await setDocumentOnce('opsAlerts', item.id, {
+      ...item,
+      source: 'platform_automation',
+      version: AUTOMATION_ORCHESTRATION_VERSION,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    if (created) counts.opsAlerts += 1;
+  }));
+
+  for (const patch of plan.patches) {
+    await db.collection(patch.collection).doc(patch.docId).set({
+      ...patch.data,
+      updatedAt: now(),
+    }, { merge: true });
+    counts.patches += 1;
+  }
+
+  return { plan, counts };
+}
+
+function statusOf(data = {}) {
+  return lower(data.status || data.estado || data.lifecycleStatus || data.attendanceStatus);
+}
+
+function dateFromUnknown(value) {
+  if (!value) return null;
+  if (value.toDate) return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === 'number') return new Date(value);
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function createdAtDate(data = {}) {
+  return dateFromUnknown(data.createdAt || data.created_at || data.fecha_creacion || data.updatedAt);
+}
+
+function isOlderThan(data = {}, ms) {
+  const date = createdAtDate(data);
+  return Boolean(date && Date.now() - date.getTime() >= ms);
+}
+
+function classEndDate(data = {}) {
+  const explicit = dateFromUnknown(data.endAt || data.endsAt || data.fecha_fin);
+  if (explicit) return explicit;
+  const date = clean(data.fecha || data.date, 20);
+  if (!date) return null;
+  const startTime = clean(data.hora_inicio || data.startTime || '23:59', 8).slice(0, 5);
+  const endTime = clean(data.hora_fin || data.endTime || startTime || '23:59', 8).slice(0, 5);
+  const end = new Date(`${date}T${endTime || '23:59'}:00`);
+  if (Number.isNaN(end.getTime())) return null;
+  if (!data.hora_fin && !data.endTime && Number(data.duracion_minutos || data.durationMinutes || 0) > 0) {
+    end.setMinutes(end.getMinutes() + Number(data.duracion_minutos || data.durationMinutes || 0));
+  }
+  return end;
+}
+
+function classEndedMoreThanMinutes(data = {}, minutes) {
+  const end = classEndDate(data);
+  return Boolean(end && Date.now() - end.getTime() >= minutes * 60 * 1000);
+}
+
+function classNeedsConfirmation(data = {}) {
+  const status = statusOf(data);
+  if (!['programada', 'confirmada', 'pendiente_confirmacion', 'scheduled', 'confirmed'].includes(status)) return false;
+  if (data.teacherConfirmedAt && data.familyConfirmedAt) return false;
+  if (['realizada', 'completada', 'cancelada', 'reprogramada', 'pagada'].includes(lower(data.attendanceStatus))) return false;
+  return classEndedMoreThanMinutes(data, 60);
+}
+
+function paymentDueDate(data = {}) {
+  return dateFromUnknown(data.dueAt || data.fecha_vencimiento || data.vencimiento || data.payByAt);
+}
+
+function paymentIsOverdue(data = {}) {
+  const status = normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
+  if (!['pendiente', 'solicitado', 'procesando', 'requires_action', 'requiere_accion'].includes(status)) return false;
+  const due = paymentDueDate(data);
+  return Boolean(due && due.getTime() < Date.now());
+}
+
+function profileLastActivityDate(data = {}) {
+  return dateFromUnknown(data.lastActivityAt || data.lastLoginAt || data.lastClassAt || data.updatedAt || data.createdAt);
+}
+
+function teacherIsInactive(data = {}) {
+  if (data.active === false || data.activo === false) return false;
+  const status = normalizeStatus(data);
+  if (status && !['verificado', 'activo', 'active', 'verified'].includes(status)) return false;
+  const lastActivity = profileLastActivityDate(data);
+  return Boolean(lastActivity && Date.now() - lastActivity.getTime() >= 30 * 24 * 60 * 60 * 1000);
+}
+
+async function loadDocsByStatuses(collectionName, fields, statuses, perStatusLimit = 25) {
+  const docs = new Map();
+  for (const field of fields) {
+    for (const status of statuses) {
+      const snap = await db.collection(collectionName).where(field, '==', status).limit(perStatusLimit).get();
+      snap.docs.forEach((doc) => docs.set(doc.id, doc));
+    }
+  }
+  return [...docs.values()];
+}
+
 async function claimSystemJob(jobRef, workerId) {
   return db.runTransaction(async (transaction) => {
     const snap = await transaction.get(jobRef);
@@ -672,6 +917,34 @@ async function resolveUserUidFromProfile(collectionName, profileId, fallback = '
   return clean(data.userUid || data.firebase_uid || data.usuario_id || fallback || id, 180);
 }
 
+async function enrichClassAutomationData(data = {}) {
+  const teacherProfileId = clean(data.teacherUid || data.profesor_id || data.teacherId, 180);
+  const familyProfileId = clean(data.familyUid || data.familia_id || data.familyId, 180);
+  const [teacherUserUid, familyUserUid] = await Promise.all([
+    resolveUserUidFromProfile('profesores', teacherProfileId, data.teacherUserUid),
+    resolveUserUidFromProfile('familias', familyProfileId, data.familyUserUid),
+  ]);
+  return {
+    ...data,
+    teacherUserUid,
+    familyUserUid,
+  };
+}
+
+async function enrichPaymentAutomationData(data = {}) {
+  const teacherProfileId = clean(data.teacherUid || data.profesor_id || data.teacherId, 180);
+  const familyProfileId = clean(data.familyUid || data.familia_id || data.familyId, 180);
+  const [teacherUserUid, familyUserUid] = await Promise.all([
+    resolveUserUidFromProfile('profesores', teacherProfileId, data.teacherUserUid),
+    resolveUserUidFromProfile('familias', familyProfileId, data.familyUserUid),
+  ]);
+  return {
+    ...data,
+    teacherUserUid,
+    familyUserUid,
+  };
+}
+
 exports.sendPushOnNotificationCreated = onDocumentCreated({
   region: REGION,
   document: 'notificaciones/{notificationId}',
@@ -734,12 +1007,12 @@ exports.notifyOnDocumentCreated = onDocumentCreated({
 }, async (event) => {
   const documentId = event.params.documentId;
   const data = event.data.data();
-  const ownerUid = clean(data.ownerUid || data.userUid || data.usuario_id, 180);
-  await notifyAdmins('Documento pendiente de revision', `${data.nombre || data.tipo || 'Documento'} necesita revision.`, {
-    type: 'document_review_pending',
-    documentId,
-    ownerUid,
-    url: '/pages/login.html',
+  await materializeAutomationPlan({
+    type: 'document.created',
+    entityType: 'documentos',
+    entityId: documentId,
+    data: { id: documentId, ...data },
+    source: 'documentos.onCreate',
   });
 });
 
@@ -749,11 +1022,12 @@ exports.notifyOnIncidentCreated = onDocumentCreated({
 }, async (event) => {
   const incidentId = event.params.incidentId;
   const data = event.data.data();
-  await notifyAdmins('Nueva incidencia', clean(data.titulo || data.descripcion || 'Incidencia pendiente de revision.', 240), {
-    type: 'class_incident',
-    incidentId,
-    classId: data.classId || data.clase_id || '',
-    url: '/pages/login.html',
+  await materializeAutomationPlan({
+    type: 'incident.created',
+    entityType: 'incidencias',
+    entityId: incidentId,
+    data: { id: incidentId, ...data },
+    source: 'incidencias.onCreate',
   });
 });
 
@@ -778,10 +1052,12 @@ exports.notifyOnTeacherProfileUpdated = onDocumentUpdated({
     'profileCompletion',
   ];
   if (!changedAny(before, after, fields)) return;
-  await notifyAdmins('Perfil de profesor actualizado', `${after.nombre || after.email || teacherId} modifico datos relevantes de su perfil.`, {
-    type: normalizeStatus(after) === 'pendiente' ? 'verification_pending' : 'profile_updated',
-    teacherId,
-    url: '/pages/login.html',
+  await materializeAutomationPlan({
+    type: 'profile.updated',
+    entityType: 'profesores',
+    entityId: teacherId,
+    data: { id: teacherId, userType: 'profesores', ...after },
+    source: 'profesores.onUpdate',
   });
 });
 
@@ -794,10 +1070,12 @@ exports.notifyOnFamilyProfileUpdated = onDocumentUpdated({
   const after = event.data.after.data();
   const fields = ['nombre', 'email', 'telefono', 'direccion', 'zona', 'preferencias', 'profileCompletion'];
   if (!changedAny(before, after, fields)) return;
-  await notifyAdmins('Perfil de familia actualizado', `${after.nombre || after.email || familyId} modifico datos relevantes de su perfil.`, {
-    type: 'profile_updated',
-    familyId,
-    url: '/pages/login.html',
+  await materializeAutomationPlan({
+    type: 'profile.updated',
+    entityType: 'familias',
+    entityId: familyId,
+    data: { id: familyId, userType: 'familias', ...after },
+    source: 'familias.onUpdate',
   });
 });
 
@@ -1555,20 +1833,11 @@ exports.generateRequestMatching = onDocumentCreated({
   const requestId = event.params.requestId;
   const request = event.data.data();
   if ((request.matchStatus || '') === 'ready') return;
-  const requestSource = lower(request.source);
-  if (!request.leadId && !request.lead_id && !['public_lead', 'publiclead'].includes(requestSource)) {
-    await notifyAdmins('Nueva solicitud recibida', `${request.nombre || request.email || 'Familia'} solicita ${request.materia || request.subject || 'profesor'}.`, {
-      type: 'request_created',
-      requestId,
-      url: '/pages/login.html',
-    });
-  }
-  await enqueueSystemJob('matching.request', {
-    requestId,
-    reason: 'request_created',
-  }, {
-    priority: 'high',
-    idempotencyKey: `matching_request_${requestId}`,
+  await materializeAutomationPlan({
+    type: 'request.created',
+    entityType: 'solicitudes',
+    entityId: requestId,
+    data: { id: requestId, ...request },
     source: 'solicitudes.onCreate',
   });
 });
@@ -1613,37 +1882,142 @@ exports.createAssignmentOnRequestAssigned = onDocumentUpdated({
     updatedAt: now(),
   }, { merge: true });
 
-  await db.collection('automationEvents').add({
-    type: 'assignment_created',
-    requestId,
-    assignmentId,
-    teacherUid,
-    studentId: studentId || null,
-    createdAt: now(),
-  });
-
   const [teacherUserUid, familyUserUid] = await Promise.all([
     resolveUserUidFromProfile('profesores', teacherUid, after.teacherUserUid),
     resolveUserUidFromProfile('familias', familyUid, after.familyUserUid),
   ]);
-  await Promise.all([
-    writeNotificationOnce(
+  await materializeAutomationPlan({
+    type: 'assignment.created',
+    entityType: 'asignaciones',
+    entityId: assignmentId,
+    data: {
+      id: assignmentId,
+      requestId,
+      solicitud_id: requestId,
+      teacherUid,
+      profesor_id: teacherUid,
       teacherUserUid,
-      'Nueva asignacion',
-      `Se te ha asignado una nueva solicitud de ${after.materia || after.subject || 'clase'}.`,
-      { type: 'assignment_created', requestId, assignmentId, url: '/pages/login.html' },
-      `assignment_created_${assignmentId}_teacher`,
-      { role: 'profesor' },
-    ),
-    writeNotificationOnce(
+      familyUid,
+      familia_id: familyUid,
       familyUserUid,
-      'Profesor asignado',
-      `Ya hay profesor asignado para ${after.materia || after.subject || 'tu solicitud'}.`,
-      { type: 'assignment_created', requestId, assignmentId, url: '/pages/login.html' },
-      `assignment_created_${assignmentId}_family`,
-      { role: 'familia' },
-    ),
-  ]);
+      studentId: studentId || '',
+      alumno_id: studentId || '',
+      materia: after.materia || after.subject || '',
+    },
+    source: 'solicitudes.onAssigned',
+  });
+});
+
+exports.automateClassCreated = onDocumentCreated({
+  region: REGION,
+  document: 'clases/{classId}',
+}, async (event) => {
+  const classId = event.params.classId;
+  const data = event.data.data();
+  const enriched = await enrichClassAutomationData(data);
+  await materializeAutomationPlan({
+    type: 'class.scheduled',
+    entityType: 'clases',
+    entityId: classId,
+    data: { id: classId, ...enriched },
+    source: 'clases.onCreate',
+  });
+});
+
+exports.automateClassUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'clases/{classId}',
+}, async (event) => {
+  const classId = event.params.classId;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const beforeStatus = statusOf(before);
+  const afterStatus = statusOf(after);
+  const scheduleChanged = changedAny(before, after, ['fecha', 'date', 'hora_inicio', 'startTime', 'hora_fin', 'endTime']);
+
+  if (scheduleChanged && !['realizada', 'completada', 'cancelada'].includes(afterStatus)) {
+    const enriched = await enrichClassAutomationData(after);
+    await materializeAutomationPlan({
+      type: 'class.rescheduled',
+      entityType: 'clases',
+      entityId: classId,
+      data: { id: classId, ...enriched },
+      source: 'clases.onUpdate',
+    });
+  }
+
+  if (beforeStatus !== afterStatus && ['realizada', 'completada', 'completed'].includes(afterStatus)) {
+    const enriched = await enrichClassAutomationData(after);
+    await materializeAutomationPlan({
+      type: 'class.completed',
+      entityType: 'clases',
+      entityId: classId,
+      data: { id: classId, ...enriched },
+      source: 'clases.onCompleted',
+    });
+  }
+
+  if (beforeStatus !== afterStatus && ['cancelada', 'cancelled', 'canceled'].includes(afterStatus)) {
+    const enriched = await enrichClassAutomationData(after);
+    await materializeAutomationPlan({
+      type: 'class.cancelled',
+      entityType: 'clases',
+      entityId: classId,
+      data: { id: classId, ...enriched },
+      source: 'clases.onCancelled',
+    });
+  }
+});
+
+exports.automatePaymentCreated = onDocumentCreated({
+  region: REGION,
+  document: 'pagos/{paymentId}',
+}, async (event) => {
+  const paymentId = event.params.paymentId;
+  const data = event.data.data();
+  const enriched = await enrichPaymentAutomationData(data);
+  await materializeAutomationPlan({
+    type: ['validado', 'pagado'].includes(normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status))
+      ? 'payment.verified'
+      : paymentIsOverdue(data) ? 'payment.overdue' : 'payment.created',
+    entityType: 'pagos',
+    entityId: paymentId,
+    data: { id: paymentId, ...enriched },
+    source: 'pagos.onCreate',
+  });
+});
+
+exports.automatePaymentUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'pagos/{paymentId}',
+}, async (event) => {
+  const paymentId = event.params.paymentId;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const beforeStatus = normalizePaymentStatus(before.familyPaymentStatus || before.estado_pago_familia || before.paymentStatus || before.estado || before.status);
+  const afterStatus = normalizePaymentStatus(after.familyPaymentStatus || after.estado_pago_familia || after.paymentStatus || after.estado || after.status);
+
+  if (beforeStatus !== afterStatus && ['validado', 'pagado'].includes(afterStatus)) {
+    const enriched = await enrichPaymentAutomationData(after);
+    await materializeAutomationPlan({
+      type: 'payment.verified',
+      entityType: 'pagos',
+      entityId: paymentId,
+      data: { id: paymentId, ...enriched },
+      source: 'pagos.onVerified',
+    });
+  }
+
+  if (beforeStatus !== afterStatus && afterStatus === 'vencido') {
+    const enriched = await enrichPaymentAutomationData(after);
+    await materializeAutomationPlan({
+      type: 'payment.overdue',
+      entityType: 'pagos',
+      entityId: paymentId,
+      data: { id: paymentId, ...enriched },
+      source: 'pagos.onOverdue',
+    });
+  }
 });
 
 exports.scanPendingMatching = onSchedule({
@@ -1671,6 +2045,130 @@ exports.scanPendingMatching = onSchedule({
     processed += 1;
   }
   logger.info('scanPendingMatching queued jobs', { processed });
+});
+
+exports.runPlatformAutomationSweep = onSchedule({
+  region: REGION,
+  schedule: 'every 15 minutes',
+  timeZone: 'Europe/Madrid',
+}, async () => {
+  const stats = {
+    classesChecked: 0,
+    classEvents: 0,
+    paymentsChecked: 0,
+    paymentEvents: 0,
+    requestsChecked: 0,
+    requestEvents: 0,
+    documentsChecked: 0,
+    documentEvents: 0,
+    incidentsChecked: 0,
+    incidentEvents: 0,
+    teachersChecked: 0,
+    teacherEvents: 0,
+    startedAt: new Date().toISOString(),
+  };
+
+  const classDocs = await loadDocsByStatuses('clases', ['status', 'estado'], ['programada', 'confirmada', 'pendiente_confirmacion', 'scheduled', 'confirmed'], 30);
+  for (const doc of classDocs) {
+    const data = doc.data();
+    stats.classesChecked += 1;
+    if (!classNeedsConfirmation(data)) continue;
+    const enriched = await enrichClassAutomationData(data);
+    await materializeAutomationPlan({
+      type: 'class.confirmation_overdue',
+      entityType: 'clases',
+      entityId: doc.id,
+      data: { id: doc.id, ...enriched },
+      source: 'platformAutomationSweep',
+    });
+    stats.classEvents += 1;
+  }
+
+  const paymentDocs = await loadDocsByStatuses('pagos', ['status', 'estado'], ['pendiente', 'solicitado', 'procesando', 'requiere_accion'], 30);
+  for (const doc of paymentDocs) {
+    const data = doc.data();
+    stats.paymentsChecked += 1;
+    if (!paymentIsOverdue(data)) continue;
+    const enriched = await enrichPaymentAutomationData(data);
+    await materializeAutomationPlan({
+      type: 'payment.overdue',
+      entityType: 'pagos',
+      entityId: doc.id,
+      data: { id: doc.id, ...enriched },
+      source: 'platformAutomationSweep',
+    });
+    stats.paymentEvents += 1;
+  }
+
+  const requestDocs = await loadDocsByStatuses('solicitudes', ['status', 'estado'], ['nueva', 'pendiente', 'pending'], 30);
+  for (const doc of requestDocs) {
+    const data = doc.data();
+    stats.requestsChecked += 1;
+    if (data.matchStatus === 'ready' || data.assignedTeacherUid || data.profesor_asignado_id) continue;
+    if (!isOlderThan(data, 12 * 60 * 60 * 1000)) continue;
+    await materializeAutomationPlan({
+      type: 'request.stale',
+      entityType: 'solicitudes',
+      entityId: doc.id,
+      data: { id: doc.id, ...data },
+      source: 'platformAutomationSweep',
+    });
+    stats.requestEvents += 1;
+  }
+
+  const documentDocs = await loadDocsByStatuses('documentos', ['status', 'estado'], ['pendiente', 'pending', 'revision'], 25);
+  for (const doc of documentDocs) {
+    const data = doc.data();
+    stats.documentsChecked += 1;
+    if (!isOlderThan(data, 24 * 60 * 60 * 1000)) continue;
+    await materializeAutomationPlan({
+      type: 'document.stale',
+      entityType: 'documentos',
+      entityId: doc.id,
+      data: { id: doc.id, ...data },
+      source: 'platformAutomationSweep',
+    });
+    stats.documentEvents += 1;
+  }
+
+  const incidentDocs = await loadDocsByStatuses('incidencias', ['status', 'estado'], ['abierta', 'open', 'pendiente'], 25);
+  for (const doc of incidentDocs) {
+    const data = doc.data();
+    stats.incidentsChecked += 1;
+    if (!isOlderThan(data, 48 * 60 * 60 * 1000)) continue;
+    await materializeAutomationPlan({
+      type: 'incident.stale',
+      entityType: 'incidencias',
+      entityId: doc.id,
+      data: { id: doc.id, ...data },
+      source: 'platformAutomationSweep',
+    });
+    stats.incidentEvents += 1;
+  }
+
+  const teacherSnap = await db.collection('profesores').where('active', '==', true).limit(75).get();
+  for (const doc of teacherSnap.docs) {
+    const data = doc.data();
+    stats.teachersChecked += 1;
+    if (!teacherIsInactive(data)) continue;
+    await materializeAutomationPlan({
+      type: 'teacher.inactive',
+      entityType: 'profesores',
+      entityId: doc.id,
+      data: { id: doc.id, ...data },
+      source: 'platformAutomationSweep',
+    });
+    stats.teacherEvents += 1;
+  }
+
+  await db.collection('automationEvents').doc(`platform_sweep_${Date.now().toString(36)}`).set({
+    type: 'platform_automation_sweep_completed',
+    stats,
+    version: AUTOMATION_ORCHESTRATION_VERSION,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+  logger.info('runPlatformAutomationSweep completed', stats);
 });
 
 exports.generateMonthlySummary = onSchedule({
