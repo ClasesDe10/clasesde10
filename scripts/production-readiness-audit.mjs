@@ -63,7 +63,7 @@ function checkHosting() {
   const hosting = config.hosting || {};
   if (hosting.public !== '.') fail('Firebase Hosting public directory must stay at project root ".".');
 
-  for (const ignored of ['**/*.md', 'scripts/**', 'supabase/**', 'firebase/**', 'package.json', '.firebaserc']) {
+  for (const ignored of ['**/*.md', 'scripts/**', 'functions/**', 'supabase/**', 'firebase/**', 'package.json', '.firebaserc']) {
     if (!hosting.ignore?.includes(ignored)) fail(`Firebase Hosting must ignore ${ignored}.`);
   }
 

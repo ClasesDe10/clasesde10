@@ -22,6 +22,7 @@ const CHECKS = [
   { path: '/firebase.json', expect: 404 },
   { path: '/package.json', expect: 404 },
   { path: '/scripts/check-centralization.mjs', expect: 404 },
+  { path: '/functions/index.js', expect: 404 },
 ];
 const REQUIRED_SECURITY_HEADERS = [
   ['x-frame-options', /^DENY$/i],
@@ -39,6 +40,7 @@ function assertConfig() {
 
   if (hosting.public !== '.') failures.push('hosting.public must be "."');
   if (!hosting.ignore?.includes('scripts/**')) failures.push('scripts/** must be ignored');
+  if (!hosting.ignore?.includes('functions/**')) failures.push('functions/** must be ignored');
   if (!hosting.ignore?.includes('package.json')) failures.push('package.json must be ignored');
   if (!hosting.headers?.some((item) => item.source === '/pages/dashboard/**')) {
     failures.push('dashboard no-store/noindex header missing');
