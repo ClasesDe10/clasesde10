@@ -1,0 +1,128 @@
+import {
+  classEndAt,
+  classStartAt,
+  cleanCalendarText,
+  normalizeDateString,
+  normalizeTimeString,
+} from './calendar-engine.js';
+
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+function toIcsDate(date) {
+  return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
+}
+
+function escapeIcs(value) {
+  return cleanCalendarText(value, 2000)
+    .replace(/\\/g, '\\\\')
+    .replace(/\n/g, '\\n')
+    .replace(/,/g, '\\,')
+    .replace(/;/g, '\\;');
+}
+
+function foldIcsLine(line) {
+  const chunks = [];
+  let rest = line;
+  while (rest.length > 74) {
+    chunks.push(rest.slice(0, 74));
+    rest = ` ${rest.slice(74)}`;
+  }
+  chunks.push(rest);
+  return chunks.join('\r\n');
+}
+
+export function classCalendarUid(classData = {}, fallbackId = '') {
+  return cleanCalendarText(
+    classData.calendarUid
+    || classData.id
+    || fallbackId
+    || `${classData.fecha || classData.date}-${classData.hora_inicio || classData.startTime}-${classData.profesor_id || classData.teacherUid}-${classData.alumno_id || classData.studentId}`,
+    180,
+  ).replace(/[^a-zA-Z0-9_.-]/g, '-');
+}
+
+export function classCalendarSummary(classData = {}) {
+  return cleanCalendarText(`ClasesDe10 - ${classData.materia || classData.subject || 'Clase'}`, 160);
+}
+
+export function classCalendarDescription(classData = {}) {
+  return [
+    `Materia: ${classData.materia || classData.subject || 'Clase'}`,
+    `Alumno: ${classData.alumno_nombre || classData.studentName || classData.alumno_id || classData.studentId || ''}`,
+    `Profesor: ${classData.profesor_nombre || classData.teacherName || classData.profesor_id || classData.teacherUid || ''}`,
+    classData.observaciones ? `Notas: ${classData.observaciones}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+export function buildIcsEvent(classData = {}, options = {}) {
+  const start = classStartAt(classData);
+  const end = classEndAt(classData);
+  if (!start || !end) return '';
+  const uid = `${classCalendarUid(classData, options.fallbackId)}@clasesde10.com`;
+  const stamp = toIcsDate(options.now ? new Date(options.now) : new Date());
+  const status = ['cancelada'].includes(cleanCalendarText(classData.estado || classData.status).toLowerCase())
+    ? 'CANCELLED'
+    : 'CONFIRMED';
+  const lines = [
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART:${toIcsDate(start)}`,
+    `DTEND:${toIcsDate(end)}`,
+    `SUMMARY:${escapeIcs(classCalendarSummary(classData))}`,
+    `DESCRIPTION:${escapeIcs(classCalendarDescription(classData))}`,
+    `STATUS:${status}`,
+    'END:VEVENT',
+  ];
+  return lines.map(foldIcsLine).join('\r\n');
+}
+
+export function buildIcsCalendar(classes = [], options = {}) {
+  const events = classes.map((item, index) => buildIcsEvent(item, { ...options, fallbackId: `class-${index}` })).filter(Boolean);
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//ClasesDe10//Calendar//ES',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    ...events,
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+export function googleCalendarTemplateUrl(classData = {}) {
+  const start = classStartAt(classData);
+  const end = classEndAt(classData);
+  if (!start || !end) return '';
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: classCalendarSummary(classData),
+    dates: `${toIcsDate(start).replace(/Z$/, 'Z')}/${toIcsDate(end).replace(/Z$/, 'Z')}`,
+    details: classCalendarDescription(classData),
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+export function calendarSyncMetadata(classData = {}) {
+  return {
+    version: 1,
+    uid: classCalendarUid(classData),
+    date: normalizeDateString(classData.fecha || classData.date),
+    startTime: normalizeTimeString(classData.hora_inicio || classData.startTime),
+    endTime: normalizeTimeString(classData.hora_fin || classData.endTime),
+    providers: {
+      google: {
+        status: 'not_connected',
+        mode: 'future_oauth_push',
+        requiredScopes: ['https://www.googleapis.com/auth/calendar.events'],
+      },
+      ical: {
+        status: 'ready',
+        mode: 'download_or_feed',
+      },
+    },
+  };
+}

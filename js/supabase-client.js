@@ -282,6 +282,26 @@ function normalizeWritePayload(table, payload, isCreate = false) {
     data.status = data.status || data.estado;
   }
 
+  if (table === 'clases') {
+    data.estado = data.estado || data.status || 'confirmada';
+    data.status = data.status || data.estado;
+    if (data.fecha && !data.date) data.date = data.fecha;
+    if (data.date && !data.fecha) data.fecha = data.date;
+    if (data.hora_inicio && !data.startTime) data.startTime = data.hora_inicio;
+    if (data.startTime && !data.hora_inicio) data.hora_inicio = data.startTime;
+    if (data.hora_fin && !data.endTime) data.endTime = data.hora_fin;
+    if (data.endTime && !data.hora_fin) data.hora_fin = data.endTime;
+    if (data.duracion_minutos && !data.durationMinutes) data.durationMinutes = data.duracion_minutos;
+    if (data.durationMinutes && !data.duracion_minutos) data.duracion_minutos = data.durationMinutes;
+    if (data.precio_total !== undefined && data.amount === undefined) data.amount = data.precio_total;
+    if (data.amount !== undefined && data.precio_total === undefined) data.precio_total = data.amount;
+    if (data.familyAmount === undefined && data.precio_total !== undefined) data.familyAmount = data.precio_total;
+    if (data.importe_profesor !== undefined && data.teacherAmount === undefined) data.teacherAmount = data.importe_profesor;
+    if (data.teacherAmount !== undefined && data.importe_profesor === undefined) data.importe_profesor = data.teacherAmount;
+    data.lifecycleStatus = data.lifecycleStatus || data.estado;
+    data.attendanceStatus = data.attendanceStatus || 'pendiente';
+  }
+
   if (table === 'alumno_invitaciones' && isCreate) {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     data.token = data.token || randomToken();

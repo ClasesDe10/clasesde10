@@ -8,6 +8,15 @@ import {
   mergeAiRanking as mergeProfessionalAiRanking,
   rankTeachersForRequest,
 } from '../js/ai-engine.js';
+import {
+  SCHEDULED_CLASS_STATUSES,
+  buildClassIncidentPayload,
+  classEnded,
+  classReminderWindows,
+  getClassAttendanceSummary,
+  isScheduledClassStatus,
+  normalizeClassStatus,
+} from '../js/calendar-engine.js';
 
 const DEFAULT_PROJECT_ID = 'clasesde10-50add';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
@@ -630,7 +639,7 @@ async function processAssignedRequests(db, stats) {
 }
 
 function classStatus(data) {
-  return lower(data.estado || data.status || '');
+  return normalizeClassStatus(data.estado || data.status || '');
 }
 
 function classEndAt(data) {
@@ -648,9 +657,7 @@ function classEndAt(data) {
 }
 
 function classEndedMoreThan(data, minutes) {
-  const end = classEndAt(data);
-  if (!end) return false;
-  return Date.now() - end.getTime() >= minutes * 60 * 1000;
+  return classEnded(data, minutes);
 }
 
 async function resolveClassRecipients(db, data) {
@@ -682,15 +689,87 @@ function classLabel(data) {
   return [subject, date, time].filter(Boolean).join(' · ');
 }
 
-async function processUnmarkedClasses(db, stats) {
-  const byEstado = await db.collection('clases').where('estado', '==', 'programada').limit(limit).get();
-  const byStatus = await db.collection('clases').where('status', '==', 'programada').limit(limit).get();
+async function loadClassDocsByStatuses(db, statuses, perStatusLimit = limit) {
   const docs = new Map();
-  [...byEstado.docs, ...byStatus.docs].forEach((doc) => docs.set(doc.id, doc));
+  for (const field of ['estado', 'status']) {
+    for (const status of statuses) {
+      const snap = await db.collection('clases').where(field, '==', status).limit(perStatusLimit).get();
+      snap.docs.forEach((doc) => docs.set(doc.id, doc));
+    }
+  }
+  return [...docs.values()];
+}
 
-  for (const doc of docs.values()) {
+async function loadScheduledClassDocs(db) {
+  return loadClassDocsByStatuses(db, SCHEDULED_CLASS_STATUSES);
+}
+
+async function createClassIncidentOnce(db, classId, classData, source, notes, stats) {
+  const id = notificationId('class_incident', source, classId);
+  const ref = db.collection('incidencias').doc(id);
+  const existing = await ref.get();
+  if (existing.exists) return false;
+
+  await writeDoc(db.collection('incidencias'), id, {
+    ...buildClassIncidentPayload(classId, classData, source, notes, 'automation'),
+    reportado_por: 'automation',
+    createdByUid: 'automation',
+    createdAt: now(),
+    created_at: isoNow(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+  }, { merge: false });
+  stats.incidentsCreated += 1;
+  return true;
+}
+
+async function processUpcomingClassReminders(db, stats) {
+  const docs = await loadScheduledClassDocs(db);
+  for (const doc of docs) {
     const data = doc.data();
-    if (classStatus(data) !== 'programada') continue;
+    if (!isScheduledClassStatus(data.estado || data.status)) continue;
+
+    const windows = classReminderWindows(data);
+    if (!windows.length) continue;
+
+    const { teacherUid, familyUid } = await resolveClassRecipients(db, data);
+    const label = classLabel(data);
+    for (const window of windows) {
+      const payload = {
+        type: 'class_reminder',
+        window,
+        classId: doc.id,
+        url: '/pages/login.html',
+      };
+      const minutesText = window === '24h' ? 'manana' : 'en unas 2 horas';
+      let created = 0;
+      created += await notifyUserOnce(
+        db,
+        teacherUid,
+        'Recordatorio de clase',
+        `Tienes la clase ${label} ${minutesText}.`,
+        payload,
+        `class_reminder_${window}_${doc.id}_teacher`,
+      ) ? 1 : 0;
+      created += await notifyUserOnce(
+        db,
+        familyUid,
+        'Recordatorio de clase',
+        `La clase ${label} esta prevista ${minutesText}.`,
+        payload,
+        `class_reminder_${window}_${doc.id}_family`,
+      ) ? 1 : 0;
+
+      if (created > 0) stats.upcomingClassRemindersCreated += created;
+    }
+  }
+}
+
+async function processUnmarkedClasses(db, stats) {
+  const docs = await loadScheduledClassDocs(db);
+  for (const doc of docs) {
+    const data = doc.data();
+    if (!isScheduledClassStatus(data.estado || data.status)) continue;
     if (!classEndedMoreThan(data, 60)) continue;
 
     const { teacherUid, familyUid } = await resolveClassRecipients(db, data);
@@ -734,7 +813,81 @@ async function processUnmarkedClasses(db, stats) {
       });
       stats.classRemindersCreated += created;
     }
+    if (classEndedMoreThan(data, 24 * 60)) {
+      await createClassIncidentOnce(
+        db,
+        doc.id,
+        data,
+        'unmarked_after_24h',
+        `La clase ${label} sigue sin marcar 24 horas despues de finalizar.`,
+        stats,
+      );
+    }
     stats.classesChecked += 1;
+  }
+}
+
+async function processAttendanceConfirmations(db, stats) {
+  const docs = await loadClassDocsByStatuses(db, ['realizada', 'cancelada', 'reprogramada']);
+  for (const doc of docs) {
+    const data = doc.data();
+    if (!classEnded(data, 60) && !['cancelada', 'reprogramada'].includes(classStatus(data))) continue;
+
+    const summary = getClassAttendanceSummary(data);
+    if (summary && summary !== data.attendanceStatus) {
+      await updateRef(doc.ref, {
+        attendanceStatus: summary,
+        updatedAt: now(),
+      });
+    }
+
+    const { teacherUid, familyUid } = await resolveClassRecipients(db, data);
+    const label = classLabel(data);
+
+    if (summary === 'pendiente_familia') {
+      const created = await notifyUserOnce(
+        db,
+        familyUid,
+        'Confirma la clase',
+        `El profesor marco como realizada la clase ${label}. Confirma desde tu panel si se dio correctamente.`,
+        { type: 'class_confirmation_needed', classId: doc.id, url: '/pages/login.html' },
+        `class_confirmation_needed_${doc.id}_family`,
+      );
+      if (created) stats.attendanceRemindersCreated += 1;
+    }
+
+    if (summary === 'pendiente_profesor') {
+      const created = await notifyUserOnce(
+        db,
+        teacherUid,
+        'Confirma la clase',
+        `La familia confirmo la clase ${label}. Revisa y marca la clase desde tu panel.`,
+        { type: 'class_confirmation_needed', classId: doc.id, url: '/pages/login.html' },
+        `class_confirmation_needed_${doc.id}_teacher`,
+      );
+      if (created) stats.attendanceRemindersCreated += 1;
+    }
+
+    if (['incidencia', 'discrepancia'].includes(summary) || ['cancelada', 'reprogramada'].includes(classStatus(data))) {
+      const source = summary === 'discrepancia' ? 'attendance_mismatch' : `class_${classStatus(data) || 'incident'}`;
+      const created = await createClassIncidentOnce(
+        db,
+        doc.id,
+        data,
+        source,
+        `Revisar incidencia de clase: ${label}. Estado asistencia: ${summary}.`,
+        stats,
+      );
+      if (created) {
+        await notifyAdminsOnce(
+          db,
+          'Incidencia de clase',
+          `Revisar la clase ${label}. Estado: ${summary}.`,
+          { type: 'class_incident', classId: doc.id, source, url: '/pages/login.html' },
+          `class_incident_${source}_${doc.id}_admin`,
+        );
+      }
+    }
   }
 }
 
@@ -889,6 +1042,9 @@ async function main() {
     assignmentsCreated: 0,
     classesChecked: 0,
     classRemindersCreated: 0,
+    upcomingClassRemindersCreated: 0,
+    attendanceRemindersCreated: 0,
+    incidentsCreated: 0,
     paymentRemindersCreated: 0,
     weeklyPaymentRemindersCreated: 0,
   };
@@ -896,7 +1052,9 @@ async function main() {
   await processPublicLeads(db, stats);
   await processPendingRequests(db, stats);
   await processAssignedRequests(db, stats);
+  await processUpcomingClassReminders(db, stats);
   await processUnmarkedClasses(db, stats);
+  await processAttendanceConfirmations(db, stats);
   await processPaymentReminders(db, stats);
 
   console.log(JSON.stringify(stats, null, 2));

@@ -4,6 +4,7 @@
  */
 
 import { nombreMes, nombreDia, formatHora } from './utils.js';
+import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js';
 
 export class Calendario {
   constructor({ contenedor, onDiaClick, onMesChange }) {
@@ -61,7 +62,15 @@ export class Calendario {
   }
 
   coloresPorEstado(estado) {
-    return { programada:'dot-navy', realizada:'dot-teal', cancelada:'dot-red', reprogramada:'dot-gold' }[estado] || 'dot-navy';
+    return {
+      pendiente: 'dot-gold',
+      programada: 'dot-navy',
+      confirmada: 'dot-navy',
+      realizada: 'dot-teal',
+      cancelada: 'dot-red',
+      reprogramada: 'dot-gold',
+      pagada: 'dot-teal',
+    }[normalizeClassStatus(estado)] || 'dot-navy';
   }
 
   render() {
@@ -85,7 +94,7 @@ export class Calendario {
       const esSel = fecha === this.diaSeleccionado;
 
       const dots = clases.slice(0,4).map(c =>
-        `<div class="day-dot ${this.coloresPorEstado(c.estado)}"></div>`
+        `<div class="day-dot ${this.coloresPorEstado(classStatusForBadge(c))}"></div>`
       ).join('');
 
       diasHTML += `
@@ -112,7 +121,8 @@ export class Calendario {
           <div class="calendar-days">${diasHTML}</div>
         </div>
         <div class="calendar-legend" style="padding:0 16px 14px;display:flex;gap:14px;font-size:.72rem;color:#8a8478">
-          <span><span class="day-dot dot-navy" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Programada</span>
+          <span><span class="day-dot dot-gold" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Pendiente/Reprogramada</span>
+          <span><span class="day-dot dot-navy" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Confirmada</span>
           <span><span class="day-dot dot-teal" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Realizada</span>
           <span><span class="day-dot dot-red" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Cancelada</span>
         </div>

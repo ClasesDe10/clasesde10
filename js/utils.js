@@ -331,6 +331,7 @@ export function debounce(fn, ms = 300) {
 // ─── BADGE HTML ──────────────────────────────────────────────────
 const LABEL_ESTADO = {
   programada:    'Programada',
+  confirmada:    'Confirmada',
   realizada:     'Realizada',
   cancelada:     'Cancelada',
   reprogramada:  'Reprogramada',
@@ -356,7 +357,7 @@ const LABEL_ESTADO = {
   verificado:    'Verificado',
 };
 const BADGE_MAPA = {
-  programada: 'badge-info', realizada: 'badge-success',
+  programada: 'badge-info', confirmada: 'badge-info', realizada: 'badge-success',
   cancelada: 'badge-danger', reprogramada: 'badge-warning',
   pendiente: 'badge-warning', solicitado: 'badge-warning', pagado: 'badge-success', validado: 'badge-success', rechazado: 'badge-danger',
   nueva: 'badge-info', asignada: 'badge-gold', completada: 'badge-success',

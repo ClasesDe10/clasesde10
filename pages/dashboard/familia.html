@@ -158,9 +158,13 @@
           </select>
           <select class="form-control" id="filtro-cl-estado" style="width:160px">
             <option value="">Todos los estados</option>
-            <option value="programada">Programada</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmada">Confirmada</option>
+            <option value="programada">Programada legacy</option>
             <option value="realizada">Realizada</option>
             <option value="cancelada">Cancelada</option>
+            <option value="reprogramada">Reprogramada</option>
+            <option value="pagada">Pagada</option>
           </select>
           <input type="month" class="form-control" id="filtro-cl-mes" style="width:160px">
         </div>
@@ -501,6 +505,13 @@ import {
   validatePhone,
   validatePostalCode,
 } from '../../js/profile-engine.js?v=20260628-profile-quality';
+import {
+  buildClassIncidentPayload,
+  buildFamilyConfirmationPayload,
+  classEnded,
+  classStatusForBadge,
+  isScheduledClassStatus,
+} from '../../js/calendar-engine.js?v=20260628-calendar';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
@@ -613,15 +624,7 @@ function evaluarPerfilFamiliaActual(extra = {}) {
 }
 
 function claseTerminada(clase, margenMinutos = 0) {
-  if (!clase?.fecha) return false;
-  const horaFin = clase.hora_fin || clase.endTime || clase.hora_inicio || clase.startTime || '23:59';
-  const fin = new Date(`${clase.fecha}T${String(horaFin).slice(0, 5)}:00`);
-  if (Number.isNaN(fin.getTime())) return clase.fecha < fechaHoy();
-  if (!clase.hora_fin && !clase.endTime && (clase.duracion_minutos || clase.durationMinutes)) {
-    fin.setMinutes(fin.getMinutes() + Number(clase.duracion_minutos || clase.durationMinutes || 0));
-  }
-  fin.setMinutes(fin.getMinutes() + margenMinutos);
-  return fin.getTime() <= Date.now();
+  return classEnded(clase, margenMinutos);
 }
 
 function labelConfirmacionFamilia(clase) {
@@ -687,8 +690,11 @@ async function cargarInicio() {
     document.getElementById('stat-profesores').textContent = profUnicos.length;
 
     // Próximas clases
-    const { data: proximas } = await db.from('v_clases_completas')
-      .select('*').in('alumno_id', ids).gte('fecha', hoy).eq('estado','programada').order('fecha').limit(5);
+    const { data: proximasRaw } = await db.from('v_clases_completas')
+      .select('*').in('alumno_id', ids).gte('fecha', hoy).order('fecha').limit(20);
+    const proximas = (proximasRaw || [])
+      .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
+      .slice(0, 5);
     const contP = document.getElementById('lista-proximas-inicio');
     contP.innerHTML = proximas?.length ? proximas.map(c => `
       <div class="clase-item" style="padding:12px 20px">
@@ -743,7 +749,7 @@ async function iniciarCalendario() {
               <div class="clase-nombre">${sanitize(c.alumno_nombre||'')}</div>
               <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}</div>
             </div>
-            ${badgeEstado(c.estado)}
+            ${badgeEstado(classStatusForBadge(c))}
           </div>`).join('');
       },
       onMesChange: cargarClasesCalendario,
@@ -759,7 +765,7 @@ async function cargarClasesCalendario(anio, mes) {
   const ids = hijos.map(h => h.id);
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('v_clases_completas').select('fecha,estado,hora_inicio,materia,alumno_nombre,profesor_nombre')
+  const { data } = await db.from('v_clases_completas').select('fecha,estado,status,hora_inicio,materia,alumno_nombre,profesor_nombre,familyPaymentStatus,estado_pago')
     .in('alumno_id', ids).gte('fecha',desde).lte('fecha',hasta);
   cal.setClases(data||[]);
 }
@@ -781,16 +787,21 @@ async function cargarClases() {
   const ids     = hijoSel ? [hijoSel] : hijos.map(h => h.id);
 
   let q = db.from('v_clases_completas').select('*').in('alumno_id', ids);
-  if (estado) q = q.eq('estado', estado);
+  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
   if (mes) q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31');
   q = q.order('fecha', {ascending:false});
 
   const { data } = await q;
+  const clases = estado === 'confirmada'
+    ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : (data || []);
   const tbody = document.getElementById('tbody-clases');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
+  if (!clases.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(c => {
-    const puedeConfirmar = claseTerminada(c, 0) && !['cancelada', 'reprogramada'].includes(c.estado);
+  tbody.innerHTML = clases.map(c => {
+    const puedeConfirmar = claseTerminada(c, 0)
+      && !['cancelada', 'reprogramada'].includes(c.estado)
+      && (isScheduledClassStatus(c.estado || c.status) || c.estado === 'realizada');
     const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
     const acciones = puedeConfirmar && !yaConfirmada ? `
       <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Realizada</button>
@@ -803,7 +814,7 @@ async function cargarClases() {
     <td>${sanitize(c.profesor_nombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
-    <td>${badgeEstado(c.estado)}</td>
+    <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td>${labelConfirmacionFamilia(c)}</td>
     <td>${acciones}</td>
   </tr>`;
@@ -822,18 +833,23 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
     ? window.prompt('Cuéntanos brevemente qué pasó con la clase:') || ''
     : '';
 
-  const { error } = await db.from('clases').update({
-    confirmacion_familia: status,
-    familyConfirmationStatus: status,
-    familyConfirmedAt: new Date().toISOString(),
-    familyConfirmedByUid: usuario.uid || usuario.id,
-    notas_familia: notas,
-    familyNotes: notas,
-  }).eq('id', btn.dataset.id);
+  const { data: claseActual } = await db.from('clases').select('*').eq('id', btn.dataset.id).single();
+  const payload = buildFamilyConfirmationPayload(status, notas, usuario.uid || usuario.id);
+  const { error } = await db.from('clases').update(payload).eq('id', btn.dataset.id);
 
   if (error) {
     showToast('Error', error.message || 'No se pudo confirmar la clase.', 'error');
     return;
+  }
+
+  if (status === 'incidencia') {
+    const incidencia = buildClassIncidentPayload(btn.dataset.id, claseActual || {}, 'family_confirmation', notas, usuario.uid || usuario.id);
+    const { error: incError } = await db.from('incidencias').insert({
+      ...incidencia,
+      createdByUid: usuario.uid || usuario.id,
+      created_at: new Date().toISOString(),
+    });
+    if (incError) console.warn('No se pudo crear incidencia de clase', incError);
   }
 
   showToast('Clase actualizada', status === 'realizada' ? 'Confirmacion guardada.' : 'Incidencia enviada.', 'success');

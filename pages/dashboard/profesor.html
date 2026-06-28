@@ -159,9 +159,13 @@
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
           <select class="form-control" id="filtro-cl-estado" style="width:160px">
             <option value="">Todos los estados</option>
-            <option value="programada">Programada</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmada">Confirmada</option>
+            <option value="programada">Programada legacy</option>
             <option value="realizada">Realizada</option>
             <option value="cancelada">Cancelada</option>
+            <option value="reprogramada">Reprogramada</option>
+            <option value="pagada">Pagada</option>
           </select>
           <input type="month" class="form-control" id="filtro-cl-mes" style="width:160px">
         </div>
@@ -547,6 +551,12 @@ import {
   validatePhone,
   validatePostalCode,
 } from '../../js/profile-engine.js?v=20260628-profile-quality';
+import {
+  buildTeacherAttendancePayload,
+  classEnded,
+  classStatusForBadge,
+  isScheduledClassStatus,
+} from '../../js/calendar-engine.js?v=20260628-calendar';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
@@ -618,15 +628,7 @@ let chatInicializado = false;
 let clasesBizumPendientes = [];
 
 function claseTerminada(clase, margenMinutos = 0) {
-  if (!clase?.fecha) return false;
-  const horaFin = clase.hora_fin || clase.endTime || clase.hora_inicio || clase.startTime || '23:59';
-  const fin = new Date(`${clase.fecha}T${String(horaFin).slice(0, 5)}:00`);
-  if (Number.isNaN(fin.getTime())) return clase.fecha < fechaHoy();
-  if (!clase.hora_fin && !clase.endTime && (clase.duracion_minutos || clase.durationMinutes)) {
-    fin.setMinutes(fin.getMinutes() + Number(clase.duracion_minutos || clase.durationMinutes || 0));
-  }
-  fin.setMinutes(fin.getMinutes() + margenMinutos);
-  return fin.getTime() <= Date.now();
+  return classEnded(clase, margenMinutos);
 }
 
 function irA(sec) {
@@ -671,9 +673,11 @@ async function cargarInicio() {
       .eq('profesor_id', profesorId).gte('fecha', mesInicio),
     db.from('asignaciones').select('alumno_id').eq('profesor_id', profesorId).eq('activa', true),
     db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId)
-      .lte('fecha', hoy).eq('estado','programada').order('fecha').limit(20),
+      .lte('fecha', hoy).order('fecha').limit(40),
   ]);
-  const pendientes = (pendientesRaw || []).filter((clase) => claseTerminada(clase, 0)).slice(0, 5);
+  const pendientes = (pendientesRaw || [])
+    .filter((clase) => isScheduledClassStatus(clase.estado || clase.status) && claseTerminada(clase, 0))
+    .slice(0, 5);
 
   const realizadas = (clasesMes||[]).filter(c => c.estado === 'realizada');
   document.getElementById('stat-clases-mes').textContent = (clasesMes||[]).length;
@@ -683,8 +687,11 @@ async function cargarInicio() {
   document.getElementById('stat-horas-mes').textContent = `${Math.floor(horas/60)}h ${horas%60}m`;
 
   // Próximas clases
-  const { data: proximas } = await db.from('clases').select('*, alumnos(nombre,apellidos)')
-    .eq('profesor_id', profesorId).gte('fecha', hoy).eq('estado','programada').order('fecha').limit(5);
+  const { data: proximasRaw } = await db.from('clases').select('*, alumnos(nombre,apellidos)')
+    .eq('profesor_id', profesorId).gte('fecha', hoy).order('fecha').limit(20);
+  const proximas = (proximasRaw || [])
+    .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
+    .slice(0, 5);
 
   const contP = document.getElementById('lista-proximas');
   if (!proximas?.length) {
@@ -741,7 +748,7 @@ async function iniciarCalendario() {
               <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia||'')}</div>
               <div class="clase-materia">${sanitize(c.materia||'')}</div>
             </div>
-            ${badgeEstado(c.estado)}
+            ${badgeEstado(classStatusForBadge(c))}
           </div>`).join('');
       },
       onMesChange: cargarClasesCalendario,
@@ -754,7 +761,7 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('clases').select('fecha,estado,hora_inicio,materia,alumnos(nombre,apellidos)')
+  const { data } = await db.from('clases').select('fecha,estado,status,hora_inicio,materia,alumnos(nombre,apellidos),familyPaymentStatus,estado_pago')
     .eq('profesor_id', profesorId).gte('fecha',desde).lte('fecha',hasta);
   cal.setClases((data||[]).map(c => ({ ...c, alumno_nombre: `${c.alumnos?.nombre||''} ${c.alumnos?.apellidos||''}` })));
 }
@@ -766,24 +773,27 @@ async function cargarMisClases() {
   const mes    = document.getElementById('filtro-cl-mes').value;
 
   let q = db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId);
-  if (estado) q = q.eq('estado', estado);
+  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
   if (mes) q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31');
   q = q.order('fecha', {ascending:false});
 
   const { data } = await q;
+  const clases = estado === 'confirmada'
+    ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : (data || []);
   const tbody = document.getElementById('tbody-mis-clases');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
+  if (!clases.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(c => `<tr>
+  tbody.innerHTML = clases.map(c => `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td>${sanitize(c.alumnos?.nombre||'—')} ${sanitize(c.alumnos?.apellidos||'')}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
-    <td>${badgeEstado(c.estado)}</td>
+    <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.78rem">${sanitize(c.notas_profesor||'—')}</td>
     <td>
-      ${c.estado === 'programada' && claseTerminada(c, 0)
+      ${isScheduledClassStatus(c.estado || c.status) && claseTerminada(c, 0)
         ? `<button class="btn btn-primary btn-sm"
                    data-action="registrar-clase"
                    data-id="${sanitize(c.id)}"
@@ -818,15 +828,8 @@ document.getElementById('btn-confirmar-registro').addEventListener('click', asyn
   const notas  = document.getElementById('rc-notas').value.trim();
   const motivo = document.getElementById('rc-motivo').value.trim();
 
-  const { error } = await db.from('clases').update({
-    estado,
-    status: estado,
-    notas_profesor: notas,
-    notasProfesor: notas,
-    cancelacion_motivo: motivo || null,
-    teacherMarkedAt: new Date().toISOString(),
-    teacherMarkedByUid: usuario.uid || usuario.id,
-  }).eq('id', id).eq('profesor_id', profesorId);
+  const payload = buildTeacherAttendancePayload(estado, notas, motivo, usuario.uid || usuario.id);
+  const { error } = await db.from('clases').update(payload).eq('id', id).eq('profesor_id', profesorId);
 
   if (error) { showToast('Error', error.message, 'error'); return; }
   document.getElementById('modal-registrar-clase').classList.remove('open');

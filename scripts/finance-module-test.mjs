@@ -12,7 +12,10 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const adminDashboard = await read('pages/dashboard/admin.html');
+const [adminDashboard, calendarEngine] = await Promise.all([
+  read('pages/dashboard/admin.html'),
+  read('js/calendar-engine.js'),
+]);
 
 assert(adminDashboard.includes('data-section="finanzas"'), 'Admin sidebar must expose the finance section.');
 assert(adminDashboard.includes('id="section-finanzas"'), 'Admin dashboard must render the finance section.');
@@ -29,11 +32,12 @@ assert(adminDashboard.includes('function calcularFinanzas'), 'Finance dashboard 
 assert(adminDashboard.includes('function cargarFinanzas'), 'Finance dashboard must load data from runtime providers.');
 assert(adminDashboard.includes('function parseMoneyInput'), 'Class save must preserve numeric money inputs.');
 
-assert(adminDashboard.includes('importe_profesor: importeProfesor'), 'Class save must persist importe_profesor.');
-assert(adminDashboard.includes('teacherAmount: importeProfesor'), 'Class save must persist Firebase-compatible teacherAmount.');
-assert(adminDashboard.includes('comision_clasesde10: comision'), 'Class save must persist platform fee.');
-assert(adminDashboard.includes('platformFee: comision'), 'Class save must persist Firebase-compatible platformFee.');
-assert(adminDashboard.includes('marginPct'), 'Class save must persist margin percentage.');
+assert(adminDashboard.includes('buildAdminClassPayload'), 'Class save must use the calendar payload builder.');
+assert(adminDashboard.includes('importe_profesor: importeProfesor'), 'Class save must pass importe_profesor to the payload builder.');
+assert(calendarEngine.includes('teacherAmount'), 'Class payload builder must persist Firebase-compatible teacherAmount.');
+assert(calendarEngine.includes('comision_clasesde10'), 'Class payload builder must persist platform fee.');
+assert(calendarEngine.includes('platformFee'), 'Class payload builder must persist Firebase-compatible platformFee.');
+assert(calendarEngine.includes('marginPct'), 'Class payload builder must persist margin percentage.');
 
 assert(adminDashboard.includes('porCobrarFamilias'), 'Finance metrics must track outstanding family payments.');
 assert(adminDashboard.includes('porPagarProfesores'), 'Finance metrics must track outstanding teacher payments.');

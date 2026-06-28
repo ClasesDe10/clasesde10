@@ -185,10 +185,13 @@
             <input type="text" class="form-control" id="filtro-clases-busqueda" aria-label="Buscar clases por alumno o profesor" placeholder="Buscar por alumno o profesor…" style="width:240px">
             <select class="form-control" id="filtro-clases-estado" aria-label="Filtrar clases por estado" style="width:160px">
               <option value="">Todos los estados</option>
-              <option value="programada">Programada</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="confirmada">Confirmada</option>
+              <option value="programada">Programada legacy</option>
               <option value="realizada">Realizada</option>
               <option value="cancelada">Cancelada</option>
               <option value="reprogramada">Reprogramada</option>
+              <option value="pagada">Pagada</option>
             </select>
             <input type="month" class="form-control" id="filtro-clases-mes" aria-label="Filtrar clases por mes" style="width:160px">
           </div>
@@ -666,10 +669,12 @@
           <div class="form-group">
             <label class="form-label">Estado</label>
             <select class="form-control" id="clase-estado">
-              <option value="programada">Programada</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="confirmada">Confirmada</option>
               <option value="realizada">Realizada</option>
               <option value="cancelada">Cancelada</option>
               <option value="reprogramada">Reprogramada</option>
+              <option value="pagada">Pagada</option>
             </select>
           </div>
         </div>
@@ -857,6 +862,14 @@ import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js';
+import {
+  SCHEDULED_CLASS_STATUSES,
+  buildAdminClassPayload,
+  classStatusForBadge,
+  normalizeClassStatus,
+  validateClassTimeRange,
+} from '../../js/calendar-engine.js?v=20260628-calendar';
+import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calendar';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
@@ -1118,9 +1131,12 @@ async function cargarSolicitudesRecientes() {
 }
 
 async function cargarProximasClasesDash() {
-  const { data } = await db.from('v_clases_completas')
+  const { data: dataRaw } = await db.from('v_clases_completas')
     .select('*').gte('fecha', fechaHoy())
-    .eq('estado','programada').order('fecha').limit(5);
+    .order('fecha').limit(20);
+  const data = (dataRaw || [])
+    .filter((clase) => SCHEDULED_CLASS_STATUSES.includes(statusClase(clase)) || normalizeClassStatus(statusClase(clase)) === 'confirmada')
+    .slice(0, 5);
 
   const cont = document.getElementById('lista-proximas-clases');
   if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases próximas</div></div>'; return; }
@@ -1234,19 +1250,22 @@ async function cargarClases() {
   const mes    = document.getElementById('filtro-clases-mes').value;
 
   let q = db.from('v_clases_completas').select('*', { count:'exact' });
-  if (estado) q = q.eq('estado', estado);
+  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
   if (mes) { q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31'); }
   if (busq) q = q.or(`alumno_nombre.ilike.%${busq}%,profesor_nombre.ilike.%${busq}%,materia.ilike.%${busq}%`);
   q = q.order('fecha', { ascending:false }).range(PAG_CLASES.offset(), PAG_CLASES.offset()+19);
 
   const { data, count } = await q;
+  const clases = estado === 'confirmada'
+    ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : (data || []);
   PAG_CLASES.setTotal(count||0);
-  document.getElementById('clases-count').textContent = `${count||0} clases`;
+  document.getElementById('clases-count').textContent = `${estado === 'confirmada' ? clases.length : count || 0} clases`;
 
   const tbody = document.getElementById('tbody-clases');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">No hay clases con estos filtros.</td></tr>'; return; }
+  if (!clases.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">No hay clases con estos filtros.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(c => `<tr>
+  tbody.innerHTML = clases.map(c => `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td><strong>${sanitize(c.alumno_nombre)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(c.nivel_educativo||'')} ${sanitize(c.curso||'')}</span></td>
@@ -1257,7 +1276,7 @@ async function cargarClases() {
       <strong>${classTotal(c) ? formatEuros(classTotal(c)) : '—'}</strong>
       <br><span style="font-size:.75rem;color:var(--gray-mid)">Prof. ${classTeacherAmount(c) ? formatEuros(classTeacherAmount(c)) : '—'} · Margen ${formatEuros(classPlatformFee(c))}</span>
     </td>
-    <td>${badgeEstado(c.estado)}</td>
+    <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td>
       <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-action="editar-clase" data-id="${sanitize(c.id)}">✏️</button>
     </td>
@@ -1276,10 +1295,12 @@ document.getElementById('tbody-clases')?.addEventListener('click', (e) => {
 });
 
 document.getElementById('btn-nueva-clase').addEventListener('click', async () => {
+  claseEditandoActual = null;
   document.getElementById('clase-id').value = '';
   document.getElementById('modal-clase-titulo').textContent = 'Nueva clase';
   document.getElementById('form-clase').reset();
   document.getElementById('clase-fecha').value = fechaHoy();
+  document.getElementById('clase-estado').value = 'confirmada';
   updateClaseMoneyPreview();
   await cargarSelectoresClase();
   openModal('modal-clase');
@@ -1288,18 +1309,20 @@ document.getElementById('btn-nueva-clase').addEventListener('click', async () =>
 async function cargarSelectoresClase() {
   const [{ data: profs }, { data: alums }] = await Promise.all([
     db.from('profesores').select('id, usuarios(nombre,apellidos)').eq('estado_verificacion','verificado'),
-    db.from('alumnos').select('id, nombre, apellidos').eq('activo', true),
+    db.from('alumnos').select('id, nombre, apellidos, familyUid, familia_id').eq('activo', true),
   ]);
 
   document.getElementById('clase-profesor').innerHTML = '<option value="">Seleccionar…</option>' +
     (profs||[]).map(p => `<option value="${p.id}">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</option>`).join('');
   document.getElementById('clase-alumno').innerHTML = '<option value="">Seleccionar…</option>' +
-    (alums||[]).map(a => `<option value="${a.id}">${sanitize(a.nombre)} ${sanitize(a.apellidos)}</option>`).join('');
+    (alums||[]).map(a => `<option value="${a.id}" data-family-uid="${sanitize(a.familyUid || a.familia_id || '')}">${sanitize(a.nombre)} ${sanitize(a.apellidos)}</option>`).join('');
 }
 
+let claseEditandoActual = null;
 window.editarClase = async (id) => {
   const { data } = await db.from('clases').select('*').eq('id', id).single();
   if (!data) return;
+  claseEditandoActual = data;
   document.getElementById('modal-clase-titulo').textContent = 'Editar clase';
   document.getElementById('clase-id').value = data.id;
   document.getElementById('clase-fecha').value = data.fecha;
@@ -1308,7 +1331,7 @@ window.editarClase = async (id) => {
   document.getElementById('clase-hora-fin').value = data.hora_fin;
   document.getElementById('clase-precio').value = data.precio_total || '';
   document.getElementById('clase-importe-profesor').value = data.importe_profesor || data.teacherAmount || '';
-  document.getElementById('clase-estado').value = data.estado;
+  document.getElementById('clase-estado').value = normalizeClassStatus(data.estado || data.status);
   document.getElementById('clase-observaciones').value = data.observaciones || '';
   await cargarSelectoresClase();
   document.getElementById('clase-profesor').value = data.profesor_id;
@@ -1338,6 +1361,63 @@ async function sugerirImporteProfesor() {
 });
 document.getElementById('clase-importe-profesor').addEventListener('input', updateClaseMoneyPreview);
 
+function newCalendarUid() {
+  return `cd10-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
+}
+
+async function notificarCambioClase(payload, previous, id) {
+  const status = normalizeClassStatus(payload.estado);
+  const changedSchedule = previous?.id && (
+    previous.fecha !== payload.fecha
+    || previous.hora_inicio !== payload.hora_inicio
+    || previous.hora_fin !== payload.hora_fin
+  );
+  const shouldNotify = !previous?.id || changedSchedule || ['cancelada', 'reprogramada'].includes(status);
+  if (!shouldNotify) return;
+
+  const title = !previous?.id
+    ? 'Nueva clase confirmada'
+    : status === 'cancelada'
+      ? 'Clase cancelada'
+      : changedSchedule || status === 'reprogramada'
+        ? 'Clase reprogramada'
+        : 'Clase actualizada';
+  const body = `${payload.materia} - ${formatFechaCorta(payload.fecha)} ${formatHora(payload.hora_inicio)}-${formatHora(payload.hora_fin)}`;
+  const docs = [
+    payload.teacherUid ? {
+      userUid: payload.teacherUid,
+      usuario_id: payload.teacherUid,
+      titulo: title,
+      title,
+      cuerpo: body,
+      body,
+      type: 'class_schedule_change',
+      payload: { classId: id, status, url: '/pages/login.html' },
+      readAt: null,
+      leida: false,
+      fromRole: 'admin',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    } : null,
+    payload.familyUid ? {
+      userUid: payload.familyUid,
+      usuario_id: payload.familyUid,
+      titulo: title,
+      title,
+      cuerpo: body,
+      body,
+      type: 'class_schedule_change',
+      payload: { classId: id, status, url: '/pages/login.html' },
+      readAt: null,
+      leida: false,
+      fromRole: 'admin',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    } : null,
+  ].filter(Boolean);
+  if (docs.length) await db.from('notificaciones').insert(docs);
+}
+
 document.getElementById('btn-guardar-clase').addEventListener('click', async () => {
   const id        = document.getElementById('clase-id').value;
   const profesor  = document.getElementById('clase-profesor').value;
@@ -1355,45 +1435,50 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
     showToast('Faltan campos', 'Completa los campos obligatorios.', 'warning'); return;
   }
 
+  const validation = validateClassTimeRange(fecha, horaIni, horaFin);
+  if (!validation.valid) {
+    showToast('Horario no valido', 'La hora de fin debe ser posterior a la hora de inicio y la duracion no puede superar 8 horas.', 'warning');
+    return;
+  }
+
   if (precio !== null && importeProfesor !== null && importeProfesor > precio) {
     showToast('Margen negativo', 'El profesor no puede cobrar mas que el total de la familia salvo excepcion revisada.', 'warning');
     return;
   }
 
-  const comision = precio !== null && importeProfesor !== null ? roundMoney(precio - importeProfesor) : null;
-  const duracionMin = Math.max(0, Math.round((new Date(`2000-01-01T${horaFin}:00`) - new Date(`2000-01-01T${horaIni}:00`)) / 60000));
-  const payload = {
+  const alumnoOption = document.getElementById('clase-alumno').selectedOptions[0];
+  const familyUid = alumnoOption?.dataset?.familyUid || claseEditandoActual?.familyUid || claseEditandoActual?.familia_id || null;
+  const input = {
     profesor_id: profesor,
     teacherUid: profesor,
+    familia_id: familyUid,
+    familyUid,
     alumno_id: alumno,
     studentId: alumno,
     fecha,
-    date: fecha,
     materia,
-    subject: materia,
     hora_inicio: horaIni,
-    startTime: horaIni,
     hora_fin: horaFin,
-    endTime: horaFin,
-    duracion_minutos: duracionMin || null,
-    durationMinutes: duracionMin || null,
     precio_total: precio,
-    amount: precio,
-    familyAmount: precio,
     importe_profesor: importeProfesor,
-    teacherAmount: importeProfesor,
-    comision_clasesde10: comision,
-    platformFee: comision,
-    marginPct: precio ? roundMoney((money(comision) / precio) * 100) : null,
     estado,
-    status: estado,
     observaciones: obs,
+    calendarUid: claseEditandoActual?.calendarUid || newCalendarUid(),
   };
-  const { error } = id
+  const payload = {
+    ...buildAdminClassPayload(input, claseEditandoActual || {}, { nowIso: new Date().toISOString(), calendarUid: input.calendarUid }),
+    calendarSync: calendarSyncMetadata(input),
+  };
+  const result = id
     ? await db.from('clases').update(payload).eq('id', id)
     : await db.from('clases').insert(payload);
+  const { error } = result;
 
   if (error) { showToast('Error', error.message, 'error'); return; }
+  const savedClassId = id || result.data?.id || payload.calendarUid;
+  await notificarCambioClase(payload, claseEditandoActual, savedClassId).catch((error) => {
+    console.warn('No se pudo notificar cambio de clase', error);
+  });
   closeModal('modal-clase');
   showToast('Guardado', id ? 'Clase actualizada.' : 'Clase creada.', 'success');
   cargarClases();
@@ -1453,7 +1538,7 @@ function claseRealizada(c) {
 }
 
 function claseProgramada(c) {
-  return ['programada', 'scheduled', 'reprogramada'].includes(statusClase(c));
+  return SCHEDULED_CLASS_STATUSES.includes(statusClase(c)) || normalizeClassStatus(statusClase(c)) === 'confirmada';
 }
 
 function pagoFamiliaValidado(p) {
@@ -1714,7 +1799,8 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('clases').select('fecha,estado').gte('fecha',desde).lte('fecha',hasta);
+  const { data } = await db.from('v_clases_completas').select('fecha,estado,status,hora_inicio,hora_fin,materia,alumno_nombre,profesor_nombre,familyPaymentStatus,estado_pago')
+    .gte('fecha',desde).lte('fecha',hasta);
   cal.setClases(data||[]);
 }
 
@@ -1731,7 +1817,7 @@ function mostrarClasesDia(fecha, clases) {
         <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia)}</div>
         <div class="clase-materia">${sanitize(c.materia||'')}</div>
       </div>
-      <div>${badgeEstado(c.estado)}</div>
+      <div>${badgeEstado(classStatusForBadge(c))}</div>
     </div>`).join('');
 }
 

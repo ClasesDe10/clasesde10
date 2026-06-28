@@ -537,9 +537,15 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'estado',
           'status',
+          'lifecycleStatus',
+          'teacherConfirmationStatus',
+          'teacherAttendanceStatus',
+          'attendanceStatus',
+          'incidentStatus',
           'notasProfesor',
           'notas_profesor',
           'cancelacion_motivo',
+          'reprogramacion_motivo',
           'teacherMarkedAt',
           'teacherMarkedByUid',
           'updatedAt',
@@ -557,6 +563,9 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'confirmacion_familia',
           'familyConfirmationStatus',
+          'familyAttendanceStatus',
+          'attendanceStatus',
+          'incidentStatus',
           'familyConfirmedAt',
           'familyConfirmedByUid',
           'notas_familia',
@@ -566,6 +575,41 @@ service cloud.firestore {
         ])
         && request.resource.data.familyConfirmationStatus in ['realizada', 'no_realizada', 'incidencia']
         && request.resource.data.confirmacion_familia == request.resource.data.familyConfirmationStatus;
+    }
+
+    function validClassIncidentCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'classId',
+          'clase_id',
+          'familyUid',
+          'familia_id',
+          'teacherUid',
+          'profesor_id',
+          'studentId',
+          'alumno_id',
+          'tipo',
+          'titulo',
+          'descripcion',
+          'estado',
+          'status',
+          'prioridad',
+          'reportado_por',
+          'createdByUid',
+          'source',
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at'
+        ])
+        && request.resource.data.keys().hasAll(['classId', 'estado', 'titulo', 'descripcion', 'createdAt'])
+        && exists(/databases/$(database)/documents/clases/$(request.resource.data.classId))
+        && isParticipant(get(/databases/$(database)/documents/clases/$(request.resource.data.classId)).data)
+        && request.resource.data.estado == 'abierta'
+        && (!request.resource.data.keys().hasAny(['status']) || request.resource.data.status == 'abierta')
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && (!request.resource.data.keys().hasAny(['updatedAt']) || request.resource.data.updatedAt == request.time);
     }
 
     function validChatCreate(chatId) {
@@ -755,6 +799,18 @@ service cloud.firestore {
       allow update: if isAdmin()
         || validTeacherClassUpdate()
         || validFamilyClassConfirmationUpdate();
+    }
+
+    match /incidencias/{incidentId} {
+      allow create: if isAdmin() || validClassIncidentCreate();
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.keys().hasAny(['classId'])
+          && exists(/databases/$(database)/documents/clases/$(resource.data.classId))
+          && isParticipant(get(/databases/$(database)/documents/clases/$(resource.data.classId)).data)
+        );
+      allow update, delete: if isAdmin();
     }
 
     match /pagos/{paymentId} {

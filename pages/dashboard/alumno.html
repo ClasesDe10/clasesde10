@@ -135,9 +135,13 @@
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
           <select class="form-control" id="filtro-estado" style="width:160px">
             <option value="">Todos los estados</option>
-            <option value="programada">Programada</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="confirmada">Confirmada</option>
+            <option value="programada">Programada legacy</option>
             <option value="realizada">Realizada</option>
             <option value="cancelada">Cancelada</option>
+            <option value="reprogramada">Reprogramada</option>
+            <option value="pagada">Pagada</option>
           </select>
           <input type="month" class="form-control" id="filtro-mes" style="width:160px">
         </div>
@@ -172,6 +176,7 @@ import {
   badgeEstado, getIniciales, sanitize, fechaHoy
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js';
+import { classStatusForBadge, isScheduledClassStatus } from '../../js/calendar-engine.js?v=20260628-calendar';
 
 const usuario = await requireAuth(['alumno']);
 if (!usuario) throw new Error('No autorizado');
@@ -209,14 +214,15 @@ async function cargarInicio() {
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
 
-  const [{ data: proxima }, { data: clasesMes }, { data: asig }, { data: total }] = await Promise.all([
+  const [{ data: proximaRaw }, { data: clasesMes }, { data: asig }, { data: total }] = await Promise.all([
     db.from('v_clases_completas').select('fecha,hora_inicio').eq('alumno_id', alumnoId)
-      .gte('fecha', hoy).eq('estado','programada').order('fecha').limit(1),
+      .gte('fecha', hoy).order('fecha').limit(10),
     db.from('clases').select('duracion_minutos,estado').eq('alumno_id', alumnoId).gte('fecha', mesInicio),
     db.from('asignaciones').select('profesor_id').eq('alumno_id', alumnoId).eq('activa', true),
     db.from('clases').select('id',{count:'exact',head:true}).eq('alumno_id', alumnoId).eq('estado','realizada'),
   ]);
 
+  const proxima = (proximaRaw || []).filter((clase) => isScheduledClassStatus(clase.estado || clase.status)).slice(0, 1);
   document.getElementById('stat-proxima').textContent = proxima?.[0]
     ? `${formatFechaCorta(proxima[0].fecha)}`
     : 'Sin programar';
@@ -238,8 +244,11 @@ async function cargarInicio() {
   document.getElementById('prog-label').textContent = `${pct}% hacia tu meta de ${meta} clases`;
 
   // Próximas
-  const { data: proximas } = await db.from('v_clases_completas')
-    .select('*').eq('alumno_id', alumnoId).gte('fecha', hoy).eq('estado','programada').order('fecha').limit(5);
+  const { data: proximasRaw } = await db.from('v_clases_completas')
+    .select('*').eq('alumno_id', alumnoId).gte('fecha', hoy).order('fecha').limit(20);
+  const proximas = (proximasRaw || [])
+    .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
+    .slice(0, 5);
 
   const cont = document.getElementById('lista-proximas');
   cont.innerHTML = proximas?.length ? proximas.map(c => `
@@ -252,7 +261,7 @@ async function cargarInicio() {
         <div class="clase-nombre">${sanitize(c.materia)}</div>
         <div class="clase-materia">con ${sanitize(c.profesor_nombre)} · ${c.duracion_minutos} min</div>
       </div>
-      ${badgeEstado(c.estado)}
+      ${badgeEstado(classStatusForBadge(c))}
     </div>`).join('')
     : '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases próximas</div><div class="empty-desc">Habla con tu familia para solicitar clases.</div></div>';
 }
@@ -274,7 +283,7 @@ async function iniciarCalendario() {
               <div class="clase-nombre">${sanitize(c.materia||'')}</div>
               <div class="clase-materia">${sanitize(c.profesor_nombre||'')}</div>
             </div>
-            ${badgeEstado(c.estado)}
+            ${badgeEstado(classStatusForBadge(c))}
           </div>`).join('');
       },
       onMesChange: cargarClasesCalendario,
@@ -287,7 +296,7 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('v_clases_completas').select('fecha,estado,hora_inicio,materia,profesor_nombre')
+  const { data } = await db.from('v_clases_completas').select('fecha,estado,status,hora_inicio,materia,profesor_nombre,familyPaymentStatus,estado_pago')
     .eq('alumno_id', alumnoId).gte('fecha',desde).lte('fecha',hasta);
   cal.setClases(data||[]);
 }
@@ -299,21 +308,24 @@ async function cargarMisClases() {
   const mes    = document.getElementById('filtro-mes').value;
 
   let q = db.from('v_clases_completas').select('*').eq('alumno_id', alumnoId);
-  if (estado) q = q.eq('estado', estado);
+  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
   if (mes) q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31');
   q = q.order('fecha', {ascending:false});
 
   const { data } = await q;
+  const clases = estado === 'confirmada'
+    ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : (data || []);
   const tbody = document.getElementById('tbody-clases');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
+  if (!clases.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(c => `<tr>
+  tbody.innerHTML = clases.map(c => `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td><strong>${sanitize(c.materia)}</strong></td>
     <td>${sanitize(c.profesor_nombre)}</td>
     <td>${c.duracion_minutos} min</td>
-    <td>${badgeEstado(c.estado)}</td>
+    <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td style="font-size:.78rem;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sanitize(c.notas_profesor||'—')}</td>
   </tr>`).join('');
 }

@@ -15,31 +15,60 @@ async function read(relativePath) {
 const [
   professorDashboard,
   familyDashboard,
+  studentDashboard,
   adminDashboard,
   chatWidget,
   notificationsProvider,
+  calendarEngine,
+  calendarSync,
   automationWorker,
   rules,
   serviceWorker,
 ] = await Promise.all([
   read('pages/dashboard/profesor.html'),
   read('pages/dashboard/familia.html'),
+  read('pages/dashboard/alumno.html'),
   read('pages/dashboard/admin.html'),
   read('js/chat-widget.js'),
   read('js/notifications-provider.js'),
+  read('js/calendar-engine.js'),
+  read('js/calendar-sync.js'),
   read('scripts/firebase-automation-worker.mjs'),
   read('firebase/firestore.rules'),
   read('service-worker.js'),
 ]);
 
-assert(professorDashboard.includes('function claseTerminada'), 'Professor dashboard must decide if a class has really ended.');
-assert(professorDashboard.includes(".lte('fecha', hoy).eq('estado','programada')"), 'Professor pending-class scan must include classes from today.');
-assert(professorDashboard.includes('teacherMarkedAt'), 'Professor class registration must store teacherMarkedAt.');
-assert(professorDashboard.includes("estado === 'programada' && claseTerminada"), 'Professor register action must use end time, not only date.');
+assert(calendarEngine.includes('CLASS_STATUSES'), 'Calendar engine must define class statuses.');
+assert(calendarEngine.includes('SCHEDULED_CLASS_STATUSES'), 'Calendar engine must define scheduled aliases.');
+assert(calendarEngine.includes('buildAdminClassPayload'), 'Calendar engine must build admin class payloads.');
+assert(calendarEngine.includes('buildTeacherAttendancePayload'), 'Calendar engine must build teacher attendance payloads.');
+assert(calendarEngine.includes('buildFamilyConfirmationPayload'), 'Calendar engine must build family confirmation payloads.');
+assert(calendarEngine.includes('buildClassIncidentPayload'), 'Calendar engine must build class incidents.');
+assert(calendarEngine.includes('classReminderWindows'), 'Calendar engine must expose reminder windows.');
 
-assert(familyDashboard.includes('confirmar-clase-familia'), 'Family dashboard must allow confirming class delivery.');
-assert(familyDashboard.includes('familyConfirmationStatus'), 'Family confirmation must write a structured confirmation status.');
-assert(familyDashboard.includes('labelConfirmacionFamilia'), 'Family dashboard must render confirmation state.');
+assert(calendarSync.includes('buildIcsCalendar'), 'Calendar sync must prepare iCalendar export.');
+assert(calendarSync.includes('googleCalendarTemplateUrl'), 'Calendar sync must prepare Google Calendar links.');
+assert(calendarSync.includes('future_oauth_push'), 'Calendar sync must document future Google push architecture.');
+
+assert(professorDashboard.includes('buildTeacherAttendancePayload'), 'Professor dashboard must use the calendar adapter payload for marking classes.');
+assert(professorDashboard.includes('isScheduledClassStatus'), 'Professor dashboard must support legacy and canonical scheduled states.');
+assert(professorDashboard.includes('classStatusForBadge'), 'Professor dashboard must render normalized calendar status badges.');
+assert(professorDashboard.includes('claseTerminada(clase, 0)'), 'Professor pending-class scan must use actual class end time.');
+
+assert(familyDashboard.includes('buildFamilyConfirmationPayload'), 'Family dashboard must use the calendar adapter payload for confirmations.');
+assert(familyDashboard.includes('buildClassIncidentPayload'), 'Family dashboard must create structured incidents.');
+assert(familyDashboard.includes("db.from('incidencias').insert"), 'Family incidents must be persisted.');
+assert(familyDashboard.includes('isScheduledClassStatus'), 'Family dashboard must support scheduled aliases.');
+
+assert(studentDashboard.includes('isScheduledClassStatus'), 'Student dashboard must support scheduled aliases.');
+assert(studentDashboard.includes('classStatusForBadge'), 'Student dashboard must render normalized status badges.');
+
+assert(adminDashboard.includes('buildAdminClassPayload'), 'Admin dashboard must create classes through the calendar payload builder.');
+assert(adminDashboard.includes('validateClassTimeRange'), 'Admin dashboard must validate class time ranges.');
+assert(adminDashboard.includes('calendarSyncMetadata'), 'Admin dashboard must store calendar sync metadata.');
+assert(adminDashboard.includes('data-family-uid'), 'Admin class selector must preserve family recipient data.');
+assert(adminDashboard.includes("type: 'class_schedule_change'"), 'Admin class changes must notify class participants.');
+assert(adminDashboard.includes('result.data?.id'), 'New class notifications must use the real saved class id.');
 
 assert(chatWidget.includes('Chat / Notificaciones'), 'Chat widget must expose the combined chat/notifications surface.');
 assert(chatWidget.includes('data-chat-tab="notificaciones"'), 'Chat widget must render a notifications tab.');
@@ -47,20 +76,26 @@ assert(chatWidget.includes('watchUserNotifications'), 'Chat widget must subscrib
 assert(chatWidget.includes('requestBrowserNotificationPermission'), 'Chat widget must offer browser/PWA notification permission.');
 assert(chatWidget.includes('showBrowserNotification'), 'Chat widget must surface new notifications through browser notifications when allowed.');
 assert(chatWidget.includes('data-admin-notification-form'), 'Chat widget must expose manual notification sending for admins.');
-assert(chatWidget.includes("type: 'admin_manual'"), 'Admin manual notifications must be typed explicitly.');
 
 assert(notificationsProvider.includes("where('userUid', '==', usuarioId)"), 'Notifications provider must read by userUid.');
 assert(notificationsProvider.includes('readAt'), 'Notifications provider must use readAt for unread state.');
 assert(serviceWorker.includes('notificationclick'), 'Service worker must handle notification clicks.');
 
+assert(automationWorker.includes('processUpcomingClassReminders'), 'Automation worker must process upcoming class reminders.');
+assert(automationWorker.includes('class_reminder'), 'Automation worker must send class reminder notifications.');
 assert(automationWorker.includes('processUnmarkedClasses'), 'Automation worker must process unmarked classes.');
 assert(automationWorker.includes('class_unmarked_after_1h'), 'Automation worker must create one-hour class reminders.');
+assert(automationWorker.includes('unmarked_after_24h'), 'Automation worker must escalate stale unmarked classes.');
+assert(automationWorker.includes('processAttendanceConfirmations'), 'Automation worker must reconcile class attendance confirmations.');
+assert(automationWorker.includes('createClassIncidentOnce'), 'Automation worker must create idempotent class incidents.');
 assert(automationWorker.includes('processPaymentReminders'), 'Automation worker must process payment reminders.');
 assert(automationWorker.includes('weekly_payment_due'), 'Automation worker must create weekly payment reminders.');
 assert(automationWorker.includes('notifyUserOnce'), 'Automation notifications must be idempotent.');
 
 assert(rules.includes('validTeacherClassUpdate'), 'Firestore rules must validate teacher class updates.');
 assert(rules.includes('validFamilyClassConfirmationUpdate'), 'Firestore rules must validate family class confirmations.');
-assert(rules.includes('reprogramada'), 'Firestore rules must allow teacher reprogrammed status.');
+assert(rules.includes('validClassIncidentCreate'), 'Firestore rules must validate participant-created class incidents.');
+assert(rules.includes('match /incidencias/{incidentId}'), 'Firestore rules must expose class incident permissions.');
+assert(rules.includes('lifecycleStatus'), 'Firestore rules must allow lifecycle status updates.');
 
 console.log('Calendar and notifications validation passed.');

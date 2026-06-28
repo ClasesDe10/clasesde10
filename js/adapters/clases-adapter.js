@@ -30,7 +30,7 @@ export const clasesAdapter = {
   },
 
   setStatus(classId, status, extra = {}) {
-    return base.update(classId, { ...extra, status });
+    return base.update(classId, { ...extra, status, estado: status, lifecycleStatus: status });
   },
 };
 
