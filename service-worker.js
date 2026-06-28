@@ -1,6 +1,15 @@
-const CACHE_VERSION = 'clasesde10-pwa-v4';
+const CACHE_VERSION = 'clasesde10-pwa-v5';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyAmxd60aRYpOrrORXpNJbsnwVaJf2S77E8',
+  authDomain: 'clasesde10-50add.firebaseapp.com',
+  projectId: 'clasesde10-50add',
+  storageBucket: 'clasesde10-50add.firebasestorage.app',
+  messagingSenderId: '895894357385',
+  appId: '1:895894357385:web:0c111a81b31f404a094d58',
+};
+let firebaseMessagingReady = false;
 
 const PRECACHE_URLS = [
   '/',
@@ -27,6 +36,35 @@ const PRIVATE_PATHS = [
   /^\/\.firebaserc$/,
   /^\/\.netlify\//
 ];
+
+try {
+  importScripts('https://www.gstatic.com/firebasejs/12.14.0/firebase-app-compat.js');
+  importScripts('https://www.gstatic.com/firebasejs/12.14.0/firebase-messaging-compat.js');
+  if (self.firebase && !self.firebase.apps.length) self.firebase.initializeApp(FIREBASE_CONFIG);
+  if (self.firebase?.messaging) {
+    const messaging = self.firebase.messaging();
+    messaging.onBackgroundMessage((payload) => {
+      const notification = payload.notification || {};
+      const data = payload.data || {};
+      const title = notification.title || data.title || 'ClasesDe10';
+      const body = notification.body || data.body || '';
+      self.registration.showNotification(title, {
+        body,
+        icon: notification.icon || '/assets/img/logo-192.png',
+        badge: '/assets/img/logo-192.png',
+        tag: data.notificationId || data.type || 'clasesde10-push',
+        data: {
+          ...data,
+          url: data.url || payload.fcmOptions?.link || '/pages/login.html',
+        },
+      });
+    });
+    firebaseMessagingReady = true;
+  }
+} catch (error) {
+  firebaseMessagingReady = false;
+  console.warn('Firebase Messaging no disponible en service worker', error);
+}
 
 function isPrivatePath(pathname) {
   return PRIVATE_PATHS.some((pattern) => pattern.test(pathname));
@@ -81,7 +119,10 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/pages/login.html';
+  const targetUrl = event.notification?.data?.url
+    || event.notification?.data?.FCM_MSG?.data?.url
+    || event.notification?.data?.FCM_MSG?.fcmOptions?.link
+    || '/pages/login.html';
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const existing = windows.find((client) => client.url.includes(self.location.origin));

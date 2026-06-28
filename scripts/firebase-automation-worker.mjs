@@ -29,6 +29,7 @@ import {
   normalizePaymentStatus,
   paymentAmount,
 } from '../js/payment-engine.js';
+import { buildNotificationDocument } from '../js/notification-engine.js';
 
 const DEFAULT_PROJECT_ID = 'clasesde10-50add';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
@@ -205,14 +206,15 @@ async function notifyAdmins(db, title, body, payload = {}) {
   }
 
   await Promise.all(admins.map((user) => writeDoc(db.collection('notificaciones'), null, {
-    userUid: user.id,
-    usuario_id: user.id,
-    titulo: title,
-    title,
-    cuerpo: body,
-    body,
-    type: payload.type || 'automation',
-    payload,
+    ...buildNotificationDocument({
+      userUid: user.id,
+      role: user.role || 'admin',
+      title,
+      body,
+      type: payload.type || 'automation',
+      payload,
+      source: 'admin',
+    }),
     readAt: null,
     leida: false,
     fromRole: 'admin',
@@ -240,14 +242,14 @@ async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '') 
   if (existing.exists) return false;
 
   await writeDoc(db.collection('notificaciones'), id, {
-    userUid: targetUid,
-    usuario_id: targetUid,
-    titulo: title,
-    title,
-    cuerpo: body,
-    body,
-    type: payload.type || 'automation',
-    payload,
+    ...buildNotificationDocument({
+      userUid: targetUid,
+      title,
+      body,
+      type: payload.type || 'automation',
+      payload,
+      source: 'admin',
+    }),
     readAt: null,
     leida: false,
     fromRole: 'admin',

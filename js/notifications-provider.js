@@ -6,15 +6,26 @@
  */
 
 import {
+  addDoc,
   collection,
   doc,
+  getDoc,
+  getDocs,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import {
+  DEFAULT_NOTIFICATION_SETTINGS,
+  buildNotificationDocument,
+  mergeNotificationSettings,
+} from './notification-engine.js';
 
 function normalizeDate(value) {
   if (!value) return '';
@@ -46,7 +57,12 @@ export function watchUserNotifications(usuarioId, callback) {
   if (!usuarioId || typeof callback !== 'function') return null;
 
   return onSnapshot(
-    query(collection(firebaseDb, 'notificaciones'), where('userUid', '==', usuarioId)),
+    query(
+      collection(firebaseDb, 'notificaciones'),
+      where('userUid', '==', usuarioId),
+      orderBy('createdAt', 'desc'),
+      limit(100),
+    ),
     (snapshot) => {
       const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
       callback(sortNotifications(data).slice(0, 80));
@@ -69,6 +85,60 @@ export async function markAllNotificationsRead(notifications = []) {
   await Promise.all(unread.map((item) => markNotificationRead(item.id)));
 }
 
+export async function loadNotificationSettings() {
+  const [privateSnap, publicSnap] = await Promise.all([
+    getDoc(doc(firebaseDb, 'configuracion', 'notificaciones')).catch(() => null),
+    getDoc(doc(firebaseDb, 'configuracionPublica', 'notificaciones')).catch(() => null),
+  ]);
+
+  return {
+    settings: mergeNotificationSettings(privateSnap?.exists() ? privateSnap.data() : DEFAULT_NOTIFICATION_SETTINGS),
+    publicConfig: publicSnap?.exists() ? publicSnap.data() : {},
+  };
+}
+
+export async function saveNotificationSettings(settings = {}, publicConfig = {}) {
+  const merged = mergeNotificationSettings(settings);
+  await Promise.all([
+    setDoc(doc(firebaseDb, 'configuracion', 'notificaciones'), {
+      ...merged,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
+    setDoc(doc(firebaseDb, 'configuracionPublica', 'notificaciones'), {
+      ...publicConfig,
+      updatedAt: serverTimestamp(),
+    }, { merge: true }),
+  ]);
+  return merged;
+}
+
+export async function createAdminNotification({ targetRole = 'todos', title, body, currentUid = '' } = {}) {
+  const usersQuery = targetRole && targetRole !== 'todos'
+    ? query(collection(firebaseDb, 'users'), where('role', '==', targetRole))
+    : collection(firebaseDb, 'users');
+  const snap = await getDocs(usersQuery);
+  const recipients = snap.docs
+    .map((item) => ({ id: item.id, ...item.data() }))
+    .filter((user) => user.active !== false);
+
+  await Promise.all(recipients.map((user) => addDoc(collection(firebaseDb, 'notificaciones'), {
+    ...buildNotificationDocument({
+      userUid: user.id,
+      role: user.role || targetRole,
+      title,
+      body,
+      type: 'admin_manual',
+      source: 'admin',
+      createdByUid: currentUid,
+      payload: { targetRole, url: '/pages/login.html' },
+    }),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  })));
+
+  return recipients.length;
+}
+
 export async function requestBrowserNotificationPermission() {
   if (typeof Notification === 'undefined') {
     return 'unsupported';
@@ -89,6 +159,7 @@ export async function showBrowserNotification(title, body, data = {}) {
         body,
         icon: '/assets/img/logo-192.png',
         badge: '/assets/img/logo-192.png',
+        tag: data.notificationId || data.type || 'clasesde10-notification',
         data,
       });
       return true;

@@ -594,6 +594,20 @@ service cloud.firestore {
         );
     }
 
+    function isChatParticipantUid(data, uid) {
+      return uid is string
+        && (
+          data.familyUid == uid
+          || data.teacherUid == uid
+          || data.familia_id == uid
+          || data.profesor_id == uid
+          || (
+            data.keys().hasAny(['participantUids'])
+            && data.participantUids[uid] == true
+          )
+        );
+    }
+
     function validTeacherClassUpdate() {
       return isTeacherParticipant(resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -732,6 +746,89 @@ service cloud.firestore {
         && request.resource.data.body.size() >= 1
         && request.resource.data.body.size() <= 2000
         && request.resource.data.createdAt == request.time;
+    }
+
+    function validNotificationTokenWrite() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userUid',
+          'role',
+          'token',
+          'platform',
+          'active',
+          'permission',
+          'origin',
+          'userAgent',
+          'deactivatedAt',
+          'deactivationReason',
+          'lastSeenAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.userUid == request.auth.uid
+        && request.resource.data.token is string
+        && request.resource.data.token.size() >= 20
+        && request.resource.data.token.size() <= 4096
+        && request.resource.data.platform in ['web']
+        && request.resource.data.active is bool
+        && optionalString('role', 40)
+        && optionalString('permission', 40)
+        && optionalString('origin', 300)
+        && optionalString('userAgent', 600)
+        && optionalString('deactivationReason', 120);
+    }
+
+    function validChatNotificationCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userUid',
+          'usuario_id',
+          'title',
+          'titulo',
+          'body',
+          'cuerpo',
+          'type',
+          'category',
+          'priority',
+          'channels',
+          'payload',
+          'actionUrl',
+          'role',
+          'readAt',
+          'leida',
+          'fromRole',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.userUid == request.resource.data.usuario_id
+        && request.resource.data.type == 'chat_message'
+        && request.resource.data.category == 'chat'
+        && request.resource.data.priority in ['normal', 'high', 'critical']
+        && request.resource.data.channels is list
+        && request.resource.data.payload is map
+        && request.resource.data.payload.keys().hasOnly(['type', 'chatId', 'messageId', 'assignmentId', 'url'])
+        && request.resource.data.payload.type == 'chat_message'
+        && request.resource.data.payload.chatId is string
+        && request.resource.data.payload.messageId is string
+        && exists(/databases/$(database)/documents/chats/$(request.resource.data.payload.chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(request.resource.data.payload.chatId)).data)
+        && (
+          isChatParticipantUid(get(/databases/$(database)/documents/chats/$(request.resource.data.payload.chatId)).data, request.resource.data.userUid)
+          || (
+            hasUserProfile(request.resource.data.userUid)
+            && get(userDoc(request.resource.data.userUid)).data.role == 'admin'
+          )
+        )
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 140
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 1200
+        && request.resource.data.readAt == null
+        && request.resource.data.leida == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
     }
 
     match /leadsPublicos/{leadId} {
@@ -887,14 +984,28 @@ service cloud.firestore {
     }
 
     match /notificaciones/{notificationId} {
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin() || validChatNotificationCreate();
+      allow delete: if isAdmin();
       allow read: if isAdmin() || (signedIn() && resource.data.userUid == request.auth.uid);
       allow update: if isAdmin()
         || (
           signedIn()
           && resource.data.userUid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'updatedAt'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt', 'leida', 'updatedAt'])
         );
+    }
+
+    match /notificationTokens/{tokenId} {
+      allow create: if validNotificationTokenWrite();
+      allow update: if signedIn()
+        && resource.data.userUid == request.auth.uid
+        && validNotificationTokenWrite();
+      allow read, delete: if isAdmin()
+        || (signedIn() && resource.data.userUid == request.auth.uid);
+    }
+
+    match /notificationPreferences/{userUid} {
+      allow read, write: if isAdmin() || isOwner(userUid);
     }
 
     match /configuracion/{configId} {

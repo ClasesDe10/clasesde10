@@ -106,6 +106,148 @@ async function getAdminUsers() {
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
+const DEFAULT_NOTIFICATION_SETTINGS = {
+  enabled: true,
+  channels: {
+    internal: true,
+    browser: true,
+    push: true,
+    email_future: false,
+    whatsapp_future: false,
+  },
+  eventTypes: {},
+  roles: {
+    admin: true,
+    profesor: true,
+    familia: true,
+    alumno: true,
+  },
+};
+
+const NOTIFICATION_DEFINITIONS = {
+  admin_manual: { category: 'admin', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  chat_message: { category: 'chat', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  class_reminder: { category: 'clases', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  class_confirmation_needed: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  class_unmarked_after_1h: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  class_schedule_change: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  class_incident: { category: 'incidencias', priority: 'critical', channels: ['internal', 'browser', 'push'] },
+  weekly_payment_due: { category: 'pagos', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  family_payment_pending: { category: 'pagos', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  teacher_payout_pending: { category: 'pagos', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  payment_overdue: { category: 'pagos', priority: 'critical', channels: ['internal', 'browser', 'push'] },
+  request_created: { category: 'solicitudes', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  matching_ready: { category: 'matching', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  matching_no_match: { category: 'matching', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  assignment_created: { category: 'matching', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  verification_pending: { category: 'verificacion', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  document_review_pending: { category: 'verificacion', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  profile_updated: { category: 'perfil', priority: 'normal', channels: ['internal', 'browser'] },
+  contact_lead: { category: 'leads', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  teacher_lead: { category: 'leads', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  family_lead_request: { category: 'leads', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  monthly_summary: { category: 'finanzas', priority: 'normal', channels: ['internal', 'browser'] },
+  automation: { category: 'sistema', priority: 'normal', channels: ['internal', 'browser'] },
+};
+
+function notificationDefinition(type) {
+  return NOTIFICATION_DEFINITIONS[type] || NOTIFICATION_DEFINITIONS.automation;
+}
+
+function notificationChannels(type, explicitChannels) {
+  const channels = Array.isArray(explicitChannels) && explicitChannels.length
+    ? explicitChannels
+    : notificationDefinition(type).channels;
+  return [...new Set(channels.filter(Boolean))];
+}
+
+async function getNotificationSettings() {
+  const snap = await db.collection('configuracion').doc('notificaciones').get().catch(() => null);
+  const data = snap?.exists ? snap.data() : {};
+  return {
+    ...DEFAULT_NOTIFICATION_SETTINGS,
+    ...data,
+    channels: {
+      ...DEFAULT_NOTIFICATION_SETTINGS.channels,
+      ...(data.channels || {}),
+    },
+    eventTypes: {
+      ...(data.eventTypes || {}),
+    },
+    roles: {
+      ...DEFAULT_NOTIFICATION_SETTINGS.roles,
+      ...(data.roles || {}),
+    },
+  };
+}
+
+function isNotificationEnabled(settings, type, channel = 'internal', role = '') {
+  if (settings.enabled === false) return false;
+  if (settings.channels?.[channel] === false) return false;
+  if (settings.eventTypes?.[type] === false) return false;
+  if (role && settings.roles?.[role] === false) return false;
+  return true;
+}
+
+function buildNotification(userUid, title, body, payload = {}, extra = {}) {
+  const type = clean(payload.type || extra.type || 'automation', 80);
+  const definition = notificationDefinition(type);
+  const finalTitle = clean(title, 140) || 'ClasesDe10';
+  const finalBody = clean(body, 1200);
+  return {
+    userUid,
+    usuario_id: userUid,
+    titulo: finalTitle,
+    title: finalTitle,
+    cuerpo: finalBody,
+    body: finalBody,
+    type,
+    category: extra.category || definition.category,
+    priority: extra.priority || definition.priority,
+    channels: notificationChannels(type, extra.channels || payload.channels),
+    payload: {
+      ...payload,
+      type,
+    },
+    actionUrl: clean(extra.actionUrl || payload.url || '/pages/login.html', 500) || '/pages/login.html',
+    role: clean(extra.role, 40),
+    readAt: null,
+    leida: false,
+    fromRole: clean(extra.fromRole || 'system', 80),
+    fromAutomation: extra.fromAutomation !== false,
+    createdByUid: clean(extra.createdByUid, 180),
+    createdAt: now(),
+    updatedAt: now(),
+  };
+}
+
+async function writeNotification(userUid, title, body, payload = {}, extra = {}) {
+  const targetUid = clean(userUid, 180);
+  if (!targetUid) return null;
+  const settings = await getNotificationSettings();
+  const type = clean(payload.type || extra.type || 'automation', 80);
+  if (!isNotificationEnabled(settings, type, 'internal', extra.role || '')) return null;
+  return db.collection('notificaciones').add(buildNotification(targetUid, title, body, payload, extra));
+}
+
+async function writeNotificationOnce(userUid, title, body, payload = {}, key = '', extra = {}) {
+  const targetUid = clean(userUid, 180);
+  if (!targetUid) return false;
+  const id = [key || payload.type || 'notification', targetUid]
+    .map((part) => clean(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__')
+    .slice(0, 900);
+  const ref = db.collection('notificaciones').doc(id);
+  if ((await ref.get()).exists) return false;
+
+  const settings = await getNotificationSettings();
+  const type = clean(payload.type || extra.type || 'automation', 80);
+  if (!isNotificationEnabled(settings, type, 'internal', extra.role || '')) return false;
+  await ref.set(buildNotification(targetUid, title, body, payload, extra), { merge: false });
+  return true;
+}
+
 async function notifyAdmins(title, body, payload = {}) {
   const admins = await getAdminUsers();
   if (!admins.length) {
@@ -120,19 +262,263 @@ async function notifyAdmins(title, body, payload = {}) {
     return;
   }
 
-  await Promise.all(admins.map((user) => db.collection('notificaciones').add({
-    userUid: user.id,
-    titulo: title,
-    title,
-    cuerpo: body,
-    body,
-    type: payload.type || 'automation',
-    payload,
-    readAt: null,
-    createdAt: now(),
-    updatedAt: now(),
+  await Promise.all(admins.map((user) => writeNotification(user.id, title, body, payload, {
+    role: user.role || 'admin',
+    fromRole: 'admin',
   })));
 }
+
+async function getPushTokensForUser(userUid) {
+  const snap = await db.collection('notificationTokens')
+    .where('userUid', '==', userUid)
+    .where('active', '==', true)
+    .limit(20)
+    .get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((item) => item.token);
+}
+
+async function deactivateInvalidTokens(tokens, responses = []) {
+  const invalidCodes = new Set([
+    'messaging/invalid-registration-token',
+    'messaging/registration-token-not-registered',
+    'messaging/invalid-argument',
+  ]);
+  const batch = db.batch();
+  let count = 0;
+  responses.forEach((response, index) => {
+    if (response.success) return;
+    if (!invalidCodes.has(response.error?.code)) return;
+    const tokenDoc = tokens[index];
+    if (!tokenDoc?.id) return;
+    batch.set(db.collection('notificationTokens').doc(tokenDoc.id), {
+      active: false,
+      deactivatedAt: now(),
+      deactivationReason: response.error.code,
+      updatedAt: now(),
+    }, { merge: true });
+    count += 1;
+  });
+  if (count) await batch.commit();
+}
+
+async function sendPushForNotification(notificationId, notification) {
+  const userUid = clean(notification.userUid, 180);
+  if (!userUid) return { sent: 0, skipped: 'missing_user' };
+
+  const channels = Array.isArray(notification.channels) ? notification.channels : [];
+  if (!channels.includes('push')) return { sent: 0, skipped: 'push_channel_disabled' };
+
+  const settings = await getNotificationSettings();
+  if (!isNotificationEnabled(settings, notification.type || 'automation', 'push', notification.role || '')) {
+    return { sent: 0, skipped: 'push_disabled_by_settings' };
+  }
+
+  const tokens = await getPushTokensForUser(userUid);
+  if (!tokens.length) return { sent: 0, skipped: 'no_tokens' };
+
+  const actionUrl = clean(notification.actionUrl || notification.payload?.url || '/pages/login.html', 500) || '/pages/login.html';
+  const message = {
+    tokens: tokens.map((item) => item.token),
+    notification: {
+      title: clean(notification.title || notification.titulo || 'ClasesDe10', 140),
+      body: clean(notification.body || notification.cuerpo || '', 800),
+    },
+    data: {
+      notificationId,
+      type: clean(notification.type || 'automation', 80),
+      url: actionUrl,
+    },
+    webpush: {
+      fcmOptions: {
+        link: actionUrl,
+      },
+      notification: {
+        icon: 'https://clasesde10.com/assets/img/logo-192.png',
+        badge: 'https://clasesde10.com/assets/img/logo-192.png',
+        tag: notificationId,
+        renotify: true,
+        requireInteraction: notification.priority === 'critical',
+      },
+    },
+  };
+
+  const response = await admin.messaging().sendEachForMulticast(message);
+  await deactivateInvalidTokens(tokens, response.responses);
+  await db.collection('notificaciones').doc(notificationId).set({
+    push: {
+      attemptedAt: now(),
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      tokenCount: tokens.length,
+    },
+    updatedAt: now(),
+  }, { merge: true });
+  return { sent: response.successCount, failed: response.failureCount };
+}
+
+function participantUidsFromChat(chat = {}) {
+  if (chat.participantUids && typeof chat.participantUids === 'object') {
+    return Object.keys(chat.participantUids).filter((uid) => chat.participantUids[uid] === true);
+  }
+  return uniq([
+    chat.familyUid,
+    chat.familia_id,
+    chat.teacherUid,
+    chat.profesor_id,
+    chat.familyUserUid,
+    chat.teacherUserUid,
+  ].map((item) => clean(item, 180)).filter(Boolean));
+}
+
+async function recipientUidsForChat(chat = {}, senderUid = '') {
+  const admins = await getAdminUsers();
+  return uniq([
+    ...participantUidsFromChat(chat),
+    ...admins.map((user) => user.id),
+  ]).filter((uid) => uid && uid !== senderUid);
+}
+
+function changedAny(before = {}, after = {}, fields = []) {
+  return fields.some((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
+}
+
+async function resolveUserUidFromProfile(collectionName, profileId, fallback = '') {
+  const id = clean(profileId, 180);
+  if (!id) return clean(fallback, 180);
+  const snap = await db.collection(collectionName).doc(id).get().catch(() => null);
+  if (!snap?.exists) return clean(fallback || id, 180);
+  const data = snap.data();
+  return clean(data.userUid || data.firebase_uid || data.usuario_id || fallback || id, 180);
+}
+
+exports.sendPushOnNotificationCreated = onDocumentCreated({
+  region: REGION,
+  document: 'notificaciones/{notificationId}',
+}, async (event) => {
+  const notificationId = event.params.notificationId;
+  const notification = event.data.data();
+  try {
+    const result = await sendPushForNotification(notificationId, notification);
+    logger.info('sendPushOnNotificationCreated completed', { notificationId, result });
+  } catch (error) {
+    logger.warn('sendPushOnNotificationCreated failed', {
+      notificationId,
+      message: error.message,
+      code: error.code,
+    });
+    await event.data.ref.set({
+      push: {
+        attemptedAt: now(),
+        error: clean(error.message || error.code || 'unknown', 500),
+      },
+      updatedAt: now(),
+    }, { merge: true });
+  }
+});
+
+exports.notifyOnChatMessage = onDocumentCreated({
+  region: REGION,
+  document: 'chats/{chatId}/mensajes/{messageId}',
+}, async (event) => {
+  const { chatId, messageId } = event.params;
+  const message = event.data.data();
+  const senderUid = clean(message.senderUid, 180);
+  const chatSnap = await db.collection('chats').doc(chatId).get();
+  if (!chatSnap.exists) return;
+
+  const chat = chatSnap.data();
+  const recipients = await recipientUidsForChat(chat, senderUid);
+  const senderLabel = clean(message.senderName || message.senderRole || 'ClasesDe10', 120);
+  const body = clean(message.body, 180);
+
+  await Promise.all(recipients.map((uid) => writeNotificationOnce(
+    uid,
+    `Nuevo mensaje de ${senderLabel}`,
+    body,
+    {
+      type: 'chat_message',
+      chatId,
+      messageId,
+      assignmentId: chat.assignmentId || chat.asignacion_id || '',
+      url: '/pages/login.html',
+    },
+    `chat_message_${chatId}_${messageId}_${uid}`,
+    { role: '', fromRole: message.senderRole || 'chat' },
+  )));
+});
+
+exports.notifyOnDocumentCreated = onDocumentCreated({
+  region: REGION,
+  document: 'documentos/{documentId}',
+}, async (event) => {
+  const documentId = event.params.documentId;
+  const data = event.data.data();
+  const ownerUid = clean(data.ownerUid || data.userUid || data.usuario_id, 180);
+  await notifyAdmins('Documento pendiente de revision', `${data.nombre || data.tipo || 'Documento'} necesita revision.`, {
+    type: 'document_review_pending',
+    documentId,
+    ownerUid,
+    url: '/pages/login.html',
+  });
+});
+
+exports.notifyOnIncidentCreated = onDocumentCreated({
+  region: REGION,
+  document: 'incidencias/{incidentId}',
+}, async (event) => {
+  const incidentId = event.params.incidentId;
+  const data = event.data.data();
+  await notifyAdmins('Nueva incidencia', clean(data.titulo || data.descripcion || 'Incidencia pendiente de revision.', 240), {
+    type: 'class_incident',
+    incidentId,
+    classId: data.classId || data.clase_id || '',
+    url: '/pages/login.html',
+  });
+});
+
+exports.notifyOnTeacherProfileUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'profesores/{teacherId}',
+}, async (event) => {
+  const teacherId = event.params.teacherId;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const fields = [
+    'nombre',
+    'email',
+    'telefono',
+    'materias',
+    'niveles_educativos',
+    'modalidad',
+    'zona',
+    'availabilitySlots',
+    'estado_verificacion',
+    'verificationStatus',
+    'profileCompletion',
+  ];
+  if (!changedAny(before, after, fields)) return;
+  await notifyAdmins('Perfil de profesor actualizado', `${after.nombre || after.email || teacherId} modifico datos relevantes de su perfil.`, {
+    type: normalizeStatus(after) === 'pendiente' ? 'verification_pending' : 'profile_updated',
+    teacherId,
+    url: '/pages/login.html',
+  });
+});
+
+exports.notifyOnFamilyProfileUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'familias/{familyId}',
+}, async (event) => {
+  const familyId = event.params.familyId;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const fields = ['nombre', 'email', 'telefono', 'direccion', 'zona', 'preferencias', 'profileCompletion'];
+  if (!changedAny(before, after, fields)) return;
+  await notifyAdmins('Perfil de familia actualizado', `${after.nombre || after.email || familyId} modifico datos relevantes de su perfil.`, {
+    type: 'profile_updated',
+    familyId,
+    url: '/pages/login.html',
+  });
+});
 
 async function findPaymentRefByStripeObject(object = {}) {
   const metadataPaymentId = clean(object.metadata?.paymentId || object.metadata?.pagoId);
@@ -695,7 +1081,21 @@ exports.generateRequestMatching = onDocumentCreated({
   const requestId = event.params.requestId;
   const request = event.data.data();
   if ((request.matchStatus || '') === 'ready') return;
-  await generateMatchesForRequest(requestId, request, 'request_created');
+  if (!request.leadId && !request.lead_id && request.source !== 'public_lead') {
+    await notifyAdmins('Nueva solicitud recibida', `${request.nombre || request.email || 'Familia'} solicita ${request.materia || request.subject || 'profesor'}.`, {
+      type: 'request_created',
+      requestId,
+      url: '/pages/login.html',
+    });
+  }
+  const result = await generateMatchesForRequest(requestId, request, 'request_created');
+  if (result?.candidates?.length) {
+    await notifyAdmins('Matching listo', `${result.candidates.length} candidato(s) para ${request.materia || request.subject || 'la solicitud'}.`, {
+      type: 'matching_ready',
+      requestId,
+      url: '/pages/login.html',
+    });
+  }
 });
 
 exports.createAssignmentOnRequestAssigned = onDocumentUpdated({
@@ -746,6 +1146,29 @@ exports.createAssignmentOnRequestAssigned = onDocumentUpdated({
     studentId: studentId || null,
     createdAt: now(),
   });
+
+  const [teacherUserUid, familyUserUid] = await Promise.all([
+    resolveUserUidFromProfile('profesores', teacherUid, after.teacherUserUid),
+    resolveUserUidFromProfile('familias', familyUid, after.familyUserUid),
+  ]);
+  await Promise.all([
+    writeNotificationOnce(
+      teacherUserUid,
+      'Nueva asignacion',
+      `Se te ha asignado una nueva solicitud de ${after.materia || after.subject || 'clase'}.`,
+      { type: 'assignment_created', requestId, assignmentId, url: '/pages/login.html' },
+      `assignment_created_${assignmentId}_teacher`,
+      { role: 'profesor' },
+    ),
+    writeNotificationOnce(
+      familyUserUid,
+      'Profesor asignado',
+      `Ya hay profesor asignado para ${after.materia || after.subject || 'tu solicitud'}.`,
+      { type: 'assignment_created', requestId, assignmentId, url: '/pages/login.html' },
+      `assignment_created_${assignmentId}_family`,
+      { role: 'familia' },
+    ),
+  ]);
 });
 
 exports.scanPendingMatching = onSchedule({
