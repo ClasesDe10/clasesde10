@@ -23,6 +23,9 @@ const [admin, module, css, pkg, rules] = await Promise.all([
 assert(admin.includes('data-admin-control-center'), 'Admin dashboard must expose the control center root.');
 assert(admin.includes('initAdminControlCenter'), 'Admin dashboard must initialize the control center module.');
 assert(admin.includes("navigate: irA"), 'Control center actions must navigate to existing admin sections.');
+assert(admin.includes('data-section="ia"'), 'Admin dashboard must expose the admin AI section in navigation.');
+assert(admin.includes('data-admin-ai-assistant'), 'Admin dashboard must expose the admin AI assistant root.');
+assert(admin.includes('initAdminAiAssistant'), 'Admin dashboard must initialize the admin AI assistant.');
 assert(admin.includes('renderCrmFicha'), 'Admin dashboard must render unified CRM profiles.');
 assert(admin.includes('buildCrmDataset'), 'Admin dashboard must build CRM datasets from operational collections.');
 assert(admin.includes('recordCrmAudit'), 'Admin dashboard must write CRM audit events.');
@@ -68,13 +71,17 @@ assert(css.includes('.control-rank-row'), 'Dashboard CSS must style teacher rank
 assert(css.includes('.control-grid-main'), 'Dashboard CSS must style control center layout.');
 assert(css.includes('.control-chart'), 'Dashboard CSS must style monthly charts.');
 assert(css.includes('.control-activity-item'), 'Dashboard CSS must style activity feed.');
+assert(css.includes('.admin-ai'), 'Dashboard CSS must style the admin AI assistant.');
+assert(css.includes('.admin-ai-row'), 'Dashboard CSS must style admin AI answer rows.');
 assert(css.includes('.crm-profile-main-grid'), 'Dashboard CSS must style the CRM profile main layout.');
 assert(css.includes('.crm-profile-side-grid'), 'Dashboard CSS must style the CRM profile secondary layout.');
 assert(css.includes('.control-timeline-item'), 'Dashboard CSS must style CRM timeline items.');
 assert(css.includes('@media (max-width: 640px)'), 'Dashboard CSS must include mobile responsive rules.');
 
 assert(pkg.includes('test:admin-control-center'), 'package.json must expose the admin control center test.');
+assert(pkg.includes('test:admin-ai'), 'package.json must expose the admin AI engine test.');
 assert(rules.includes('match /crmNotes/{noteId}'), 'Firestore rules must protect CRM notes.');
 assert(rules.includes('match /crmTasks/{taskId}'), 'Firestore rules must protect CRM tasks.');
+assert(rules.includes('match /adminAiQueries/{queryId}'), 'Firestore rules must protect admin AI query logs.');
 
 console.log('Admin control center validation passed.');

@@ -1025,6 +1025,10 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /adminAiQueries/{queryId} {
+      allow read, write: if isAdmin();
+    }
+
     match /classLifecycleEvents/{eventId} {
       allow read, write: if isAdmin();
     }

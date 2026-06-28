@@ -45,6 +45,7 @@ async (page) => {
   if (page.url().includes('/pages/dashboard/admin')) {
     const sections = [
       'dashboard',
+      'ia',
       'clases',
       'calendario',
       'profesores',

@@ -41,6 +41,10 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
         Dashboard
       </button>
+      <button class="sidebar-link" data-section="ia">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3a1.5 1.5 0 00-1.5 1.5V6h-1.5A2.25 2.25 0 004.5 8.25v1.5H3a1.5 1.5 0 000 3h1.5v1.5a2.25 2.25 0 002.25 2.25h1.5v1.5a1.5 1.5 0 003 0v-1.5h1.5v1.5a1.5 1.5 0 003 0v-1.5h1.5A2.25 2.25 0 0019.5 14.25v-1.5H21a1.5 1.5 0 000-3h-1.5v-1.5A2.25 2.25 0 0017.25 6h-1.5V4.5a1.5 1.5 0 00-3 0V6h-1.5V4.5A1.5 1.5 0 009.75 3zM8 10h.01M16 10h.01M9 14h6"/></svg>
+        IA Admin
+      </button>
       <button class="sidebar-link" data-section="clases">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Clases
@@ -180,6 +184,10 @@
       </section>
 
       <!-- â•â• SECCIÃ“N: CLASES â•â• -->
+      <section id="section-ia" class="dash-section" style="display:none">
+        <div id="admin-ai-assistant" data-admin-ai-assistant></div>
+      </section>
+
       <section id="section-clases" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -889,6 +897,7 @@
 import db from '../../js/firebase-data-client.js?v=20260628-data-client';
 import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-bi';
+import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-admin-ai';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
@@ -935,13 +944,14 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // â”€â”€ NAVEGACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const secciones = ['dashboard','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias'];
+const secciones = ['dashboard','ia','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias'];
 const TITULOS = {
-  dashboard:'Dashboard', clases:'Clases', calendario:'Calendario',
+  dashboard:'Dashboard', ia:'IA Admin', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
   solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias',
 };
 let chatInicializado = false;
+let adminAiInicializada = false;
 let profesoresCache = new Map();
 let profesoresFirestoreCache = null;
 let familiasCache = new Map();
@@ -1061,6 +1071,7 @@ function irA(seccion) {
   });
   document.getElementById('topbar-title').textContent = TITULOS[seccion] || seccion;
   if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
+  else if (seccion === 'ia') ejecutarCargaSeccion(seccion, iniciarAdminAi);
   else if (seccion === 'clases') ejecutarCargaSeccion(seccion, cargarClases);
   else if (seccion === 'calendario') ejecutarCargaSeccion(seccion, iniciarCalendario);
   else if (seccion === 'profesores') ejecutarCargaSeccion(seccion, cargarProfesores);
@@ -1111,6 +1122,16 @@ async function cargarBadgeLeads() {
 }
 
 // â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+function iniciarAdminAi() {
+  if (adminAiInicializada) return;
+  initAdminAiAssistant({
+    container: document.getElementById('admin-ai-assistant'),
+    onNavigate: irA,
+    actor: usuario,
+  });
+  adminAiInicializada = true;
+}
+
 async function cargarDashboard() {
   await cargarBadgeLeads();
   const controlCenter = document.getElementById('admin-control-center');
