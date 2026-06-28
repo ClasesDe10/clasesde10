@@ -249,8 +249,10 @@
                   <input class="form-control" type="tel" id="p-telefono">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Foto de perfil (URL)</label>
-                  <input class="form-control" type="url" id="p-foto-url" placeholder="https://...">
+                  <label class="form-label">Foto de perfil</label>
+                  <input class="form-control" type="file" id="p-foto-file" accept="image/jpeg,image/png,image/webp">
+                  <div class="form-hint">Sube una foto clara. Se comprimira automaticamente antes de guardarla.</div>
+                  <div id="p-foto-preview" style="margin-top:10px;width:96px;height:96px;border-radius:12px;background:var(--gray-soft);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--gray-mid);font-size:.78rem">Sin foto</div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Calle y numero</label>
@@ -271,19 +273,35 @@
                   </div>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Nivel de estudios</label>
+                  <label class="form-label">Tipo de formacion principal</label>
                   <select class="form-control" id="p-nivel">
                     <option value="">Seleccionar…</option>
                     <option>Bachillerato</option>
                     <option>Grado universitario</option>
                     <option>Máster</option>
                     <option>Doctorado</option>
+                    <option>Conservatorio / escuela de musica</option>
+                    <option>Entrenador / monitor deportivo</option>
                     <option>Otros</option>
                   </select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Universidad / Centro</label>
-                  <input class="form-control" type="text" id="p-universidad">
+                  <label class="form-label">Estudio exacto / titulacion</label>
+                  <input class="form-control" type="text" id="p-estudio-exacto" placeholder="Ej: Grado en Fisica, TAFAD, Conservatorio profesional de piano">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Colegio, universidad o centro donde estudiaste</label>
+                  <input class="form-control" type="text" id="p-centro-estudios" placeholder="Ej: Universidad Complutense, IES Ramiro de Maeztu, Federacion Madrilena de Padel">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label">Nota media de Bachillerato</label>
+                    <input class="form-control" type="number" id="p-nota-bachillerato" min="0" max="10" step="0.01" placeholder="0-10">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Nota media universitaria o formacion principal</label>
+                    <input class="form-control" type="number" id="p-nota-universidad" min="0" max="10" step="0.01" placeholder="0-10">
+                  </div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Biografía / Presentación</label>
@@ -295,17 +313,15 @@
                     <input class="form-control" type="number" id="p-experiencia" min="0" max="60" step="1">
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Tarifa orientativa EUR/h</label>
-                    <input class="form-control" type="number" id="p-tarifa" min="1" max="200" step="0.5">
+                    <label class="form-label" style="display:flex;gap:10px;align-items:center;margin-top:30px;text-transform:none;letter-spacing:0;font-size:.9rem">
+                      <input type="checkbox" id="p-bizum" style="width:18px;height:18px;accent-color:var(--navy)">
+                      Tengo Bizum para recibir pagos
+                    </label>
                   </div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Disponibilidad resumida</label>
                   <textarea class="form-control" id="p-disponibilidad" rows="3" placeholder="Lunes a jueves tardes, sabados manana, online..."></textarea>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">IBAN (para transferencias)</label>
-                  <input class="form-control" type="text" id="p-iban" placeholder="ES00 0000 0000 0000 0000 0000">
                 </div>
                 <button type="submit" class="btn btn-primary">Guardar cambios</button>
               </form>
@@ -314,11 +330,11 @@
 
           <div>
             <div class="card" style="margin-bottom:20px">
-              <div class="card-header"><span class="card-title">Materias que imparto</span></div>
+              <div class="card-header"><span class="card-title">Materias y actividades que imparto</span></div>
               <div class="card-body">
                 <div id="materias-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
                 <div style="display:flex;gap:8px">
-                  <input class="form-control" type="text" id="nueva-materia" placeholder="Añadir materia…">
+                  <input class="form-control" type="text" id="nueva-materia" placeholder="Ej: Matematicas, padel, guitarra, piano...">
                   <button class="btn btn-primary btn-sm" id="btn-add-materia">+</button>
                 </div>
               </div>
@@ -473,6 +489,8 @@ import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
+import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   formatEuros, badgeEstado, getIniciales, debounce, sanitize, fechaHoy, nombreMes
@@ -486,8 +504,33 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // Cargar perfil profesor
-const { data: perfil } = await db.from('profesores').select('*').eq('usuario_id', usuario.id).single();
-const profesorId = perfil?.id || usuario.uid || usuario.firebase_uid || usuario.id;
+const profesorFirestoreId = usuario.uid || usuario.firebase_uid || usuario.id;
+let perfilLegacy = null;
+try {
+  const { data } = await db.from('profesores').select('*').eq('usuario_id', usuario.id).single();
+  perfilLegacy = data || null;
+} catch (error) {
+  console.warn('Perfil legacy no disponible', error);
+}
+const perfilFirestoreSnap = await getDoc(firestoreDoc(firebaseDb, 'profesores', profesorFirestoreId)).catch((error) => {
+  console.warn('Perfil Firestore no disponible', error);
+  return null;
+});
+const perfilFirestoreExists = perfilFirestoreSnap?.exists() === true;
+let perfil = perfilFirestoreSnap?.exists()
+  ? { id: perfilFirestoreSnap.id, ...perfilFirestoreSnap.data(), legacy: perfilLegacy }
+  : (perfilLegacy || {
+      id: profesorFirestoreId,
+      userUid: profesorFirestoreId,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      apellidos: usuario.apellidos,
+      telefono: usuario.telefono,
+      estado_verificacion: 'pendiente_perfil',
+      verificationStatus: 'pendiente_perfil',
+      status: 'pendiente_perfil',
+    });
+const profesorId = perfilLegacy?.id || perfil?.id || profesorFirestoreId;
 
 // Mostrar alerta de verificación
 if (perfil) {
@@ -768,9 +811,61 @@ async function cargarIngresos() {
 }
 
 // ── PERFIL ───────────────────────────────────────────────────────
-const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universidad','Adultos'];
+const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universidad','Adultos','Iniciacion','Intermedio','Avanzado','Musica','Deporte'];
 let materiasActuales = [];
 let nivelesActuales  = [];
+let fotoPerfilDataUrl = '';
+
+function setFotoPreview(src) {
+  const preview = document.getElementById('p-foto-preview');
+  if (!preview) return;
+  fotoPerfilDataUrl = src || '';
+  preview.innerHTML = src
+    ? `<img src="${sanitize(src)}" alt="Foto de perfil" style="width:100%;height:100%;object-fit:cover">`
+    : 'Sin foto';
+}
+
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('La imagen no es valida.'));
+    image.src = src;
+  });
+}
+
+async function compressProfilePhoto(file) {
+  if (!file) return fotoPerfilDataUrl;
+  if (!file.type.startsWith('image/')) throw new Error('Sube una imagen JPG, PNG o WEBP.');
+  if (file.size > 5 * 1024 * 1024) throw new Error('La foto debe pesar menos de 5 MB.');
+
+  const image = await loadImage(await readImage(file));
+  const maxSide = 640;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+  let quality = 0.82;
+  let dataUrl = canvas.toDataURL('image/jpeg', quality);
+  while (dataUrl.length > 240000 && quality > 0.55) {
+    quality -= 0.08;
+    dataUrl = canvas.toDataURL('image/jpeg', quality);
+  }
+  if (dataUrl.length > 280000) throw new Error('La foto sigue siendo demasiado grande. Prueba con otra imagen.');
+  return dataUrl;
+}
 
 async function cargarChat() {
   if (chatInicializado || !profesorId) return;
@@ -786,25 +881,26 @@ async function cargarChat() {
 }
 
 async function cargarPerfil() {
-  if (!perfil) return;
   materiasActuales = perfil.materias || [];
   nivelesActuales  = perfil.niveles_educativos || [];
 
-  document.getElementById('p-nombre').value      = usuario.nombre || '';
-  document.getElementById('p-apellidos').value   = usuario.apellidos || '';
-  document.getElementById('p-telefono').value    = usuario.telefono || '';
-  document.getElementById('p-foto-url').value    = perfil.foto_url || perfil.photoUrl || '';
+  document.getElementById('p-nombre').value      = usuario.nombre || perfil.nombre || '';
+  document.getElementById('p-apellidos').value   = usuario.apellidos || perfil.apellidos || '';
+  document.getElementById('p-telefono').value    = usuario.telefono || perfil.telefono || '';
+  setFotoPreview(perfil.foto_url || perfil.photoUrl || '');
   document.getElementById('p-direccion').value   = perfil.direccion || perfil.address || '';
   document.getElementById('p-ciudad').value      = perfil.ciudad || 'Madrid';
   document.getElementById('p-cp').value          = perfil.codigo_postal || perfil.postalCode || '';
   document.getElementById('p-zona').value        = perfil.zona || perfil.zone || '';
   document.getElementById('p-nivel').value       = perfil.nivel_estudios || '';
-  document.getElementById('p-universidad').value = perfil.universidad || '';
+  document.getElementById('p-estudio-exacto').value = perfil.estudio_exacto || perfil.exactStudy || perfil.universidad || '';
+  document.getElementById('p-centro-estudios').value = perfil.centro_estudios || perfil.studyCenter || perfil.colegio_estudios || '';
+  document.getElementById('p-nota-bachillerato').value = perfil.nota_bachillerato ?? perfil.bachilleratoGrade ?? '';
+  document.getElementById('p-nota-universidad').value = perfil.nota_media_universidad ?? perfil.universityAverageGrade ?? '';
   document.getElementById('p-bio').value         = perfil.bio || '';
   document.getElementById('p-experiencia').value = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
-  document.getElementById('p-tarifa').value      = perfil.tarifa_hora ?? perfil.hourlyRate ?? '';
   document.getElementById('p-disponibilidad').value = perfil.disponibilidad_resumen || perfil.availabilitySummary || '';
-  document.getElementById('p-iban').value        = perfil.iban || '';
+  document.getElementById('p-bizum').checked     = perfil.acepta_bizum === true || perfil.hasBizum === true;
 
   renderMaterias();
 
@@ -816,6 +912,17 @@ async function cargarPerfil() {
       <span style="font-size:.875rem">${n}</span>
     </label>`).join('');
 }
+
+document.getElementById('p-foto-file')?.addEventListener('change', async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    setFotoPreview(await compressProfilePhoto(file));
+  } catch (error) {
+    e.target.value = '';
+    showToast('Foto no valida', error.message, 'warning');
+  }
+});
 
 function renderMaterias() {
   document.getElementById('materias-tags').innerHTML = materiasActuales.map(m => `
@@ -877,29 +984,98 @@ document.getElementById('btn-add-materia').addEventListener('click', () => {
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   e.preventDefault();
   const telefono = document.getElementById('p-telefono').value.trim();
-  const fotoUrl = document.getElementById('p-foto-url').value.trim();
+  const fotoUrl = fotoPerfilDataUrl;
   const direccion = document.getElementById('p-direccion').value.trim();
   const ciudad = document.getElementById('p-ciudad').value.trim();
   const codigoPostal = document.getElementById('p-cp').value.trim();
   const zona = document.getElementById('p-zona').value.trim();
+  const tipoFormacion = document.getElementById('p-nivel').value.trim();
+  const estudioExacto = document.getElementById('p-estudio-exacto').value.trim();
+  const centroEstudios = document.getElementById('p-centro-estudios').value.trim();
+  const notaBachillerato = Number(document.getElementById('p-nota-bachillerato').value);
+  const notaUniversidad = Number(document.getElementById('p-nota-universidad').value);
   const bio = document.getElementById('p-bio').value.trim();
   const experiencia = Number(document.getElementById('p-experiencia').value || 0);
-  const tarifa = Number(document.getElementById('p-tarifa').value || 0);
   const disponibilidad = document.getElementById('p-disponibilidad').value.trim();
+  const aceptaBizum = document.getElementById('p-bizum').checked;
+  const notasValidas = Number.isFinite(notaBachillerato) && notaBachillerato >= 0 && notaBachillerato <= 10
+    && Number.isFinite(notaUniversidad) && notaUniversidad >= 0 && notaUniversidad <= 10;
 
   if (!telefono || !fotoUrl || !direccion || !ciudad || !codigoPostal || !zona ||
-      !materiasActuales.length || !nivelesActuales.length || !tarifa || !disponibilidad || bio.length < 40) {
-    showToast('Perfil incompleto', 'Completa foto, telefono, direccion, zona, materias, niveles, tarifa, disponibilidad y presentacion antes de guardar.', 'warning');
+      !tipoFormacion || !estudioExacto || !centroEstudios || !notasValidas ||
+      !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum) {
+    showToast('Perfil incompleto', 'Completa foto, telefono, direccion, zona, estudios, centro, notas, materias/actividades, niveles, disponibilidad, Bizum y presentacion antes de guardar.', 'warning');
     return;
   }
 
-  const [{ error: e1 }, { error: e2 }] = await Promise.all([
-    db.from('usuarios').update({
-      nombre:    document.getElementById('p-nombre').value.trim(),
-      apellidos: document.getElementById('p-apellidos').value.trim(),
+  const nombre = document.getElementById('p-nombre').value.trim();
+  const apellidos = document.getElementById('p-apellidos').value.trim();
+  const perfilActivo = perfil.active !== false && perfil.activo !== false;
+  const profesorPayload = {
+    userUid: profesorFirestoreId,
+    email: usuario.email || perfil.email || '',
+    nombre,
+    apellidos,
+    telefono,
+    active: perfilActivo,
+    foto_url: fotoUrl,
+    direccion,
+    ciudad,
+    codigo_postal: codigoPostal,
+    zona,
+    nivel_estudios: tipoFormacion,
+    estudio_exacto: estudioExacto,
+    centro_estudios: centroEstudios,
+    colegio_estudios: centroEstudios,
+    nota_bachillerato: notaBachillerato,
+    nota_media_universidad: notaUniversidad,
+    bio,
+    experiencia_anios: Number.isFinite(experiencia) ? experiencia : 0,
+    disponibilidad_resumen: disponibilidad,
+    materias: materiasActuales,
+    niveles_educativos: nivelesActuales,
+    acepta_bizum: true,
+    perfil_completo: true,
+    updatedAt: serverTimestamp(),
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    await setDoc(firestoreDoc(firebaseDb, 'users', profesorFirestoreId), {
+      nombre,
+      apellidos,
       telefono,
-    }).eq('id', usuario.id),
-    db.from('profesores').update({
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    if (!perfilFirestoreExists) {
+      await setDoc(firestoreDoc(firebaseDb, 'profesores', profesorFirestoreId), {
+        userUid: profesorFirestoreId,
+        email: usuario.email || perfil.email || '',
+        nombre,
+        apellidos,
+        telefono,
+        active: perfilActivo,
+        status: 'pendiente_perfil',
+        perfil_completo: false,
+        profileComplete: false,
+        estado_verificacion: 'pendiente_perfil',
+        verificationStatus: 'pendiente_perfil',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await setDoc(firestoreDoc(firebaseDb, 'profesores', profesorFirestoreId), profesorPayload, { merge: true });
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo guardar el perfil en Firebase.', 'error');
+    return;
+  }
+
+  try {
+    await db.from('usuarios').update({ nombre, apellidos, telefono }).eq('id', usuario.id);
+    if (perfilLegacy?.id) {
+      await db.from('profesores').update({
       foto_url:          fotoUrl,
       photoUrl:          fotoUrl,
       direccion,
@@ -909,26 +1085,26 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       codigo_postal:     codigoPostal,
       postalCode:        codigoPostal,
       zona,
-      zone:              zona,
-      nivel_estudios:    document.getElementById('p-nivel').value,
-      universidad:       document.getElementById('p-universidad').value.trim(),
+      nivel_estudios:    tipoFormacion,
+      universidad:       centroEstudios,
       bio,
       experiencia_anios: Number.isFinite(experiencia) ? experiencia : 0,
       experienceYears:   Number.isFinite(experiencia) ? experiencia : 0,
-      tarifa_hora:       tarifa,
-      hourlyRate:        tarifa,
       disponibilidad_resumen: disponibilidad,
       availabilitySummary: disponibilidad,
-      iban:              document.getElementById('p-iban').value.trim(),
       materias:          materiasActuales,
       subjects:          materiasActuales,
       niveles_educativos: nivelesActuales,
       levels:            nivelesActuales,
       perfil_completo:   true,
       profileComplete:   true,
-    }).eq('id', profesorId),
-  ]);
-  if (e1 || e2) { showToast('Error', (e1||e2).message, 'error'); return; }
+      }).eq('id', perfilLegacy.id);
+    }
+  } catch (error) {
+    console.warn('No se pudo sincronizar perfil legacy', error);
+  }
+
+  perfil = { ...perfil, ...profesorPayload };
   showToast('Guardado', 'Perfil actualizado correctamente.', 'success');
 });
 

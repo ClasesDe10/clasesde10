@@ -79,6 +79,10 @@ function splitName(fullName) {
 function profileIssues(data) {
   const subjects = asArray(data.materias || data.subjects || data.materia || data.materiasTexto);
   const levels = asArray(data.niveles_educativos || data.levels || data.niveles || data.nivel);
+  const bachilleratoGrade = Number(data.nota_bachillerato ?? data.bachilleratoGrade);
+  const universityGrade = Number(data.nota_media_universidad ?? data.universityAverageGrade);
+  const hasValidBachilleratoGrade = Number.isFinite(bachilleratoGrade) && bachilleratoGrade >= 0 && bachilleratoGrade <= 10;
+  const hasValidUniversityGrade = Number.isFinite(universityGrade) && universityGrade >= 0 && universityGrade <= 10;
   const issues = [];
   if (!(data.foto_url || data.photoUrl)) issues.push('foto');
   if (!clean(data.email)) issues.push('email');
@@ -87,10 +91,15 @@ function profileIssues(data) {
   if (!(data.ciudad || data.city)) issues.push('ciudad');
   if (!(data.codigo_postal || data.postalCode)) issues.push('codigo postal');
   if (!(data.zona || data.zone)) issues.push('zona');
+  if (!(data.nivel_estudios || data.studyLevel)) issues.push('tipo formacion');
+  if (!(data.estudio_exacto || data.exactStudy || data.titulacion)) issues.push('estudio exacto');
+  if (!(data.centro_estudios || data.studyCenter || data.colegio_estudios || data.universidad)) issues.push('centro estudios');
+  if (!hasValidBachilleratoGrade) issues.push('nota bachillerato');
+  if (!hasValidUniversityGrade) issues.push('nota formacion superior');
   if (!subjects.length) issues.push('materias');
   if (!levels.length) issues.push('niveles');
-  if (!Number(data.tarifa_hora || data.hourlyRate || data.tarifaHora || 0)) issues.push('tarifa');
   if (!(data.disponibilidad_resumen || data.availabilitySummary)) issues.push('disponibilidad');
+  if (!(data.acepta_bizum === true || data.hasBizum === true)) issues.push('bizum');
   if (!data.bio || clean(data.bio).length < 40) issues.push('presentacion');
   return issues;
 }
@@ -99,9 +108,8 @@ function buildPatch(data) {
   const patch = {};
   const subjects = asArray(data.materias || data.subjects || data.materia || data.materiasTexto);
   const levels = asArray(data.niveles_educativos || data.levels || data.niveles || data.nivel);
-  const hourlyRate = Number(data.tarifa_hora || data.hourlyRate || data.tarifaHora || data.tarifa || 0);
   const names = splitName(data.nombre);
-  const issues = profileIssues({ ...data, subjects, levels, hourlyRate });
+  const issues = profileIssues({ ...data, subjects, levels });
   const complete = issues.length === 0;
   const status = clean(data.status || data.estado_verificacion || data.verificationStatus) || 'pendiente_perfil';
   const legacyImported = Boolean(data.legacyId || data.source === 'google_sheets_profesores');
@@ -118,10 +126,16 @@ function buildPatch(data) {
     patch.levels = levels;
     patch.niveles_educativos = levels;
   }
-  if (hourlyRate > 0) {
-    patch.hourlyRate = hourlyRate;
-    patch.tarifa_hora = hourlyRate;
+  if (data.nivel_estudios && !data.studyLevel) patch.studyLevel = clean(data.nivel_estudios, 160);
+  if (data.studyLevel && !data.nivel_estudios) patch.nivel_estudios = clean(data.studyLevel, 160);
+  if ((data.estudio_exacto || data.exactStudy || data.titulacion) && !data.estudio_exacto) {
+    patch.estudio_exacto = clean(data.exactStudy || data.titulacion, 300);
   }
+  if (data.estudio_exacto && !data.exactStudy) patch.exactStudy = clean(data.estudio_exacto, 300);
+  if ((data.centro_estudios || data.studyCenter || data.colegio_estudios || data.universidad) && !data.centro_estudios) {
+    patch.centro_estudios = clean(data.studyCenter || data.colegio_estudios || data.universidad, 300);
+  }
+  if (data.centro_estudios && !data.studyCenter) patch.studyCenter = clean(data.centro_estudios, 300);
   if (data.zona && !data.zone) patch.zone = clean(data.zona, 180);
   if (data.modalidad && !data.modality) patch.modality = clean(data.modalidad, 120);
   if (data.experienciaTexto && !data.experienceSummary) patch.experienceSummary = clean(data.experienciaTexto, 1000);

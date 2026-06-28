@@ -25,7 +25,6 @@ async (page) => {
         'prof-canal',
         'prof-niveles',
         'prof-anios',
-        'prof-tarifa',
         'prof-experiencia',
         'prof-disponibilidad',
         'prof-verificacion',

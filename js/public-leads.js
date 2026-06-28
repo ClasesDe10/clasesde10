@@ -44,7 +44,6 @@ function cleanMetadata(metadata = {}) {
     'page_url',
     'presupuesto',
     'referrer',
-    'tarifa',
     'user_agent',
     'utm_campaign',
     'utm_content',

@@ -1343,7 +1343,6 @@ function mapProfesorFirestore(docSnap) {
     verificationStatus: data.verificationStatus || data.estado_verificacion || data.status || 'pendiente',
     materias: listaCampo(data.materias || data.subjects || data.materiasTexto),
     niveles_educativos: listaCampo(data.niveles_educativos || data.levels || data.niveles),
-    tarifa_hora: Number(data.tarifa_hora || data.hourlyRate || data.tarifaHora || 0),
     ciudad: data.ciudad || data.city || 'Madrid',
     createdSort: timestampMillis(data.createdAt || data.importedAt || data.updatedAt),
   };
@@ -1447,7 +1446,6 @@ function renderProfesorDetalle(p) {
         ${fila('Telefono', p.usuarios?.telefono || p.telefono)}
         ${fila('Direccion', p.direccion || p.address)}
         ${fila('Zona', [p.zona || p.zone, p.ciudad || p.city, p.codigo_postal || p.postalCode].filter(Boolean).join(', '))}
-        ${fila('Tarifa', Number(p.tarifa_hora || p.hourlyRate || 0) ? `${Number(p.tarifa_hora || p.hourlyRate)} EUR/h` : '')}
         ${fila('Experiencia', Number.isFinite(Number(p.experiencia_anios ?? p.experienceYears)) ? `${Number(p.experiencia_anios ?? p.experienceYears)} anios` : '')}
       </div>
     </div>
@@ -1455,6 +1453,11 @@ function renderProfesorDetalle(p) {
       ${renderProfesorAiPanel(p)}
       ${fila('Materias', materias.join(', '))}
       ${fila('Niveles', niveles.join(', '))}
+      ${fila('Formacion', p.estudio_exacto || p.exactStudy || p.nivel_estudios || p.studyLevel)}
+      ${fila('Centro', p.centro_estudios || p.studyCenter || p.colegio_estudios || p.universidad)}
+      ${fila('Nota Bachillerato', p.nota_bachillerato ?? p.bachilleratoGrade ?? '')}
+      ${fila('Nota formacion superior', p.nota_media_universidad ?? p.universityAverageGrade ?? '')}
+      ${fila('Bizum', (p.acepta_bizum === true || p.hasBizum === true) ? 'Si' : 'No confirmado')}
       ${fila('Disponibilidad', p.disponibilidad_resumen || p.availabilitySummary)}
       <div><strong>Presentacion:</strong><br>${sanitize(p.bio || '-')}</div>
       ${issues.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Perfil incompleto</div>Falta: ${issues.map(sanitize).join(', ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">✓</span><div class="alert-body"><div class="alert-title">Perfil completo</div>Puede verificarse y asignarse.</div></div>'}
@@ -1900,7 +1903,7 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     if (detalleProfesor && !completos) {
       detalleProfesor.style.display = '';
       detalleProfesor.innerHTML = profesoresElegibles.length
-        ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, materias, niveles, tarifa, disponibilidad y presentacion antes de asignar.</div></div>`
+        ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, estudios, centro, notas, materias/actividades, niveles, Bizum, disponibilidad y presentacion antes de asignar.</div></div>`
         : '<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Activa o verifica al menos un profesor con perfil completo antes de asignar esta solicitud.</div></div>';
     } else if (detalleProfesor) {
       detalleProfesor.style.display = 'none';
@@ -1959,7 +1962,7 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
   if (detalleProfesor && !completos) {
     detalleProfesor.style.display = '';
     detalleProfesor.innerHTML = profesoresElegibles.length
-      ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, materias, niveles, tarifa, disponibilidad y presentacion antes de asignar.</div></div>`
+      ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, estudios, centro, notas, materias/actividades, niveles, Bizum, disponibilidad y presentacion antes de asignar.</div></div>`
       : '<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Activa o verifica al menos un profesor con perfil completo antes de asignar esta solicitud.</div></div>';
   } else if (detalleProfesor) {
     detalleProfesor.style.display = 'none';

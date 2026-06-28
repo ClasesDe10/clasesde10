@@ -297,7 +297,6 @@ export async function register({
   materias,
   niveles_educativos,
   experiencia_anios,
-  tarifa_hora,
   disponibilidad_resumen,
   bio,
 }) {
@@ -321,9 +320,7 @@ export async function register({
     ? niveles_educativos.map(normalizeText).filter(Boolean)
     : normalizeText(niveles_educativos).split(',').map((item) => item.trim()).filter(Boolean);
   const experienciaNum = Number(experiencia_anios || 0);
-  const tarifaNum = Number(tarifa_hora || 0);
   const hasExperience = normalizeText(experiencia_anios) !== '' && Number.isFinite(experienciaNum);
-  const hasHourlyRate = normalizeText(tarifa_hora) !== '' && Number.isFinite(tarifaNum) && tarifaNum > 0;
 
   if (!emailClean || !password || !nombreClean || !apellidosClean || !role) {
     return { error: authError('Todos los campos obligatorios deben completarse.') };
@@ -347,7 +344,6 @@ export async function register({
     materiasList.length,
     nivelesList.length,
     hasExperience,
-    hasHourlyRate,
     disponibilidadClean,
     bioClean.length >= 40,
   ].every(Boolean);
@@ -422,7 +418,6 @@ export async function register({
         ...(materiasList.length ? { materias: materiasList, subjects: materiasList } : {}),
         ...(nivelesList.length ? { niveles_educativos: nivelesList, levels: nivelesList } : {}),
         ...(hasExperience ? { experiencia_anios: experienciaNum, experienceYears: experienciaNum } : {}),
-        ...(hasHourlyRate ? { tarifa_hora: tarifaNum, hourlyRate: tarifaNum } : {}),
         ...(disponibilidadClean ? { disponibilidad_resumen: disponibilidadClean, availabilitySummary: disponibilidadClean } : {}),
         ...(bioClean ? { bio: bioClean } : {}),
         perfil_completo: teacherProfileComplete,

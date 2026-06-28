@@ -133,7 +133,6 @@ service cloud.firestore {
             'page_url',
             'presupuesto',
             'referrer',
-            'tarifa',
             'user_agent',
             'utm_campaign',
             'utm_content',
@@ -161,7 +160,6 @@ service cloud.firestore {
           && optionalMetadataString('page_url', 500)
           && optionalMetadataString('presupuesto', 120)
           && optionalMetadataString('referrer', 500)
-          && optionalMetadataString('tarifa', 120)
           && optionalMetadataString('user_agent', 500)
           && optionalMetadataString('utm_campaign', 160)
           && optionalMetadataString('utm_content', 160)
@@ -243,7 +241,7 @@ service cloud.firestore {
         && requiredString('nombre', 1, 80)
         && optionalString('apellidos', 120)
         && optionalString('telefono', 40)
-        && request.resource.data.active == true
+        && request.resource.data.active is bool
         && request.resource.data.status in (
           role == 'profesor'
             ? ['pendiente_revision', 'pendiente_perfil']
@@ -271,10 +269,80 @@ service cloud.firestore {
         && optionalString('apellidos', 120)
         && optionalString('telefono', 40)
         && validClientUpdatedAt()
-        && request.resource.data.userUid == resource.data.userUid
+        && (
+          request.resource.data.userUid == resource.data.userUid
+          || (
+            !resource.data.keys().hasAny(['userUid'])
+            && request.resource.data.userUid == request.auth.uid
+          )
+        )
         && request.resource.data.email == resource.data.email
         && request.resource.data.active == resource.data.active
         && request.resource.data.status == resource.data.status;
+    }
+
+    function validTeacherProfileSelfUpdate() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly([
+          'nombre',
+          'apellidos',
+          'telefono',
+          'foto_url',
+          'photoUrl',
+          'direccion',
+          'address',
+          'ciudad',
+          'city',
+          'codigo_postal',
+          'postalCode',
+          'zona',
+          'zone',
+          'nivel_estudios',
+          'studyLevel',
+          'estudio_exacto',
+          'exactStudy',
+          'centro_estudios',
+          'studyCenter',
+          'colegio_estudios',
+          'nota_bachillerato',
+          'bachilleratoGrade',
+          'nota_media_universidad',
+          'universityAverageGrade',
+          'bio',
+          'experiencia_anios',
+          'experienceYears',
+          'disponibilidad_resumen',
+          'availabilitySummary',
+          'materias',
+          'subjects',
+          'niveles_educativos',
+          'levels',
+          'acepta_bizum',
+          'hasBizum',
+          'perfil_completo',
+          'profileComplete',
+          'estado_verificacion',
+          'verificationStatus',
+          'status',
+          'updatedAt',
+          'updated_at'
+        ])
+        && (
+          request.resource.data.userUid == resource.data.userUid
+          || (
+            !resource.data.keys().hasAny(['userUid'])
+            && request.resource.data.userUid == request.auth.uid
+          )
+        )
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.active == resource.data.active
+        && (!changed.hasAny(['estado_verificacion'])
+          || request.resource.data.estado_verificacion in ['pendiente', 'pendiente_perfil'])
+        && (!changed.hasAny(['verificationStatus'])
+          || request.resource.data.verificationStatus in ['pendiente', 'pendiente_perfil'])
+        && (!changed.hasAny(['status'])
+          || request.resource.data.status in ['pendiente_revision', 'pendiente_perfil'])
+        && validClientUpdatedAt();
     }
 
     function validFamilyStudentUpdate() {
@@ -420,7 +488,7 @@ service cloud.firestore {
     match /profesores/{uid} {
       allow create: if isAdmin() || validRoleProfileCreate(uid, 'profesor');
       allow read: if isAdmin() || isOwner(uid);
-      allow update: if isAdmin() || (isOwner(uid) && validRoleProfileSelfUpdate());
+      allow update: if isAdmin() || (isOwner(uid) && validTeacherProfileSelfUpdate());
       allow delete: if isAdmin();
     }
 

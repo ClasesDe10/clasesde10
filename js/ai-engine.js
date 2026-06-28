@@ -38,6 +38,13 @@ export function unique(values) {
   return [...new Set(values.filter(Boolean))];
 }
 
+function numberOrNull(value) {
+  const raw = clean(value).replace(',', '.');
+  if (!raw) return null;
+  const number = Number(raw);
+  return Number.isFinite(number) ? number : null;
+}
+
 export function getTeacherName(teacher) {
   return clean(
     teacher.displayName
@@ -58,7 +65,7 @@ export function getTeacherProfile(teacher = {}) {
     name: getTeacherName(teacher),
     email: clean(teacher.usuarios?.email || teacher.email, 254),
     phone: clean(teacher.usuarios?.telefono || teacher.telefono, 40),
-    photoUrl: clean(teacher.foto_url || teacher.photoUrl, 500),
+    photoUrl: clean(teacher.foto_url || teacher.photoUrl, 300000),
     address: clean(teacher.direccion || teacher.address, 240),
     city: clean(teacher.ciudad || teacher.city || 'Madrid', 160),
     postalCode: clean(teacher.codigo_postal || teacher.postalCode, 20),
@@ -66,9 +73,14 @@ export function getTeacherProfile(teacher = {}) {
     modality: clean(teacher.modalidad || teacher.modality || teacher.tipo_clase || teacher.formato, 120),
     subjects,
     levels,
-    hourlyRate: Number(teacher.tarifa_hora || teacher.hourlyRate || teacher.tarifaHora || teacher.precio || 0),
+    studyLevel: clean(teacher.nivel_estudios || teacher.studyLevel, 160),
+    exactStudy: clean(teacher.estudio_exacto || teacher.exactStudy || teacher.titulacion || teacher.universidad, 300),
+    studyCenter: clean(teacher.centro_estudios || teacher.studyCenter || teacher.colegio_estudios || teacher.universidad, 300),
+    bachilleratoGrade: numberOrNull(teacher.nota_bachillerato ?? teacher.bachilleratoGrade),
+    universityAverageGrade: numberOrNull(teacher.nota_media_universidad ?? teacher.universityAverageGrade),
     availability: clean(teacher.disponibilidad_resumen || teacher.availabilitySummary || teacher.disponibilidad, 500),
     bio: clean(teacher.bio || teacher.presentacion || teacher.experiencia || teacher.experienceSummary, 1500),
+    hasBizum: teacher.acepta_bizum === true || teacher.hasBizum === true,
     status: lower(teacher.estado_verificacion || teacher.verificationStatus || teacher.status || teacher.estado),
     active: teacher.active === true || teacher.activo === true,
     maxStudents: Number(teacher.maxStudents || teacher.max_alumnos || 5),
@@ -119,8 +131,18 @@ export function evaluateTeacherProfile(teacher = {}) {
   if (!profile.levels.length) issues.push({ field: 'niveles', label: 'Anadir niveles educativos', weight: 12 });
   else strengths.push(`${profile.levels.length} nivel(es)`);
 
-  if (!profile.hourlyRate) issues.push({ field: 'tarifa', label: 'Definir tarifa orientativa', weight: 6 });
-  else strengths.push(`Tarifa ${profile.hourlyRate} EUR/h`);
+  if (!profile.studyLevel) issues.push({ field: 'tipo_formacion', label: 'Indicar tipo de formacion principal', weight: 5 });
+  if (!profile.exactStudy) issues.push({ field: 'estudio_exacto', label: 'Completar estudio exacto o titulacion', weight: 8 });
+  else strengths.push(`Formacion: ${profile.exactStudy}`);
+
+  if (!profile.studyCenter) issues.push({ field: 'centro_estudios', label: 'Completar colegio, universidad o centro', weight: 6 });
+  if (profile.bachilleratoGrade === null || profile.bachilleratoGrade < 0 || profile.bachilleratoGrade > 10) {
+    issues.push({ field: 'nota_bachillerato', label: 'Completar nota media de Bachillerato', weight: 4 });
+  }
+  if (profile.universityAverageGrade === null || profile.universityAverageGrade < 0 || profile.universityAverageGrade > 10) {
+    issues.push({ field: 'nota_universidad', label: 'Completar nota media universitaria o formacion principal', weight: 4 });
+  }
+  if (!profile.hasBizum) issues.push({ field: 'bizum', label: 'Confirmar que tiene Bizum', weight: 4 });
 
   if (!profile.availability) issues.push({ field: 'disponibilidad', label: 'Indicar disponibilidad horaria', weight: 8 });
   else strengths.push('Disponibilidad indicada');

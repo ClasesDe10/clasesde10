@@ -252,7 +252,6 @@ async function loadTeachers(db) {
         modalidad: clean(data.modalidad || data.tipo_clase || data.formato),
         zona: clean(data.zona || data.ciudad || data.barrio),
         bio: clean(data.bio || data.experiencia, 1000),
-        tarifa: Number(data.tarifa_hora || data.precio || data.price || 0),
         maxStudents: Number(data.maxStudents || data.max_alumnos || 5),
         activeAssignments: assignmentCounts.get(doc.id) || assignmentCounts.get(userUid) || 0,
       };

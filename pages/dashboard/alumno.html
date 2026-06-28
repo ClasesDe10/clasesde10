@@ -323,7 +323,7 @@ async function cargarMisClases() {
 async function cargarProfesor() {
   if (!alumnoId) return;
   const { data: asig } = await db.from('asignaciones')
-    .select('materia, profesores(id, bio, materias, niveles_educativos, tarifa_hora, usuarios(nombre,apellidos,telefono,email))')
+    .select('materia, profesores(id, bio, materias, niveles_educativos, usuarios(nombre,apellidos,telefono,email))')
     .eq('alumno_id', alumnoId).eq('activa', true);
 
   const cont = document.getElementById('info-profesor');
