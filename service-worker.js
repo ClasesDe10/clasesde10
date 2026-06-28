@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'clasesde10-pwa-v5';
+const CACHE_VERSION = 'clasesde10-pwa-v10';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const FIREBASE_CONFIG = {
@@ -19,15 +19,15 @@ const PRECACHE_URLS = [
   '/css/style.css',
   '/js/pwa.js',
   '/js/nav.js',
+  '/pages/login.html',
+  '/pages/registro.html',
+  '/pages/reset-password.html',
   '/assets/img/logo-192.png',
   '/assets/img/logo-512.png'
 ];
 
 const PRIVATE_PATHS = [
   /^\/pages\/dashboard\//,
-  /^\/pages\/login(?:\.html)?$/,
-  /^\/pages\/registro(?:\.html)?$/,
-  /^\/pages\/reset-password(?:\.html)?$/,
   /^\/offline(?:\.html)?$/,
   /^\/__\//,
   /^\/supabase\//,
@@ -35,6 +35,12 @@ const PRIVATE_PATHS = [
   /^\/firebase\.json$/,
   /^\/\.firebaserc$/,
   /^\/\.netlify\//
+];
+
+const AUTH_SHELL_PATHS = [
+  /^\/pages\/login(?:\.html)?$/,
+  /^\/pages\/registro(?:\.html)?$/,
+  /^\/pages\/reset-password(?:\.html)?$/,
 ];
 
 try {
@@ -70,6 +76,10 @@ function isPrivatePath(pathname) {
   return PRIVATE_PATHS.some((pattern) => pattern.test(pathname));
 }
 
+function isAuthShellPath(pathname) {
+  return AUTH_SHELL_PATHS.some((pattern) => pattern.test(pathname));
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
@@ -87,10 +97,6 @@ self.addEventListener('activate', (event) => {
         .map((key) => caches.delete(key))
     );
 
-    if (self.registration.navigationPreload) {
-      await self.registration.navigationPreload.enable();
-    }
-
     await self.clients.claim();
   })());
 });
@@ -100,12 +106,20 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  if (url.origin !== self.location.origin || isPrivatePath(url.pathname)) return;
+  if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
-    event.respondWith(networkFirstPage(request, event));
+    event.respondWith(
+      isAuthShellPath(url.pathname)
+        ? networkFirstAuthShell(url.pathname, request, event)
+        : isPrivatePath(url.pathname)
+        ? networkOnlyPrivatePage(request, event)
+        : networkFirstPage(request, event)
+    );
     return;
   }
+
+  if (isPrivatePath(url.pathname)) return;
 
   if (['style', 'script', 'manifest'].includes(request.destination)) {
     event.respondWith(networkFirstAsset(request));
@@ -114,6 +128,12 @@ self.addEventListener('fetch', (event) => {
 
   if (['image', 'font'].includes(request.destination)) {
     event.respondWith(cacheFirst(request));
+  }
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
 
@@ -135,20 +155,58 @@ self.addEventListener('notificationclick', (event) => {
   })());
 });
 
+async function networkOnlyPrivatePage(request, event) {
+  try {
+    const preload = event.preloadResponse ? await event.preloadResponse.catch(() => null) : null;
+    return preload || await fetch(request);
+  } catch (_) {
+    return offlineFallbackResponse();
+  }
+}
+
+async function networkFirstAuthShell(pathname, request, event) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cacheKey = pathname.endsWith('.html') ? pathname : `${pathname}.html`;
+
+  try {
+    const preload = event.preloadResponse ? await event.preloadResponse.catch(() => null) : null;
+    const response = preload || await fetch(request);
+    if (response && response.ok) {
+      await cache.put(cacheKey, response.clone());
+    }
+    return response;
+  } catch (_) {
+    return cache.match(cacheKey)
+      || caches.match(cacheKey, { ignoreSearch: true })
+      || offlineFallbackResponse();
+  }
+}
+
 async function networkFirstPage(request, event) {
   const cache = await caches.open(PAGE_CACHE);
 
   try {
-    const preload = event.preloadResponse ? await event.preloadResponse : null;
+    const preload = event.preloadResponse ? await event.preloadResponse.catch(() => null) : null;
     const response = preload || await fetch(request);
     if (response && response.ok) {
       await cache.put(request, response.clone());
     }
     return response;
   } catch (_) {
-    const cached = await cache.match(request);
-    return cached || caches.match('/offline.html');
+    const cached = await caches.match(request, { ignoreSearch: true });
+    return cached || offlineFallbackResponse();
   }
+}
+
+async function offlineFallbackResponse() {
+  const offline = await caches.match('/offline.html', { ignoreSearch: true });
+  return offline || new Response(
+    '<!doctype html><title>Sin conexion | ClasesDe10</title><h1>Sin conexion</h1><p>Vuelve a intentarlo cuando recuperes internet.</p>',
+    {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    }
+  );
 }
 
 async function networkFirstAsset(request) {

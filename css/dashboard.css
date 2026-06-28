@@ -30,28 +30,64 @@
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
   --shadow:      0 4px 16px rgba(0,0,0,0.1);
   --shadow-lg:   0 8px 32px rgba(0,0,0,0.15);
+  --app-vh:      1vh;
+  --keyboard-inset: 0px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; font-size: 16px; }
+html {
+  min-height: 100%;
+  scroll-behavior: smooth;
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--cream);
   color: var(--text-body);
   overflow-x: hidden;
   min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: rgba(232,160,48,.22);
+}
+
+button,
+[role="button"],
+.btn,
+.topbar-btn,
+.hamburger-btn,
+.sidebar-link,
+.chat-tab,
+.chat-list-item {
+  touch-action: manipulation;
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
 }
 
 /* ── LAYOUT PRINCIPAL ─────────────────────────────────────────── */
 .dash-layout {
   display: flex;
   min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
 }
 
 /* ── SIDEBAR ─────────────────────────────────────────────────── */
 .sidebar {
   width: var(--sidebar-w);
   min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
   background: var(--navy);
   display: flex;
   flex-direction: column;
@@ -223,6 +259,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--gray-mid);
   transition: background .2s, color .2s;
+  touch-action: manipulation;
 }
 .topbar-btn:hover { background: var(--gray-soft); color: var(--navy); }
 .topbar-btn .badge {
@@ -517,6 +554,7 @@ body {
   flex-direction: column; gap: 5px;
   align-items: center; justify-content: center;
   cursor: pointer;
+  touch-action: manipulation;
 }
 .hamburger-btn span {
   width: 18px; height: 2px;
@@ -529,6 +567,7 @@ body {
   margin-left: var(--sidebar-w);
   padding-top: var(--topbar-h);
   min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
   flex: 1;
   min-width: 0;
   max-width: calc(100vw - var(--sidebar-w));
@@ -1083,7 +1122,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   background: rgba(0,0,0,0.5);
   backdrop-filter: blur(4px);
   display: none; align-items: center; justify-content: center;
-  padding: 20px;
+  padding: 20px 20px max(20px, calc(20px + var(--keyboard-inset, 0px)));
 }
 .modal-overlay.open { display: flex; }
 .modal {
@@ -1091,7 +1130,9 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   border-radius: var(--radius);
   width: 100%; max-width: 560px;
   max-height: 90vh;
+  max-height: min(90vh, calc((var(--app-vh, 1vh) * 100) - 40px - var(--keyboard-inset, 0px)));
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-lg);
   animation: modalIn .2s ease;
 }
@@ -1109,12 +1150,13 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   font-size: 1.1rem; font-weight: 700; color: var(--navy);
 }
 .modal-close {
-  width: 32px; height: 32px;
+  width: 44px; height: 44px;
   border-radius: 8px; border: none; background: none;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--gray-mid);
   font-size: 1.1rem;
   transition: background .2s;
+  touch-action: manipulation;
 }
 .modal-close:hover { background: var(--gray-soft); color: var(--text-dark); }
 .modal-body { padding: 24px; }
@@ -1348,6 +1390,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .chat-compose {
     grid-template-columns: 1fr;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
   .admin-notification-form {
     grid-template-columns: 1fr;
@@ -1382,9 +1425,9 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .hamburger-btn,
   .topbar-btn {
-    width: 36px;
-    height: 36px;
-    flex: 0 0 36px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
   }
   .topbar-title {
     min-width: 0;
@@ -1541,13 +1584,13 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     flex-wrap: wrap;
   }
   .btn {
-    min-height: 36px;
+    min-height: 44px;
     padding: 8px 11px;
     font-size: .8rem;
     justify-content: center;
   }
   .btn-sm {
-    min-height: 30px;
+    min-height: 44px;
     padding: 6px 9px;
     font-size: .74rem;
   }
@@ -1556,7 +1599,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     font-size: .9rem;
   }
   .btn-icon {
-    min-width: 36px;
+    min-width: 44px;
     padding: 8px;
   }
   .dash-section > div[style*="display:flex"] > div[style*="display:flex"],
@@ -1570,8 +1613,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     width: 100% !important;
   }
   .dash-section > div[style*="display:flex"] .btn-icon {
-    width: 36px !important;
-    flex: 0 0 36px;
+    width: 44px !important;
+    flex: 0 0 44px;
   }
   .form-group {
     margin-bottom: 14px;
@@ -1586,7 +1629,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .modal {
     width: 100%;
-    max-height: 92dvh;
+    max-height: min(92dvh, calc((var(--app-vh, 1vh) * 100) - var(--keyboard-inset, 0px)));
     overflow-y: auto;
   }
   .modal-header,
@@ -1612,6 +1655,11 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .modal-footer .btn {
     flex: 1 1 130px;
+  }
+  .page-btn,
+  .calendar-nav button {
+    width: 44px;
+    height: 44px;
   }
   #profesor-detalle-body > div[style*="grid-template-columns"],
   #asignar-profesor-detalle > div[style*="grid-template-columns"] {
@@ -1688,7 +1736,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .stats-grid { grid-template-columns: 1fr; }
   .page-content { padding: 12px; }
   .modal { border-radius: var(--radius) var(--radius) 0 0; max-width: 100%; }
-  .modal-overlay { align-items: flex-end; padding: 0; }
+  .modal-overlay { align-items: flex-end; padding: 0 0 var(--keyboard-inset, 0px); }
   #calendario-wrapper,
   .calendar-wrapper {
     max-width: calc(100vw - 24px);
@@ -1742,8 +1790,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     flex-shrink: 0;
   }
   .calendar-nav button {
-    width: 30px;
-    height: 30px;
+    width: 40px;
+    height: 40px;
   }
   .calendar-grid {
     padding: 10px 8px;

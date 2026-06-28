@@ -38,6 +38,37 @@
       '/pages/reset-password.html',
     ].includes(window.location.pathname);
 
+  function syncViewportVars() {
+    const viewport = window.visualViewport;
+    const height = viewport?.height || window.innerHeight || document.documentElement.clientHeight;
+    const keyboardInset = viewport
+      ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+      : 0;
+
+    document.documentElement.style.setProperty('--app-vh', `${height * 0.01}px`);
+    document.documentElement.style.setProperty('--keyboard-inset', `${Math.round(keyboardInset)}px`);
+    document.documentElement.classList.toggle('is-standalone-app', isStandalone());
+  }
+
+  function keepFocusedFieldVisible(event) {
+    const field = event.target;
+    if (!field?.matches?.('input, select, textarea')) return;
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+
+    window.setTimeout(() => {
+      field.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    }, 180);
+  }
+
+  function bindViewportSignals() {
+    syncViewportVars();
+    window.addEventListener('resize', syncViewportVars, { passive: true });
+    window.addEventListener('orientationchange', () => window.setTimeout(syncViewportVars, 250), { passive: true });
+    window.visualViewport?.addEventListener('resize', syncViewportVars, { passive: true });
+    window.visualViewport?.addEventListener('scroll', syncViewportVars, { passive: true });
+    document.addEventListener('focusin', keepFocusedFieldVisible);
+  }
+
   function injectStyles() {
     if (document.getElementById('cd10-install-styles')) return;
 
@@ -65,7 +96,7 @@
       .cd10-install-card p { margin: 0; color: #5d6678; font-size: .84rem; line-height: 1.45; }
       .cd10-install-card__actions { display: flex; gap: 8px; margin-top: 14px; }
       .cd10-install-card button {
-        min-height: 42px;
+        min-height: 44px;
         border-radius: 9px;
         border: 0;
         padding: 9px 13px;
@@ -105,7 +136,7 @@
         }
         .cd10-install-card button {
           width: 100%;
-          min-height: 40px;
+          min-height: 44px;
           padding: 8px 10px;
         }
       }
@@ -131,6 +162,7 @@
     installCard.className = 'cd10-install-card';
     installCard.setAttribute('role', 'dialog');
     installCard.setAttribute('aria-live', 'polite');
+    installCard.setAttribute('aria-label', 'Instalar ClasesDe10');
 
     const iosSteps = mode === 'ios'
       ? '<div class="cd10-install-card__steps">En iPhone: pulsa Compartir y despues "Anadir a pantalla de inicio".</div>'
@@ -175,9 +207,37 @@
     document.body.appendChild(installCard);
   }
 
+  function bindServiceWorkerUpdates(registration) {
+    const notifyReady = (detail) => {
+      window.dispatchEvent(new CustomEvent('cd10:pwa-status', { detail }));
+    };
+
+    const watchWorker = (worker) => {
+      if (!worker) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+          worker.postMessage({ type: 'SKIP_WAITING' });
+          notifyReady({ type: 'update-ready' });
+        }
+      });
+    };
+
+    watchWorker(registration.installing);
+    registration.addEventListener('updatefound', () => watchWorker(registration.installing));
+    notifyReady({ type: 'registered', scope: registration.scope });
+  }
+
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(() => {});
+    window.addEventListener('load', async () => {
+      try {
+        const registration = await navigator.serviceWorker.register('/service-worker.js', { scope: '/' });
+        bindServiceWorkerUpdates(registration);
+        await navigator.serviceWorker.ready;
+      } catch (_) {}
+    });
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      window.dispatchEvent(new CustomEvent('cd10:pwa-status', { detail: { type: 'controllerchange' } }));
     });
   }
 
@@ -196,4 +256,10 @@
       window.setTimeout(() => showInstallCard('ios'), 1800);
     }
   });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindViewportSignals, { once: true });
+  } else {
+    bindViewportSignals();
+  }
 })();

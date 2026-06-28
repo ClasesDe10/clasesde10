@@ -13,7 +13,7 @@ const CHECKS = [
   { path: '/offline.html', expect: 200, header: ['x-robots-tag', /noindex/] },
   { path: '/robots.txt', expect: 200 },
   { path: '/sitemap.xml', expect: 200 },
-  { path: '/pages/login.html', expect: 200, header: ['x-robots-tag', /noindex/] },
+  { path: '/pages/login.html', expect: 200, header: ['cache-control', /no-cache/] },
   { path: '/pages/dashboard/admin.html', expect: 200, header: ['cache-control', /no-store/] },
   { path: '/dashboard', expect: 302, location: /\/pages\/login\.html/, manual: true },
   { path: '/entrar', expect: 301, location: /\/pages\/login\.html/, manual: true },
@@ -42,15 +42,19 @@ function assertConfig() {
   const sw = fs.readFileSync('service-worker.js', 'utf8');
   for (const pattern of [
     '^\\/pages\\/dashboard\\/',
-    '^\\/pages\\/login',
-    '^\\/pages\\/registro',
-    '^\\/pages\\/reset-password',
     '^\\/offline',
     '^\\/supabase\\/',
     '^\\/firebase\\/',
     '^\\/firebase\\.json$',
   ]) {
     if (!sw.includes(pattern)) failures.push(`service-worker private pattern missing: ${pattern}`);
+  }
+  for (const appShellPath of [
+    '/pages/login.html',
+    '/pages/registro.html',
+    '/pages/reset-password.html',
+  ]) {
+    if (!sw.includes(`'${appShellPath}'`)) failures.push(`auth app shell not precached: ${appShellPath}`);
   }
 
   const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));

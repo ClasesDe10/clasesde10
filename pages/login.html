@@ -17,7 +17,7 @@
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
 <link rel="stylesheet" href="../css/dashboard.css?v=20260627-mobile">
 <style>
-body { display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
+body { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:calc(var(--app-vh, 1vh) * 100); padding:20px;
        background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%); }
 .auth-card {
   background: var(--white); border-radius: var(--radius);
@@ -82,7 +82,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 }
 .tab-btns { display:flex; gap:8px; margin-bottom:24px; }
 .tab-btn {
-  flex:1; padding:9px; border-radius:var(--radius-sm);
+  flex:1; min-height:44px; padding:9px; border-radius:var(--radius-sm);
   border:1.5px solid rgba(0,0,0,0.13); background:none;
   font-family:inherit; font-size:.82rem; font-weight:600;
   cursor:pointer; color:var(--gray-mid); transition:all .18s;
@@ -138,7 +138,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     gap: 8px;
   }
   .tab-btn {
-    min-height: 38px;
+    min-height: 44px;
     padding: 8px 10px;
     font-size: .8rem;
   }
@@ -149,7 +149,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   }
   .btn {
     max-width: 100%;
-    min-height: 42px;
+    min-height: 44px;
     white-space: normal;
   }
   .google-auth-btn {

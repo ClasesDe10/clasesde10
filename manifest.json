@@ -3,7 +3,7 @@
   "short_name": "ClasesDe10",
   "description": "Encuentra profesores particulares verificados o gestiona tus clases desde el movil.",
   "id": "/",
-  "start_url": "/?utm_source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
