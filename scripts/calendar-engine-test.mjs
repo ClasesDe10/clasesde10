@@ -47,11 +47,13 @@ const adminPayload = buildAdminClassPayload({
   estado: 'confirmada',
 }, previous, { nowIso: '2026-06-28T10:00:00.000Z', calendarUid: 'cal_1' });
 assert(adminPayload.estado === 'reprogramada', 'Schedule changes must mark the class as reprogramada.');
+assert(adminPayload.lifecycleStatus === 'reprogramada', 'Schedule changes must preserve lifecycle reprogramada state.');
 assert(adminPayload.platformFee === 7, 'Admin payload must calculate platform fee.');
 assert(adminPayload.previousSchedule?.fecha === '2026-06-29', 'Admin payload must preserve previous schedule metadata.');
 
 const teacherPayload = buildTeacherAttendancePayload('realizada', 'Todo bien', '', 'teacher_1', '2026-06-30T18:05:00.000Z');
 assert(teacherPayload.attendanceStatus === 'pendiente_familia', 'Teacher completion must wait for family confirmation.');
+assert(teacherPayload.lifecycleStatus === 'pendiente_confirmacion', 'Teacher completion must enter pending confirmation lifecycle.');
 
 const familyPayload = buildFamilyConfirmationPayload('incidencia', 'No aparecio', 'family_1', '2026-06-30T18:10:00.000Z');
 assert(familyPayload.incidentStatus === 'abierta', 'Family incidents must open incident status.');

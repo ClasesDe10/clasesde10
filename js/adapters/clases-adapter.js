@@ -1,5 +1,6 @@
 import { makeFirestoreAdapter } from './firebase-firestore-adapter.js';
 import { COLLECTIONS } from './contracts.js';
+import { lifecycleStatusForClassStatus } from '../calendar-engine.js';
 
 const base = makeFirestoreAdapter(COLLECTIONS.clases);
 
@@ -30,7 +31,12 @@ export const clasesAdapter = {
   },
 
   setStatus(classId, status, extra = {}) {
-    return base.update(classId, { ...extra, status, estado: status, lifecycleStatus: status });
+    return base.update(classId, {
+      ...extra,
+      status,
+      estado: status,
+      lifecycleStatus: lifecycleStatusForClassStatus(status),
+    });
   },
 };
 

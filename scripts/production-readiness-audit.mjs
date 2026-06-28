@@ -119,6 +119,7 @@ function checkRules() {
     'validNotificationTokenWrite()',
     'validFamilyPaymentCreate()',
     'validTeacherPayoutCreate()',
+    'match /classLifecycleEvents/{eventId}',
   ]) {
     if (!firestoreRules.includes(needle)) fail(`Firestore rules guard missing: ${needle}.`);
   }
@@ -165,6 +166,14 @@ function checkIndexes() {
     ['incidencias', [
       { fieldPath: 'estado', order: 'ASCENDING' },
       { fieldPath: 'priority', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
+    ['clases', [
+      { fieldPath: 'lifecycleStatus', order: 'ASCENDING' },
+      { fieldPath: 'fecha', order: 'ASCENDING' },
+    ]],
+    ['classLifecycleEvents', [
+      { fieldPath: 'classId', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ]],
   ];

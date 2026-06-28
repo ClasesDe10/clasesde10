@@ -20,6 +20,7 @@ const [
   chatWidget,
   notificationsProvider,
   calendarEngine,
+  classLifecycleEngine,
   calendarSync,
   automationWorker,
   rules,
@@ -32,6 +33,7 @@ const [
   read('js/chat-widget.js'),
   read('js/notifications-provider.js'),
   read('js/calendar-engine.js'),
+  read('js/class-lifecycle-engine.js'),
   read('js/calendar-sync.js'),
   read('scripts/firebase-automation-worker.mjs'),
   read('firebase/firestore.rules'),
@@ -45,6 +47,12 @@ assert(calendarEngine.includes('buildTeacherAttendancePayload'), 'Calendar engin
 assert(calendarEngine.includes('buildFamilyConfirmationPayload'), 'Calendar engine must build family confirmation payloads.');
 assert(calendarEngine.includes('buildClassIncidentPayload'), 'Calendar engine must build class incidents.');
 assert(calendarEngine.includes('classReminderWindows'), 'Calendar engine must expose reminder windows.');
+assert(calendarEngine.includes('lifecycleStatusForClassStatus'), 'Calendar engine must write professional lifecycle states.');
+
+assert(classLifecycleEngine.includes('CLASS_LIFECYCLE_STATES'), 'Class lifecycle engine must define lifecycle states.');
+assert(classLifecycleEngine.includes('CLASS_LIFECYCLE_TRANSITIONS'), 'Class lifecycle engine must define allowed transitions.');
+assert(classLifecycleEngine.includes('deriveLifecycleTargetState'), 'Class lifecycle engine must derive target state.');
+assert(classLifecycleEngine.includes('buildClassLifecycleTransition'), 'Class lifecycle engine must build auditable transitions.');
 
 assert(calendarSync.includes('buildIcsCalendar'), 'Calendar sync must prepare iCalendar export.');
 assert(calendarSync.includes('googleCalendarTemplateUrl'), 'Calendar sync must prepare Google Calendar links.');
@@ -91,11 +99,15 @@ assert(automationWorker.includes('createClassIncidentOnce'), 'Automation worker 
 assert(automationWorker.includes('processPaymentReminders'), 'Automation worker must process payment reminders.');
 assert(automationWorker.includes('weekly_payment_due'), 'Automation worker must create weekly payment reminders.');
 assert(automationWorker.includes('notifyUserOnce'), 'Automation notifications must be idempotent.');
+assert(automationWorker.includes('processClassLifecycle'), 'Automation worker must process lifecycle transitions.');
+assert(automationWorker.includes('classLifecycleEvents'), 'Automation worker must write lifecycle history events.');
+assert(automationWorker.includes('class_lifecycle_transition'), 'Automation worker must audit lifecycle transitions.');
 
 assert(rules.includes('validTeacherClassUpdate'), 'Firestore rules must validate teacher class updates.');
 assert(rules.includes('validFamilyClassConfirmationUpdate'), 'Firestore rules must validate family class confirmations.');
 assert(rules.includes('validClassIncidentCreate'), 'Firestore rules must validate participant-created class incidents.');
 assert(rules.includes('match /incidencias/{incidentId}'), 'Firestore rules must expose class incident permissions.');
 assert(rules.includes('lifecycleStatus'), 'Firestore rules must allow lifecycle status updates.');
+assert(rules.includes('match /classLifecycleEvents/{eventId}'), 'Firestore rules must expose lifecycle event permissions.');
 
 console.log('Calendar and notifications validation passed.');

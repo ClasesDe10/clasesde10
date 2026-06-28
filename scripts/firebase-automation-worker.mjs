@@ -2,6 +2,11 @@
 
 import admin from 'firebase-admin';
 import {
+  CLASS_LIFECYCLE_VERSION,
+  buildClassLifecycleTransition,
+  buildRequestLifecyclePatch,
+} from '../js/class-lifecycle-engine.js';
+import {
   AI_FEATURES_VERSION,
   MATCHING_VERSION,
   buildFamilyRequestBrief,
@@ -193,6 +198,12 @@ function leadToPublicRequest(leadId, lead) {
       nivel: clean(metadata.nivel || metadata.niveles, 120),
     },
     matchStatus: 'pending',
+    lifecycleStatus: 'solicitud_enviada',
+    lifecycleVersion: CLASS_LIFECYCLE_VERSION,
+    lifecycleUpdatedAt: isoNow(),
+    lifecycleTimestamps: {
+      solicitud_enviada: isoNow(),
+    },
     createdAt: now(),
     updatedAt: now(),
     created_at: isoNow(),
@@ -682,8 +693,18 @@ async function processAssignedRequests(db, stats) {
       materia: data.materia || data.subject || '',
       active: true,
       activa: true,
+      lifecycleStatus: 'solicitud_aceptada',
+      lifecycleVersion: CLASS_LIFECYCLE_VERSION,
+      lifecycleUpdatedAt: isoNow(),
+      lifecycleTimestamps: {
+        solicitud_aceptada: isoNow(),
+      },
       source: 'request_assignment_worker',
       createdAt: now(),
+      updatedAt: now(),
+    });
+    await updateRef(doc.ref, {
+      ...buildRequestLifecyclePatch('solicitud_aceptada', isoNow()),
       updatedAt: now(),
     });
     await writeDoc(db.collection('solicitudMatches'), `${doc.id}_${teacherUid}`, {
@@ -767,6 +788,84 @@ async function loadClassDocsByStatuses(db, statuses, perStatusLimit = limit) {
 
 async function loadScheduledClassDocs(db) {
   return loadClassDocsByStatuses(db, SCHEDULED_CLASS_STATUSES);
+}
+
+async function writeLifecycleHistoryOnce(db, transition) {
+  const id = transition.transitionId;
+  if (!id) return false;
+  const ref = db.collection('classLifecycleEvents').doc(id);
+  const existing = await ref.get();
+  if (existing.exists) return false;
+  await writeDoc(db.collection('classLifecycleEvents'), id, {
+    ...transition.historyEvent,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+  return true;
+}
+
+async function notifyLifecycleRecipients(db, transition, recipients, stats) {
+  for (const notification of transition.notifications || []) {
+    if (notification.role === 'admin') {
+      stats.lifecycleNotificationsCreated += await notifyAdminsOnce(
+        db,
+        notification.title,
+        notification.body,
+        notification.payload,
+        notification.key,
+      );
+      continue;
+    }
+
+    const targetUid = notification.role === 'teacher' ? recipients.teacherUid : recipients.familyUid;
+    const created = await notifyUserOnce(
+      db,
+      targetUid,
+      notification.title,
+      notification.body,
+      notification.payload,
+      notification.key,
+    );
+    if (created) stats.lifecycleNotificationsCreated += 1;
+  }
+}
+
+async function processClassLifecycle(db, stats) {
+  const snap = await db.collection('clases').limit(limit).get();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const transition = buildClassLifecycleTransition(doc.id, data);
+    stats.lifecycleClassesEvaluated += 1;
+    if (!transition.changed) continue;
+
+    await updateRef(doc.ref, {
+      ...transition.patch,
+      lifecycleTransitionCount: admin.firestore.FieldValue.increment(1),
+      updatedAt: now(),
+    });
+
+    const historyCreated = await writeLifecycleHistoryOnce(db, transition);
+    if (historyCreated) stats.lifecycleHistoryEventsCreated += 1;
+
+    await writeDoc(db.collection('auditLogs'), `audit_${transition.transitionId}`, {
+      ...transition.auditEvent,
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: false });
+
+    await addAutomationEvent(db, {
+      type: 'class_lifecycle_transition',
+      classId: doc.id,
+      from: transition.from || null,
+      to: transition.to,
+      target: transition.target,
+      lifecycleVersion: CLASS_LIFECYCLE_VERSION,
+    });
+
+    const recipients = await resolveClassRecipients(db, data);
+    await notifyLifecycleRecipients(db, transition, recipients, stats);
+    stats.lifecycleTransitionsApplied += 1;
+  }
 }
 
 async function createClassIncidentOnce(db, classId, classData, source, notes, stats) {
@@ -1237,16 +1336,23 @@ async function main() {
     paymentsReconciled: 0,
     paymentsNeedingReview: 0,
     weeklyPaymentRemindersCreated: 0,
+    lifecycleClassesEvaluated: 0,
+    lifecycleTransitionsApplied: 0,
+    lifecycleHistoryEventsCreated: 0,
+    lifecycleNotificationsCreated: 0,
   };
 
   await processPublicLeads(db, stats);
   await processPendingRequests(db, stats);
   await processAssignedRequests(db, stats);
+  await processClassLifecycle(db, stats);
   await processUpcomingClassReminders(db, stats);
   await processUnmarkedClasses(db, stats);
   await processAttendanceConfirmations(db, stats);
+  await processClassLifecycle(db, stats);
   await processIncidentClassification(db, stats);
   await reconcileVerifiedPayments(db, stats);
+  await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
 
   console.log(JSON.stringify(stats, null, 2));

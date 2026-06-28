@@ -48,6 +48,15 @@ export function storedClassStatus(status) {
   return CANONICAL_CLASS_STATUSES.includes(normalized) ? normalized : 'pendiente';
 }
 
+export function lifecycleStatusForClassStatus(status) {
+  const normalized = normalizeClassStatus(status);
+  if (normalized === 'cancelada') return 'cancelada';
+  if (normalized === 'reprogramada') return 'reprogramada';
+  if (normalized === 'realizada') return 'pendiente_confirmacion';
+  if (normalized === 'pagada') return 'pago_recibido';
+  return 'clase_programada';
+}
+
 export function classStatusForBadge(classData = {}) {
   const payment = cleanCalendarText(
     classData.familyPaymentStatus
@@ -155,7 +164,7 @@ export function buildClassLifecycleFields(classData = {}, nowIso = new Date().to
   return {
     estado: status,
     status,
-    lifecycleStatus: status,
+    lifecycleStatus: lifecycleStatusForClassStatus(status),
     attendanceStatus,
     updated_at: nowIso,
   };
@@ -200,7 +209,7 @@ export function buildAdminClassPayload(input = {}, previous = {}, options = {}) 
     marginPct: price ? Math.round((Number(platformFee || 0) / Number(price)) * 10000) / 100 : null,
     estado: nextStatus,
     status: nextStatus,
-    lifecycleStatus: nextStatus,
+    lifecycleStatus: lifecycleStatusForClassStatus(nextStatus),
     attendanceStatus: previous.attendanceStatus || 'pendiente',
     teacherConfirmationStatus: previous.teacherConfirmationStatus || null,
     familyConfirmationStatus: previous.familyConfirmationStatus || null,
@@ -240,7 +249,7 @@ export function buildTeacherAttendancePayload(status, notes = '', reason = '', u
   return {
     estado: nextStatus,
     status: nextStatus,
-    lifecycleStatus: nextStatus,
+    lifecycleStatus: lifecycleStatusForClassStatus(nextStatus),
     teacherConfirmationStatus: normalized === 'realizada' ? 'realizada' : normalized,
     teacherAttendanceStatus: normalized === 'realizada' ? 'realizada' : normalized,
     attendanceStatus: normalized === 'realizada' ? 'pendiente_familia' : 'incidencia',

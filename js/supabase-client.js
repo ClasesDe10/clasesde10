@@ -25,6 +25,7 @@ import {
   uploadBytes,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
 import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
+import { lifecycleStatusForClassStatus } from './calendar-engine.js';
 import {
   buildFamilyPaymentPayload,
   buildTeacherPayoutPayload,
@@ -326,7 +327,7 @@ function normalizeWritePayload(table, payload, isCreate = false) {
     if (data.familyAmount === undefined && data.precio_total !== undefined) data.familyAmount = data.precio_total;
     if (data.importe_profesor !== undefined && data.teacherAmount === undefined) data.teacherAmount = data.importe_profesor;
     if (data.teacherAmount !== undefined && data.importe_profesor === undefined) data.importe_profesor = data.teacherAmount;
-    data.lifecycleStatus = data.lifecycleStatus || data.estado;
+    data.lifecycleStatus = data.lifecycleStatus || lifecycleStatusForClassStatus(data.estado);
     data.attendanceStatus = data.attendanceStatus || 'pendiente';
   }
 
