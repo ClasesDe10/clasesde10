@@ -4,7 +4,8 @@ async (page) => {
   const password = process.env.CD10_TEMP_TEACHER_PASSWORD;
   if (!email || !password) throw new Error('Missing temporary teacher credentials.');
 
-  await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
 
   return await page.evaluate(async ({ email, password }) => {
     const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js');

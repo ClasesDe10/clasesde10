@@ -9,7 +9,7 @@ const ANON_KEY = 'cd10:analytics:anonymous';
 const MAX_EVENT_NAME = 120;
 const MAX_METADATA_KEYS = 36;
 const MAX_CONTEXT_KEYS = 28;
-const SENSITIVE_KEY_RE = /(password|passwd|contrasena|contraseña|token|secret|cookie|authorization|auth|iban|card|tarjeta|cvv|email|mail|telefono|teléfono|phone|whatsapp|direccion|dirección|address|dni|nif|documento)/i;
+const SENSITIVE_KEY_RE = /(password|passwd|contrasena|contraseña|token|secret|cookie|authorization|auth|iban|card|tarjeta|cvv|email|mail|telefono|teléfono|phone|direccion|dirección|address|dni|nif|documento)/i;
 let installedGlobalListeners = false;
 
 function clean(value, max = 500) {

@@ -70,7 +70,7 @@ function npxInvocation() {
 
 function runPlaywright(session, args, env = process.env) {
   const invocation = npxInvocation();
-  return execFileSync(invocation.command, [
+  const fullArgs = [
     ...invocation.prefixArgs,
     '--yes',
     '--package',
@@ -78,12 +78,22 @@ function runPlaywright(session, args, env = process.env) {
     'playwright-cli',
     `-s=${session}`,
     ...args,
-  ], {
-    encoding: 'utf8',
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: Number(process.env.PWCLI_STEP_TIMEOUT_MS || 120000),
-  });
+  ];
+  try {
+    return execFileSync(invocation.command, fullArgs, {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: Number(process.env.PWCLI_STEP_TIMEOUT_MS || 120000),
+    });
+  } catch (error) {
+    const stdout = String(error.stdout || '').trim();
+    const stderr = String(error.stderr || '').trim();
+    const clean = [stderr, stdout].filter(Boolean).join('\n');
+    const safe = new Error(clean || `playwright-cli failed with status ${error.status ?? 'unknown'}`);
+    safe.status = error.status;
+    throw safe;
+  }
 }
 
 function compactFunctionSource(filePath) {

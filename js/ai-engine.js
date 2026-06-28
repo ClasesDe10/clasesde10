@@ -911,7 +911,7 @@ export function classifyIncident(input = '', metadata = {}) {
     ['asistencia', /(no vino|no se presento|ausencia|falto|asistencia|marcar clase|realizada)/],
     ['horario', /(cancelar|cancelada|reprogramar|cambiar hora|retraso|llego tarde|horario)/],
     ['calidad', /(no entiende|mala clase|metodologia|explicacion|nivel bajo|queja|suspenso)/],
-    ['comunicacion', /(no responde|whatsapp|mensaje|llamada|contacto|email)/],
+    ['comunicacion', /(no responde|mensaje|llamada|contacto|email|correo|chat)/],
     ['documentacion', /(dni|documento|titulo|certificado|verificacion|perfil)/],
     ['tecnica', /(login|error|app|web|no carga|firebase|supabase|pantalla)/],
   ];

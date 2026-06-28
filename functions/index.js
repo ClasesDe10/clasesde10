@@ -126,8 +126,7 @@ const DEFAULT_NOTIFICATION_SETTINGS = {
     internal: true,
     browser: true,
     push: true,
-    email_future: false,
-    whatsapp_future: false,
+    email: false,
   },
   eventTypes: {},
   roles: {

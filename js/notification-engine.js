@@ -9,8 +9,7 @@ export const NOTIFICATION_CHANNELS = Object.freeze({
   INTERNAL: 'internal',
   BROWSER: 'browser',
   PUSH: 'push',
-  EMAIL_FUTURE: 'email_future',
-  WHATSAPP_FUTURE: 'whatsapp_future',
+  EMAIL: 'email',
 });
 
 export const NOTIFICATION_EVENTS = Object.freeze({
@@ -186,8 +185,7 @@ export const DEFAULT_NOTIFICATION_SETTINGS = Object.freeze({
     internal: true,
     browser: true,
     push: true,
-    email_future: false,
-    whatsapp_future: false,
+    email: false,
   },
   eventTypes: Object.freeze(Object.keys(NOTIFICATION_EVENT_DEFINITIONS).reduce((acc, type) => {
     acc[type] = true;

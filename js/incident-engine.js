@@ -53,7 +53,7 @@ const CATEGORY_KEYWORDS = Object.freeze([
   ['conflicto', /(conflicto|queja|reclamacion|disputa|desacuerdo|problema entre)/i],
   ['perfil', /(perfil|foto|telefono|direccion|estudios|datos)/i],
   ['matching', /(matching|emparejamiento|asignacion|profesor adecuado|encaje)/i],
-  ['comunicacion', /(mensaje|chat|whatsapp|email|no responde|contacto)/i],
+  ['comunicacion', /(mensaje|chat|email|correo|no responde|contacto)/i],
 ]);
 
 function clean(value, max = 2000) {

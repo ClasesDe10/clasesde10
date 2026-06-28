@@ -259,17 +259,15 @@
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label class="form-label">Teléfono / WhatsApp</label>
+                    <label class="form-label">Telefono de contacto</label>
                     <input class="form-control" type="tel" id="p-telefono" placeholder="+34 600 000 000">
                   </div>
                   <div class="form-group">
                     <label class="form-label">Canal preferido</label>
                     <select class="form-control" id="p-contacto-preferido">
                       <option value="">Seleccionar...</option>
-                      <option value="whatsapp">WhatsApp</option>
-                      <option value="telefono">Telefono</option>
-                      <option value="email">Email</option>
-                      <option value="chat">Chat de la plataforma</option>
+                      <option value="chat">Chat interno de la web app</option>
+                      <option value="email">Correo electronico</option>
                     </select>
                   </div>
                 </div>
@@ -1207,7 +1205,9 @@ async function cargarPerfil() {
   document.getElementById('p-ciudad').value    = familiaData.ciudad || familiaData.city || 'Madrid';
   document.getElementById('p-cp').value        = familiaData.codigo_postal || familiaData.postalCode || '';
   document.getElementById('p-zona').value      = familiaData.zona || familiaData.zone || '';
-  document.getElementById('p-contacto-preferido').value = familiaData.contacto_preferido || familiaData.preferredContact || '';
+  const contactoPreferidoGuardado = familiaData.contacto_preferido || familiaData.preferredContact || '';
+  document.getElementById('p-contacto-preferido').value =
+    ['email', 'chat'].includes(contactoPreferidoGuardado) ? contactoPreferidoGuardado : 'chat';
   document.getElementById('p-emergencia-nombre').value = familiaData.contacto_emergencia_nombre || familiaData.emergencyContactName || '';
   document.getElementById('p-emergencia-telefono').value = familiaData.contacto_emergencia_telefono || familiaData.emergencyContactPhone || '';
   document.getElementById('p-idiomas').value = toProfileList(familiaData.idiomas || familiaData.languages || []).join(', ');

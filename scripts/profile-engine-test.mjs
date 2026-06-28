@@ -57,7 +57,7 @@ const family = evaluateFamilyProfileProfessional({
   ciudad: 'Madrid',
   codigo_postal: '28010',
   zona: 'Chamberi',
-  contacto_preferido: 'whatsapp',
+  contacto_preferido: 'chat',
   contacto_emergencia_nombre: 'Tutor dos',
   contacto_emergencia_telefono: '699123456',
   idiomas: ['Espanol'],

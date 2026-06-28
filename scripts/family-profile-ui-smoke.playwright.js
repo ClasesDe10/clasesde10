@@ -4,7 +4,8 @@ async (page) => {
   const password = process.env.CD10_PROFILE_PASSWORD;
   if (!email || !password) throw new Error('Missing temporary family credentials.');
 
-  await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
   const setup = await page.evaluate(async ({ email, password }) => {
     const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js');
     const { doc, serverTimestamp, setDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
@@ -55,7 +56,7 @@ async (page) => {
   await page.locator('#p-ciudad').fill('Madrid');
   await page.locator('#p-cp').fill('28010');
   await page.locator('#p-zona').fill('Chamberi');
-  await page.locator('#p-contacto-preferido').selectOption('whatsapp');
+  await page.locator('#p-contacto-preferido').selectOption('chat');
   await page.locator('#p-emergencia-nombre').fill('Tutor Alternativo');
   await page.locator('#p-emergencia-telefono').fill('699123456');
   await page.locator('#p-idiomas').fill('Espanol, Ingles');
@@ -86,7 +87,7 @@ async (page) => {
   if (result.family?.codigo_postal !== '28010') {
     throw new Error(`Family postal code was not saved: ${JSON.stringify({ user: result.user, family: result.family })}`);
   }
-  if (result.family?.zona !== 'Chamberi' || result.family?.preferredContact !== 'whatsapp') {
+  if (result.family?.zona !== 'Chamberi' || result.family?.preferredContact !== 'chat') {
     throw new Error(`Family matching fields were not saved: ${JSON.stringify({ family: result.family })}`);
   }
   if (!Array.isArray(result.family?.languages) || !result.family.languages.includes('Ingles')) {
