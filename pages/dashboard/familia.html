@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260627-mobile">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-trust">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -504,7 +504,7 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260628-profile-quality';
+} from '../../js/profile-engine.js?v=20260628-trust';
 import {
   buildClassIncidentPayload,
   buildFamilyConfirmationPayload,
@@ -572,6 +572,8 @@ function renderQualityPanel(targetId, evaluation) {
   if (!panel) return;
   const missing = evaluation.issueLabels.slice(0, 4);
   const recommendations = evaluation.recommendations.slice(0, 4);
+  const trustBadges = (evaluation.trustBadges || []).filter((item) => item.public !== false).slice(0, 5);
+  const trustStats = evaluation.publicTrustStats || {};
   const indicatorHtml = evaluation.indicators.map((indicator) => `
     <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:${indicator.complete ? 'rgba(22,163,74,.10)' : 'rgba(217,119,6,.10)'};color:${indicator.complete ? 'var(--success)' : 'var(--warning)'};font-size:.78rem;font-weight:700">
       ${indicator.complete ? 'OK' : '!'} ${sanitize(indicator.label)}
@@ -591,6 +593,15 @@ function renderQualityPanel(targetId, evaluation) {
         <div style="font-size:.88rem;color:var(--gray-dark)">
           <strong>Confianza:</strong> ${evaluation.trustScore}/100 (${sanitize(evaluation.trustLevel)}).
           ${evaluation.pendingDocuments ? `${evaluation.pendingDocuments} documento(s) pendiente(s) de validacion.` : ''}
+        </div>
+        <div class="trust-badges trust-badges-compact" style="margin-top:10px">
+          ${trustBadges.length ? trustBadges.map((item) => `<span class="badge ${item.tone === 'success' ? 'badge-success' : item.tone === 'warning' ? 'badge-warning' : item.tone === 'gold' ? 'badge-gold' : 'badge-info'}">${sanitize(item.label)}</span>`).join('') : '<span class="badge badge-gray">Sin insignias publicas todavia</span>'}
+        </div>
+        <div class="trust-public-stats trust-public-stats-compact" style="margin-top:10px">
+          <div><strong>${sanitize(trustStats.activeStudents ?? 0)}</strong><span>alumnos</span></div>
+          <div><strong>${sanitize(trustStats.completedClasses ?? 0)}</strong><span>clases</span></div>
+          <div><strong>${Math.round(Number(trustStats.paymentReliability ?? 0) * 100)}%</strong><span>pagos ok</span></div>
+          <div><strong>${Math.round(Number(trustStats.cancellationRate ?? 0) * 100)}%</strong><span>cancelacion</span></div>
         </div>
         ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Datos necesarios para asignaciones mas precisas</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
         ${!missing.length && recommendations.length ? `<div style="margin-top:10px;color:var(--gray-mid);font-size:.84rem">Siguiente mejora: ${recommendations.map(sanitize).join(', ')}</div>` : ''}
@@ -713,7 +724,7 @@ async function cargarInicio() {
     // Profesores asignados
     if (profUnicos.length) {
       const { data: profs } = await db.from('profesores')
-        .select('id, bio, materias, usuarios(nombre,apellidos,telefono)')
+        .select('id, bio, materias, trustScore, trustLevel, trustBadges, publicTrustStats, reputationMetrics, usuarios(nombre,apellidos,telefono)')
         .in('id', profUnicos);
       document.getElementById('lista-profesores-inicio').innerHTML = (profs||[]).map(p => `
         <div style="display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid rgba(0,0,0,.06)">
@@ -721,6 +732,13 @@ async function cargarInicio() {
           <div>
             <div style="font-weight:700">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</div>
             <div style="font-size:.78rem;color:var(--gray-mid);margin-bottom:4px">${(p.materias||[]).join(', ')}</div>
+            <div class="trust-badges trust-badges-compact" style="margin-bottom:6px">
+              <span class="badge ${Number(p.trustScore || 0) >= 78 ? 'badge-success' : 'badge-info'}">${sanitize(p.trustScore ?? '-')} /100 ${sanitize(p.trustLevel || 'confianza')}</span>
+              ${(p.trustBadges || []).filter((item) => item.public !== false).slice(0,2).map((item) => `<span class="badge badge-gray">${sanitize(item.label)}</span>`).join('')}
+            </div>
+            <div style="font-size:.78rem;color:var(--gray-mid);margin-bottom:4px">
+              ${(p.publicTrustStats?.completedClasses ?? p.reputationMetrics?.completedClasses ?? 0)} clases registradas · cancelacion ${Math.round(Number(p.publicTrustStats?.cancellationRate ?? p.reputationMetrics?.cancellationRate ?? 0) * 100)}%
+            </div>
             <div style="font-size:.82rem">📞 ${sanitize(p.usuarios?.telefono||'—')}</div>
           </div>
         </div>`).join('');

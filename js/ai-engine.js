@@ -5,6 +5,8 @@
  * model later, but the baseline score is always explainable and bounded.
  */
 
+import { buildTeacherTrustProfile } from './trust-engine.js';
+
 export const MATCHING_VERSION = 'professional_matching_v2';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
 
@@ -314,6 +316,11 @@ export function getTeacherProfile(teacher = {}) {
       ?? (accepted !== null && offered ? clamp(accepted / offered, 0, 1) : null),
     completionRate: rate01(teacher.completionRate ?? teacher.classCompletionRate ?? teacher.ratio_clases_realizadas),
     cancellationRate: rate01(teacher.cancellationRate ?? teacher.cancelRate ?? teacher.ratio_cancelacion),
+    trustScore: firstNumber(teacher.reputationScore, teacher.publicTrustScore, teacher.trustScore, teacher.trust_profile_score),
+    trustLevel: clean(teacher.trustLevel || teacher.trust_level, 80),
+    trustBadges: Array.isArray(teacher.trustBadges) ? teacher.trustBadges : [],
+    publicTrustStats: teacher.publicTrustStats || {},
+    reputationMetrics: teacher.reputationMetrics || {},
     raw: teacher,
   };
 }
@@ -504,6 +511,31 @@ function scoreReputation(teacherProfile) {
   const reasons = [];
   const risks = [];
 
+  const persistedTrust = teacherProfile.trustScore !== null
+    ? {
+      score: clamp(teacherProfile.trustScore, 0, 100),
+      level: teacherProfile.trustLevel || '',
+      badges: teacherProfile.trustBadges || [],
+      metrics: teacherProfile.reputationMetrics || {},
+      publicStats: teacherProfile.publicTrustStats || {},
+    }
+    : null;
+  const computedTrust = persistedTrust || buildTeacherTrustProfile(teacherProfile.raw || teacherProfile, {
+    stats: {
+      completedClasses: teacherProfile.reputationMetrics?.completedClasses ?? teacherProfile.publicTrustStats?.completedClasses,
+      completionRate: teacherProfile.completionRate ?? teacherProfile.reputationMetrics?.completionRate,
+      cancellationRate: teacherProfile.cancellationRate ?? teacherProfile.reputationMetrics?.cancellationRate,
+      averageResponseHours: teacherProfile.responseTimeHours ?? teacherProfile.reputationMetrics?.averageResponseHours,
+      acceptanceRate: teacherProfile.acceptanceRate ?? teacherProfile.reputationMetrics?.acceptanceRate,
+      activeAssignments: teacherProfile.activeAssignments,
+    },
+  });
+  if (computedTrust?.score !== undefined) {
+    parts.push(clamp(computedTrust.score, 0, 100) / 100);
+    reasons.push(`Confianza operativa ${Math.round(computedTrust.score)}/100.`);
+    if ((computedTrust.warnings || []).length) risks.push(...computedTrust.warnings.slice(0, 2));
+  }
+
   if (teacherProfile.rating !== null) {
     parts.push(clamp(teacherProfile.rating, 0, 5) / 5);
     reasons.push(`Valoracion media ${round(teacherProfile.rating, 1)}/5.`);
@@ -610,6 +642,17 @@ export function scoreTeacherForRequest(request, teacher) {
     hardBlocks,
     source: MATCHING_VERSION,
     matchingVersion: MATCHING_VERSION,
+    trustScore: teacherProfile.trustScore ?? Math.round((buildTeacherTrustProfile(teacherProfile.raw || teacherProfile, {
+      stats: {
+        completedClasses: teacherProfile.reputationMetrics?.completedClasses ?? teacherProfile.publicTrustStats?.completedClasses,
+        completionRate: teacherProfile.completionRate ?? teacherProfile.reputationMetrics?.completionRate,
+        cancellationRate: teacherProfile.cancellationRate ?? teacherProfile.reputationMetrics?.cancellationRate,
+        averageResponseHours: teacherProfile.responseTimeHours ?? teacherProfile.reputationMetrics?.averageResponseHours,
+        acceptanceRate: teacherProfile.acceptanceRate ?? teacherProfile.reputationMetrics?.acceptanceRate,
+        activeAssignments: teacherProfile.activeAssignments,
+      },
+    }).score)),
+    trustLevel: teacherProfile.trustLevel || '',
   };
 }
 

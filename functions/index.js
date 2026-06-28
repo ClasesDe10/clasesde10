@@ -735,6 +735,9 @@ async function loadTeachers() {
         bio: clean(data.bio || data.experiencia, 1000),
         maxStudents: Number(data.maxStudents || data.max_alumnos || 5),
         activeAssignments: assignmentCounts.get(doc.id) || assignmentCounts.get(userUid) || 0,
+        trustScore: Number(data.trustScore || data.reputationScore || 0),
+        trustLevel: data.trustLevel || '',
+        reputationMetrics: data.reputationMetrics || {},
         raw: data,
       };
     })
@@ -810,6 +813,16 @@ function scoreTeacher(profile, teacher) {
 
   if (teacher.status === 'verificado' || teacher.status === 'activo') score += 8;
   else risks.push('Profesor pendiente de revision/verificacion.');
+
+  if (teacher.trustScore >= 85) {
+    score += 10;
+    reasons.push(`Confianza operativa alta (${teacher.trustScore}/100).`);
+  } else if (teacher.trustScore >= 65) {
+    score += 5;
+    reasons.push(`Confianza operativa media (${teacher.trustScore}/100).`);
+  } else if (teacher.trustScore > 0) {
+    risks.push(`Confianza operativa baja (${teacher.trustScore}/100).`);
+  }
 
   return {
     score: Math.max(0, Math.min(100, Math.round(score))),

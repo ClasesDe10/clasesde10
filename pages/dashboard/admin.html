@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Panel Administrador — ClasesDe10</title>
+<title>Panel Administrador â€” ClasesDe10</title>
 <meta name="description" content="Panel privado de administracion de ClasesDe10 para gestionar usuarios, clases, pagos y leads.">
 <link rel="canonical" href="https://clasesde10.com/pages/dashboard/admin.html">
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-bi">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-trust">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -64,7 +64,7 @@
         Alumnos
       </button>
 
-      <div class="sidebar-section-title">Gestión</div>
+      <div class="sidebar-section-title">GestiÃ³n</div>
       <button class="sidebar-link" data-section="solicitudes">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         Solicitudes
@@ -102,7 +102,7 @@
     <div class="sidebar-footer">
       <button class="sidebar-logout" id="btn-logout">
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-        Cerrar sesión
+        Cerrar sesiÃ³n
       </button>
     </div>
   </aside>
@@ -118,7 +118,7 @@
       <h1 class="topbar-title" id="topbar-title">Dashboard</h1>
       <div class="topbar-search">
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text" id="busqueda-global" placeholder="Buscar…">
+        <input type="text" id="busqueda-global" placeholder="Buscarâ€¦">
       </div>
       <div class="topbar-actions">
         <button class="topbar-btn" id="btn-notificaciones" title="Notificaciones">
@@ -130,11 +130,11 @@
 
     <div class="page-content">
 
-      <!-- ══ SECCIÓN: DASHBOARD ══ -->
+      <!-- â•â• SECCIÃ“N: DASHBOARD â•â• -->
       <section id="section-dashboard" class="dash-section">
         <div id="admin-control-center" data-admin-control-center></div>
         <div class="stats-grid" id="stats-grid">
-          <!-- Cargados dinámicamente -->
+          <!-- Cargados dinÃ¡micamente -->
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
@@ -155,10 +155,10 @@
             </div>
           </div>
 
-          <!-- Próximas clases -->
+          <!-- PrÃ³ximas clases -->
           <div class="card">
             <div class="card-header">
-              <span class="card-title">Próximas clases</span>
+              <span class="card-title">PrÃ³ximas clases</span>
               <button class="btn btn-ghost btn-sm" data-section="clases">Ver todas</button>
             </div>
             <div class="card-body" style="padding:0" id="lista-proximas-clases">
@@ -170,7 +170,7 @@
         <!-- Pagos pendientes -->
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Pagos pendientes de validación</span>
+            <span class="card-title">Pagos pendientes de validaciÃ³n</span>
             <button class="btn btn-ghost btn-sm" data-section="pagos">Ver todos</button>
           </div>
           <div class="card-body" style="padding:0" id="lista-pagos-pendientes">
@@ -179,11 +179,11 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: CLASES ══ -->
+      <!-- â•â• SECCIÃ“N: CLASES â•â• -->
       <section id="section-clases" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <input type="text" class="form-control" id="filtro-clases-busqueda" aria-label="Buscar clases por alumno o profesor" placeholder="Buscar por alumno o profesor…" style="width:240px">
+            <input type="text" class="form-control" id="filtro-clases-busqueda" aria-label="Buscar clases por alumno o profesor" placeholder="Buscar por alumno o profesorâ€¦" style="width:240px">
             <select class="form-control" id="filtro-clases-estado" aria-label="Filtrar clases por estado" style="width:160px">
               <option value="">Todos los estados</option>
               <option value="pendiente">Pendiente</option>
@@ -197,7 +197,7 @@
             <input type="month" class="form-control" id="filtro-clases-mes" aria-label="Filtrar clases por mes" style="width:160px">
           </div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-outline btn-sm" id="btn-export-clases">↓ Exportar CSV</button>
+            <button class="btn btn-outline btn-sm" id="btn-export-clases">â†“ Exportar CSV</button>
             <button class="btn btn-primary" id="btn-nueva-clase">+ Nueva clase</button>
           </div>
         </div>
@@ -212,13 +212,13 @@
                   <th>Alumno</th>
                   <th>Profesor</th>
                   <th>Materia</th>
-                  <th>Duración</th>
+                  <th>DuraciÃ³n</th>
                   <th>Precio</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -228,36 +228,36 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: CALENDARIO ══ -->
+      <!-- â•â• SECCIÃ“N: CALENDARIO â•â• -->
       <section id="section-calendario" class="dash-section" style="display:none">
         <div style="display:grid;grid-template-columns:1fr 340px;gap:20px">
           <div id="calendario-wrapper"></div>
           <div class="card">
-            <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
+            <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un dÃ­a</span></div>
             <div class="card-body" id="cal-clases-dia">
               <div class="empty-state">
-                <div class="empty-icon">📅</div>
+                <div class="empty-icon">ðŸ“…</div>
                 <div class="empty-title">Sin clases</div>
-                <div class="empty-desc">Selecciona un día para ver sus clases.</div>
+                <div class="empty-desc">Selecciona un dÃ­a para ver sus clases.</div>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: PROFESORES ══ -->
+      <!-- â•â• SECCIÃ“N: PROFESORES â•â• -->
       <section id="section-profesores" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <input type="text" class="form-control" id="filtro-prof-busqueda" aria-label="Buscar profesor" placeholder="Buscar profesor…" style="width:240px">
+            <input type="text" class="form-control" id="filtro-prof-busqueda" aria-label="Buscar profesor" placeholder="Buscar profesorâ€¦" style="width:240px">
             <select class="form-control" id="filtro-prof-estado" aria-label="Filtrar profesores por estado" style="width:180px">
               <option value="">Todos los estados</option>
-              <option value="pendiente">Pendiente verificación</option>
+              <option value="pendiente">Pendiente verificaciÃ³n</option>
               <option value="verificado">Verificado</option>
               <option value="rechazado">Rechazado</option>
             </select>
           </div>
-          <button class="btn btn-outline btn-sm" id="btn-export-profesores">↓ Exportar CSV</button>
+          <button class="btn btn-outline btn-sm" id="btn-export-profesores">â†“ Exportar CSV</button>
         </div>
 
         <div class="card">
@@ -267,15 +267,16 @@
                 <tr>
                   <th>Profesor</th>
                   <th>Email</th>
-                  <th>Teléfono</th>
+                  <th>TelÃ©fono</th>
                   <th>Materias</th>
-                  <th>Comisión</th>
-                  <th>Verificación</th>
+                  <th>ComisiÃ³n</th>
+                  <th>VerificaciÃ³n</th>
+                  <th>Confianza</th>
                   <th>Clases mes</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-profesores"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-profesores"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -285,11 +286,11 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: FAMILIAS ══ -->
+      <!-- â•â• SECCIÃ“N: FAMILIAS â•â• -->
       <section id="section-familias" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-          <input type="text" class="form-control" id="filtro-fam-busqueda" aria-label="Buscar familia" placeholder="Buscar familia…" style="width:260px">
-          <button class="btn btn-outline btn-sm" id="btn-export-familias">↓ Exportar CSV</button>
+          <input type="text" class="form-control" id="filtro-fam-busqueda" aria-label="Buscar familia" placeholder="Buscar familiaâ€¦" style="width:260px">
+          <button class="btn btn-outline btn-sm" id="btn-export-familias">â†“ Exportar CSV</button>
         </div>
         <div class="card">
           <div class="table-wrapper">
@@ -298,7 +299,7 @@
                 <tr>
                   <th>Familia</th>
                   <th>Email</th>
-                  <th>Teléfono</th>
+                  <th>TelÃ©fono</th>
                   <th>Ciudad</th>
                   <th>Perfil</th>
                   <th>Confianza</th>
@@ -306,7 +307,7 @@
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-familias"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-familias"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -316,11 +317,11 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: ALUMNOS ══ -->
+      <!-- â•â• SECCIÃ“N: ALUMNOS â•â• -->
       <section id="section-alumnos" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
-          <input type="text" class="form-control" id="filtro-alum-busqueda" aria-label="Buscar alumno" placeholder="Buscar alumno…" style="width:260px">
-          <button class="btn btn-outline btn-sm" id="btn-export-alumnos">↓ Exportar CSV</button>
+          <input type="text" class="form-control" id="filtro-alum-busqueda" aria-label="Buscar alumno" placeholder="Buscar alumnoâ€¦" style="width:260px">
+          <button class="btn btn-outline btn-sm" id="btn-export-alumnos">â†“ Exportar CSV</button>
         </div>
         <div class="card">
           <div class="table-wrapper">
@@ -336,7 +337,7 @@
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-alumnos"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-alumnos"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -346,11 +347,11 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: SOLICITUDES ══ -->
+      <!-- â•â• SECCIÃ“N: SOLICITUDES â•â• -->
       <section id="section-solicitudes" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <input type="text" class="form-control" id="filtro-sol-busqueda" aria-label="Buscar solicitudes" placeholder="Buscar…" style="width:220px">
+            <input type="text" class="form-control" id="filtro-sol-busqueda" aria-label="Buscar solicitudes" placeholder="Buscarâ€¦" style="width:220px">
             <select class="form-control" id="filtro-sol-estado" aria-label="Filtrar solicitudes por estado" style="width:150px">
               <option value="">Todos</option>
               <option value="nueva">Nuevas</option>
@@ -376,7 +377,7 @@
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-solicitudes"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-solicitudes"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -386,11 +387,11 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: PAGOS ══ -->
+      <!-- â•â• SECCIÃ“N: PAGOS â•â• -->
       <section id="section-pagos" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <input type="text" class="form-control" id="filtro-pago-busqueda" aria-label="Buscar pagos" placeholder="Buscar…" style="width:220px">
+            <input type="text" class="form-control" id="filtro-pago-busqueda" aria-label="Buscar pagos" placeholder="Buscarâ€¦" style="width:220px">
             <select class="form-control" id="filtro-pago-estado" aria-label="Filtrar pagos por estado" style="width:150px">
               <option value="">Todos</option>
               <option value="pendiente">Pendientes</option>
@@ -402,7 +403,7 @@
               <option value="rechazado">Rechazados</option>
             </select>
           </div>
-          <button class="btn btn-outline btn-sm" id="btn-export-pagos">↓ Exportar CSV</button>
+          <button class="btn btn-outline btn-sm" id="btn-export-pagos">â†“ Exportar CSV</button>
         </div>
         <div class="card">
           <div class="table-wrapper">
@@ -413,13 +414,13 @@
                   <th>Origen</th>
                   <th>Justificante</th>
                   <th>Importe</th>
-                  <th>Método</th>
+                  <th>MÃ©todo</th>
                   <th>Referencia</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-pagos"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-pagos"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
           <div class="card-footer">
@@ -429,7 +430,7 @@
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: FINANZAS ══ -->
+      <!-- â•â• SECCIÃ“N: FINANZAS â•â• -->
       <section id="section-finanzas" class="dash-section" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -439,7 +440,7 @@
               <option value="caja">Caja pagos</option>
             </select>
           </div>
-          <button class="btn btn-outline btn-sm" id="btn-export-finanzas">↓ Exportar CSV</button>
+          <button class="btn btn-outline btn-sm" id="btn-export-finanzas">â†“ Exportar CSV</button>
         </div>
 
         <div class="stats-grid" id="finanzas-stats" style="margin-bottom:20px">
@@ -451,7 +452,7 @@
 
         <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:20px;margin-bottom:20px">
           <div class="card">
-            <div class="card-header"><span class="card-title">Proyección y salud del mes</span></div>
+            <div class="card-header"><span class="card-title">ProyecciÃ³n y salud del mes</span></div>
             <div class="card-body" id="finanzas-proyeccion">
               <div class="skeleton skeleton-text"></div>
               <div class="skeleton skeleton-text"></div>
@@ -471,7 +472,7 @@
             <div class="table-wrapper">
               <table>
                 <thead><tr><th>Fecha</th><th>Clase</th><th>Total</th><th>Profesor</th><th>Margen</th></tr></thead>
-                <tbody id="tbody-finanzas-riesgos"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+                <tbody id="tbody-finanzas-riesgos"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -480,7 +481,7 @@
             <div class="table-wrapper">
               <table>
                 <thead><tr><th>Profesor</th><th>Clases</th><th>Facturado</th><th>A cobrar</th><th>Margen</th></tr></thead>
-                <tbody id="tbody-finanzas-profesores"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+                <tbody id="tbody-finanzas-profesores"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -540,7 +541,7 @@
       <section id="section-documentos" class="dash-section" style="display:none">
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Documentos pendientes de revisión</span>
+            <span class="card-title">Documentos pendientes de revisiÃ³n</span>
           </div>
           <div class="table-wrapper">
             <table>
@@ -554,13 +555,13 @@
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-documentos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-documentos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
         </div>
       </section>
 
-      <!-- ══ SECCIÓN: INCIDENCIAS ══ -->
+      <!-- â•â• SECCIÃ“N: INCIDENCIAS â•â• -->
       <section id="section-chats" class="dash-section" style="display:none">
         <div id="chat-admin"></div>
       </section>
@@ -591,13 +592,13 @@
                   <th>Fecha</th>
                   <th>Reportado por</th>
                   <th>Tipo</th>
-                  <th>Descripción</th>
+                  <th>DescripciÃ³n</th>
                   <th>Prioridad</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-incidencias"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-incidencias"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -612,7 +613,7 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title" id="modal-clase-titulo">Nueva clase</span>
-      <button class="modal-close">✕</button>
+      <button class="modal-close">âœ•</button>
     </div>
     <div class="modal-body">
     <form id="form-clase" method="post" novalidate>
@@ -621,13 +622,13 @@
           <div class="form-group">
             <label class="form-label">Profesor <span class="required">*</span></label>
             <select class="form-control" id="clase-profesor" required>
-              <option value="">Seleccionar…</option>
+              <option value="">Seleccionarâ€¦</option>
             </select>
           </div>
           <div class="form-group">
             <label class="form-label">Alumno <span class="required">*</span></label>
             <select class="form-control" id="clase-alumno" required>
-              <option value="">Seleccionar…</option>
+              <option value="">Seleccionarâ€¦</option>
             </select>
           </div>
         </div>
@@ -638,7 +639,7 @@
           </div>
           <div class="form-group">
             <label class="form-label">Materia <span class="required">*</span></label>
-            <input type="text" class="form-control" id="clase-materia" placeholder="Ej: Matemáticas" required>
+            <input type="text" class="form-control" id="clase-materia" placeholder="Ej: MatemÃ¡ticas" required>
           </div>
         </div>
         <div class="form-row">
@@ -653,12 +654,12 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Total familia (€)</label>
+            <label class="form-label">Total familia (â‚¬)</label>
             <input type="number" class="form-control" id="clase-precio" min="0" step="0.5" placeholder="0.00">
             <div class="form-hint">Importe que paga la familia por esta clase.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Cobra profesor (€)</label>
+            <label class="form-label">Cobra profesor (â‚¬)</label>
             <input type="number" class="form-control" id="clase-importe-profesor" min="0" step="0.5" placeholder="0.00">
             <div class="form-hint">Puede variar por clase, profesor, materia o acuerdo.</div>
           </div>
@@ -666,7 +667,7 @@
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Margen ClasesDe10</label>
-            <input type="text" class="form-control" id="clase-comision-preview" readonly placeholder="—">
+            <input type="text" class="form-control" id="clase-comision-preview" readonly placeholder="â€”">
             <div class="form-hint" id="clase-precio-hint"></div>
           </div>
           <div class="form-group">
@@ -683,7 +684,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Observaciones</label>
-          <textarea class="form-control" id="clase-observaciones" rows="3" placeholder="Notas internas…"></textarea>
+          <textarea class="form-control" id="clase-observaciones" rows="3" placeholder="Notas internasâ€¦"></textarea>
         </div>
       </form>
     </div>
@@ -699,7 +700,7 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Asignar profesor</span>
-      <button class="modal-close">✕</button>
+      <button class="modal-close">âœ•</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="asignar-solicitud-id">
@@ -714,18 +715,18 @@
       <div class="form-group">
         <label class="form-label">Profesor asignado <span class="required">*</span></label>
         <select class="form-control" id="asignar-profesor">
-          <option value="">Seleccionar profesor verificado…</option>
+          <option value="">Seleccionar profesor verificadoâ€¦</option>
         </select>
       </div>
       <div id="asignar-profesor-detalle" style="display:none;margin-bottom:14px;background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem"></div>
       <div class="form-group">
         <label class="form-label">Notas</label>
-        <textarea class="form-control" id="asignar-notas" rows="3" placeholder="Notas para el expediente…"></textarea>
+        <textarea class="form-control" id="asignar-notas" rows="3" placeholder="Notas para el expedienteâ€¦"></textarea>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-asignar">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-asignar">Confirmar asignación</button>
+      <button class="btn btn-primary" id="btn-confirmar-asignar">Confirmar asignaciÃ³n</button>
     </div>
   </div>
 </div>
@@ -735,11 +736,25 @@
   <div class="modal" style="max-width:760px">
     <div class="modal-header">
       <span class="modal-title">Perfil completo del profesor</span>
-      <button class="modal-close">✕</button>
+      <button class="modal-close">âœ•</button>
     </div>
     <div class="modal-body" id="profesor-detalle-body"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-profesor-detalle">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE FAMILIA -->
+<div class="modal-overlay" id="modal-familia-detalle">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header">
+      <span class="modal-title">Perfil completo de la familia</span>
+      <button class="modal-close">x</button>
+    </div>
+    <div class="modal-body" id="familia-detalle-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-familia-detalle">Cerrar</button>
     </div>
   </div>
 </div>
@@ -749,13 +764,13 @@
   <div class="modal" style="max-width:700px">
     <div class="modal-header">
       <span class="modal-title" id="modal-doc-nombre">Documento</span>
-      <button class="modal-close">✕</button>
+      <button class="modal-close">âœ•</button>
     </div>
     <div class="modal-body">
       <div id="modal-doc-preview" style="text-align:center;margin-bottom:20px;min-height:200px;display:flex;align-items:center;justify-content:center;background:var(--gray-soft);border-radius:var(--radius-sm)"></div>
       <div class="form-group">
-        <label class="form-label">Notas de revisión</label>
-        <textarea class="form-control" id="modal-doc-notas" rows="3" placeholder="Motivo de aprobación o rechazo…"></textarea>
+        <label class="form-label">Notas de revisiÃ³n</label>
+        <textarea class="form-control" id="modal-doc-notas" rows="3" placeholder="Motivo de aprobaciÃ³n o rechazoâ€¦"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -771,12 +786,12 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Gestionar incidencia</span>
-      <button class="modal-close">✕</button>
+      <button class="modal-close">âœ•</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="inc-id">
       <div class="form-group">
-        <label class="form-label">Descripción</label>
+        <label class="form-label">DescripciÃ³n</label>
         <div id="inc-desc" style="background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem;line-height:1.6"></div>
       </div>
       <div class="form-row">
@@ -800,8 +815,8 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Resolución / Notas internas</label>
-        <textarea class="form-control" id="inc-resolucion" rows="4" placeholder="Describe cómo se ha resuelto o las acciones tomadas…"></textarea>
+        <label class="form-label">ResoluciÃ³n / Notas internas</label>
+        <textarea class="form-control" id="inc-resolucion" rows="4" placeholder="Describe cÃ³mo se ha resuelto o las acciones tomadasâ€¦"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -816,7 +831,7 @@
   <div class="modal">
     <div class="modal-header">
       <span class="modal-title">Editar alumno</span>
-      <button class="modal-close">✕</button>
+      <button class="modal-close">âœ•</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="edit-alum-id">
@@ -834,14 +849,14 @@
         <div class="form-group">
           <label class="form-label">Nivel educativo</label>
           <select class="form-control" id="edit-alum-nivel">
-            <option value="">Seleccionar…</option>
+            <option value="">Seleccionarâ€¦</option>
             <option>Primaria</option><option>ESO</option>
             <option>Bachillerato</option><option>Selectividad</option><option>Universidad</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Curso</label>
-          <input class="form-control" type="text" id="edit-alum-curso" placeholder="Ej: 3º ESO">
+          <input class="form-control" type="text" id="edit-alum-curso" placeholder="Ej: 3Âº ESO">
         </div>
       </div>
       <div class="form-group">
@@ -865,7 +880,11 @@ import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js';
+import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260628-trust';
+import {
+  buildFamilyTrustProfile,
+  buildTeacherTrustProfile,
+} from '../../js/trust-engine.js?v=20260628-trust';
 import {
   SCHEDULED_CLASS_STATUSES,
   buildAdminClassPayload,
@@ -894,14 +913,14 @@ import {
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js';
 
-// ── PROTEGER RUTA ────────────────────────────────────────────────
+// â”€â”€ PROTEGER RUTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const usuario = await requireAuth(['admin']);
 if (!usuario) throw new Error('No autorizado');
 
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
-// ── NAVEGACIÓN ───────────────────────────────────────────────────
+// â”€â”€ NAVEGACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const secciones = ['dashboard','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias'];
 const TITULOS = {
   dashboard:'Dashboard', clases:'Clases', calendario:'Calendario',
@@ -911,9 +930,12 @@ const TITULOS = {
 let chatInicializado = false;
 let profesoresCache = new Map();
 let profesoresFirestoreCache = null;
+let familiasCache = new Map();
+let familiasFirestoreCache = null;
+let trustContextCache = null;
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
-  profesores: { id: 'tbody-profesores', colspan: 8, countId: 'prof-count' },
+  profesores: { id: 'tbody-profesores', colspan: 9, countId: 'prof-count' },
   familias: { id: 'tbody-familias', colspan: 8, countId: 'fam-count' },
   alumnos: { id: 'tbody-alumnos', colspan: 7, countId: 'alum-count' },
   solicitudes: { id: 'tbody-solicitudes', colspan: 9, countId: 'sol-count' },
@@ -1007,7 +1029,7 @@ async function cargarBadgeLeads() {
   }
 }
 
-// ── DASHBOARD ────────────────────────────────────────────────────
+// â”€â”€ DASHBOARD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cargarDashboard() {
   await cargarBadgeLeads();
   const controlCenter = document.getElementById('admin-control-center');
@@ -1148,13 +1170,13 @@ async function cargarSolicitudesRecientes() {
     .order('created_at', { ascending: false }).limit(5);
 
   const cont = document.getElementById('lista-solicitudes-recientes');
-  if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Sin solicitudes</div></div>'; return; }
+  if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">ðŸ“‹</div><div class="empty-title">Sin solicitudes</div></div>'; return; }
 
   cont.innerHTML = data.map(s => `
     <div class="clase-item" style="padding:12px 20px">
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(s.materia)} — ${sanitize(s.alumnos?.nombre||'Alumno')} ${sanitize(s.alumnos?.apellidos||'')}</div>
-        <div class="clase-materia">${sanitize(s.familias?.usuarios?.nombre||'')} · ${formatFechaCorta(s.created_at)}</div>
+        <div class="clase-nombre">${sanitize(s.materia)} â€” ${sanitize(s.alumnos?.nombre||'Alumno')} ${sanitize(s.alumnos?.apellidos||'')}</div>
+        <div class="clase-materia">${sanitize(s.familias?.usuarios?.nombre||'')} Â· ${formatFechaCorta(s.created_at)}</div>
       </div>
       <div>${badgeEstado(s.estado)}</div>
     </div>`).join('');
@@ -1169,7 +1191,7 @@ async function cargarProximasClasesDash() {
     .slice(0, 5);
 
   const cont = document.getElementById('lista-proximas-clases');
-  if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases próximas</div></div>'; return; }
+  if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">ðŸ“…</div><div class="empty-title">Sin clases prÃ³ximas</div></div>'; return; }
 
   cont.innerHTML = data.map(c => `
     <div class="clase-item" style="padding:12px 20px">
@@ -1179,7 +1201,7 @@ async function cargarProximasClasesDash() {
       </div>
       <div class="clase-info">
         <div class="clase-nombre">${sanitize(c.alumno_nombre)}</div>
-        <div class="clase-materia">${sanitize(c.materia)} · ${sanitize(c.profesor_nombre)}</div>
+        <div class="clase-materia">${sanitize(c.materia)} Â· ${sanitize(c.profesor_nombre)}</div>
       </div>
     </div>`).join('');
 }
@@ -1193,11 +1215,11 @@ async function cargarPagosPendientesDash() {
   const pendientes = (data || []).filter((p) => ['pendiente', 'solicitado', 'procesando', 'vencido'].includes(paymentStatusForBadge(p))).slice(0, 5);
   if (!pendientes.length) { cont.innerHTML = '<div style="padding:20px;color:var(--gray-mid);font-size:.875rem;text-align:center">No hay pagos pendientes</div>'; return; }
 
-  cont.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Origen</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Fecha</th><th>Acción</th></tr></thead><tbody>` +
+  cont.innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Origen</th><th>Importe</th><th>MÃ©todo</th><th>Referencia</th><th>Fecha</th><th>AcciÃ³n</th></tr></thead><tbody>` +
     pendientes.map(p => {
       const referencia = esPagoProfesor(p)
         ? [p.telefono_bizum, p.concepto].filter(Boolean).join(' / ')
-        : (p.referencia || '—');
+        : (p.referencia || 'â€”');
       const estadoAprobado = esPagoProfesor(p) ? 'pagado' : 'validado';
       const accionAprobado = esPagoProfesor(p) ? 'Pagado' : 'Validar';
       return `<tr>
@@ -1220,7 +1242,7 @@ document.getElementById('lista-pagos-pendientes')?.addEventListener('click', (e)
   window.validarPago(btn.dataset.id, btn.dataset.estado);
 });
 
-// ── CLASES ───────────────────────────────────────────────────────
+// â”€â”€ CLASES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PAG_CLASES = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-clases'), onPageChange: () => cargarClases() });
 
 function money(value) {
@@ -1297,18 +1319,18 @@ async function cargarClases() {
 
   tbody.innerHTML = clases.map(c => `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
-    <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
+    <td>${formatHora(c.hora_inicio)}â€“${formatHora(c.hora_fin)}</td>
     <td><strong>${sanitize(c.alumno_nombre)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(c.nivel_educativo||'')} ${sanitize(c.curso||'')}</span></td>
     <td>${sanitize(c.profesor_nombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
     <td>
-      <strong>${classTotal(c) ? formatEuros(classTotal(c)) : '—'}</strong>
-      <br><span style="font-size:.75rem;color:var(--gray-mid)">Prof. ${classTeacherAmount(c) ? formatEuros(classTeacherAmount(c)) : '—'} · Margen ${formatEuros(classPlatformFee(c))}</span>
+      <strong>${classTotal(c) ? formatEuros(classTotal(c)) : 'â€”'}</strong>
+      <br><span style="font-size:.75rem;color:var(--gray-mid)">Prof. ${classTeacherAmount(c) ? formatEuros(classTeacherAmount(c)) : 'â€”'} Â· Margen ${formatEuros(classPlatformFee(c))}</span>
     </td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td>
-      <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-action="editar-clase" data-id="${sanitize(c.id)}">✏️</button>
+      <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-action="editar-clase" data-id="${sanitize(c.id)}">âœï¸</button>
     </td>
   </tr>`).join('');
 }
@@ -1342,9 +1364,9 @@ async function cargarSelectoresClase() {
     db.from('alumnos').select('id, nombre, apellidos, familyUid, familia_id').eq('activo', true),
   ]);
 
-  document.getElementById('clase-profesor').innerHTML = '<option value="">Seleccionar…</option>' +
+  document.getElementById('clase-profesor').innerHTML = '<option value="">Seleccionarâ€¦</option>' +
     (profs||[]).map(p => `<option value="${p.id}">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</option>`).join('');
-  document.getElementById('clase-alumno').innerHTML = '<option value="">Seleccionar…</option>' +
+  document.getElementById('clase-alumno').innerHTML = '<option value="">Seleccionarâ€¦</option>' +
     (alums||[]).map(a => `<option value="${a.id}" data-family-uid="${sanitize(a.familyUid || a.familia_id || '')}">${sanitize(a.nombre)} ${sanitize(a.apellidos)}</option>`).join('');
 }
 
@@ -1520,12 +1542,12 @@ document.getElementById('btn-export-clases').addEventListener('click', async () 
     {titulo:'Fecha',campo:'fecha'},{titulo:'Alumno',campo:'alumno_nombre'},
     {titulo:'Profesor',campo:'profesor_nombre'},{titulo:'Materia',campo:'materia'},
     {titulo:'Hora inicio',campo:'hora_inicio'},{titulo:'Hora fin',campo:'hora_fin'},
-    {titulo:'Precio',campo:'precio_total'},{titulo:'Comisión CD10',campo:'comision_clasesde10'},
+    {titulo:'Precio',campo:'precio_total'},{titulo:'ComisiÃ³n CD10',campo:'comision_clasesde10'},
     {titulo:'Importe prof.',campo:'importe_profesor'},{titulo:'Estado',campo:'estado'},
   ]);
 });
 
-// ── FINANZAS ─────────────────────────────────────────────────────
+// â”€â”€ FINANZAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let finanzasUltimoDataset = [];
 
 function mesActualInput() {
@@ -1812,7 +1834,7 @@ document.getElementById('btn-export-finanzas')?.addEventListener('click', () => 
   ]);
 });
 
-// ── CALENDARIO ───────────────────────────────────────────────────
+// â”€â”€ CALENDARIO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let cal;
 async function iniciarCalendario() {
   if (!cal) {
@@ -1838,7 +1860,7 @@ function mostrarClasesDia(fecha, clases) {
   document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
   const cont = document.getElementById('cal-clases-dia');
   if (!clases.length) {
-    cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>'; return;
+    cont.innerHTML = '<div class="empty-state"><div class="empty-icon">ðŸ“…</div><div class="empty-title">Sin clases</div></div>'; return;
   }
   cont.innerHTML = clases.map(c => `
     <div class="clase-item">
@@ -1851,7 +1873,7 @@ function mostrarClasesDia(fecha, clases) {
     </div>`).join('');
 }
 
-// ── PROFESORES ───────────────────────────────────────────────────
+// â”€â”€ PROFESORES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PAG_PROF = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-profesores'), onPageChange: cargarProfesores });
 
 function nombreProfesor(p) {
@@ -1924,6 +1946,121 @@ function timestampMillis(value) {
   return 0;
 }
 
+async function safeListFirestore(collectionName) {
+  try {
+    const snap = await getDocs(collection(firebaseDb, collectionName));
+    return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  } catch (error) {
+    console.warn(`No se pudo cargar ${collectionName} para confianza`, error);
+    return [];
+  }
+}
+
+async function cargarTrustContextFirestore() {
+  if (trustContextCache) return trustContextCache;
+  const [
+    classes,
+    payments,
+    documents,
+    requests,
+    matches,
+    assignments,
+    incidents,
+    students,
+  ] = await Promise.all([
+    safeListFirestore('clases'),
+    safeListFirestore('pagos'),
+    safeListFirestore('documentos'),
+    safeListFirestore('solicitudes'),
+    safeListFirestore('solicitudMatches'),
+    safeListFirestore('asignaciones'),
+    safeListFirestore('incidencias'),
+    safeListFirestore('alumnos'),
+  ]);
+
+  trustContextCache = {
+    classes,
+    payments,
+    documents,
+    requests,
+    matches,
+    requestMatches: matches,
+    assignments,
+    incidents,
+    students,
+    alumnos: students,
+  };
+  return trustContextCache;
+}
+
+function trustBadgeClass(score) {
+  if (Number(score) >= 90) return 'badge-gold';
+  if (Number(score) >= 78) return 'badge-success';
+  if (Number(score) >= 60) return 'badge-info';
+  return 'badge-warning';
+}
+
+function formatTrustPercent(value) {
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 100)}%` : '-';
+}
+
+function formatTrustHours(value) {
+  return Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 10) / 10}h` : '-';
+}
+
+function renderTrustBadge(score, level) {
+  const value = Number.isFinite(Number(score)) ? Math.round(Number(score)) : 0;
+  return `<span class="badge ${trustBadgeClass(value)}">${value}/100 ${sanitize(level || '')}</span>`;
+}
+
+function renderTrustBadges(badges = [], limit = 4) {
+  const visible = (badges || []).filter((item) => item.public !== false).slice(0, limit);
+  if (!visible.length) return '<span class="badge badge-gray">Sin insignias publicas</span>';
+  return visible.map((item) => {
+    const cls = item.tone === 'success' ? 'badge-success'
+      : item.tone === 'warning' ? 'badge-warning'
+        : item.tone === 'gold' ? 'badge-gold'
+          : item.tone === 'info' ? 'badge-info'
+            : 'badge-gray';
+    return `<span class="badge ${cls}" title="${sanitize(item.detail || '')}">${sanitize(item.label)}</span>`;
+  }).join(' ');
+}
+
+function renderTrustPanel(trust) {
+  if (!trust) return '';
+  const metrics = trust.metrics || {};
+  const publicStats = trust.publicStats || {};
+  const components = (trust.components || []).map((item) => `
+    <div class="trust-component-row">
+      <div>
+        <strong>${sanitize(item.label)}</strong>
+        <span>${sanitize(item.detail || '')}</span>
+      </div>
+      <b>${Math.round(Number(item.points || 0))}/${Math.round(Number(item.max || 0))}</b>
+    </div>`).join('');
+  const warnings = (trust.warnings || []).slice(0, 4);
+
+  return `
+    <div class="trust-panel">
+      <div class="trust-panel-head">
+        <div>
+          <div class="trust-kicker">Confianza y reputacion</div>
+          <h4>${Math.round(Number(trust.score || 0))}/100 Â· ${sanitize(trust.level || trust.trustLevel || 'inicial')}</h4>
+        </div>
+        <div class="trust-score-ring">${Math.round(Number(trust.score || 0))}</div>
+      </div>
+      <div class="trust-badges">${renderTrustBadges(trust.badges, 6)}</div>
+      <div class="trust-public-stats">
+        <div><strong>${sanitize(publicStats.completedClasses ?? metrics.completedClasses ?? 0)}</strong><span>clases realizadas</span></div>
+        <div><strong>${formatTrustPercent(publicStats.completionRate ?? metrics.completionRate)}</strong><span>realizacion</span></div>
+        <div><strong>${formatTrustPercent(publicStats.cancellationRate ?? metrics.cancellationRate)}</strong><span>cancelacion</span></div>
+        <div><strong>${formatTrustHours(publicStats.averageResponseHours ?? metrics.averageResponseHours)}</strong><span>respuesta media</span></div>
+      </div>
+      ${components ? `<div class="trust-components">${components}</div>` : ''}
+      ${warnings.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Senales a revisar</div>${warnings.map(sanitize).join(' Â· ')}</div></div>` : ''}
+    </div>`;
+}
+
 function mapProfesorFirestore(docSnap) {
   const data = docSnap.data();
   const nombre = data.nombre || data.displayName || '';
@@ -1948,9 +2085,24 @@ function mapProfesorFirestore(docSnap) {
 
 async function cargarProfesoresFirestore() {
   if (profesoresFirestoreCache) return profesoresFirestoreCache;
-  const snap = await getDocs(collection(firebaseDb, 'profesores'));
+  const [snap, trustContext] = await Promise.all([
+    getDocs(collection(firebaseDb, 'profesores')),
+    cargarTrustContextFirestore(),
+  ]);
   profesoresFirestoreCache = snap.docs
-    .map(mapProfesorFirestore)
+    .map((docSnap) => {
+      const profesor = mapProfesorFirestore(docSnap);
+      const trustProfile = buildTeacherTrustProfile(profesor, trustContext);
+      return {
+        ...profesor,
+        trustProfile,
+        trustScore: trustProfile.score,
+        trustLevel: trustProfile.level,
+        trustBadges: trustProfile.badges,
+        reputationMetrics: trustProfile.metrics,
+        publicTrustStats: trustProfile.publicStats,
+      };
+    })
     .sort((a, b) => b.createdSort - a.createdSort);
   return profesoresFirestoreCache;
 }
@@ -2036,6 +2188,7 @@ function renderProfesorDetalle(p) {
   const certificaciones = listaCampo(p.certificaciones || p.certifications);
   const foto = p.foto_url || p.photoUrl || '';
   const fila = (label, value) => `<div><strong>${label}:</strong> ${sanitize(value || '-')}</div>`;
+  const trust = p.trustProfile || buildTeacherTrustProfile(p, {});
   return `
     <div style="display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:start">
       <div style="width:112px;height:112px;border-radius:12px;background:var(--gray-soft);overflow:hidden;display:flex;align-items:center;justify-content:center">
@@ -2051,9 +2204,10 @@ function renderProfesorDetalle(p) {
       </div>
     </div>
     <div style="margin-top:16px;display:grid;gap:10px;font-size:.9rem;line-height:1.5">
+      ${renderTrustPanel(trust)}
       ${renderProfesorAiPanel(p)}
       ${fila('Perfil completado', p.profileCompletionPercent !== undefined ? `${p.profileCompletionPercent}%` : '')}
-      ${fila('Confianza', p.trustScore !== undefined ? `${p.trustScore}/100 (${p.trustLevel || 'sin nivel'})` : '')}
+      ${fila('Confianza', trust ? `${trust.score}/100 (${trust.level || 'sin nivel'})` : '')}
       ${fila('Materias', materias.join(', '))}
       ${fila('Niveles', niveles.join(', '))}
       ${fila('Especialidades', especialidades.join(', '))}
@@ -2066,7 +2220,7 @@ function renderProfesorDetalle(p) {
       ${fila('Bizum', (p.acepta_bizum === true || p.hasBizum === true) ? 'Si' : 'No confirmado')}
       ${fila('Disponibilidad', p.disponibilidad_resumen || p.availabilitySummary)}
       <div><strong>Presentacion:</strong><br>${sanitize(p.bio || '-')}</div>
-      ${issues.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Perfil incompleto</div>Falta: ${issues.map(sanitize).join(', ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">✓</span><div class="alert-body"><div class="alert-title">Perfil completo</div>Puede verificarse y asignarse.</div></div>'}
+      ${issues.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Perfil incompleto</div>Falta: ${issues.map(sanitize).join(', ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">âœ“</span><div class="alert-body"><div class="alert-title">Perfil completo</div>Puede verificarse y asignarse.</div></div>'}
     </div>
   `;
 }
@@ -2097,7 +2251,7 @@ async function cargarProfesores() {
 
   const tbodyProfesores = document.getElementById('tbody-profesores');
   if (!filtradoFirestore.length) {
-    tbodyProfesores.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
+    tbodyProfesores.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
     return;
   }
 
@@ -2115,29 +2269,33 @@ async function cargarProfesores() {
       </div>
     </td>
     <td>${sanitize(p.usuarios?.email || p.email || '')}</td>
-    <td>${sanitize(p.usuarios?.telefono || p.telefono || 'â€”')}</td>
-    <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'â€”'}</td>
+    <td>${sanitize(p.usuarios?.telefono || p.telefono || 'Ã¢â‚¬â€')}</td>
+    <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'Ã¢â‚¬â€'}</td>
     <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
+    <td>
+      ${renderTrustBadge(p.trustScore, p.trustLevel)}
+      <div class="trust-badges trust-badges-compact">${renderTrustBadges(p.trustBadges, 2)}</div>
+    </td>
     <td>
       ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
       ${renderProfesorAiStatus(p)}
     </td>
-    <td>â€”</td>
+    <td>Ã¢â‚¬â€</td>
     <td>
       <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver perfil</button>
-      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">âœ“ Verificar</button>
-      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">âœ•</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">Ã¢Å“â€œ Verificar</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">Ã¢Å“â€¢</button>
     </td>
   </tr>`).join('');
   return;
 
-  // La búsqueda se hace en el servidor usando la vista + búsqueda en usuarios
-  // Para que la paginación sea correcta con búsqueda, filtramos vía subquery
+  // La bÃºsqueda se hace en el servidor usando la vista + bÃºsqueda en usuarios
+  // Para que la paginaciÃ³n sea correcta con bÃºsqueda, filtramos vÃ­a subquery
   let q = null
     .select('*, usuarios!inner(nombre,apellidos,email,telefono)', {count:'exact'});
   if (estado) q = q.eq('estado_verificacion', estado);
   if (busq) {
-    // Búsqueda en campos de la tabla usuarios (usando .or con columnas de la relación)
+    // BÃºsqueda en campos de la tabla usuarios (usando .or con columnas de la relaciÃ³n)
     q = q.or(
       `nombre.ilike.%${busq}%,apellidos.ilike.%${busq}%,email.ilike.%${busq}%`,
       { foreignTable: 'usuarios' }
@@ -2166,18 +2324,22 @@ async function cargarProfesores() {
       </div>
     </td>
     <td>${sanitize(p.usuarios?.email||'')}</td>
-    <td>${sanitize(p.usuarios?.telefono||'—')}</td>
-    <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'—'}</td>
+    <td>${sanitize(p.usuarios?.telefono||'â€”')}</td>
+    <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'â€”'}</td>
     <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
+    <td>
+      ${renderTrustBadge(p.trustScore, p.trustLevel)}
+      <div class="trust-badges trust-badges-compact">${renderTrustBadges(p.trustBadges, 2)}</div>
+    </td>
     <td>
       ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
       ${renderProfesorAiStatus(p)}
     </td>
-    <td>—</td>
+    <td>â€”</td>
     <td>
       <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver perfil</button>
-      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">✓ Verificar</button>
-      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">✕</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">âœ“ Verificar</button>
+      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">âœ•</button>
     </td>
   </tr>`).join('');
 }
@@ -2219,6 +2381,7 @@ window.cambiarVerificacion = async (id, estado) => {
     return;
   }
   profesoresFirestoreCache = null;
+  trustContextCache = null;
   showToast('Actualizado', `Profesor ${estado}.`, 'success');
   cargarProfesores();
 };
@@ -2229,82 +2392,203 @@ window.cambiarVerificacion = async (id, estado) => {
 
 document.getElementById('btn-export-profesores').addEventListener('click', async () => {
   const data = await cargarProfesoresFirestore();
-  exportarCSV(data.map(p=>({...p, nombre:p.usuarios?.nombre, apellidos:p.usuarios?.apellidos, email:p.usuarios?.email, telefono:p.usuarios?.telefono}))||[],
+  exportarCSV(data.map(p=>({
+    ...p,
+    nombre:p.usuarios?.nombre,
+    apellidos:p.usuarios?.apellidos,
+    email:p.usuarios?.email,
+    telefono:p.usuarios?.telefono,
+    confianza:p.trustScore ?? '',
+    nivel_confianza:p.trustLevel || '',
+    clases_realizadas:p.reputationMetrics?.completedClasses ?? '',
+    respuesta_media_horas:p.reputationMetrics?.averageResponseHours ?? '',
+    tasa_cancelacion:p.reputationMetrics?.cancellationRate ?? '',
+    alertas_confianza:(p.trustProfile?.warnings || []).join(' | '),
+  }))||[],
     'profesores_clasesde10.csv', [
       {titulo:'Nombre',campo:'nombre'},{titulo:'Apellidos',campo:'apellidos'},
-      {titulo:'Email',campo:'email'},{titulo:'Teléfono',campo:'telefono'},
-      {titulo:'Ciudad',campo:'ciudad'},{titulo:'Comisión%',campo:'comision_porcentaje'},
+      {titulo:'Email',campo:'email'},{titulo:'TelÃ©fono',campo:'telefono'},
+      {titulo:'Ciudad',campo:'ciudad'},{titulo:'ComisiÃ³n%',campo:'comision_porcentaje'},
+      {titulo:'Confianza',campo:'confianza'},{titulo:'Nivel confianza',campo:'nivel_confianza'},
+      {titulo:'Clases realizadas',campo:'clases_realizadas'},{titulo:'Respuesta media horas',campo:'respuesta_media_horas'},
+      {titulo:'Tasa cancelacion',campo:'tasa_cancelacion'},{titulo:'Alertas confianza',campo:'alertas_confianza'},
       {titulo:'Estado',campo:'estado_verificacion'},
   ]);
 });
 
-// ── FAMILIAS ─────────────────────────────────────────────────────
+// â”€â”€ FAMILIAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PAG_FAM = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-familias'), onPageChange: cargarFamilias });
 
-async function cargarFamilias() {
-  const busq = document.getElementById('filtro-fam-busqueda').value.trim();
-  let q = db.from('familias').select('*, usuarios(nombre,apellidos,email,telefono,created_at)', {count:'exact'});
-  if (busq) q = q.or(`usuarios.nombre.ilike.%${busq}%,usuarios.email.ilike.%${busq}%`);
-  q = q.order('created_at',{ascending:false}).range(PAG_FAM.offset(), PAG_FAM.offset()+19);
+function nombreFamilia(f) {
+  return `${f?.usuarios?.nombre || f?.nombre || ''} ${f?.usuarios?.apellidos || f?.apellidos || ''}`.trim() || f?.email || f?.usuarios?.email || f?.id || 'Familia';
+}
 
-  const { data, count } = await q;
-  PAG_FAM.setTotal(count||0);
-  document.getElementById('fam-count').textContent = `${count||0} familias`;
+function mapFamiliaFirestore(docSnap, user = {}) {
+  const data = docSnap.data();
+  const userUid = data.userUid || data.usuario_id || docSnap.id;
+  return {
+    id: docSnap.id,
+    ...data,
+    userUid,
+    usuarios: {
+      nombre: user.nombre || data.nombre || '',
+      apellidos: user.apellidos || data.apellidos || '',
+      email: user.email || data.email || '',
+      telefono: user.telefono || data.telefono || '',
+      created_at: user.created_at || data.created_at || '',
+    },
+    nombre: data.nombre || user.nombre || '',
+    apellidos: data.apellidos || user.apellidos || '',
+    email: data.email || user.email || '',
+    telefono: data.telefono || user.telefono || '',
+    ciudad: data.ciudad || data.city || 'Madrid',
+    created_at: data.created_at || data.createdAt || user.created_at || '',
+    createdSort: timestampMillis(data.createdAt || data.created_at || user.createdAt || user.created_at),
+  };
+}
+
+async function cargarFamiliasFirestore() {
+  if (familiasFirestoreCache) return familiasFirestoreCache;
+  const [familiasSnap, usersMap, trustContext] = await Promise.all([
+    getDocs(collection(firebaseDb, 'familias')),
+    cargarColeccionMap('users'),
+    cargarTrustContextFirestore(),
+  ]);
+
+  familiasFirestoreCache = familiasSnap.docs
+    .map((docSnap) => {
+      const data = docSnap.data();
+      const userUid = data.userUid || data.usuario_id || docSnap.id;
+      const familia = mapFamiliaFirestore(docSnap, usersMap.get(userUid) || usersMap.get(docSnap.id) || {});
+      const trustProfile = buildFamilyTrustProfile(familia, trustContext);
+      return {
+        ...familia,
+        trustProfile,
+        trustScore: trustProfile.score,
+        trustLevel: trustProfile.level,
+        trustBadges: trustProfile.badges,
+        reputationMetrics: trustProfile.metrics,
+        publicTrustStats: trustProfile.publicStats,
+      };
+    })
+    .sort((a, b) => b.createdSort - a.createdSort);
+  return familiasFirestoreCache;
+}
+
+async function cargarFamilias() {
+  const busq = document.getElementById('filtro-fam-busqueda').value.trim().toLowerCase();
+  const todas = await cargarFamiliasFirestore();
+  const data = busq
+    ? todas.filter((f) => [
+      nombreFamilia(f),
+      f.usuarios?.email,
+      f.usuarios?.telefono,
+      f.ciudad,
+      f.zona,
+      f.codigo_postal,
+    ].join(' ').toLowerCase().includes(busq))
+    : todas;
+
+  PAG_FAM.setTotal(data.length);
+  document.getElementById('fam-count').textContent = `${data.length} familias`;
 
   const tbody = document.getElementById('tbody-familias');
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>'; return; }
 
-  tbody.innerHTML = data.map(f => `<tr>
-    <td><div style="font-weight:600">${sanitize(f.usuarios?.nombre)} ${sanitize(f.usuarios?.apellidos)}</div></td>
+  const pagina = data.slice(PAG_FAM.offset(), PAG_FAM.offset() + 20);
+  familiasCache = new Map(data.map((f) => [f.id, f]));
+  tbody.innerHTML = pagina.map(f => `<tr>
+    <td>
+      <div style="font-weight:600">${sanitize(nombreFamilia(f))}</div>
+      <div class="trust-badges trust-badges-compact">${renderTrustBadges(f.trustBadges, 2)}</div>
+    </td>
     <td>${sanitize(f.usuarios?.email||'')}</td>
-    <td>${sanitize(f.usuarios?.telefono||'—')}</td>
+    <td>${sanitize(f.usuarios?.telefono||'-')}</td>
     <td>${sanitize([f.zona || f.zone, f.ciudad || f.city || 'Madrid', f.codigo_postal || f.postalCode].filter(Boolean).join(', '))}</td>
-    <td>${f.profileCompletionPercent !== undefined ? `${sanitize(f.profileCompletionPercent)}%` : '—'}</td>
-    <td>${f.trustScore !== undefined ? `${sanitize(f.trustScore)}/100` : '—'}</td>
+    <td>${f.profileCompletionPercent !== undefined ? `${sanitize(f.profileCompletionPercent)}%` : '-'}</td>
+    <td>${renderTrustBadge(f.trustScore, f.trustLevel)}</td>
     <td style="font-size:.78rem;color:var(--gray-mid)">${formatFechaCorta(f.created_at)}</td>
-    <td><button class="btn btn-ghost btn-sm btn-icon" title="Ver detalle">👁</button></td>
+    <td><button class="btn btn-ghost btn-sm" data-action="ver-familia" data-id="${sanitize(f.id)}">Ver detalle</button></td>
   </tr>`).join('');
 }
+function renderFamiliaDetalle(f) {
+  if (!f) return '<div class="empty-state"><div class="empty-title">Familia no encontrada</div></div>';
+  const fila = (label, value) => `<div><strong>${label}:</strong> ${sanitize(value || '-')}</div>`;
+  const trust = f.trustProfile || buildFamilyTrustProfile(f, {});
+  const metrics = trust.metrics || {};
+  return `
+    <div style="display:grid;gap:14px;font-size:.9rem;line-height:1.5">
+      <div>
+        <h3 style="margin:0;color:var(--navy)">${sanitize(nombreFamilia(f))}</h3>
+        <div style="color:var(--gray-mid);font-size:.84rem">${sanitize(f.usuarios?.email || f.email || '')}</div>
+      </div>
+      ${renderTrustPanel(trust)}
+      <div class="trust-detail-grid">
+        ${fila('Telefono', f.usuarios?.telefono || f.telefono)}
+        ${fila('Zona', [f.zona || f.zone, f.ciudad || f.city, f.codigo_postal || f.postalCode].filter(Boolean).join(', '))}
+        ${fila('Canal preferido', f.contacto_preferido || f.preferredContact)}
+        ${fila('Alumnos activos', metrics.activeStudents ?? 0)}
+        ${fila('Clases realizadas', metrics.completedClasses ?? 0)}
+        ${fila('Pagos pendientes', metrics.pendingPayments ?? 0)}
+        ${fila('Incidencias abiertas', metrics.openIncidents ?? 0)}
+        ${fila('Ultima actividad', metrics.inactiveDays !== null && metrics.inactiveDays !== undefined ? `Hace ${metrics.inactiveDays} dia(s)` : '-')}
+      </div>
+      ${trust.warnings?.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Para aumentar confianza</div>${trust.warnings.map(sanitize).join(' · ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">OK</span><div class="alert-body"><div class="alert-title">Familia operativa</div>Sin alertas relevantes de confianza.</div></div>'}
+    </div>
+  `;
+}
+
+document.getElementById('tbody-familias')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="ver-familia"]');
+  if (!btn) return;
+  const familia = familiasCache.get(btn.dataset.id);
+  document.getElementById('familia-detalle-body').innerHTML = renderFamiliaDetalle(familia);
+  openModal('modal-familia-detalle');
+});
 document.getElementById('filtro-fam-busqueda').addEventListener('input', debounce(cargarFamilias, 350));
 
 document.getElementById('btn-export-familias').addEventListener('click', async () => {
-  const { data } = await db.from('familias')
-    .select('*, usuarios(nombre,apellidos,email,telefono,created_at)')
-    .order('created_at', {ascending:false});
+  const data = await cargarFamiliasFirestore();
   exportarCSV(
     (data||[]).map(f => ({
-      nombre:         f.usuarios?.nombre || '',
-      apellidos:      f.usuarios?.apellidos || '',
-      email:          f.usuarios?.email || '',
-      telefono:       f.usuarios?.telefono || '',
+      nombre:         f.usuarios?.nombre || f.nombre || '',
+      apellidos:      f.usuarios?.apellidos || f.apellidos || '',
+      email:          f.usuarios?.email || f.email || '',
+      telefono:       f.usuarios?.telefono || f.telefono || '',
       ciudad:         f.ciudad || '',
-      codigo_postal:  f.codigo_postal || '',
+      codigo_postal:  f.codigo_postal || f.postalCode || '',
       zona:           f.zona || f.zone || '',
       contacto_preferido: f.contacto_preferido || f.preferredContact || '',
-      perfil:         f.profileCompletionPercent ?? '',
+      perfil:         f.trustProfile?.metrics?.profileCompletionPercent ?? f.profileCompletionPercent ?? '',
       confianza:      f.trustScore ?? '',
-      como_nos_conocio: f.como_nos_conocio || '',
-      alta:           f.created_at ? f.created_at.split('T')[0] : '',
+      nivel_confianza: f.trustLevel || '',
+      pagos_pendientes: f.reputationMetrics?.pendingPayments ?? '',
+      clases_realizadas: f.reputationMetrics?.completedClasses ?? '',
+      alertas_confianza: (f.trustProfile?.warnings || []).join(' | '),
+      alta:           f.created_at ? String(f.created_at).split('T')[0] : '',
     })),
     'familias_clasesde10.csv',
     [
       {titulo:'Nombre',       campo:'nombre'},
       {titulo:'Apellidos',    campo:'apellidos'},
       {titulo:'Email',        campo:'email'},
-      {titulo:'Teléfono',     campo:'telefono'},
+      {titulo:'Telefono',     campo:'telefono'},
       {titulo:'Ciudad',       campo:'ciudad'},
-      {titulo:'Código postal',campo:'codigo_postal'},
+      {titulo:'Codigo postal',campo:'codigo_postal'},
       {titulo:'Zona',         campo:'zona'},
       {titulo:'Canal preferido', campo:'contacto_preferido'},
       {titulo:'Perfil %',     campo:'perfil'},
       {titulo:'Confianza',    campo:'confianza'},
-      {titulo:'Cómo nos conoció', campo:'como_nos_conocio'},
+      {titulo:'Nivel confianza', campo:'nivel_confianza'},
+      {titulo:'Pagos pendientes', campo:'pagos_pendientes'},
+      {titulo:'Clases realizadas', campo:'clases_realizadas'},
+      {titulo:'Alertas confianza', campo:'alertas_confianza'},
       {titulo:'Fecha alta',   campo:'alta'},
     ]
   );
 });
 
-// ── ALUMNOS ──────────────────────────────────────────────────────
+// ALUMNOS
 const PAG_ALUM = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-alumnos'), onPageChange: cargarAlumnos });
 
 async function cargarAlumnos() {
@@ -2324,9 +2608,9 @@ async function cargarAlumnos() {
   tbody.innerHTML = filtrado.map(a => `<tr>
     <td><div style="font-weight:600">${sanitize(a.nombre)} ${sanitize(a.apellidos)}</div></td>
     <td>${sanitize(a.familias?.usuarios?.nombre||'')} ${sanitize(a.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(a.nivel_educativo||'—')} ${sanitize(a.curso||'')}</td>
-    <td style="font-size:.78rem">${(a.materias_necesita||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'—'}</td>
-    <td>—</td>
+    <td>${sanitize(a.nivel_educativo||'â€”')} ${sanitize(a.curso||'')}</td>
+    <td style="font-size:.78rem">${(a.materias_necesita||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'â€”'}</td>
+    <td>â€”</td>
     <td>${badgeEstado(a.activo ? 'verificado' : 'rechazado')}</td>
     <td>
       <button class="btn btn-ghost btn-sm btn-icon"
@@ -2337,7 +2621,7 @@ async function cargarAlumnos() {
               data-alum-nivel="${sanitize(a.nivel_educativo||'')}"
               data-alum-curso="${sanitize(a.curso||'')}"
               data-alum-colegio="${sanitize(a.colegio||'')}"
-              title="Editar alumno">✏️</button>
+              title="Editar alumno">âœï¸</button>
     </td>
   </tr>`).join('');
 }
@@ -2397,7 +2681,7 @@ document.getElementById('btn-guardar-alumno').addEventListener('click', async ()
     colegio:        document.getElementById('edit-alum-colegio').value.trim(),
   };
   if (!payload.nombre || !payload.apellidos) {
-    showToast('Atención', 'Nombre y apellidos son obligatorios.', 'warning'); return;
+    showToast('AtenciÃ³n', 'Nombre y apellidos son obligatorios.', 'warning'); return;
   }
   const { error } = await db.from('alumnos').update(payload).eq('id', id);
   if (error) { showToast('Error', error.message, 'error'); return; }
@@ -2406,7 +2690,7 @@ document.getElementById('btn-guardar-alumno').addEventListener('click', async ()
   cargarAlumnos();
 });
 
-// ── SOLICITUDES ──────────────────────────────────────────────────
+// â”€â”€ SOLICITUDES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PAG_SOL = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-solicitudes'), onPageChange: cargarSolicitudes });
 
 async function cargarSolicitudes() {
@@ -2426,12 +2710,12 @@ async function cargarSolicitudes() {
   tbodySolicitudes.innerHTML = paginaSolicitudes.map(s => `<tr>
     <td>${formatFechaCorta(s.created_at)}</td>
     <td>${sanitize(s.familias?.usuarios?.nombre||'')} ${sanitize(s.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(s.alumnos?.nombre||'â€”')} ${sanitize(s.alumnos?.apellidos||'')}</td>
+    <td>${sanitize(s.alumnos?.nombre||'Ã¢â‚¬â€')} ${sanitize(s.alumnos?.apellidos||'')}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
-    <td>${sanitize(s.nivel||'â€”')}</td>
-    <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'â€”')}</td>
+    <td>${sanitize(s.nivel||'Ã¢â‚¬â€')}</td>
+    <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'Ã¢â‚¬â€')}</td>
     <td>${badgeEstado(s.estado)}</td>
-    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : 'â€”'}</td>
+    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : 'Ã¢â‚¬â€'}</td>
     <td>
       ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm"
                                       data-action="abrir-asignar"
@@ -2457,12 +2741,12 @@ async function cargarSolicitudes() {
   tbody.innerHTML = data.map(s => `<tr>
     <td>${formatFechaCorta(s.created_at)}</td>
     <td>${sanitize(s.familias?.usuarios?.nombre||'')} ${sanitize(s.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(s.alumnos?.nombre||'—')} ${sanitize(s.alumnos?.apellidos||'')}</td>
+    <td>${sanitize(s.alumnos?.nombre||'â€”')} ${sanitize(s.alumnos?.apellidos||'')}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
-    <td>${sanitize(s.nivel||'—')}</td>
-    <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'—')}</td>
+    <td>${sanitize(s.nivel||'â€”')}</td>
+    <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'â€”')}</td>
     <td>${badgeEstado(s.estado)}</td>
-    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : '—'}</td>
+    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : 'â€”'}</td>
     <td>
       ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm"
                                       data-action="abrir-asignar"
@@ -2554,6 +2838,7 @@ function renderAsignarMatches(matches, error) {
     const teacherId = String(m.profesor_id || m.teacherUid || '');
     const profesor = profesoresCache.get(teacherId);
     const profileQuality = profesor ? evaluateTeacherProfile(profesor) : null;
+    const trust = profesor?.trustProfile || (profesor ? buildTeacherTrustProfile(profesor, {}) : null);
     const assignable = m.assignable ?? (profileQuality ? profileQuality.assignable : true);
     const score = Number.isFinite(Number(m.score)) ? Number(m.score) : 0;
     const badgeClass = assignable && score >= 65 ? 'badge-success' : score >= 45 ? 'badge-warning' : 'badge-danger';
@@ -2588,6 +2873,10 @@ function renderAsignarMatches(matches, error) {
           <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
         ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
+        ${trust ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px">
+          ${renderTrustBadge(trust.score, trust.level)}
+          ${renderTrustBadges(trust.badges, 3)}
+        </div>` : ''}
         <div style="margin-top:6px">${reasons || 'Candidato propuesto por compatibilidad general.'}</div>
         ${risks ? `<div style="margin-top:4px;color:var(--gray-mid)">A revisar: ${risks}</div>` : ''}
         ${profileIssues ? `<div style="margin-top:4px;color:${assignable ? 'var(--gray-mid)' : 'var(--warning)'}">Perfil: ${profileIssues}</div>` : ''}
@@ -2638,7 +2927,7 @@ function renderProfesorAsignacionSeleccionado(profesorId) {
 document.getElementById('btn-confirmar-asignar').addEventListener('click', async () => {
   const id     = document.getElementById('asignar-solicitud-id').value;
   const profId = document.getElementById('asignar-profesor').value;
-  if (!profId) { showToast('Atención', 'Selecciona un profesor.', 'warning'); return; }
+  if (!profId) { showToast('AtenciÃ³n', 'Selecciona un profesor.', 'warning'); return; }
   const profesor = profesoresCache.get(profId);
   if (profesor && !perfilProfesorCompleto(profesor)) {
     showToast('Perfil incompleto', 'No se puede asignar un profesor con perfil incompleto.', 'warning');
@@ -2712,7 +3001,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
   cargarSolicitudes();
 });
 
-// ── PAGOS ────────────────────────────────────────────────────────
+// â”€â”€ PAGOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PAG_PAGO = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-pagos'), onPageChange: cargarPagos });
 
 function esPagoProfesor(pago) {
@@ -2734,15 +3023,15 @@ function accionesPago(pago, docButton) {
     return estado === 'solicitado' ? `
       <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="pagado">Pagado</button>
       <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">Rechazar</button>
-    ` : (docButton || '—');
+    ` : (docButton || 'â€”');
   }
 
   const revisionButtons = ['pendiente', 'vencido', 'procesando'].includes(estado) ? `
-    <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="validado">✓</button>
-    <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">✕</button>
+    <button class="btn btn-success btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="validado">âœ“</button>
+    <button class="btn btn-danger btn-sm" data-action="validar-pago" data-pago-id="${sanitize(pago.id)}" data-pago-estado="rechazado">âœ•</button>
   ` : '';
 
-  return `${docButton}${revisionButtons}` || '—';
+  return `${docButton}${revisionButtons}` || 'â€”';
 }
 
 async function cargarPagos() {
@@ -2775,12 +3064,12 @@ async function cargarPagos() {
     ` : '';
     const referencia = esPagoProfesor(p)
       ? [p.telefono_bizum, p.concepto].filter(Boolean).join(' / ')
-      : (p.referencia || '—');
+      : (p.referencia || 'â€”');
 
     return `<tr>
     <td>${formatFechaCorta(p.created_at)}</td>
     <td>${sanitize(nombreOrigenPago(p))}</td>
-    <td>${doc?.nombre ? sanitize(doc.nombre) : sanitize(p.concepto || '—')}</td>
+    <td>${doc?.nombre ? sanitize(doc.nombre) : sanitize(p.concepto || 'â€”')}</td>
     <td><strong>${formatEuros(paymentAmount(p))}</strong></td>
     <td>${sanitize(p.metodo)}</td>
     <td style="font-family:monospace;font-size:.8rem">${sanitize(referencia)}</td>
@@ -2829,14 +3118,14 @@ document.getElementById('btn-export-pagos').addEventListener('click', async () =
       {titulo:'Tipo',           campo:'tipo'},
       {titulo:'Origen',         campo:'origen'},
       {titulo:'Email origen',   campo:'email_origen'},
-      {titulo:'Importe (€)',    campo:'monto'},
-      {titulo:'Método',         campo:'metodo'},
+      {titulo:'Importe (â‚¬)',    campo:'monto'},
+      {titulo:'MÃ©todo',         campo:'metodo'},
       {titulo:'Referencia',     campo:'referencia'},
       {titulo:'Estado',         campo:'estado'},
       {titulo:'Notas',          campo:'notas'},
       {titulo:'Documento',      campo:'documento'},
       {titulo:'Ruta documento', campo:'documento_path'},
-      {titulo:'Fecha validación', campo:'fecha_validacion'},
+      {titulo:'Fecha validaciÃ³n', campo:'fecha_validacion'},
     ]
   );
 });
@@ -2900,7 +3189,7 @@ window.validarPago = async (id, estado) => {
   cargarPagosPendientesDash();
 };
 
-// ── DOCUMENTOS ───────────────────────────────────────────────────
+// â”€â”€ DOCUMENTOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Leads publicos
 async function cargarLeads() {
   const tipo = document.getElementById('filtro-lead-tipo').value;
@@ -2971,10 +3260,10 @@ async function cargarDocumentos() {
       ${d.estado === 'pendiente' ? `
         <button class="btn btn-success btn-sm"
                 data-action="validar-doc"
-                data-doc-id="${sanitize(d.id)}">✓</button>
+                data-doc-id="${sanitize(d.id)}">âœ“</button>
         <button class="btn btn-danger btn-sm"
                 data-action="rechazar-doc"
-                data-doc-id="${sanitize(d.id)}">✕</button>
+                data-doc-id="${sanitize(d.id)}">âœ•</button>
       ` : ''}
     </td>
   </tr>`).join('');
@@ -3001,11 +3290,11 @@ document.getElementById('tbody-documentos').addEventListener('click', async (e) 
 async function verDocumento(id, nombre, storagePath) {
   document.getElementById('modal-doc-nombre').textContent = nombre;
   const preview = document.getElementById('modal-doc-preview');
-  preview.innerHTML = '<div style="color:var(--gray-mid);font-size:.875rem">Cargando…</div>';
+  preview.innerHTML = '<div style="color:var(--gray-mid);font-size:.875rem">Cargandoâ€¦</div>';
 
   let url = '';
   if (storagePath) {
-    // Signed URL de 1 hora — funciona con bucket privado
+    // Signed URL de 1 hora â€” funciona con bucket privado
     const { data: signed } = await getDocumentUrl(storagePath);
     url = signed?.url || '';
   }
@@ -3041,7 +3330,7 @@ async function actualizarDoc(id, estado) {
   cargarDocumentos();
 }
 
-// ── INCIDENCIAS ──────────────────────────────────────────────────
+// â”€â”€ INCIDENCIAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function cargarChats() {
   if (chatInicializado) return;
   chatInicializado = true;
@@ -3070,7 +3359,7 @@ async function cargarIncidencias() {
   tbody.innerHTML = data.map(i => `<tr>
     <td>${formatFechaCorta(i.created_at)}</td>
     <td>${sanitize(i.usuarios?.nombre||'')} ${sanitize(i.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(i.tipo||'—')}</td>
+    <td>${sanitize(i.tipo||'â€”')}</td>
     <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${sanitize(i.descripcion)}">${sanitize(i.descripcion)}</td>
     <td>${badgeEstado(i.prioridad)}</td>
     <td>${badgeEstado(i.estado)}</td>
@@ -3125,7 +3414,7 @@ document.getElementById('btn-guardar-inc').addEventListener('click', async () =>
   cargarIncidencias();
 });
 
-// ── INIT ─────────────────────────────────────────────────────────
+// â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 cargarDashboard();
 
 window.closeModal = (id) => {

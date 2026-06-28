@@ -19,6 +19,11 @@ import {
   rankTeachersForRequest,
 } from '../js/ai-engine.js';
 import {
+  buildFamilyTrustProfile,
+  buildTeacherTrustProfile,
+  buildTrustSnapshotPatch,
+} from '../js/trust-engine.js';
+import {
   SCHEDULED_CLASS_STATUSES,
   buildClassIncidentPayload,
   classEnded,
@@ -46,6 +51,7 @@ const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const selfTest = args.has('--self-test');
+const trustOnly = args.has('--trust-only');
 const limitArg = process.argv.find((arg) => arg.startsWith('--limit='));
 const limit = Number(limitArg?.split('=')[1] || process.env.AUTOMATION_LIMIT || 50);
 
@@ -308,6 +314,46 @@ async function addAutomationEvent(db, payload) {
     dryRun,
     createdAt: now(),
   });
+}
+
+async function listCollection(db, collectionName) {
+  const snap = await db.collection(collectionName).get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
+}
+
+async function loadTrustContext(db) {
+  const [
+    classes,
+    payments,
+    documents,
+    requests,
+    matches,
+    assignments,
+    incidents,
+    students,
+  ] = await Promise.all([
+    listCollection(db, 'clases'),
+    listCollection(db, 'pagos'),
+    listCollection(db, 'documentos'),
+    listCollection(db, 'solicitudes'),
+    listCollection(db, 'solicitudMatches'),
+    listCollection(db, 'asignaciones'),
+    listCollection(db, 'incidencias'),
+    listCollection(db, 'alumnos'),
+  ]);
+
+  return {
+    classes,
+    payments,
+    documents,
+    requests,
+    matches,
+    requestMatches: matches,
+    assignments,
+    incidents,
+    students,
+    alumnos: students,
+  };
 }
 
 async function writeDoc(collectionRef, id, payload, options = {}) {
@@ -1243,6 +1289,68 @@ async function reconcileVerifiedPayments(db, stats) {
   }
 }
 
+async function processTrustReputation(db, stats) {
+  const [teachersSnap, familiesSnap, usersSnap, trustContext] = await Promise.all([
+    db.collection('profesores').limit(limit).get(),
+    db.collection('familias').limit(limit).get(),
+    db.collection('users').get(),
+    loadTrustContext(db),
+  ]);
+  const users = new Map(usersSnap.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
+  const batch = db.batch();
+  let writes = 0;
+
+  teachersSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    const userUid = data.userUid || data.usuario_id || doc.id;
+    const profile = {
+      ...data,
+      id: doc.id,
+      teacherUid: doc.id,
+      userUid,
+      usuarios: users.get(userUid) || users.get(doc.id) || {},
+    };
+    const trust = buildTeacherTrustProfile(profile, trustContext);
+    batch.set(doc.ref, {
+      ...buildTrustSnapshotPatch(trust),
+      trustUpdatedAt: now(),
+      updatedAt: now(),
+    }, { merge: true });
+    writes += 1;
+  });
+
+  familiesSnap.docs.forEach((doc) => {
+    const data = doc.data();
+    const userUid = data.userUid || data.usuario_id || doc.id;
+    const profile = {
+      ...data,
+      id: doc.id,
+      familyUid: doc.id,
+      userUid,
+      usuarios: users.get(userUid) || users.get(doc.id) || {},
+    };
+    const trust = buildFamilyTrustProfile(profile, trustContext);
+    batch.set(doc.ref, {
+      ...buildTrustSnapshotPatch(trust),
+      trustUpdatedAt: now(),
+      updatedAt: now(),
+    }, { merge: true });
+    writes += 1;
+  });
+
+  if (writes && !dryRun) await batch.commit();
+  stats.trustProfilesUpdated += writes;
+
+  if (writes) {
+    await addAutomationEvent(db, {
+      type: 'trust_reputation_recalculated',
+      profilesUpdated: writes,
+      teachers: teachersSnap.size,
+      families: familiesSnap.size,
+    });
+  }
+}
+
 async function main() {
   if (selfTest) {
     const request = {
@@ -1317,6 +1425,7 @@ async function main() {
   const db = admin.firestore();
   const stats = {
     dryRun,
+    trustOnly,
     leadsSeen: 0,
     leadsFlaggedForReview: 0,
     familyLeadsProcessed: 0,
@@ -1340,9 +1449,17 @@ async function main() {
     lifecycleTransitionsApplied: 0,
     lifecycleHistoryEventsCreated: 0,
     lifecycleNotificationsCreated: 0,
+    trustProfilesUpdated: 0,
   };
 
+  if (trustOnly) {
+    await processTrustReputation(db, stats);
+    console.log(JSON.stringify(stats, null, 2));
+    return;
+  }
+
   await processPublicLeads(db, stats);
+  await processTrustReputation(db, stats);
   await processPendingRequests(db, stats);
   await processAssignedRequests(db, stats);
   await processClassLifecycle(db, stats);

@@ -6,6 +6,11 @@
  * signals consistent for families and teachers.
  */
 
+import {
+  buildFamilyTrustProfile,
+  buildTeacherTrustProfile,
+} from './trust-engine.js';
+
 const VERIFIED_DOCUMENT_STATUSES = new Set(['validado', 'verificado', 'aprobado', 'approved', 'verified']);
 const PENDING_DOCUMENT_STATUSES = new Set(['pendiente', 'pending', 'en_revision']);
 
@@ -162,16 +167,26 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
   ];
 
   const summary = summarizeChecks(checks);
-  const statsScore = Math.min(12, Math.max(0,
-    Number(stats.averageRating || profile.averageRating || profile.valoracion_media || 0) * 1.2
-    + Number(stats.completedClasses || profile.completedClasses || profile.clases_completadas || 0) * 0.15
-    + Number(stats.acceptanceRate || profile.acceptanceRate || 0) * 0.04
-  ));
-  const trustScore = Math.min(100, Math.round(summary.percent * 0.72
-    + (identityVerified ? 8 : identityDoc ? 4 : 0)
-    + (academicVerified ? 7 : academicDoc ? 3 : 0)
-    + (cvDoc ? 2 : 0)
-    + statsScore));
+  const trustProfile = buildTeacherTrustProfile({
+    ...profile,
+    profileCompletionPercent: summary.percent,
+    profileComplete: summary.complete,
+    perfil_completo: summary.complete,
+    trustScore: profile.trustScore,
+    trustLevel: profile.trustLevel,
+  }, {
+    documentsForOwner: docs,
+    stats: {
+      ...stats,
+      completedClasses: Number(stats.completedClasses || profile.completedClasses || profile.clases_completadas || profile.reputationMetrics?.completedClasses || 0),
+      completionRate: stats.completionRate ?? profile.completionRate ?? profile.reputationMetrics?.completionRate,
+      cancellationRate: stats.cancellationRate ?? profile.cancellationRate ?? profile.reputationMetrics?.cancellationRate,
+      averageResponseHours: stats.averageResponseHours ?? stats.responseTimeHours ?? profile.responseTimeHours ?? profile.reputationMetrics?.averageResponseHours,
+      acceptanceRate: stats.acceptanceRate ?? profile.acceptanceRate ?? profile.reputationMetrics?.acceptanceRate,
+      activeAssignments: stats.activeAssignments ?? profile.activeAssignments ?? profile.reputationMetrics?.activeAssignments,
+      openIncidents: stats.openIncidents ?? profile.openIncidents ?? profile.reputationMetrics?.openIncidents,
+    },
+  });
 
   return {
     role: 'profesor',
@@ -180,8 +195,12 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     issues: summary.issues,
     issueLabels: summary.issueLabels,
     recommendations: summary.recommendations,
-    trustScore,
-    trustLevel: trustLevel(trustScore),
+    trustScore: trustProfile.score,
+    trustLevel: trustProfile.level || trustLevel(trustProfile.score),
+    trustProfile,
+    trustBadges: trustProfile.badges,
+    publicTrustStats: trustProfile.publicStats,
+    reputationMetrics: trustProfile.metrics,
     pendingDocuments: pendingDocs,
     normalized: {
       subjects,
@@ -200,7 +219,8 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
       trustIndicator('Foto y contacto', hasText(firstValue(profile, ['foto_url', 'photoUrl']), 20) && phone.valid),
       trustIndicator('Perfil completo para matching', summary.complete),
       trustIndicator('Especializacion visible', specialties.length > 0 || certifications.length > 0),
-      trustIndicator('Historial operativo', Number(stats.completedClasses || profile.completedClasses || profile.clases_completadas || 0) > 0),
+      trustIndicator('Historial operativo', Number(trustProfile.metrics.completedClasses || 0) > 0, `${trustProfile.metrics.completedClasses || 0} clase(s)`),
+      trustIndicator('Baja cancelacion', (trustProfile.metrics.cancellationRate ?? 0) <= 0.1, `${Math.round((trustProfile.metrics.cancellationRate ?? 0) * 100)}%`),
     ],
   };
 }
@@ -228,7 +248,24 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
   ];
 
   const summary = summarizeChecks(checks);
-  const trustScore = Math.min(100, Math.round(summary.percent * 0.78 + (identityVerified ? 12 : identityDoc ? 6 : 0)));
+  const trustProfile = buildFamilyTrustProfile({
+    ...profile,
+    profileCompletionPercent: summary.percent,
+    profileComplete: summary.complete,
+    perfil_completo: summary.complete,
+  }, {
+    studentsForOwner: students,
+    documentsForOwner: docs,
+    stats: {
+      completedClasses: profile.reputationMetrics?.completedClasses,
+      completionRate: profile.reputationMetrics?.completionRate,
+      cancellationRate: profile.reputationMetrics?.cancellationRate,
+      paidPayments: profile.reputationMetrics?.paidPayments,
+      pendingPayments: profile.reputationMetrics?.pendingPayments,
+      paymentReliability: profile.reputationMetrics?.paymentReliability,
+      openIncidents: profile.reputationMetrics?.openIncidents,
+    },
+  });
 
   return {
     role: 'familia',
@@ -237,8 +274,12 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
     issues: summary.issues,
     issueLabels: summary.issueLabels,
     recommendations: summary.recommendations,
-    trustScore,
-    trustLevel: trustLevel(trustScore),
+    trustScore: trustProfile.score,
+    trustLevel: trustProfile.level || trustLevel(trustProfile.score),
+    trustProfile,
+    trustBadges: trustProfile.badges,
+    publicTrustStats: trustProfile.publicStats,
+    reputationMetrics: trustProfile.metrics,
     pendingDocuments: pendingDocs,
     normalized: {
       languages,
@@ -251,6 +292,7 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
       trustIndicator('Alumno registrado', hasStudent),
       trustIndicator('Identidad documentada', identityDoc, identityVerified ? 'Validada por admin' : identityDoc ? 'Pendiente de validacion' : 'Sin documento'),
       trustIndicator('Preferencias claras', hasText(firstValue(profile, ['notas_perfil', 'profileNotes']), 20)),
+      trustIndicator('Pagos sin incidencias', !trustProfile.metrics.pendingPayments, trustProfile.metrics.pendingPayments ? `${trustProfile.metrics.pendingPayments} pendiente(s)` : 'Al dia'),
     ],
   };
 }
