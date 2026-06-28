@@ -47,7 +47,12 @@ export async function watchUnreadNotifications(db, usuarioId, callback) {
   if (!db || !usuarioId || typeof callback !== 'function') return null;
 
   return onSnapshot(
-    query(collection(firebaseDb, 'notificaciones'), where('userUid', '==', usuarioId)),
+    query(
+      collection(firebaseDb, 'notificaciones'),
+      where('userUid', '==', usuarioId),
+      where('readAt', '==', null),
+      limit(200),
+    ),
     (snapshot) => callback(snapshot.docs.filter((item) => isUnread(item.data())).length),
     () => callback(0),
   );

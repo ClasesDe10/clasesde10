@@ -120,6 +120,9 @@ function checkRules() {
     'validFamilyPaymentCreate()',
     'validTeacherPayoutCreate()',
     'match /classLifecycleEvents/{eventId}',
+    'match /systemJobs/{jobId}',
+    'match /metricSnapshots/{snapshotId}',
+    'match /opsAlerts/{alertId}',
   ]) {
     if (!firestoreRules.includes(needle)) fail(`Firestore rules guard missing: ${needle}.`);
   }
@@ -176,6 +179,21 @@ function checkIndexes() {
       { fieldPath: 'classId', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ]],
+    ['systemJobs', [
+      { fieldPath: 'status', order: 'ASCENDING' },
+      { fieldPath: 'runAt', order: 'ASCENDING' },
+      { fieldPath: 'priority', order: 'DESCENDING' },
+    ]],
+    ['metricSnapshots', [
+      { fieldPath: 'scope', order: 'ASCENDING' },
+      { fieldPath: 'period', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
+    ['opsAlerts', [
+      { fieldPath: 'status', order: 'ASCENDING' },
+      { fieldPath: 'level', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
   ];
 
   for (const [collectionGroup, fields] of required) {
@@ -203,6 +221,14 @@ function checkFunctions() {
   }
   if (!functionsCode.includes('stripe.webhooks.constructEvent')) {
     fail('Stripe webhook must verify Stripe signatures.');
+  }
+  for (const exportName of ['processSystemJobs', 'rollupScaleMetrics']) {
+    if (!functionsCode.includes(`exports.${exportName}`)) {
+      fail(`Missing scalability Cloud Function export: ${exportName}.`);
+    }
+  }
+  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs']) {
+    if (!functionsCode.includes(needle)) fail(`Scalability function path missing: ${needle}.`);
   }
 }
 

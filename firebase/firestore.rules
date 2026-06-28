@@ -1045,6 +1045,22 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /systemJobs/{jobId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /deadLetters/{deadLetterId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /metricSnapshots/{snapshotId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /opsAlerts/{alertId} {
+      allow read, write: if isAdmin();
+    }
+
     match /resumenMensual/{summaryId} {
       allow read, write: if isAdmin();
     }

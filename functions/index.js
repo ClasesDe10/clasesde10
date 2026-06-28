@@ -11,8 +11,13 @@ const db = admin.firestore();
 
 const REGION = 'europe-west1';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
+const MATCHING_TEACHER_SCAN_LIMIT = Number(process.env.MATCHING_TEACHER_SCAN_LIMIT || 1000);
+const MATCHING_USER_SCAN_LIMIT = Number(process.env.MATCHING_USER_SCAN_LIMIT || 2000);
+const MATCHING_ASSIGNMENT_SCAN_LIMIT = Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000);
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
+let adminUsersCache = { expiresAt: 0, users: [] };
+let notificationSettingsCache = { expiresAt: 0, settings: null };
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -102,8 +107,11 @@ function getUserName(user) {
 }
 
 async function getAdminUsers() {
+  if (adminUsersCache.expiresAt > Date.now()) return adminUsersCache.users;
   const snap = await db.collection('users').where('role', '==', 'admin').get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const users = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  adminUsersCache = { expiresAt: Date.now() + 60 * 1000, users };
+  return users;
 }
 
 const DEFAULT_NOTIFICATION_SETTINGS = {
@@ -162,9 +170,12 @@ function notificationChannels(type, explicitChannels) {
 }
 
 async function getNotificationSettings() {
+  if (notificationSettingsCache.expiresAt > Date.now() && notificationSettingsCache.settings) {
+    return notificationSettingsCache.settings;
+  }
   const snap = await db.collection('configuracion').doc('notificaciones').get().catch(() => null);
   const data = snap?.exists ? snap.data() : {};
-  return {
+  const settings = {
     ...DEFAULT_NOTIFICATION_SETTINGS,
     ...data,
     channels: {
@@ -179,6 +190,8 @@ async function getNotificationSettings() {
       ...(data.roles || {}),
     },
   };
+  notificationSettingsCache = { expiresAt: Date.now() + 60 * 1000, settings };
+  return settings;
 }
 
 function isNotificationEnabled(settings, type, channel = 'internal', role = '') {
@@ -380,6 +393,274 @@ async function recipientUidsForChat(chat = {}, senderUid = '') {
 
 function changedAny(before = {}, after = {}, fields = []) {
   return fields.some((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
+}
+
+const SYSTEM_JOB_BATCH_LIMIT = 50;
+const SYSTEM_JOB_LEASE_MS = 10 * 60 * 1000;
+const SYSTEM_JOB_MAX_BACKOFF_MS = 60 * 60 * 1000;
+
+function toTimestamp(value) {
+  if (value?.toDate) return value;
+  const date = value instanceof Date ? value : new Date(value || Date.now());
+  return admin.firestore.Timestamp.fromDate(Number.isNaN(date.getTime()) ? new Date() : date);
+}
+
+function timestampAfter(ms) {
+  return admin.firestore.Timestamp.fromDate(new Date(Date.now() + ms));
+}
+
+function normalizeJobStatus(status) {
+  const value = lower(status || 'queued');
+  if (['queued', 'pending', 'retry'].includes(value)) return 'queued';
+  if (['processing', 'running', 'leased'].includes(value)) return 'processing';
+  if (['completed', 'done', 'success'].includes(value)) return 'completed';
+  if (['dead_letter', 'dead-letter', 'failed_permanently'].includes(value)) return 'dead_letter';
+  if (['cancelled', 'canceled'].includes(value)) return 'cancelled';
+  return 'queued';
+}
+
+function jobPriority(priority) {
+  const numeric = Number(priority);
+  if (Number.isFinite(numeric)) return Math.max(0, Math.min(100, Math.round(numeric)));
+  const value = lower(priority);
+  if (value === 'critical') return 100;
+  if (value === 'high') return 75;
+  if (value === 'low') return 25;
+  return 50;
+}
+
+function stableJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+}
+
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function idempotencyKey(type, payload = {}) {
+  return hashString(`${clean(type, 120)}|${stableJson(payload)}`);
+}
+
+function systemJobId(type, key) {
+  return [type, key]
+    .map((part) => clean(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__')
+    .slice(0, 900);
+}
+
+function traceContext(source, entityType, entityId, parentTraceId = '') {
+  return {
+    traceId: parentTraceId || `tr_${hashString(`${source}|${entityType}|${entityId}|${Date.now()}`)}`,
+    parentTraceId: parentTraceId || null,
+    source: clean(source, 120) || 'functions',
+    entityType: clean(entityType, 80) || null,
+    entityId: clean(entityId, 180) || null,
+    sampledAt: new Date().toISOString(),
+    version: 'scale-engine-2026-06-28',
+  };
+}
+
+async function enqueueSystemJob(type, payload = {}, options = {}) {
+  const key = clean(options.idempotencyKey || idempotencyKey(type, payload), 300);
+  const ref = db.collection('systemJobs').doc(systemJobId(type, key));
+  const existing = await ref.get();
+  if (existing.exists && !['dead_letter', 'cancelled'].includes(normalizeJobStatus(existing.data().status))) {
+    return { id: ref.id, created: false };
+  }
+
+  await ref.set({
+    type: clean(type, 120),
+    payload,
+    status: 'queued',
+    priority: jobPriority(options.priority),
+    runAt: toTimestamp(options.runAt || new Date()),
+    attempts: 0,
+    maxAttempts: Math.max(1, Number(options.maxAttempts || 5)),
+    idempotencyKey: key,
+    trace: options.trace || traceContext(options.source || 'functions', 'systemJob', type, options.traceId),
+    source: clean(options.source || 'functions', 120),
+    createdAt: now(),
+    updatedAt: now(),
+    version: 'scale-engine-2026-06-28',
+  }, { merge: false });
+  return { id: ref.id, created: true };
+}
+
+async function claimSystemJob(jobRef, workerId) {
+  return db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(jobRef);
+    if (!snap.exists) return null;
+
+    const data = snap.data();
+    const status = normalizeJobStatus(data.status);
+    const leaseUntil = data.leaseUntil?.toDate ? data.leaseUntil.toDate() : null;
+    if (status === 'processing' && leaseUntil && leaseUntil.getTime() > Date.now()) return null;
+    if (!['queued', 'processing'].includes(status)) return null;
+
+    const attempts = Math.max(0, Number(data.attempts || 0)) + 1;
+    transaction.set(jobRef, {
+      status: 'processing',
+      attempts,
+      workerId,
+      startedAt: now(),
+      leaseUntil: timestampAfter(SYSTEM_JOB_LEASE_MS),
+      updatedAt: now(),
+    }, { merge: true });
+    return { id: snap.id, ref: jobRef, data: { ...data, attempts } };
+  });
+}
+
+function serializeJobError(error) {
+  return {
+    message: clean(error?.message || error || 'unknown_error', 1000),
+    code: clean(error?.code || error?.name || '', 120) || null,
+    stack: clean(error?.stack || '', 2000) || null,
+    at: new Date().toISOString(),
+  };
+}
+
+function retryDelayMs(attempts) {
+  const safeAttempts = Math.max(1, Number(attempts || 1));
+  return Math.min(SYSTEM_JOB_MAX_BACKOFF_MS, Math.round((2 ** (safeAttempts - 1)) * 60 * 1000));
+}
+
+async function completeSystemJob(job, result = {}) {
+  await job.ref.set({
+    status: 'completed',
+    completedAt: now(),
+    leaseUntil: null,
+    result,
+    updatedAt: now(),
+  }, { merge: true });
+}
+
+async function failSystemJob(job, error) {
+  const attempts = Math.max(1, Number(job.data.attempts || 1));
+  const maxAttempts = Math.max(1, Number(job.data.maxAttempts || 5));
+  const lastError = serializeJobError(error);
+
+  if (attempts >= maxAttempts) {
+    await Promise.all([
+      job.ref.set({
+        status: 'dead_letter',
+        deadLetterAt: now(),
+        leaseUntil: null,
+        lastError,
+        updatedAt: now(),
+      }, { merge: true }),
+      db.collection('deadLetters').doc(job.id).set({
+        jobId: job.id,
+        type: job.data.type || '',
+        payload: job.data.payload || {},
+        attempts,
+        maxAttempts,
+        lastError,
+        trace: job.data.trace || null,
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: true }),
+    ]);
+    return;
+  }
+
+  await job.ref.set({
+    status: 'queued',
+    runAt: timestampAfter(retryDelayMs(attempts)),
+    leaseUntil: null,
+    lastError,
+    updatedAt: now(),
+  }, { merge: true });
+}
+
+async function countQuery(queryRef, label) {
+  try {
+    const snap = await queryRef.count().get();
+    return snap.data().count;
+  } catch (error) {
+    logger.warn('countQuery failed', { label, message: error.message });
+    return null;
+  }
+}
+
+function buildScaleAlerts(metrics) {
+  const alerts = [];
+  if ((metrics.jobs?.queued || 0) > 500) alerts.push({ level: 'high', type: 'job_backlog', message: 'System job backlog above 500 queued jobs.' });
+  if ((metrics.jobs?.deadLetter || 0) > 0) alerts.push({ level: 'critical', type: 'dead_letters', message: 'Dead-letter jobs require admin review.' });
+  if ((metrics.payments?.overdue || 0) > 0) alerts.push({ level: 'high', type: 'overdue_payments', message: 'There are overdue payments.' });
+  if ((metrics.notifications?.unread || 0) > 10000) alerts.push({ level: 'medium', type: 'notification_backlog', message: 'Unread notification backlog is high.' });
+  return alerts;
+}
+
+async function writeScaleMetricSnapshot(source = 'scheduled') {
+  const metrics = {
+    source,
+    generatedAt: new Date().toISOString(),
+    users: {
+      total: await countQuery(db.collection('users'), 'users_total'),
+      admins: await countQuery(db.collection('users').where('role', '==', 'admin'), 'users_admins'),
+    },
+    marketplace: {
+      teachers: await countQuery(db.collection('profesores'), 'teachers_total'),
+      families: await countQuery(db.collection('familias'), 'families_total'),
+      students: await countQuery(db.collection('alumnos'), 'students_total'),
+      requests: await countQuery(db.collection('solicitudes'), 'requests_total'),
+      assignments: await countQuery(db.collection('asignaciones'), 'assignments_total'),
+    },
+    classes: {
+      total: await countQuery(db.collection('clases'), 'classes_total'),
+      scheduled: await countQuery(db.collection('clases').where('status', '==', 'programada'), 'classes_scheduled'),
+      completed: await countQuery(db.collection('clases').where('status', '==', 'realizada'), 'classes_completed'),
+    },
+    payments: {
+      total: await countQuery(db.collection('pagos'), 'payments_total'),
+      pending: await countQuery(db.collection('pagos').where('status', '==', 'pendiente'), 'payments_pending'),
+      overdue: await countQuery(db.collection('pagos').where('status', '==', 'vencido'), 'payments_overdue'),
+      needsReview: await countQuery(db.collection('pagos').where('reconciliationStatus', '==', 'needs_review'), 'payments_needs_review'),
+    },
+    notifications: {
+      total: await countQuery(db.collection('notificaciones'), 'notifications_total'),
+      unread: await countQuery(db.collection('notificaciones').where('readAt', '==', null), 'notifications_unread'),
+      tokens: await countQuery(db.collection('notificationTokens').where('active', '==', true), 'push_tokens_active'),
+    },
+    jobs: {
+      queued: await countQuery(db.collection('systemJobs').where('status', '==', 'queued'), 'jobs_queued'),
+      processing: await countQuery(db.collection('systemJobs').where('status', '==', 'processing'), 'jobs_processing'),
+      deadLetter: await countQuery(db.collection('systemJobs').where('status', '==', 'dead_letter'), 'jobs_dead_letter'),
+    },
+    incidents: {
+      open: await countQuery(db.collection('incidencias').where('status', '==', 'abierta'), 'incidents_open'),
+      critical: await countQuery(db.collection('incidencias').where('priority', '==', 'critical'), 'incidents_critical'),
+    },
+    version: 'scale-engine-2026-06-28',
+  };
+  const alerts = buildScaleAlerts(metrics);
+  const id = new Date().toISOString().slice(0, 16).replace(/[:]/g, '-');
+  await db.collection('metricSnapshots').doc(`platform_${id}`).set({
+    scope: 'platform',
+    period: '15m',
+    metrics,
+    alerts,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: true });
+
+  await Promise.all(alerts.map((alert) => db.collection('opsAlerts').doc(`${alert.type}_${id}`).set({
+    ...alert,
+    status: 'open',
+    source: 'scale_metrics',
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: true })));
+
+  return { metrics, alerts };
 }
 
 async function resolveUserUidFromProfile(collectionName, profileId, fallback = '') {
@@ -696,7 +977,10 @@ function leadToPublicRequest(leadId, lead) {
 }
 
 async function countActiveAssignmentsByTeacher() {
-  const snap = await db.collection('asignaciones').where('active', '==', true).get();
+  const snap = await db.collection('asignaciones')
+    .where('active', '==', true)
+    .limit(MATCHING_ASSIGNMENT_SCAN_LIMIT)
+    .get();
   const counts = new Map();
   snap.docs.forEach((doc) => {
     const data = doc.data();
@@ -708,8 +992,8 @@ async function countActiveAssignmentsByTeacher() {
 
 async function loadTeachers() {
   const [teachersSnap, usersSnap, assignmentCounts] = await Promise.all([
-    db.collection('profesores').get(),
-    db.collection('users').get(),
+    db.collection('profesores').limit(MATCHING_TEACHER_SCAN_LIMIT).get(),
+    db.collection('users').limit(MATCHING_USER_SCAN_LIMIT).get(),
     countActiveAssignmentsByTeacher(),
   ]);
   const users = new Map(usersSnap.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
@@ -967,6 +1251,151 @@ async function generateMatchesForRequest(requestId, request, reason = 'trigger')
   return { runId: runRef.id, candidates };
 }
 
+async function dispatchSystemJob(job) {
+  const type = clean(job.data.type, 120);
+  const payload = job.data.payload || {};
+
+  if (type === 'noop') return { skipped: true, reason: 'noop' };
+
+  if (type === 'notification.admin') {
+    await notifyAdmins(
+      payload.title || 'ClasesDe10',
+      payload.body || '',
+      payload.payload || { type: 'automation' },
+    );
+    return { notified: 'admin' };
+  }
+
+  if (type === 'notification.internal') {
+    const userUid = clean(payload.userUid || payload.usuario_id, 180);
+    const notificationPayload = payload.payload || { type: payload.type || 'automation' };
+    const key = payload.idempotencyKey || job.data.idempotencyKey || `job_${job.id}`;
+    const created = await writeNotificationOnce(
+      userUid,
+      payload.title || payload.titulo || 'ClasesDe10',
+      payload.body || payload.cuerpo || '',
+      notificationPayload,
+      key,
+      payload.extra || {},
+    );
+    return { notified: userUid, created };
+  }
+
+  if (type === 'matching.request') {
+    const requestId = clean(payload.requestId || payload.solicitud_id, 180);
+    if (!requestId) throw new Error('matching.request requires requestId.');
+    const requestSnap = await db.collection('solicitudes').doc(requestId).get();
+    if (!requestSnap.exists) return { skipped: true, reason: 'request_not_found', requestId };
+    const request = requestSnap.data();
+    if (request.matchStatus === 'ready' && request.matchRunId) {
+      return { skipped: true, reason: 'already_matched', requestId };
+    }
+
+    const result = await generateMatchesForRequest(requestId, request, payload.reason || 'system_job');
+    if (result?.candidates?.length) {
+      await notifyAdmins('Matching listo', `${result.candidates.length} candidato(s) para ${request.materia || request.subject || 'la solicitud'}.`, {
+        type: 'matching_ready',
+        requestId,
+        url: '/pages/login.html',
+      });
+    }
+    return { requestId, candidatesCount: result?.candidates?.length || 0, runId: result?.runId || null };
+  }
+
+  if (type === 'metrics.snapshot') {
+    const snapshot = await writeScaleMetricSnapshot(payload.source || 'system_job');
+    return { alerts: snapshot.alerts.length };
+  }
+
+  if (type === 'audit.event') {
+    const entityType = clean(payload.entityType, 80);
+    const action = clean(payload.action, 120);
+    if (!entityType || !action) throw new Error('audit.event requires entityType and action.');
+    await db.collection('auditLogs').add({
+      actorUid: clean(payload.actorUid || 'system', 180),
+      action,
+      entityType,
+      entityId: clean(payload.entityId, 180) || null,
+      metadata: payload.metadata || {},
+      trace: job.data.trace || null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    return { audited: true, entityType, action };
+  }
+
+  throw new Error(`Unsupported system job type: ${type}`);
+}
+
+exports.processSystemJobs = onSchedule({
+  region: REGION,
+  schedule: 'every 5 minutes',
+  timeZone: 'Europe/Madrid',
+}, async () => {
+  const workerId = `systemJobs-${Date.now().toString(36)}`;
+  let snap;
+  try {
+    snap = await db.collection('systemJobs')
+      .where('status', '==', 'queued')
+      .where('runAt', '<=', admin.firestore.Timestamp.now())
+      .orderBy('runAt', 'asc')
+      .orderBy('priority', 'desc')
+      .limit(SYSTEM_JOB_BATCH_LIMIT)
+      .get();
+  } catch (error) {
+    logger.error('processSystemJobs query failed', { message: error.message });
+    await db.collection('automationEvents').add({
+      type: 'system_jobs_query_failed',
+      error: serializeJobError(error),
+      createdAt: now(),
+    });
+    return;
+  }
+
+  let processed = 0;
+  let failed = 0;
+  for (const doc of snap.docs) {
+    const claimed = await claimSystemJob(doc.ref, workerId);
+    if (!claimed) continue;
+
+    try {
+      const result = await dispatchSystemJob(claimed);
+      await completeSystemJob(claimed, result);
+      processed += 1;
+    } catch (error) {
+      logger.warn('processSystemJobs job failed', { jobId: claimed.id, type: claimed.data.type, message: error.message });
+      await failSystemJob(claimed, error);
+      failed += 1;
+    }
+  }
+
+  await db.collection('automationEvents').add({
+    type: 'system_jobs_processed',
+    workerId,
+    scanned: snap.size,
+    processed,
+    failed,
+    createdAt: now(),
+  });
+  logger.info('processSystemJobs completed', { workerId, scanned: snap.size, processed, failed });
+});
+
+exports.rollupScaleMetrics = onSchedule({
+  region: REGION,
+  schedule: 'every 15 minutes',
+  timeZone: 'Europe/Madrid',
+}, async () => {
+  const snapshot = await writeScaleMetricSnapshot('scheduled_rollup');
+  if (snapshot.alerts.some((alert) => alert.level === 'critical')) {
+    await notifyAdmins('Alerta operativa critica', 'Hay alertas criticas en el snapshot de escalabilidad.', {
+      type: 'automation',
+      alertTypes: snapshot.alerts.map((alert) => alert.type),
+      url: '/pages/login.html',
+    });
+  }
+  logger.info('rollupScaleMetrics completed', { alerts: snapshot.alerts.length });
+});
+
 exports.processPublicLead = onDocumentCreated({
   region: REGION,
   document: 'leadsPublicos/{leadId}',
@@ -1094,21 +1523,22 @@ exports.generateRequestMatching = onDocumentCreated({
   const requestId = event.params.requestId;
   const request = event.data.data();
   if ((request.matchStatus || '') === 'ready') return;
-  if (!request.leadId && !request.lead_id && request.source !== 'public_lead') {
+  const requestSource = lower(request.source);
+  if (!request.leadId && !request.lead_id && !['public_lead', 'publiclead'].includes(requestSource)) {
     await notifyAdmins('Nueva solicitud recibida', `${request.nombre || request.email || 'Familia'} solicita ${request.materia || request.subject || 'profesor'}.`, {
       type: 'request_created',
       requestId,
       url: '/pages/login.html',
     });
   }
-  const result = await generateMatchesForRequest(requestId, request, 'request_created');
-  if (result?.candidates?.length) {
-    await notifyAdmins('Matching listo', `${result.candidates.length} candidato(s) para ${request.materia || request.subject || 'la solicitud'}.`, {
-      type: 'matching_ready',
-      requestId,
-      url: '/pages/login.html',
-    });
-  }
+  await enqueueSystemJob('matching.request', {
+    requestId,
+    reason: 'request_created',
+  }, {
+    priority: 'high',
+    idempotencyKey: `matching_request_${requestId}`,
+    source: 'solicitudes.onCreate',
+  });
 });
 
 exports.createAssignmentOnRequestAssigned = onDocumentUpdated({
@@ -1198,10 +1628,17 @@ exports.scanPendingMatching = onSchedule({
   for (const doc of snap.docs) {
     const data = doc.data();
     if (data.matchStatus === 'ready') continue;
-    await generateMatchesForRequest(doc.id, data, 'scheduled_scan');
+    await enqueueSystemJob('matching.request', {
+      requestId: doc.id,
+      reason: 'scheduled_scan',
+    }, {
+      priority: 'normal',
+      idempotencyKey: `matching_request_${doc.id}`,
+      source: 'scanPendingMatching',
+    });
     processed += 1;
   }
-  logger.info('scanPendingMatching completed', { processed });
+  logger.info('scanPendingMatching queued jobs', { processed });
 });
 
 exports.generateMonthlySummary = onSchedule({
@@ -1212,7 +1649,14 @@ exports.generateMonthlySummary = onSchedule({
   const nowDate = new Date();
   const previousMonthDate = new Date(nowDate.getFullYear(), nowDate.getMonth() - 1, 1);
   const month = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, '0')}`;
-  const classesSnap = await db.collection('clases').get();
+  const nextMonthDate = new Date(previousMonthDate.getFullYear(), previousMonthDate.getMonth() + 1, 1);
+  const monthStart = `${month}-01`;
+  const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+  const classesSnap = await db.collection('clases')
+    .where('fecha', '>=', monthStart)
+    .where('fecha', '<', nextMonth)
+    .limit(20000)
+    .get();
   const summary = {
     month,
     classes: 0,

@@ -54,6 +54,10 @@ const selfTest = args.has('--self-test');
 const trustOnly = args.has('--trust-only');
 const limitArg = process.argv.find((arg) => arg.startsWith('--limit='));
 const limit = Number(limitArg?.split('=')[1] || process.env.AUTOMATION_LIMIT || 50);
+const trustContextLimit = Math.max(1, Number(process.env.TRUST_CONTEXT_LIMIT || 2000));
+const matchingTeacherScanLimit = Math.max(1, Number(process.env.MATCHING_TEACHER_SCAN_LIMIT || 1000));
+const matchingUserScanLimit = Math.max(1, Number(process.env.MATCHING_USER_SCAN_LIMIT || 2000));
+const matchingAssignmentScanLimit = Math.max(1, Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000));
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -316,8 +320,8 @@ async function addAutomationEvent(db, payload) {
   });
 }
 
-async function listCollection(db, collectionName) {
-  const snap = await db.collection(collectionName).get();
+async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
+  const snap = await db.collection(collectionName).limit(maxDocs).get();
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
 }
 
@@ -372,7 +376,10 @@ async function updateRef(ref, payload) {
 }
 
 async function countActiveAssignmentsByTeacher(db) {
-  const snap = await db.collection('asignaciones').where('active', '==', true).get();
+  const snap = await db.collection('asignaciones')
+    .where('active', '==', true)
+    .limit(matchingAssignmentScanLimit)
+    .get();
   const counts = new Map();
   snap.docs.forEach((doc) => {
     const data = doc.data();
@@ -384,7 +391,7 @@ async function countActiveAssignmentsByTeacher(db) {
 
 async function loadAvailabilityByTeacher(db) {
   try {
-    const snap = await db.collection('disponibilidad').get();
+    const snap = await db.collection('disponibilidad').limit(matchingTeacherScanLimit * 5).get();
     const slots = new Map();
     snap.docs.forEach((doc) => {
       const data = { id: doc.id, ...doc.data() };
@@ -401,8 +408,8 @@ async function loadAvailabilityByTeacher(db) {
 
 async function loadTeachers(db) {
   const [teachersSnap, usersSnap, assignmentCounts, availabilitySlots] = await Promise.all([
-    db.collection('profesores').get(),
-    db.collection('users').get(),
+    db.collection('profesores').limit(matchingTeacherScanLimit).get(),
+    db.collection('users').limit(matchingUserScanLimit).get(),
     countActiveAssignmentsByTeacher(db),
     loadAvailabilityByTeacher(db),
   ]);
@@ -1450,6 +1457,12 @@ async function main() {
     lifecycleHistoryEventsCreated: 0,
     lifecycleNotificationsCreated: 0,
     trustProfilesUpdated: 0,
+    scaleLimits: {
+      trustContextLimit,
+      matchingTeacherScanLimit,
+      matchingUserScanLimit,
+      matchingAssignmentScanLimit,
+    },
   };
 
   if (trustOnly) {

@@ -193,7 +193,11 @@ async function loadChats(dbCompat, role, profileId, usuario) {
   if (role === 'admin') {
     const assignments = await loadAssignments(dbCompat, role, profileId);
     await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role)));
-    const snap = await getDocs(collection(firebaseDb, 'chats'));
+    const snap = await getDocs(query(
+      collection(firebaseDb, 'chats'),
+      orderBy('updatedAt', 'desc'),
+      limit(200),
+    ));
     const chats = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
     return chats;
