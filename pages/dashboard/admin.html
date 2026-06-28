@@ -132,6 +132,7 @@
 
       <!-- ══ SECCIÓN: DASHBOARD ══ -->
       <section id="section-dashboard" class="dash-section">
+        <div id="admin-control-center" data-admin-control-center></div>
         <div class="stats-grid" id="stats-grid">
           <!-- Cargados dinámicamente -->
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text" style="width:60%"></div></div>
@@ -858,6 +859,7 @@
 <script type="module">
 import db from '../../js/supabase-client.js?v=20260627-domain-auth';
 import { leads } from '../../js/adapters/index.js';
+import { initAdminControlCenter } from '../../js/admin-control-center.js';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
@@ -1008,6 +1010,19 @@ async function cargarBadgeLeads() {
 // ── DASHBOARD ────────────────────────────────────────────────────
 async function cargarDashboard() {
   await cargarBadgeLeads();
+  const controlCenter = document.getElementById('admin-control-center');
+  const dashboardSection = document.getElementById('section-dashboard');
+  if (controlCenter && dashboardSection) {
+    dashboardSection.querySelectorAll(':scope > :not(#admin-control-center)').forEach((node) => node.remove());
+    await initAdminControlCenter({
+      container: controlCenter,
+      db,
+      leadsAdapter: leads,
+      navigate: irA,
+      showToast,
+    });
+    return;
+  }
 
   let data = null;
   try {

@@ -1,0 +1,50 @@
+async (page) => {
+  await page.waitForFunction(() => {
+    const root = document.querySelector('#admin-control-center .control-center');
+    return root && root.textContent.includes('Centro de control') && !root.textContent.includes('Centro de control no disponible');
+  }, null, { timeout: 30000 });
+
+  const result = await page.evaluate(() => {
+    const root = document.querySelector('#section-dashboard');
+    const text = root?.innerText || '';
+    const cards = root?.querySelectorAll('.control-kpi').length || 0;
+    const chartBars = root?.querySelectorAll('.control-chart-bar').length || 0;
+    const actionButtons = root?.querySelectorAll('[data-control-nav]').length || 0;
+    const required = [
+      'Salud del marketplace',
+      'Evolucion mensual',
+      'Alertas automaticas',
+      'Actividad reciente',
+      'Moderacion y auditorias',
+      'Calidad de datos',
+    ];
+    return {
+      text,
+      cards,
+      chartBars,
+      actionButtons,
+      missing: required.filter((item) => !text.includes(item)),
+    };
+  });
+
+  if (result.missing.length) {
+    throw new Error(`Control center missing sections: ${result.missing.join(', ')}`);
+  }
+  if (result.cards < 6) {
+    throw new Error(`Expected at least 6 KPI cards, got ${result.cards}`);
+  }
+  if (result.chartBars < 6) {
+    throw new Error(`Expected 6 monthly chart bars, got ${result.chartBars}`);
+  }
+  if (result.actionButtons < 3) {
+    throw new Error(`Expected actionable controls, got ${result.actionButtons}`);
+  }
+
+  return {
+    topbar: await page.locator('#topbar-title').textContent().catch(() => ''),
+    cards: result.cards,
+    chartBars: result.chartBars,
+    actionButtons: result.actionButtons,
+    firstText: result.text.replace(/\s+/g, ' ').trim().slice(0, 260),
+  };
+}
