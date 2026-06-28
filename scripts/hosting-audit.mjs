@@ -23,6 +23,14 @@ const CHECKS = [
   { path: '/package.json', expect: 404 },
   { path: '/scripts/check-centralization.mjs', expect: 404 },
 ];
+const REQUIRED_SECURITY_HEADERS = [
+  ['x-frame-options', /^DENY$/i],
+  ['x-content-type-options', /^nosniff$/i],
+  ['referrer-policy', /strict-origin-when-cross-origin/i],
+  ['permissions-policy', /camera=\(\), microphone=\(\), geolocation=\(\)/i],
+  ['content-security-policy', /frame-ancestors 'none'/i],
+  ['content-security-policy', /object-src 'none'/i],
+];
 
 function assertConfig() {
   const config = JSON.parse(fs.readFileSync('firebase.json', 'utf8'));
@@ -103,6 +111,12 @@ async function main() {
       const [name, pattern] = check.header;
       const value = result.headers.get(name) || '';
       if (!pattern.test(value)) errors.push(`${name} mismatch: ${value}`);
+    }
+    if (check.expect === 200) {
+      for (const [name, pattern] of REQUIRED_SECURITY_HEADERS) {
+        const value = result.headers.get(name) || '';
+        if (!pattern.test(value)) errors.push(`${name} security mismatch: ${value}`);
+      }
     }
 
     if (errors.length) {

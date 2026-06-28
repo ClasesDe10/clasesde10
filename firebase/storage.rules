@@ -20,25 +20,37 @@ service firebase.storage {
       return request.resource == null || request.resource.size <= maxMb * 1024 * 1024;
     }
 
+    function validPrivateContentType() {
+      return request.resource == null
+        || (request.resource.contentType is string && request.resource.contentType.matches(
+          '^(image/(jpeg|jpg|png|webp|gif)|application/pdf|application/msword|application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet|presentationml\\.presentation)|text/plain)$'
+        ));
+    }
+
+    function validPublicContentType() {
+      return request.resource == null
+        || (request.resource.contentType is string && request.resource.contentType.matches('^image/(jpeg|jpg|png|webp|gif)$'));
+    }
+
     match /users/{uid}/{filePath=**} {
-      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10);
+      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10) && validPrivateContentType();
     }
 
     match /documentos/{uid}/{filePath=**} {
-      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10);
+      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10) && validPrivateContentType();
     }
 
     match /documentos/documentos/{uid}/{filePath=**} {
-      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10);
+      allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10) && validPrivateContentType();
     }
 
     match /legacy-imports/{filePath=**} {
-      allow read, write: if isAdmin() && validFileSize(50);
+      allow read, write: if isAdmin() && validFileSize(50) && validPrivateContentType();
     }
 
     match /public/{filePath=**} {
       allow read: if true;
-      allow write: if isAdmin() && validFileSize(5);
+      allow write: if isAdmin() && validFileSize(5) && validPublicContentType();
     }
 
     match /{filePath=**} {
