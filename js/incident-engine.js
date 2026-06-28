@@ -20,6 +20,7 @@ export const INCIDENT_PRIORITIES = Object.freeze(['urgente', 'alta', 'media', 'b
 
 export const INCIDENT_CATEGORIES = Object.freeze([
   'pago',
+  'finanzas',
   'clase',
   'documentacion',
   'tecnica',
@@ -42,6 +43,7 @@ const PRIORITY_META = Object.freeze({
 
 const CATEGORY_KEYWORDS = Object.freeze([
   ['seguridad', /(acoso|amenaza|agresion|violencia|seguridad|riesgo|menor|inapropiado)/i],
+  ['finanzas', /(finanzas|margen|beneficio|erp|cashflow|rentabilidad|prevision|facturacion)/i],
   ['pago', /(pago|cobro|bizum|stripe|transferencia|factura|deuda|vencido|dinero)/i],
   ['clase', /(clase|asistencia|no vino|no se presento|cancelada|reprogramada|horario|puntualidad)/i],
   ['documentacion', /(documento|dni|titulo|certificado|verificacion|archivo|pdf)/i],
@@ -410,6 +412,7 @@ export function buildAutomaticIncidentPayload(kind, source = {}, options = {}) {
   const nowIso = options.nowIso || new Date().toISOString();
   const labels = {
     payment_overdue: ['Pago vencido sin resolver', 'pago', 'alta'],
+    finance_anomaly: ['Anomalia financiera detectada', 'finanzas', 'alta'],
     class_unconfirmed: ['Clase sin confirmar', 'clase', 'alta'],
     document_stale: ['Documento pendiente atascado', 'documentacion', 'media'],
     ai_error: ['Error de IA detectado', 'ia', 'media'],

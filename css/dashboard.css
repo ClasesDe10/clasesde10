@@ -630,6 +630,101 @@ textarea {
   font-weight: 500;
 }
 
+.finance-erp-grid,
+.finance-breakdown-grid,
+.finance-cash-grid {
+  min-width: 0;
+}
+.finance-breakdown-grid,
+.finance-cash-grid {
+  display: grid;
+  gap: 14px;
+}
+.finance-breakdown-block {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.finance-breakdown-block h4 {
+  margin: 0;
+  font-size: .82rem;
+  color: var(--navy);
+}
+.finance-mini-row {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.finance-mini-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  font-size: .82rem;
+}
+.finance-mini-row-head strong,
+.finance-mini-row-head span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.finance-mini-row-head span {
+  color: var(--text-dark);
+  font-weight: 700;
+  text-align: right;
+}
+.finance-mini-track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15,31,61,.08);
+}
+.finance-mini-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--gold));
+}
+.finance-mini-note,
+.muted {
+  margin: 0;
+  color: var(--gray-mid);
+  font-size: .74rem;
+}
+.finance-timeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  align-items: end;
+  gap: 10px;
+  min-height: 170px;
+}
+.finance-timeline-item {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 6px;
+  align-items: end;
+  min-width: 0;
+  min-height: 150px;
+  text-align: center;
+}
+.finance-timeline-bar {
+  width: 100%;
+  min-height: 10px;
+  align-self: end;
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(180deg, rgba(232,160,48,.95), rgba(29,122,107,.95));
+}
+.finance-timeline-item span,
+.finance-timeline-item strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: .7rem;
+}
+.finance-timeline-item strong {
+  color: var(--text-dark);
+}
+
 /* ── CARDS GENÉRICAS ─────────────────────────────────────────── */
 .control-center {
   display: grid;
@@ -2072,6 +2167,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .page-content > div[style*="grid-template-columns"],
   .card-body > div[style*="grid-template-columns"],
   .modal-body > div[style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+  .finance-erp-grid,
+  .finance-breakdown-grid {
     grid-template-columns: 1fr !important;
   }
   .stats-grid { grid-template-columns: 1fr; }

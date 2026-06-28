@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-reputation-v2">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-finance-erp">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -472,7 +472,9 @@
             <select class="form-control" id="finanzas-vista" aria-label="Vista financiera" style="width:180px">
               <option value="devengo">Devengo clases</option>
               <option value="caja">Caja pagos</option>
+              <option value="erp">ERP completo</option>
             </select>
+            <input type="search" class="form-control" id="finanzas-filtro" aria-label="Filtrar finanzas" placeholder="Profesor, familia, ciudad..." style="width:230px">
           </div>
           <button class="btn btn-outline btn-sm" id="btn-export-finanzas">â†“ Exportar CSV</button>
         </div>
@@ -484,7 +486,7 @@
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:20px;margin-bottom:20px">
+        <div class="finance-erp-grid finance-erp-grid-main" style="display:grid;grid-template-columns:1.15fr .85fr;gap:20px;margin-bottom:20px">
           <div class="card">
             <div class="card-header"><span class="card-title">ProyecciÃ³n y salud del mes</span></div>
             <div class="card-body" id="finanzas-proyeccion">
@@ -500,11 +502,41 @@
           </div>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div class="finance-erp-grid" id="finanzas-breakdowns" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Evolucion historica</span></div>
+            <div class="card-body" id="finanzas-evolucion">
+              <div class="skeleton skeleton-text"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Flujo de caja y vencimientos</span></div>
+            <div class="card-body" id="finanzas-cashflow">
+              <div class="skeleton skeleton-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="finance-erp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Ingresos por ciudad, materia y modalidad</span></div>
+            <div class="card-body" id="finanzas-segmentos">
+              <div class="skeleton skeleton-text"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Familias activas y profesores rentables</span></div>
+            <div class="card-body" id="finanzas-rankings">
+              <div class="skeleton skeleton-text"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="finance-erp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
           <div class="card">
             <div class="card-header"><span class="card-title">Clases con margen bajo o incompletas</span></div>
             <div class="table-wrapper">
-              <table>
+              <table class="responsive-card-table">
                 <thead><tr><th>Fecha</th><th>Clase</th><th>Total</th><th>Profesor</th><th>Margen</th></tr></thead>
                 <tbody id="tbody-finanzas-riesgos"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
               </table>
@@ -513,7 +545,7 @@
           <div class="card">
             <div class="card-header"><span class="card-title">Ranking profesores</span></div>
             <div class="table-wrapper">
-              <table>
+              <table class="responsive-card-table">
                 <thead><tr><th>Profesor</th><th>Clases</th><th>Facturado</th><th>A cobrar</th><th>Margen</th></tr></thead>
                 <tbody id="tbody-finanzas-profesores"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargandoâ€¦</td></tr></tbody>
               </table>
@@ -1087,6 +1119,11 @@ import {
   paymentAmount,
   paymentStatusForBadge,
 } from '../../js/payment-engine.js';
+import {
+  FINANCE_ERP_VERSION,
+  buildFinanceErpReport,
+  buildFinanceCsvRows,
+} from '../../js/finance-erp-engine.js?v=20260628-finance-erp';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
@@ -1860,9 +1897,16 @@ document.getElementById('btn-export-clases').addEventListener('click', async () 
 
 // â”€â”€ FINANZAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let finanzasUltimoDataset = [];
+let finanzasUltimoReporte = null;
 
 function mesActualInput() {
   return new Date().toISOString().slice(0, 7);
+}
+
+function mesAnteriorInput(mes) {
+  const [anio, month] = String(mes || mesActualInput()).split('-').map(Number);
+  const date = new Date(Date.UTC(anio || new Date().getUTCFullYear(), (month || 1) - 2, 1));
+  return date.toISOString().slice(0, 7);
 }
 
 function diasMes(mes) {
@@ -1952,61 +1996,60 @@ function renderFinanceAlert(tipo, texto) {
   </div>`;
 }
 
-function calcularFinanzas(clases, pagos, mes) {
-  const hoy = fechaHoy();
-  const mesActual = mesActualInput();
-  const realizadas = clases.filter(claseRealizada);
-  const programadas = clases.filter((c) => claseProgramada(c) && String(c.fecha || c.date || '') >= hoy);
-  const clasesConImportes = realizadas.filter((c) => classTotal(c) > 0 && classTeacherAmount(c) > 0);
-  const clasesSinImporte = realizadas.filter((c) => classTotal(c) <= 0 || classTeacherAmount(c) <= 0);
-  const clasesMargenNegativo = realizadas.filter((c) => classTotal(c) > 0 && classTeacherAmount(c) > classTotal(c));
-  const clasesMargenBajo = realizadas.filter((c) => classTotal(c) > 0 && classTeacherAmount(c) > 0 && classMarginPct(c) < 15);
-  const clasesFamiliaPendiente = realizadas.filter((c) => {
-    const status = statusPagoFamilia(c);
-    return classTotal(c) > 0 && !['pagado', 'paid', 'validado', 'validated'].includes(status);
+function financeTextSearch(item) {
+  return [
+    item?.studentName, item?.alumno_nombre, item?.familyName, item?.familia_nombre,
+    item?.teacherName, item?.profesor_nombre, item?.subject, item?.materia,
+    item?.city, item?.ciudad, item?.zona, item?.modality, item?.modalidad,
+    item?.reference, item?.referencia, item?.concepto,
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function filtrarFinanzas(clases, pagos) {
+  const filtro = String(document.getElementById('finanzas-filtro')?.value || '').trim().toLowerCase();
+  if (!filtro) return { clases, pagos };
+  return {
+    clases: (clases || []).filter((item) => financeTextSearch(item).includes(filtro)),
+    pagos: (pagos || []).filter((item) => financeTextSearch(item).includes(filtro)),
+  };
+}
+
+function calcularFinanzas(clases, pagos, mes, extra = {}) {
+  const report = buildFinanceErpReport({
+    classes: clases,
+    payments: pagos,
+    teachers: extra.teachers || [],
+    families: extra.families || [],
+    students: extra.students || [],
+  }, {
+    month: mes,
+    config: platformConfig,
+    nowIso: new Date().toISOString(),
   });
-  const clasesProfesorPendiente = realizadas.filter((c) => {
-    const status = statusPagoProfesor(c);
-    return classTeacherAmount(c) > 0 && !['pagado', 'paid', 'validado', 'validated'].includes(status);
-  });
-
-  const facturacionDevengada = sumar(realizadas, classTotal);
-  const costeProfesor = sumar(realizadas, classTeacherAmount);
-  const margenBruto = roundMoney(facturacionDevengada - costeProfesor);
-  const margenPct = facturacionDevengada > 0 ? roundMoney((margenBruto / facturacionDevengada) * 100) : 0;
-  const pipelineProgramado = sumar(programadas, classTotal);
-  const cajaFamilias = sumar(pagos.filter(pagoFamiliaValidado), importePago);
-  const cajaProfesores = sumar(pagos.filter(pagoProfesorPagado), importePago);
-  const cajaNeta = roundMoney(cajaFamilias - cajaProfesores);
-  const porCobrarFamilias = sumar(clasesFamiliaPendiente, classTotal);
-  const porPagarProfesores = sumar(clasesProfesorPendiente, classTeacherAmount);
-
-  const now = new Date();
-  const diasTranscurridos = mes === mesActual ? Math.max(1, now.getDate()) : diasMes(mes);
-  const proyeccionRunRate = roundMoney((facturacionDevengada / diasTranscurridos) * diasMes(mes));
-  const proyeccionCierre = roundMoney(Math.max(proyeccionRunRate, facturacionDevengada + pipelineProgramado));
-  const margenProyectado = facturacionDevengada > 0
-    ? roundMoney((proyeccionCierre * margenPct) / 100)
-    : 0;
-
-  const profesores = new Map();
-  realizadas.forEach((c) => {
-    const key = nombreProfesorFinanzas(c);
-    const prev = profesores.get(key) || { nombre: key, clases: 0, facturado: 0, profesor: 0, margen: 0 };
-    prev.clases += 1;
-    prev.facturado = roundMoney(prev.facturado + classTotal(c));
-    prev.profesor = roundMoney(prev.profesor + classTeacherAmount(c));
-    prev.margen = roundMoney(prev.facturado - prev.profesor);
-    profesores.set(key, prev);
-  });
-
-  const riesgos = [
-    ...clasesMargenNegativo.map((c) => ({ tipo: 'Margen negativo', clase: c, prioridad: 1 })),
-    ...clasesSinImporte.map((c) => ({ tipo: 'Importe incompleto', clase: c, prioridad: 2 })),
-    ...clasesMargenBajo.map((c) => ({ tipo: 'Margen bajo', clase: c, prioridad: 3 })),
-  ].sort((a, b) => a.prioridad - b.prioridad || String(b.clase.fecha || '').localeCompare(String(a.clase.fecha || '')));
+  const metrics = report.metrics;
+  const monthClasses = report.dataset.classes.filter((item) => item.month === mes);
+  const realizadas = monthClasses.filter((item) => item.isRevenueClass || item.isCompleted);
+  const programadas = monthClasses.filter((item) => item.isScheduled && String(item.date || '') >= fechaHoy());
+  const clasesConImportes = realizadas.filter((item) => item.familyAmount > 0 && item.teacherAmount > 0);
+  const clasesSinImporte = realizadas.filter((item) => item.familyAmount <= 0 || item.teacherAmount <= 0);
+  const clasesMargenNegativo = realizadas.filter((item) => item.familyAmount > 0 && item.teacherAmount > item.familyAmount);
+  const clasesMargenBajo = realizadas.filter((item) => item.familyAmount > 0 && item.teacherAmount > 0 && item.marginPct < getConfigValue(platformConfig, 'finance.lowMarginAlertPct', 15));
+  const clasesFamiliaPendiente = realizadas.filter((item) => item.familyAmount > 0 && !item.familyPaid);
+  const clasesProfesorPendiente = realizadas.filter((item) => item.teacherAmount > 0 && !item.teacherPaid);
+  const riesgos = report.anomalies
+    .filter((item) => !item.date || String(item.date).slice(0, 7) === mes)
+    .map((item) => ({
+      tipo: item.title,
+      prioridad: item.severity === 'critical' ? 1 : item.severity === 'high' ? 2 : 3,
+      clase: report.dataset.classes.find((clase) => clase.id === item.classId) || item,
+      anomaly: item,
+    }));
 
   return {
+    report,
+    metrics,
+    dataset: report.dataset,
+    anomalies: report.anomalies,
     realizadas,
     programadas,
     clasesConImportes,
@@ -2015,25 +2058,66 @@ function calcularFinanzas(clases, pagos, mes) {
     clasesMargenBajo,
     clasesFamiliaPendiente,
     clasesProfesorPendiente,
-    facturacionDevengada,
-    costeProfesor,
-    margenBruto,
-    margenPct,
-    pipelineProgramado,
-    cajaFamilias,
-    cajaProfesores,
-    cajaNeta,
-    porCobrarFamilias,
-    porPagarProfesores,
-    proyeccionCierre,
-    margenProyectado,
     riesgos,
-    profesores: Array.from(profesores.values()).sort((a, b) => b.facturado - a.facturado),
+    facturacionDevengada: metrics.revenue.earned,
+    costeProfesor: metrics.costs.teacherAccrued,
+    margenBruto: metrics.profit.gross,
+    margenPct: metrics.profit.marginPct,
+    pipelineProgramado: metrics.forecast.futureRevenue,
+    cajaFamilias: metrics.revenue.collected,
+    cajaProfesores: metrics.costs.teacherPaid,
+    cajaNeta: metrics.operational.estimatedCashFlow,
+    porCobrarFamilias: metrics.revenue.pending,
+    porPagarProfesores: metrics.costs.teacherPending,
+    proyeccionCierre: metrics.forecast.monthly,
+    margenProyectado: metrics.profit.forecastGross,
+    profesores: metrics.breakdowns.byTeacher.map((item) => ({
+      nombre: item.label,
+      clases: item.classes,
+      facturado: item.revenue,
+      profesor: item.teacherCost,
+      margen: item.profit,
+      margenPct: item.marginPct,
+    })),
   };
 }
 
-function renderizarFinanzas(clases, pagos, mes, vista) {
-  const fin = calcularFinanzas(clases, pagos, mes);
+function renderFinanceMiniBar(label, value, max, extra = '') {
+  const pct = max > 0 ? Math.max(4, Math.min(100, Math.round((money(value) / max) * 100))) : 0;
+  return `<div class="finance-mini-row">
+    <div class="finance-mini-row-head"><strong>${sanitize(label)}</strong><span>${formatEuros(value)}</span></div>
+    <div class="finance-mini-track"><span style="width:${pct}%"></span></div>
+    ${extra ? `<div class="finance-mini-note">${sanitize(extra)}</div>` : ''}
+  </div>`;
+}
+
+function renderFinanceBreakdown(title, rows, valueField = 'revenue') {
+  const top = (rows || []).slice(0, 5);
+  const max = Math.max(...top.map((item) => money(item[valueField])), 0);
+  return `<div class="finance-breakdown-block">
+    <h4>${sanitize(title)}</h4>
+    ${top.length ? top.map((item) => renderFinanceMiniBar(item.label || item.key, item[valueField], max, `${item.classes || item.payments || 0} mov.`)).join('') : '<p class="muted">Sin datos.</p>'}
+  </div>`;
+}
+
+function renderFinanceTimeline(rows) {
+  const top = (rows || []).slice(-8);
+  const max = Math.max(...top.map((item) => money(item.revenue)), 0);
+  if (!top.length) return '<div class="empty-state"><div class="empty-title">Sin historico financiero</div><div class="empty-text">Cuando haya clases con importes, se mostrara la tendencia mensual.</div></div>';
+  return `<div class="finance-timeline">${top.map((item) => {
+    const h = max > 0 ? Math.max(10, Math.round((money(item.revenue) / max) * 100)) : 10;
+    return `<div class="finance-timeline-item">
+      <div class="finance-timeline-bar" style="height:${h}%"></div>
+      <span>${sanitize(item.month)}</span>
+      <strong>${formatEuros(item.revenue)}</strong>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
+  const filtrado = filtrarFinanzas(clases, pagos);
+  const fin = calcularFinanzas(filtrado.clases, filtrado.pagos, mes, extra);
+  finanzasUltimoReporte = fin.report;
   const cobertura = fin.realizadas.length
     ? Math.round((fin.clasesConImportes.length / fin.realizadas.length) * 100)
     : 100;
@@ -2042,7 +2126,7 @@ function renderizarFinanzas(clases, pagos, mes, vista) {
     ? [
         renderFinanceCard('Caja cobrada familias', formatEuros(fin.cajaFamilias), `${fin.realizadas.length} clases mes`, 'green'),
         renderFinanceCard('Caja pagada profesores', formatEuros(fin.cajaProfesores), 'Bizum/profesor', 'gold'),
-        renderFinanceCard('Caja neta', formatEuros(fin.cajaNeta), fin.cajaNeta >= 0 ? 'saldo positivo' : 'revisar', fin.cajaNeta >= 0 ? 'teal' : 'red'),
+        renderFinanceCard('Cashflow estimado', formatEuros(fin.cajaNeta), fin.cajaNeta >= 0 ? 'saldo positivo' : 'revisar', fin.cajaNeta >= 0 ? 'teal' : 'red'),
         renderFinanceCard('Pendiente de cobro', formatEuros(fin.porCobrarFamilias), `${fin.clasesFamiliaPendiente.length} clases`, fin.porCobrarFamilias ? 'red' : 'green'),
       ]
     : [
@@ -2050,15 +2134,21 @@ function renderizarFinanzas(clases, pagos, mes, vista) {
         renderFinanceCard('Coste profesores', formatEuros(fin.costeProfesor), 'variable por clase', 'gold'),
         renderFinanceCard('Margen bruto CD10', formatEuros(fin.margenBruto), `${fin.margenPct}%`, fin.margenPct >= 20 ? 'green' : 'red'),
         renderFinanceCard('Proyeccion cierre', formatEuros(fin.proyeccionCierre), `${formatEuros(fin.margenProyectado)} margen`, 'teal'),
+        renderFinanceCard('Prevision anual', formatEuros(fin.metrics.forecast.annual), `${fin.metrics.revenue.growthPct}% crecimiento`, fin.metrics.revenue.growthPct >= 0 ? 'green' : 'red'),
+        renderFinanceCard('Pagos vencidos', formatEuros(fin.metrics.revenue.overdue), `${fin.metrics.payments.overdue} pagos`, fin.metrics.revenue.overdue ? 'red' : 'green'),
+        renderFinanceCard('Familias activas', String(fin.metrics.breakdowns.byFamily.length), `${fin.metrics.classes.revenue} clases facturables`, 'navy'),
+        renderFinanceCard('Valor medio clase', formatEuros(fin.metrics.operational.averageClassValue), `${fin.metrics.operational.collectionRatePct}% cobrado`, 'teal'),
       ];
 
   document.getElementById('finanzas-stats').innerHTML = stats.join('');
   document.getElementById('finanzas-proyeccion').innerHTML = `
     <div style="display:grid;gap:12px;font-size:.9rem;line-height:1.5">
+      <div><strong>Motor ERP:</strong> ${sanitize(FINANCE_ERP_VERSION)} calculando sobre clases, pagos, tarifas de profesor y estado de conciliacion.</div>
       <div><strong>Cobertura de importes:</strong> ${cobertura}% de clases realizadas tienen total familia y cobra profesor.</div>
-      <div><strong>Pipeline programado:</strong> ${formatEuros(fin.pipelineProgramado)} en clases futuras del mes.</div>
-      <div><strong>Margen objetivo:</strong> mantener cada clase por encima del 20% y revisar automaticamente todo lo que caiga por debajo del 15%.</div>
+      <div><strong>Pipeline programado:</strong> ${formatEuros(fin.pipelineProgramado)} en clases futuras del mes. Prevision semanal ${formatEuros(fin.metrics.forecast.weekly)}.</div>
+      <div><strong>Margen objetivo:</strong> mantener cada clase por encima del ${getConfigValue(platformConfig, 'finance.targetMarginPct', 25)}% y revisar automaticamente todo lo que caiga por debajo del ${getConfigValue(platformConfig, 'finance.lowMarginAlertPct', 15)}%.</div>
       <div><strong>Liquidez:</strong> pendiente cobrar familias ${formatEuros(fin.porCobrarFamilias)} y pendiente pagar profesores ${formatEuros(fin.porPagarProfesores)}.</div>
+      <div><strong>Vencidos:</strong> cobros familiares ${formatEuros(fin.metrics.revenue.overdue)} y pagos a profesores ${formatEuros(fin.metrics.costs.teacherOverdue)}.</div>
     </div>
   `;
 
@@ -2071,41 +2161,53 @@ function renderizarFinanzas(clases, pagos, mes, vista) {
   if (!alertas.length) alertas.push(renderFinanceAlert('success', 'Sin alertas criticas este mes.'));
   document.getElementById('finanzas-alertas').innerHTML = alertas.join('');
 
+  document.getElementById('finanzas-evolucion').innerHTML = renderFinanceTimeline(fin.metrics.breakdowns.monthly);
+  document.getElementById('finanzas-cashflow').innerHTML = `
+    <div class="finance-cash-grid">
+      ${renderFinanceMiniBar('Cobrado familias', fin.metrics.revenue.collected, Math.max(fin.metrics.revenue.earned, fin.metrics.revenue.collected), `${fin.metrics.operational.collectionRatePct}% del devengo`)}
+      ${renderFinanceMiniBar('Pendiente familias', fin.metrics.revenue.pending, Math.max(fin.metrics.revenue.earned, fin.metrics.revenue.pending), `${fin.clasesFamiliaPendiente.length} clases`)}
+      ${renderFinanceMiniBar('Pagado profesores', fin.metrics.costs.teacherPaid, Math.max(fin.metrics.costs.teacherAccrued, fin.metrics.costs.teacherPaid), `${fin.metrics.operational.payoutCoveragePct}% del coste`)}
+      ${renderFinanceMiniBar('Pendiente profesores', fin.metrics.costs.teacherPending, Math.max(fin.metrics.costs.teacherAccrued, fin.metrics.costs.teacherPending), `${fin.clasesProfesorPendiente.length} clases`)}
+    </div>
+  `;
+  document.getElementById('finanzas-segmentos').innerHTML = `
+    <div class="finance-breakdown-grid">
+      ${renderFinanceBreakdown('Ciudades', fin.metrics.breakdowns.byCity)}
+      ${renderFinanceBreakdown('Materias', fin.metrics.breakdowns.bySubject)}
+      ${renderFinanceBreakdown('Modalidades', fin.metrics.breakdowns.byModality)}
+    </div>
+  `;
+  document.getElementById('finanzas-rankings').innerHTML = `
+    <div class="finance-breakdown-grid">
+      ${renderFinanceBreakdown('Profesores rentables', fin.metrics.breakdowns.topProfitableTeachers, 'profit')}
+      ${renderFinanceBreakdown('Familias activas', fin.metrics.breakdowns.activeFamilies, 'revenue')}
+    </div>
+  `;
+
   const tbodyRiesgos = document.getElementById('tbody-finanzas-riesgos');
   tbodyRiesgos.innerHTML = fin.riesgos.slice(0, 15).length
     ? fin.riesgos.slice(0, 15).map(({ tipo, clase }) => `<tr>
-        <td>${formatFechaCorta(clase.fecha || clase.date)}</td>
-        <td><strong>${sanitize(tipo)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(nombreClaseFinanzas(clase))}</span></td>
-        <td>${formatEuros(classTotal(clase))}</td>
-        <td>${formatEuros(classTeacherAmount(clase))}</td>
-        <td>${formatEuros(classPlatformFee(clase))} (${roundMoney(classMarginPct(clase))}%)</td>
+        <td data-label="Fecha">${formatFechaCorta(clase.fecha || clase.date)}</td>
+        <td data-label="Clase"><strong>${sanitize(tipo)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(clase.studentName ? `${clase.studentName} / ${clase.subject} / ${clase.teacherName}` : nombreClaseFinanzas(clase))}</span></td>
+        <td data-label="Total">${formatEuros(clase.familyAmount ?? classTotal(clase))}</td>
+        <td data-label="Profesor">${formatEuros(clase.teacherAmount ?? classTeacherAmount(clase))}</td>
+        <td data-label="Margen">${formatEuros(clase.platformFee ?? classPlatformFee(clase))} (${roundMoney(clase.marginPct ?? classMarginPct(clase))}%)</td>
       </tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases de riesgo.</td></tr>';
 
   const tbodyProfesores = document.getElementById('tbody-finanzas-profesores');
   tbodyProfesores.innerHTML = fin.profesores.slice(0, 15).length
     ? fin.profesores.slice(0, 15).map((p) => `<tr>
-        <td>${sanitize(p.nombre)}</td>
-        <td>${p.clases}</td>
-        <td>${formatEuros(p.facturado)}</td>
-        <td>${formatEuros(p.profesor)}</td>
-        <td>${formatEuros(p.margen)}</td>
+        <td data-label="Profesor">${sanitize(p.nombre)}</td>
+        <td data-label="Clases">${p.clases}</td>
+        <td data-label="Facturado">${formatEuros(p.facturado)}</td>
+        <td data-label="A cobrar">${formatEuros(p.profesor)}</td>
+        <td data-label="Margen">${formatEuros(p.margen)} (${roundMoney(p.margenPct)}%)</td>
       </tr>`).join('')
     : '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases realizadas este mes.</td></tr>';
 
-  finanzasUltimoDataset = fin.realizadas.map((c) => ({
-    fecha: c.fecha || c.date || '',
-    alumno: c.alumno_nombre || c.studentName || '',
-    profesor: nombreProfesorFinanzas(c),
-    materia: c.materia || c.subject || '',
-    estado: statusClase(c),
-    total_familia: classTotal(c),
-    cobra_profesor: classTeacherAmount(c),
-    margen_clasesde10: classPlatformFee(c),
-    margen_porcentaje: roundMoney(classMarginPct(c)),
-    pago_familia: statusPagoFamilia(c),
-    pago_profesor: statusPagoProfesor(c),
-  }));
+  finanzasUltimoDataset = buildFinanceCsvRows(fin.dataset, fin.metrics, fin.anomalies, { month: mes })
+    .filter((item) => !item.mes || item.mes === mes);
 }
 
 async function cargarFinanzas() {
@@ -2115,26 +2217,40 @@ async function cargarFinanzas() {
   const mes = mesInput.value;
   const vista = vistaInput.value || 'devengo';
   const range = monthRange(mes);
+  const previousRange = monthRange(mesAnteriorInput(mes));
 
-  const [clasesRes, pagosRes] = await Promise.all([
-    db.from('v_clases_completas').select('*').gte('fecha', range.desde).lte('fecha', range.hasta).order('fecha', { ascending:false }),
-    db.from('pagos').select('*, familias(usuarios(nombre,apellidos,email)), profesores(usuarios(nombre,apellidos,email))').gte('created_at', range.inicioTs).lte('created_at', range.finTs).order('created_at', { ascending:false }),
+  const [clasesRes, pagosRes, profesores, familias, alumnos] = await Promise.all([
+    db.from('v_clases_completas').select('*').gte('fecha', previousRange.desde).lte('fecha', range.hasta).order('fecha', { ascending:false }),
+    db.from('pagos').select('*, familias(usuarios(nombre,apellidos,email)), profesores(usuarios(nombre,apellidos,email))').gte('created_at', `${previousRange.desde}T00:00:00.000Z`).lte('created_at', range.finTs).order('created_at', { ascending:false }),
+    safeListFirestore('profesores'),
+    safeListFirestore('familias'),
+    safeListFirestore('alumnos'),
   ]);
   if (clasesRes.error) throw clasesRes.error;
   if (pagosRes.error) throw pagosRes.error;
-  renderizarFinanzas(clasesRes.data || [], pagosRes.data || [], mes, vista);
+  renderizarFinanzas(clasesRes.data || [], pagosRes.data || [], mes, vista, {
+    teachers: profesores || [],
+    families: familias || [],
+    students: alumnos || [],
+  });
 }
 
-['finanzas-mes','finanzas-vista'].forEach((id) => {
+['finanzas-mes','finanzas-vista','finanzas-filtro'].forEach((id) => {
   document.getElementById(id)?.addEventListener('change', cargarFinanzas);
 });
+document.getElementById('finanzas-filtro')?.addEventListener('input', debounce(cargarFinanzas, 250));
 
 document.getElementById('btn-export-finanzas')?.addEventListener('click', () => {
   exportarCSV(finanzasUltimoDataset, `finanzas_clasesde10_${document.getElementById('finanzas-mes').value || mesActualInput()}.csv`, [
     {titulo:'Fecha', campo:'fecha'},
+    {titulo:'Mes', campo:'mes'},
     {titulo:'Alumno', campo:'alumno'},
+    {titulo:'Familia', campo:'familia'},
     {titulo:'Profesor', campo:'profesor'},
+    {titulo:'Ciudad', campo:'ciudad'},
     {titulo:'Materia', campo:'materia'},
+    {titulo:'Nivel', campo:'nivel'},
+    {titulo:'Modalidad', campo:'modalidad'},
     {titulo:'Estado', campo:'estado'},
     {titulo:'Total familia', campo:'total_familia'},
     {titulo:'Cobra profesor', campo:'cobra_profesor'},
@@ -2142,6 +2258,9 @@ document.getElementById('btn-export-finanzas')?.addEventListener('click', () => 
     {titulo:'Margen %', campo:'margen_porcentaje'},
     {titulo:'Pago familia', campo:'pago_familia'},
     {titulo:'Pago profesor', campo:'pago_profesor'},
+    {titulo:'Vencimiento', campo:'vencimiento'},
+    {titulo:'Origen tarifa', campo:'tarifa_origen'},
+    {titulo:'Regla tarifa', campo:'tarifa_regla'},
   ]);
 });
 

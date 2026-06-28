@@ -50,6 +50,10 @@ import {
   normalizePaymentStatus,
   paymentAmount,
 } from '../js/payment-engine.js';
+import {
+  FINANCE_ERP_VERSION,
+  buildFinanceErpReport,
+} from '../js/finance-erp-engine.js';
 import { buildNotificationDocument } from '../js/notification-engine.js';
 
 const require = createRequire(import.meta.url);
@@ -95,6 +99,15 @@ function runtimeNumber(path, fallback, min = 1, max = Number.MAX_SAFE_INTEGER) {
   const number = Number(configValue(platformConfigRuntime, path, fallback));
   if (!Number.isFinite(number)) return fallback;
   return Math.max(min, Math.min(max, number));
+}
+
+function runtimeBoolean(path, fallback = false) {
+  const value = configValue(platformConfigRuntime, path, fallback);
+  if (typeof value === 'boolean') return value;
+  const normalized = lower(value);
+  if (['true', '1', 'yes', 'si', 'on'].includes(normalized)) return true;
+  if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  return Boolean(fallback);
 }
 
 function asArray(value) {
@@ -1973,16 +1986,59 @@ async function processPaymentReminders(db, stats) {
 }
 
 async function processPlatformAutomationSweep(db, stats) {
-  const [classes, payments, requests, documents, incidents, teachers, deadLetters, opsAlerts] = await Promise.all([
+  const [classes, payments, requests, documents, incidents, teachers, families, students, deadLetters, opsAlerts] = await Promise.all([
     listCollection(db, 'clases', limit),
     listCollection(db, 'pagos', limit),
     listCollection(db, 'solicitudes', limit),
     listCollection(db, 'documentos', limit),
     listCollection(db, 'incidencias', limit),
     listCollection(db, 'profesores', limit),
+    listCollection(db, 'familias', limit),
+    listCollection(db, 'alumnos', limit),
     listCollection(db, 'deadLetters', limit),
     listCollection(db, 'opsAlerts', limit),
   ]);
+
+  if (runtimeBoolean('finance.autoDetectAnomalies', true)) {
+    const financeReport = buildFinanceErpReport({
+      classes,
+      payments,
+      teachers,
+      families,
+      students,
+    }, {
+      month: isoNow().slice(0, 7),
+      config: platformConfigRuntime,
+      nowIso: isoNow(),
+    });
+    stats.financeAnomaliesDetected = financeReport.anomalies.length;
+    stats.financeErpVersion = FINANCE_ERP_VERSION;
+    const shouldCreateIncidents = runtimeBoolean('finance.autoCreateIncidentFromAnomalies', true);
+    for (const item of financeReport.anomalies.slice(0, 20)) {
+      const eventId = item.classId || item.paymentId || item.id;
+      await materializeWorkerAutomationPlan(db, {
+        type: 'finance.anomaly_detected',
+        entityType: item.paymentId ? 'pagos' : 'clases',
+        entityId: eventId,
+        data: { id: eventId, ...item, financeErpVersion: FINANCE_ERP_VERSION },
+        source: 'githubActionsSweep',
+      }, stats);
+      if (shouldCreateIncidents && ['critical', 'high'].includes(item.severity)) {
+        await createOperationalIncidentOnce(db, 'finance_anomaly', {
+          id: item.id,
+          classId: item.classId,
+          paymentId: item.paymentId,
+          teacherUid: item.teacherUid,
+          familyUid: item.familyUid,
+          prioridad: item.severity === 'critical' ? 'urgente' : 'alta',
+          descripcion: `${item.title}: ${item.description}`,
+          suggestedActions: item.suggestedActions || [],
+        }, stats);
+        stats.financeIncidentsCreated = (stats.financeIncidentsCreated || 0) + 1;
+      }
+      stats.platformFinanceEvents = (stats.platformFinanceEvents || 0) + 1;
+    }
+  }
 
   for (const item of classes) {
     stats.platformClassesChecked += 1;
@@ -2357,6 +2413,10 @@ async function main() {
     platformIncidentEvents: 0,
     platformTeachersChecked: 0,
     platformTeacherEvents: 0,
+    platformFinanceEvents: 0,
+    financeAnomaliesDetected: 0,
+    financeIncidentsCreated: 0,
+    financeErpVersion: FINANCE_ERP_VERSION,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
