@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import {
+  MATCHING_VERSION,
+  buildMatchingAiPrompt,
   evaluateTeacherProfile,
+  mergeAiRanking,
   rankTeachersForRequest,
   scoreTeacherForRequest,
   summarizeTeacherProfile,
@@ -36,6 +39,9 @@ const completeTeacher = {
   nota_bachillerato: 8.7,
   nota_media_universidad: 8.1,
   disponibilidad_resumen: 'Tardes entre semana',
+  rating: 4.8,
+  acceptanceRate: 0.9,
+  responseTimeHours: 2,
   bio: 'Profesora universitaria con experiencia real preparando alumnos de ESO y Bachillerato.',
   acepta_bizum: true,
   status: 'verificado',
@@ -67,6 +73,10 @@ const completeScore = scoreTeacherForRequest(request, completeTeacher);
 assert.equal(completeScore.assignable, true);
 assert.ok(completeScore.score > 80);
 assert.ok(completeScore.reasons.some((reason) => reason.toLowerCase().includes('materia')));
+assert.equal(completeScore.matchingVersion, MATCHING_VERSION);
+assert.ok(completeScore.scoreBreakdown.subject.points > 0);
+assert.ok(completeScore.scoreBreakdown.availability.points > 0);
+assert.ok(completeScore.scoreBreakdown.reputation.points > 0);
 
 const ranking = rankTeachersForRequest(request, [incompleteTeacher, completeTeacher], { limit: 2, includeZeroScore: true });
 assert.equal(ranking[0].teacherUid, 'teacher_complete');
@@ -76,6 +86,102 @@ assert.equal(ranking[1].assignable, false);
 const summary = summarizeTeacherProfile(incompleteTeacher);
 assert.ok(summary.nextActions.length > 0);
 assert.equal(summary.assignable, false);
+
+const presencialRequest = {
+  materia: 'Matematicas',
+  nivel: '2 ESO',
+  modalidad: 'presencial',
+  zona: 'Madrid centro',
+  codigo_postal: '28001',
+  preferencia_horario: 'martes tarde',
+};
+const localTeacher = {
+  ...completeTeacher,
+  id: 'teacher_local',
+  teacherUid: 'teacher_local',
+  modalidad: 'presencial',
+  codigo_postal: '28001',
+  disponibilidad_resumen: 'martes tarde',
+  activeAssignments: 2,
+};
+const remoteTeacher = {
+  ...completeTeacher,
+  id: 'teacher_remote',
+  teacherUid: 'teacher_remote',
+  modalidad: 'online',
+  zona: 'Valencia',
+  codigo_postal: '46001',
+  disponibilidad_resumen: 'lunes manana',
+};
+const presencialRanking = rankTeachersForRequest(presencialRequest, [remoteTeacher, localTeacher], { limit: 2, includeZeroScore: true });
+assert.equal(presencialRanking[0].teacherUid, 'teacher_local');
+assert.ok(presencialRanking[0].scoreBreakdown.location.points > presencialRanking[1].scoreBreakdown.location.points);
+assert.ok(presencialRanking[0].scoreBreakdown.availability.points > presencialRanking[1].scoreBreakdown.availability.points);
+
+const reliableTeacher = {
+  ...completeTeacher,
+  id: 'teacher_reliable',
+  teacherUid: 'teacher_reliable',
+  rating: 4.9,
+  reviewsCount: 20,
+  responseTimeHours: 1,
+  acceptanceRate: 0.95,
+};
+const slowTeacher = {
+  ...completeTeacher,
+  id: 'teacher_slow',
+  teacherUid: 'teacher_slow',
+  rating: 3.8,
+  reviewsCount: 2,
+  responseTimeHours: 48,
+  acceptanceRate: 0.35,
+};
+const reliabilityRanking = rankTeachersForRequest(request, [slowTeacher, reliableTeacher], { limit: 2, includeZeroScore: true });
+assert.equal(reliabilityRanking[0].teacherUid, 'teacher_reliable');
+assert.ok(reliabilityRanking[0].scoreBreakdown.reputation.points > reliabilityRanking[1].scoreBreakdown.reputation.points);
+
+const padelRequest = {
+  materia: 'Padel',
+  nivel: 'Deporte',
+  modalidad: 'presencial',
+  zona: 'Chamberi',
+  preferencia_horario: 'sabado manana',
+};
+const padelTeacher = {
+  ...completeTeacher,
+  id: 'teacher_padel',
+  teacherUid: 'teacher_padel',
+  materias: ['Padel', 'Tenis'],
+  niveles_educativos: ['Deporte'],
+  modalidad: 'presencial',
+  zona: 'Chamberi',
+  disponibilidad_resumen: 'sabado manana',
+  estudio_exacto: 'Monitor nacional de padel',
+};
+const guitarTeacher = {
+  ...completeTeacher,
+  id: 'teacher_guitar',
+  teacherUid: 'teacher_guitar',
+  materias: ['Guitarra'],
+  niveles_educativos: ['Musica'],
+  modalidad: 'presencial',
+  zona: 'Chamberi',
+};
+const activityRanking = rankTeachersForRequest(padelRequest, [guitarTeacher, padelTeacher], { limit: 2, includeZeroScore: true });
+assert.equal(activityRanking[0].teacherUid, 'teacher_padel');
+
+const aiMerged = mergeAiRanking([reliableTeacher, slowTeacher].map((teacher) => scoreTeacherForRequest(request, teacher)), {
+  matches: [
+    { teacherUid: 'unknown_teacher', score: 100, reason: 'No debe entrar', risks: [] },
+    { teacherUid: 'teacher_slow', score: 100, reason: 'Buena comunicacion aparente', risks: ['Validar respuesta real'] },
+  ],
+});
+assert.equal(aiMerged.some((match) => match.teacherUid === 'unknown_teacher'), false);
+assert.ok(aiMerged.find((match) => match.teacherUid === 'teacher_slow').aiAdjustment <= 8);
+
+const prompt = buildMatchingAiPrompt(request, ranking);
+assert.ok(prompt.includes('No inventes datos'));
+assert.ok(prompt.includes('JSON requerido'));
 
 console.log(JSON.stringify({
   ok: true,

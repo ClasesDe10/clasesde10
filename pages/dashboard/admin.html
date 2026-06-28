@@ -1795,6 +1795,11 @@ function profesorPuedeAparecerAsignacion(p) {
   return p?.active === true || p?.activo === true || ['verificado', 'verified', 'activo', 'active'].includes(estado);
 }
 
+function profesorVerificadoParaAsignacion(p) {
+  const estado = estadoProfesorNormalizado(p);
+  return (p?.active !== false && p?.activo !== false) && ['verificado', 'verified', 'activo', 'active'].includes(estado);
+}
+
 function timestampMillis(value) {
   if (!value) return 0;
   if (typeof value.toMillis === 'function') return value.toMillis();
@@ -2370,9 +2375,11 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
       (profesoresElegibles.length ? profesoresElegibles.map((p) => {
         const completo = perfilProfesorCompleto(p);
+        const verificado = profesorVerificadoParaAsignacion(p);
         const issues = incidenciasPerfilProfesor(p).slice(0, 3).join(', ');
         const nombre = nombreProfesor(p);
-        return `<option value="${sanitize(p.id)}" ${completo ? '' : 'disabled'}>${sanitize(nombre)}${completo ? '' : ` (perfil incompleto: ${sanitize(issues)})`}</option>`;
+        const bloqueo = !verificado ? 'pendiente de verificacion' : !completo ? `perfil incompleto: ${sanitize(issues)}` : '';
+        return `<option value="${sanitize(p.id)}" ${completo && verificado ? '' : 'disabled'}>${sanitize(nombre)}${bloqueo ? ` (${bloqueo})` : ''}</option>`;
       }).join('') : '<option value="" disabled>No hay profesores activos o verificados</option>');
 
     const detalleProfesor = document.getElementById('asignar-profesor-detalle');
@@ -2398,58 +2405,6 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     openModal('modal-asignar');
     return;
   }
-
-  const [{ data: solicitud }, { data: profs }, { data: matches, error: matchError }] = await Promise.all([
-    null
-      .select('*, familias(usuarios(nombre,apellidos)), alumnos(nombre,apellidos)')
-      .eq('id', solicitudId)
-      .single(),
-    null
-      .select('*, usuarios(nombre,apellidos,email,telefono)'),
-    null
-      .select('*')
-      .eq('solicitud_id', solicitudId)
-      .order('score', { ascending: false })
-      .limit(5),
-  ]);
-
-  window.solicitudAsignacionActual = solicitud || null;
-  if (solicitud) {
-    document.getElementById('asignar-solicitud-info').innerHTML = `
-      <strong>Materia:</strong> ${sanitize(solicitud.materia || materia)}<br>
-      <strong>Familia:</strong> ${sanitize(solicitud.familias?.usuarios?.nombre || familia || '-')}<br>
-      <strong>Alumno:</strong> ${sanitize([solicitud.alumnos?.nombre, solicitud.alumnos?.apellidos].filter(Boolean).join(' ') || solicitud.alumno_nombre || '-')}<br>
-      <strong>Nivel:</strong> ${sanitize(solicitud.nivel || '-')}<br>
-      <strong>Horario:</strong> ${sanitize(solicitud.preferencia_horario || '-')}
-    `;
-  }
-
-  (profs || []).forEach((p) => profesoresCache.set(p.id, p));
-  const profesoresElegibles = (profs || []).filter(profesorPuedeAparecerAsignacion);
-  document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
-    (profesoresElegibles.length ? profesoresElegibles.map((p) => {
-      const completo = perfilProfesorCompleto(p);
-      const issues = incidenciasPerfilProfesor(p).slice(0, 3).join(', ');
-      const nombre = nombreProfesor(p);
-      return `<option value="${sanitize(p.id)}" ${completo ? '' : 'disabled'}>${sanitize(nombre)}${completo ? '' : ` (perfil incompleto: ${sanitize(issues)})`}</option>`;
-    }).join('') : '<option value="" disabled>No hay profesores activos o verificados</option>');
-
-  const detalleProfesor = document.getElementById('asignar-profesor-detalle');
-  const completos = profesoresElegibles.filter(perfilProfesorCompleto).length;
-  if (detalleProfesor && !completos) {
-    detalleProfesor.style.display = '';
-    detalleProfesor.innerHTML = profesoresElegibles.length
-      ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, estudios, centro, notas, materias/actividades, niveles, Bizum, disponibilidad y presentacion antes de asignar.</div></div>`
-      : '<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Activa o verifica al menos un profesor con perfil completo antes de asignar esta solicitud.</div></div>';
-  } else if (detalleProfesor) {
-    detalleProfesor.style.display = 'none';
-    detalleProfesor.innerHTML = '';
-  }
-  const aiMatches = (matches || []).length
-    ? matches
-    : rankTeachersForRequest(solicitud || { materia, subject: materia }, profs || [], { limit: 5, includeZeroScore: true });
-  renderAsignarMatches(aiMatches, matchError);
-  openModal('modal-asignar');
 };
 
 function renderAsignarMatches(matches, error) {
@@ -2474,15 +2429,37 @@ function renderAsignarMatches(matches, error) {
     const risks = (m.risks || []).slice(0, 2).map(sanitize).join(' ');
     const profileIssues = (m.profileIssues || profileQuality?.issueLabels || []).slice(0, 3).map(sanitize).join(', ');
     const notes = [reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
+    const breakdown = Object.entries(m.scoreBreakdown || {})
+      .filter(([, value]) => value && Number.isFinite(Number(value.points)))
+      .slice(0, 6)
+      .map(([key, value]) => {
+        const labels = {
+          subject: 'Materia',
+          level: 'Nivel',
+          modality: 'Modalidad',
+          location: 'Zona',
+          availability: 'Horario',
+          experience: 'Experiencia',
+          reputation: 'Fiabilidad',
+          capacity: 'Carga',
+          profileQuality: 'Perfil',
+        };
+        return `<span class="badge badge-gray" title="${sanitize(value.detail || '')}">${labels[key] || key}: ${Math.round(Number(value.points))}/${Math.round(Number(value.max || 0))}</span>`;
+      }).join(' ');
+    const sourceLabel = String(m.aiMode || m.source || m.matchingVersion || '').includes('gemini')
+      ? 'IA Gemini + scoring'
+      : 'Scoring IA determinista';
     return `
       <div data-ai-match="teacher" style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
           <strong>${sanitize(m.teacherName || m.nombreProfesor || m.teacherEmail || teacherId || 'Profesor')}</strong>
-          <span class="badge ${badgeClass}">${score}%</span>
+          <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
+        ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
         <div style="margin-top:6px">${reasons || 'Candidato propuesto por compatibilidad general.'}</div>
         ${risks ? `<div style="margin-top:4px;color:var(--gray-mid)">A revisar: ${risks}</div>` : ''}
         ${profileIssues ? `<div style="margin-top:4px;color:${assignable ? 'var(--gray-mid)' : 'var(--warning)'}">Perfil: ${profileIssues}</div>` : ''}
+        <div style="margin-top:4px;color:var(--gray-mid);font-size:.75rem">${sanitize(sourceLabel)}</div>
         <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px"
                 data-action="seleccionar-match"
                 data-profesor-id="${sanitize(teacherId)}"
@@ -2533,6 +2510,11 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
   const profesor = profesoresCache.get(profId);
   if (profesor && !perfilProfesorCompleto(profesor)) {
     showToast('Perfil incompleto', 'No se puede asignar un profesor con perfil incompleto.', 'warning');
+    renderProfesorAsignacionSeleccionado(profId);
+    return;
+  }
+  if (profesor && !profesorVerificadoParaAsignacion(profesor)) {
+    showToast('Profesor no verificado', 'Verifica al profesor antes de asignarlo a una familia.', 'warning');
     renderProfesorAsignacionSeleccionado(profId);
     return;
   }

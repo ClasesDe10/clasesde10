@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 
 import admin from 'firebase-admin';
+import {
+  MATCHING_VERSION,
+  buildMatchingAiPrompt,
+  getRequestProfile as getMatchingRequestProfile,
+  mergeAiRanking as mergeProfessionalAiRanking,
+  rankTeachersForRequest,
+} from '../js/ai-engine.js';
 
 const DEFAULT_PROJECT_ID = 'clasesde10-50add';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
@@ -282,11 +289,29 @@ async function countActiveAssignmentsByTeacher(db) {
   return counts;
 }
 
+async function loadAvailabilityByTeacher(db) {
+  try {
+    const snap = await db.collection('disponibilidad').get();
+    const slots = new Map();
+    snap.docs.forEach((doc) => {
+      const data = { id: doc.id, ...doc.data() };
+      const teacherUid = clean(data.teacherUid || data.profesor_id || data.userUid || data.usuario_id);
+      if (!teacherUid) return;
+      if (!slots.has(teacherUid)) slots.set(teacherUid, []);
+      slots.get(teacherUid).push(data);
+    });
+    return slots;
+  } catch {
+    return new Map();
+  }
+}
+
 async function loadTeachers(db) {
-  const [teachersSnap, usersSnap, assignmentCounts] = await Promise.all([
+  const [teachersSnap, usersSnap, assignmentCounts, availabilitySlots] = await Promise.all([
     db.collection('profesores').get(),
     db.collection('users').get(),
     countActiveAssignmentsByTeacher(db),
+    loadAvailabilityByTeacher(db),
   ]);
   const users = new Map(usersSnap.docs.map((doc) => [doc.id, { id: doc.id, ...doc.data() }]));
 
@@ -296,101 +321,36 @@ async function loadTeachers(db) {
       const userUid = data.userUid || data.usuario_id || doc.id;
       const user = users.get(userUid) || {};
       const status = normalizeStatus(data);
+      const slots = [
+        ...(availabilitySlots.get(doc.id) || []),
+        ...(availabilitySlots.get(userUid) || []),
+      ];
       return {
+        ...data,
         id: doc.id,
         teacherUid: doc.id,
         userUid,
+        usuarios: user,
         nombre: getUserName(user) || getUserName(data) || doc.id,
         email: user.email || data.email || '',
         status,
         active: data.active !== false && data.activo !== false,
         materias: asArray(data.materias || data.materia),
+        subjects: asArray(data.subjects || data.materias || data.materia),
         niveles: asArray(data.niveles_educativos || data.niveles || data.nivel),
+        niveles_educativos: asArray(data.niveles_educativos || data.levels || data.niveles || data.nivel),
+        levels: asArray(data.levels || data.niveles_educativos || data.niveles || data.nivel),
         modalidad: clean(data.modalidad || data.tipo_clase || data.formato),
+        modality: clean(data.modality || data.modalidad || data.tipo_clase || data.formato),
         zona: clean(data.zona || data.ciudad || data.barrio),
+        zone: clean(data.zone || data.zona || data.ciudad || data.barrio),
         bio: clean(data.bio || data.experiencia, 1000),
         maxStudents: Number(data.maxStudents || data.max_alumnos || 5),
         activeAssignments: assignmentCounts.get(doc.id) || assignmentCounts.get(userUid) || 0,
+        availabilitySlots: slots,
       };
     })
     .filter((teacher) => teacher.active && ['verificado', 'activo', 'pendiente_revision', 'pendiente', ''].includes(teacher.status));
-}
-
-function getRequestProfile(request) {
-  const metadata = request.metadata || {};
-  const student = request.studentSnapshot || {};
-  return {
-    subject: clean(request.materia || request.subject || metadata.materia || metadata.materias),
-    level: clean(request.nivel || request.nivel_educativo || request.curso || student.nivel || metadata.nivel),
-    modality: clean(request.modalidad || metadata.modalidad),
-    zone: clean(request.zona || metadata.zona),
-    schedule: clean(request.preferencia_horario || request.disponibilidad || metadata.disponibilidad),
-    studentName: clean(student.nombre || request.alumno_nombre || metadata.alumno),
-  };
-}
-
-function scoreTeacher(profile, teacher) {
-  let score = 0;
-  const reasons = [];
-  const risks = [];
-  const subjectTokens = tokenize(profile.subject);
-  const teacherSubjectText = lower(teacher.materias.join(' '));
-  const subjectMatches = subjectTokens.filter((token) => teacherSubjectText.includes(token));
-  if (subjectTokens.length && subjectMatches.length) {
-    score += Math.min(45, 25 + subjectMatches.length * 10);
-    reasons.push(`Cubre la materia (${profile.subject}).`);
-  } else if (subjectTokens.length) {
-    risks.push(`No hay coincidencia clara de materia (${profile.subject}).`);
-    score -= 20;
-  } else {
-    score += 10;
-    risks.push('La solicitud no indica materia clara.');
-  }
-
-  const level = lower(profile.level);
-  const levels = lower(teacher.niveles.join(' '));
-  if (level && (levels.includes(level) || levels.includes('todos') || (levels.includes('eso') && level.includes('eso')))) {
-    score += 25;
-    reasons.push(`Nivel compatible (${profile.level}).`);
-  } else if (level) {
-    risks.push(`Nivel no confirmado (${profile.level}).`);
-  }
-
-  const modality = lower(profile.modality);
-  const teacherModality = lower(teacher.modalidad);
-  if (!modality || !teacherModality || teacherModality.includes('ambas') || modality.includes('ambas') || teacherModality.includes(modality)) {
-    score += 10;
-    if (profile.modality) reasons.push(`Modalidad compatible (${profile.modality}).`);
-  } else {
-    risks.push(`Modalidad pendiente de validar (${profile.modality} vs ${teacher.modalidad}).`);
-  }
-
-  const zone = lower(profile.zone);
-  const teacherZone = lower(teacher.zona);
-  if (zone && teacherZone && (teacherZone.includes(zone) || zone.includes(teacherZone) || teacherModality.includes('online'))) {
-    score += 10;
-    reasons.push(`Zona/modalidad compatible (${profile.zone}).`);
-  } else if (zone) {
-    risks.push(`Zona no confirmada (${profile.zone}).`);
-  }
-
-  const remaining = Math.max(0, teacher.maxStudents - teacher.activeAssignments);
-  if (remaining > 0) {
-    score += Math.min(10, remaining * 2);
-    reasons.push(`${remaining} plaza(s) estimadas disponibles.`);
-  } else {
-    score -= 30;
-    risks.push('Carga actual completa.');
-  }
-
-  if (teacher.status === 'verificado' || teacher.status === 'activo') score += 8;
-  else risks.push('Profesor pendiente de revision/verificacion.');
-
-  return {
-    score: Math.max(0, Math.min(100, Math.round(score))),
-    reasons,
-    risks,
-  };
 }
 
 async function callGeminiForMatching(profile, baseCandidates) {
@@ -398,22 +358,7 @@ async function callGeminiForMatching(profile, baseCandidates) {
   const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
   if (!apiKey || !baseCandidates.length) return null;
 
-  const teacherBlock = baseCandidates.slice(0, 8).map((candidate, index) => (
-    `P${index + 1}: id="${candidate.teacherUid}" nombre="${candidate.nombre}" scoreBase=${candidate.score} materias="${candidate.materias.join(', ')}" niveles="${candidate.niveles.join(', ')}" modalidad="${candidate.modalidad}" zona="${candidate.zona}" carga="${candidate.activeAssignments}/${candidate.maxStudents}" riesgos="${candidate.risks.join('; ')}"`
-  )).join('\n');
-
-  const prompt = [
-    'Eres el asistente de matching de ClasesDe10.',
-    'Tu objetivo es ayudar al administrador a elegir profesor, no inventar datos.',
-    'Reordena los candidatos segun encaje pedagogico, materia, nivel, modalidad, zona, carga actual y riesgos.',
-    'No propongas profesores fuera de la lista. Responde solo JSON valido.',
-    '',
-    `SOLICITUD: materia="${profile.subject}" nivel="${profile.level}" modalidad="${profile.modality}" zona="${profile.zone}" horario="${profile.schedule}" alumno="${profile.studentName}"`,
-    'CANDIDATOS:',
-    teacherBlock,
-    '',
-    'JSON requerido: {"matches":[{"teacherUid":"id exacto","score":90,"reason":"motivo breve para admin","risks":["riesgo breve"]}]}',
-  ].join('\n');
+  const prompt = buildMatchingAiPrompt(profile, baseCandidates);
 
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
@@ -444,33 +389,6 @@ async function callGeminiForMatching(profile, baseCandidates) {
   const parsed = JSON.parse(text);
   if (!Array.isArray(parsed.matches)) return null;
   return parsed;
-}
-
-function mergeAiRanking(baseCandidates, aiResult) {
-  if (!aiResult?.matches?.length) return baseCandidates.map((candidate) => ({ ...candidate, aiReason: '', aiRisks: [] }));
-
-  const baseByTeacher = new Map(baseCandidates.map((candidate) => [candidate.teacherUid, candidate]));
-  const seen = new Set();
-  const ranked = [];
-
-  for (const match of aiResult.matches) {
-    const teacherUid = clean(match.teacherUid, 120);
-    const candidate = baseByTeacher.get(teacherUid);
-    if (!candidate || seen.has(teacherUid)) continue;
-    seen.add(teacherUid);
-    ranked.push({
-      ...candidate,
-      score: Math.max(candidate.score, Math.min(100, Math.max(0, Number(match.score || 0)))),
-      aiReason: clean(match.reason, 500),
-      aiRisks: Array.isArray(match.risks) ? match.risks.map((risk) => clean(risk, 180)).filter(Boolean) : [],
-    });
-  }
-
-  for (const candidate of baseCandidates) {
-    if (!seen.has(candidate.teacherUid)) ranked.push({ ...candidate, aiReason: '', aiRisks: [] });
-  }
-
-  return ranked.sort((a, b) => b.score - a.score);
 }
 
 async function processPublicLeads(db, stats) {
@@ -541,13 +459,12 @@ async function processPublicLeads(db, stats) {
 }
 
 async function generateMatchesForRequest(db, requestId, request, stats, reason = 'worker_scan') {
-  const profile = getRequestProfile(request);
+  const profile = getMatchingRequestProfile({ id: requestId, ...request });
   const teachers = await loadTeachers(db);
-  const baseCandidates = teachers
-    .map((teacher) => ({ ...teacher, ...scoreTeacher(profile, teacher) }))
-    .filter((candidate) => candidate.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
+  const baseCandidates = rankTeachersForRequest({ id: requestId, ...request }, teachers, {
+    limit: 10,
+    minScore: 25,
+  });
 
   let aiResult = null;
   let aiError = null;
@@ -557,7 +474,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     aiError = error.message || String(error);
   }
 
-  const candidates = mergeAiRanking(baseCandidates, aiResult).slice(0, 5);
+  const candidates = mergeProfessionalAiRanking(baseCandidates, aiResult).slice(0, 5);
   const aiUsed = Boolean(aiResult?.matches?.length);
   const aiMode = process.env.GEMINI_API_KEY
     ? (aiUsed ? 'gemini_assisted' : 'gemini_attempted_fallback_deterministic')
@@ -571,6 +488,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       status: candidates.length ? 'completed' : 'no_match',
       profile,
       candidatesCount: candidates.length,
+      matchingVersion: MATCHING_VERSION,
       aiUsed,
       aiMode,
       aiError,
@@ -587,11 +505,17 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
         runId: runRef.id,
         teacherUid: candidate.teacherUid,
         profesor_id: candidate.teacherUid,
-        teacherUserUid: candidate.userUid,
-        teacherName: candidate.nombre,
-        nombreProfesor: candidate.nombre,
-        teacherEmail: candidate.email,
+        teacherUserUid: candidate.userUid || candidate.teacherUserUid,
+        teacherName: candidate.teacherName,
+        nombreProfesor: candidate.teacherName,
+        teacherEmail: candidate.teacherEmail || '',
         score: candidate.score,
+        scoreBreakdown: candidate.scoreBreakdown || {},
+        profileScore: candidate.profileScore || 0,
+        assignable: candidate.assignable === true,
+        matchingVersion: candidate.matchingVersion || MATCHING_VERSION,
+        source: candidate.source || MATCHING_VERSION,
+        aiAdjustment: candidate.aiAdjustment || 0,
         rank: index + 1,
         reasons: candidate.aiReason ? [candidate.aiReason, ...candidate.reasons] : candidate.reasons,
         risks: uniq([...(candidate.aiRisks || []), ...candidate.risks]),
@@ -627,6 +551,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     aiUsed,
     aiMode,
     aiError,
+    matchingVersion: MATCHING_VERSION,
   });
 
   if (!candidates.length) {
@@ -883,49 +808,71 @@ async function processPaymentReminders(db, stats) {
 
 async function main() {
   if (selfTest) {
-    const profile = getRequestProfile({
+    const request = {
       materia: 'Matematicas',
       nivel: '2 ESO',
       modalidad: 'online',
       zona: 'Madrid',
       preferencia_horario: 'martes tarde',
-    });
+    };
     const candidates = [
       {
         teacherUid: 'prof_ok',
+        nombre: 'Ana',
+        email: 'ana@example.com',
+        telefono: '600111222',
+        foto_url: 'https://example.com/ana.jpg',
+        direccion: 'Calle Mayor 1',
+        ciudad: 'Madrid',
+        codigo_postal: '28001',
         materias: ['Matematicas', 'Fisica'],
-        niveles: ['ESO', 'Bachillerato'],
+        niveles_educativos: ['ESO', 'Bachillerato'],
         modalidad: 'online',
         zona: 'Madrid',
+        nivel_estudios: 'Grado universitario',
+        estudio_exacto: 'Grado en Matematicas',
+        centro_estudios: 'Universidad Complutense de Madrid',
+        nota_bachillerato: 8.7,
+        nota_media_universidad: 8.1,
+        disponibilidad_resumen: 'Martes y jueves tarde',
+        bio: 'Profesora universitaria con experiencia preparando alumnos de ESO y Bachillerato.',
+        acepta_bizum: true,
+        rating: 4.8,
+        acceptanceRate: 0.92,
+        responseTimeHours: 2,
         maxStudents: 5,
         activeAssignments: 1,
         status: 'verificado',
+        active: true,
       },
       {
         teacherUid: 'prof_low',
+        nombre: 'Luis',
+        email: 'luis@example.com',
         materias: ['Ingles'],
-        niveles: ['Primaria'],
+        niveles_educativos: ['Primaria'],
         modalidad: 'presencial',
         zona: 'Sevilla',
         maxStudents: 1,
         activeAssignments: 1,
         status: 'pendiente',
+        active: true,
       },
-    ].map((teacher) => ({ ...teacher, ...scoreTeacher(profile, teacher) }))
-      .sort((a, b) => b.score - a.score);
+    ];
 
-    if (candidates[0].teacherUid !== 'prof_ok' || candidates[0].score <= candidates[1].score) {
+    const ranking = rankTeachersForRequest(request, candidates, { limit: 2, includeZeroScore: true });
+    if (ranking[0].teacherUid !== 'prof_ok' || ranking[0].score <= ranking[1].score) {
       throw new Error('Self-test failed: deterministic matching did not rank the expected teacher first.');
     }
 
-    const aiMerged = mergeAiRanking(candidates, {
+    const aiMerged = mergeProfessionalAiRanking(ranking, {
       matches: [{ teacherUid: 'prof_ok', score: 99, reason: 'Encaje IA validado.', risks: ['Confirmar horario.'] }],
     });
     if (aiMerged[0].teacherUid !== 'prof_ok' || !aiMerged[0].aiReason) {
       throw new Error('Self-test failed: AI ranking merge did not preserve the expected teacher.');
     }
 
-    console.log(JSON.stringify({ selfTest: 'passed', best: aiMerged[0] }, null, 2));
+    console.log(JSON.stringify({ selfTest: 'passed', matchingVersion: MATCHING_VERSION, best: aiMerged[0] }, null, 2));
     return;
   }
 
