@@ -265,6 +265,14 @@ function configNumber(path, fallback) {
   return { number: { firstOf: [`config.${path}`, { const: fallback }] } };
 }
 
+function configDirectNumber(config, path, fallback) {
+  const value = String(path || '').split('.').reduce((current, key) => (
+    current === undefined || current === null ? undefined : current[key]
+  ), config || {});
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
 const DEFAULT_AUTOMATION_RULES = [
   {
     id: 'request.created.core',
@@ -594,8 +602,15 @@ function buildRuleContext(normalizedEvent, config = {}) {
   const data = normalizedEvent.data || {};
   const userType = clean(data.userType || normalizedEvent.entityType, 40);
   const profileStatus = lower(data.verificationStatus || data.estado_verificacion || data.status || data.estado);
-  const incidentPriority = lower(data.priority || data.prioridad || '');
-  const incidentCritical = ['critical', 'critica', 'alta', '1', '2'].includes(incidentPriority);
+  const incidentPriority = lower(data.prioridad || data.priorityLabel || data.priority || '');
+  const incidentCritical = ['critical', 'critica', 'urgente', 'alta', 'high', '1', '2'].includes(incidentPriority);
+  const incidentDueMinutes = incidentPriority === 'urgente' || incidentPriority === 'critical'
+    ? configDirectNumber(config, 'incidents.urgentSlaHours', 2) * 60
+    : incidentPriority === 'alta' || incidentPriority === 'high'
+      ? configDirectNumber(config, 'incidents.highSlaHours', 12) * 60
+      : incidentPriority === 'baja' || incidentPriority === 'low'
+        ? configDirectNumber(config, 'incidents.lowSlaHours', 48) * 60
+        : configDirectNumber(config, 'incidents.mediumSlaHours', 24) * 60;
   const teacherUid = userUid(data, ['teacherUserUid', 'teacherUid', 'profesor_id', 'userUid', 'usuario_id']);
   const familyUid = userUid(data, ['familyUserUid', 'familyUid', 'familia_id', 'userUid', 'usuario_id']);
   return {
@@ -628,7 +643,7 @@ function buildRuleContext(normalizedEvent, config = {}) {
       incidentSeverity: incidentCritical ? 'warning' : 'info',
       incidentNotificationPriority: incidentCritical ? 'critical' : 'high',
       incidentTaskPriority: incidentCritical ? 'critical' : 'high',
-      incidentDueMinutes: incidentCritical ? 60 : 1440,
+      incidentDueMinutes,
       incidentLabel: clean(data.titulo || data.title || data.descripcion || data.description || 'Incidencia pendiente de revision.', 240),
       messagePreview: clean(data.preview || data.text || data.message || data.body || 'Tienes un nuevo mensaje.', 240),
     },

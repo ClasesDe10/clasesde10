@@ -34,6 +34,11 @@ import {
   normalizeClassStatus,
 } from '../js/calendar-engine.js';
 import {
+  buildAutomaticIncidentPayload,
+  normalizeIncidentPriority,
+  incidentPriorityMeta,
+} from '../js/incident-engine.js';
+import {
   PAID_PAYMENT_STATUSES,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
@@ -1608,14 +1613,18 @@ async function createClassIncidentOnce(db, classId, classData, source, notes, st
     classId,
     status: classStatus(classData),
   });
+  const prioridad = normalizeIncidentPriority(aiClassification.priority, aiClassification.category);
+  const meta = incidentPriorityMeta(prioridad);
 
   await writeDoc(db.collection('incidencias'), id, {
     ...buildClassIncidentPayload(classId, classData, source, notes, 'automation'),
     aiClassification,
     aiVersion: AI_FEATURES_VERSION,
     categoria: aiClassification.category,
-    priority: aiClassification.priority,
-    prioridad: aiClassification.priority,
+    category: aiClassification.category,
+    priority: meta.severity,
+    prioridad,
+    priorityRank: meta.rank,
     suggestedActions: aiClassification.suggestedActions,
     reportado_por: 'automation',
     createdByUid: 'automation',
@@ -1625,6 +1634,46 @@ async function createClassIncidentOnce(db, classId, classData, source, notes, st
     updated_at: isoNow(),
   }, { merge: false });
   stats.incidentsCreated += 1;
+  return true;
+}
+
+async function createOperationalIncidentOnce(db, kind, sourceData = {}, stats) {
+  const payload = buildAutomaticIncidentPayload(kind, sourceData, { config: platformConfigRuntime });
+  const id = clean(payload.id || notificationId('operational_incident', kind, sourceData.id || sourceData.classId || sourceData.paymentId || sourceData.documentId), 160);
+  const ref = db.collection('incidencias').doc(id);
+  const existing = await ref.get();
+  if (existing.exists) return false;
+  const aiClassification = classifyIncident(textFromValues(payload.titulo, payload.descripcion, kind, sourceData), {
+    source: kind,
+    ...sourceData,
+  });
+  const prioridad = normalizeIncidentPriority(aiClassification.priority, aiClassification.category);
+  const meta = incidentPriorityMeta(prioridad);
+  await writeDoc(db.collection('incidencias'), id, {
+    ...payload,
+    id,
+    ticketId: payload.ticketId || `AUTO-${id.slice(-10).toUpperCase()}`,
+    aiClassification,
+    aiVersion: AI_FEATURES_VERSION,
+    categoria: payload.categoria || aiClassification.category,
+    category: payload.category || payload.categoria || aiClassification.category,
+    prioridad,
+    priority: meta.severity,
+    priorityRank: meta.rank,
+    suggestedActions: payload.suggestedActions?.length ? payload.suggestedActions : aiClassification.suggestedActions,
+    reportado_por: 'automation',
+    createdByUid: 'automation',
+    updatedAt: now(),
+    updated_at: isoNow(),
+  }, { merge: false });
+  stats.incidentsCreated += 1;
+  stats.operationalIncidentsCreated = (stats.operationalIncidentsCreated || 0) + 1;
+  await addAutomationEvent(db, {
+    type: 'incident.auto_created',
+    incidentId: id,
+    kind,
+    entityId: sourceData.id || sourceData.classId || sourceData.paymentId || sourceData.documentId || '',
+  });
   return true;
 }
 
@@ -1815,13 +1864,17 @@ async function processIncidentClassification(db, stats) {
       data.tipo,
       data.type,
     ), data);
+    const prioridad = normalizeIncidentPriority(data.prioridad || data.priority || aiClassification.priority, aiClassification.category);
+    const meta = incidentPriorityMeta(prioridad);
 
     await updateRef(doc.ref, {
       aiClassification,
       aiVersion: AI_FEATURES_VERSION,
       categoria: data.categoria || aiClassification.category,
-      priority: data.priority || aiClassification.priority,
-      prioridad: data.prioridad || aiClassification.priority,
+      category: data.category || data.categoria || aiClassification.category,
+      priority: meta.severity,
+      prioridad,
+      priorityRank: meta.rank,
       suggestedActions: data.suggestedActions || aiClassification.suggestedActions,
       updatedAt: now(),
     });
@@ -1920,13 +1973,15 @@ async function processPaymentReminders(db, stats) {
 }
 
 async function processPlatformAutomationSweep(db, stats) {
-  const [classes, payments, requests, documents, incidents, teachers] = await Promise.all([
+  const [classes, payments, requests, documents, incidents, teachers, deadLetters, opsAlerts] = await Promise.all([
     listCollection(db, 'clases', limit),
     listCollection(db, 'pagos', limit),
     listCollection(db, 'solicitudes', limit),
     listCollection(db, 'documentos', limit),
     listCollection(db, 'incidencias', limit),
     listCollection(db, 'profesores', limit),
+    listCollection(db, 'deadLetters', limit),
+    listCollection(db, 'opsAlerts', limit),
   ]);
 
   for (const item of classes) {
@@ -1941,6 +1996,13 @@ async function processPlatformAutomationSweep(db, stats) {
       data: { id: item.id, ...enriched },
       source: 'githubActionsSweep',
     }, stats);
+    await createOperationalIncidentOnce(db, 'class_unconfirmed', {
+      id: item.id,
+      classId: item.id,
+      teacherUid: item.teacherUid || item.profesor_id,
+      familyUid: item.familyUid || item.familia_id,
+      descripcion: `Clase sin confirmar tras el margen operativo: ${classLabel(item)}.`,
+    }, stats);
     stats.platformClassEvents += 1;
   }
 
@@ -1954,6 +2016,13 @@ async function processPlatformAutomationSweep(db, stats) {
       entityId: item.id,
       data: { id: item.id, ...enriched },
       source: 'githubActionsSweep',
+    }, stats);
+    await createOperationalIncidentOnce(db, 'payment_overdue', {
+      id: item.id,
+      paymentId: item.id,
+      familyUid: item.familyUid || item.familia_id,
+      teacherUid: item.teacherUid || item.profesor_id,
+      descripcion: `Pago vencido pendiente de resolver por ${paymentAmount(item).toFixed(2)} EUR.`,
     }, stats);
     stats.platformPaymentEvents += 1;
   }
@@ -1986,6 +2055,12 @@ async function processPlatformAutomationSweep(db, stats) {
       data: { id: item.id, ...item },
       source: 'githubActionsSweep',
     }, stats);
+    await createOperationalIncidentOnce(db, 'document_stale', {
+      id: item.id,
+      documentId: item.id,
+      relatedUserUid: item.ownerUid || item.userUid || item.usuario_id,
+      descripcion: `Documento pendiente demasiado tiempo: ${clean(item.nombre || item.tipo || item.type || item.id, 180)}.`,
+    }, stats);
     stats.platformDocumentEvents += 1;
   }
 
@@ -2015,6 +2090,26 @@ async function processPlatformAutomationSweep(db, stats) {
       source: 'githubActionsSweep',
     }, stats);
     stats.platformTeacherEvents += 1;
+  }
+
+  for (const item of deadLetters) {
+    const status = lower(item.status || item.estado || 'open');
+    if (['resolved', 'resuelta', 'closed', 'cerrada'].includes(status)) continue;
+    await createOperationalIncidentOnce(db, 'system_error', {
+      id: item.id,
+      descripcion: `Job en dead letter: ${clean(item.type || item.error || item.id, 300)}.`,
+      relatedUserUid: item.userUid || '',
+    }, stats);
+  }
+
+  for (const item of opsAlerts) {
+    const status = lower(item.status || item.estado || 'open');
+    if (!['open', 'abierta', 'active', 'activo'].includes(status)) continue;
+    const alertType = lower(item.alertType || item.type || '');
+    await createOperationalIncidentOnce(db, alertType.includes('ai') ? 'ai_error' : 'system_error', {
+      id: item.id,
+      descripcion: clean(item.message || item.description || item.alertType || item.type || 'Alerta operativa abierta.', 500),
+    }, stats);
   }
 }
 
@@ -2223,6 +2318,7 @@ async function main() {
     upcomingClassRemindersCreated: 0,
     attendanceRemindersCreated: 0,
     incidentsCreated: 0,
+    operationalIncidentsCreated: 0,
     incidentsClassified: 0,
     paymentRemindersCreated: 0,
     paymentsMarkedOverdue: 0,

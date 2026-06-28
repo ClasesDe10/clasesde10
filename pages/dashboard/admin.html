@@ -601,6 +601,35 @@
       </section>
 
       <section id="section-incidencias" class="dash-section" style="display:none">
+        <div class="stats-grid" id="incidents-summary-grid" style="margin-bottom:16px"></div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <span class="card-title">Centro de incidencias</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-outline btn-sm" id="btn-export-incidencias">Exportar CSV</button>
+              <button class="btn btn-primary btn-sm" id="btn-nueva-incidencia">Nueva incidencia</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+              <input class="form-control" id="filtro-inc-busqueda" aria-label="Buscar incidencias" placeholder="Ticket, usuario, causa o texto">
+              <select class="form-control" id="filtro-inc-categoria" aria-label="Filtrar incidencias por categoria">
+                <option value="">Todas categorias</option>
+              </select>
+              <select class="form-control" id="filtro-inc-responsable" aria-label="Filtrar incidencias por responsable">
+                <option value="">Todos responsables</option>
+                <option value="sin_responsable">Sin responsable</option>
+                <option value="mias">Asignadas a mi</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="card" id="incidents-patterns-card" style="margin-bottom:16px">
+          <div class="card-header">
+            <span class="card-title">Patrones detectados</span>
+          </div>
+          <div class="card-body" id="incidents-patterns"></div>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
             <select class="form-control" id="filtro-inc-estado" aria-label="Filtrar incidencias por estado" style="width:160px">
@@ -887,9 +916,20 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="inc-id">
+      <div id="inc-ticket-meta" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px"></div>
       <div class="form-group">
         <label class="form-label">DescripciÃ³n</label>
         <div id="inc-desc" style="background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem;line-height:1.6"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Categoria</label>
+          <select class="form-control" id="inc-categoria"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Responsable admin</label>
+          <input class="form-control" id="inc-responsable-email" placeholder="admin@clasesde10.com">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -897,6 +937,7 @@
           <select class="form-control" id="inc-estado">
             <option value="abierta">Abierta</option>
             <option value="en_proceso">En proceso</option>
+            <option value="esperando_usuario">Esperando usuario</option>
             <option value="resuelta">Resuelta</option>
             <option value="cerrada">Cerrada</option>
           </select>
@@ -912,8 +953,34 @@
         </div>
       </div>
       <div class="form-group">
+        <label class="form-label">Causa raiz</label>
+        <input class="form-control" id="inc-causa" placeholder="Ej: pago no conciliado, documento incompleto, error tecnico...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Accion realizada</label>
+        <input class="form-control" id="inc-accion" placeholder="Ej: contactada familia, pago verificado, clase reprogramada...">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Conversacion / nota interna</label>
+        <textarea class="form-control" id="inc-mensaje" rows="3" placeholder="Anade una nota trazable al ticket..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Adjunto - nombre</label>
+          <input class="form-control" id="inc-adjunto-nombre" placeholder="Captura, justificante, documento...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Adjunto - URL</label>
+          <input class="form-control" id="inc-adjunto-url" placeholder="https://...">
+        </div>
+      </div>
+      <div class="form-group">
         <label class="form-label">ResoluciÃ³n / Notas internas</label>
         <textarea class="form-control" id="inc-resolucion" rows="4" placeholder="Describe cÃ³mo se ha resuelto o las acciones tomadasâ€¦"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Historial del ticket</label>
+        <div id="inc-historial" style="max-height:180px;overflow:auto;background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.82rem;line-height:1.5"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -974,6 +1041,7 @@ import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-rules';
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
+import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
@@ -1029,6 +1097,7 @@ import { Calendario } from '../../js/calendario.js';
 // â”€â”€ PROTEGER RUTA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const usuario = await requireAuth(['admin']);
 if (!usuario) throw new Error('No autorizado');
+window.CD10CurrentUser = usuario;
 let platformConfig = normalizePlatformConfig({});
 try {
   platformConfig = (await loadPlatformConfig()).config;
@@ -1055,6 +1124,7 @@ const TITULOS = {
 let chatInicializado = false;
 let adminAiInicializada = false;
 let adminConfigInicializada = false;
+let adminIncidentsInicializada = false;
 let profesoresCache = new Map();
 let profesoresFirestoreCache = null;
 let familiasCache = new Map();
@@ -1064,6 +1134,7 @@ const selectedProfesores = new Set();
 const selectedFamilias = new Set();
 let crmActivo = null;
 let auditLogsCache = [];
+let incidenciasCache = [];
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
   profesores: { id: 'tbody-profesores', colspan: 10, countId: 'prof-count' },
@@ -1188,7 +1259,7 @@ function irA(seccion) {
   else if (seccion === 'leads') ejecutarCargaSeccion(seccion, cargarLeads);
   else if (seccion === 'documentos') ejecutarCargaSeccion(seccion, cargarDocumentos);
   else if (seccion === 'chats') ejecutarCargaSeccion(seccion, cargarChats);
-  else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, cargarIncidencias);
+  else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, iniciarIncidencias);
   else if (seccion === 'auditoria') ejecutarCargaSeccion(seccion, cargarAuditoria);
 }
 
@@ -1246,6 +1317,27 @@ function iniciarConfiguracion() {
     showToast,
   });
   adminConfigInicializada = true;
+}
+
+async function iniciarIncidencias() {
+  const api = await initAdminIncidents({
+    section: document.getElementById('section-incidencias'),
+    db,
+    usuario,
+    platformConfig,
+    showToast,
+    openModal,
+    closeModal,
+    exportarCSV,
+    sanitize,
+    debounce,
+    crmDate,
+    crmDateShort,
+    crmBadge,
+    recordAdminAudit,
+  });
+  adminIncidentsInicializada = true;
+  return api;
 }
 
 async function cargarDashboard() {

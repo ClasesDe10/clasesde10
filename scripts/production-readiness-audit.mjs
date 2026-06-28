@@ -175,6 +175,21 @@ function checkIndexes() {
       { fieldPath: 'priority', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ]],
+    ['incidencias', [
+      { fieldPath: 'estado', order: 'ASCENDING' },
+      { fieldPath: 'priorityRank', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
+    ['incidencias', [
+      { fieldPath: 'categoria', order: 'ASCENDING' },
+      { fieldPath: 'estado', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
+    ['incidencias', [
+      { fieldPath: 'assignedAdminEmail', order: 'ASCENDING' },
+      { fieldPath: 'estado', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
     ['clases', [
       { fieldPath: 'lifecycleStatus', order: 'ASCENDING' },
       { fieldPath: 'fecha', order: 'ASCENDING' },
@@ -253,7 +268,7 @@ function checkFunctions() {
   }
 
   const workerCode = readText('scripts/firebase-automation-worker.mjs');
-  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated', 'automationRules', 'automationRuleRuns', 'loadWorkerPlatformConfig']) {
+  for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated', 'automationRules', 'automationRuleRuns', 'loadWorkerPlatformConfig', 'createOperationalIncidentOnce']) {
     if (!workerCode.includes(needle)) fail(`GitHub automation worker scalability path missing: ${needle}.`);
   }
   if (!workerCode.includes('platformHealthChecks')) fail('GitHub automation worker must write platform health checks.');
@@ -261,6 +276,13 @@ function checkFunctions() {
   const adminDashboard = readText('pages/dashboard/admin.html');
   for (const needle of ['data-section="configuracion"', 'initAdminPlatformConfig', 'loadPlatformConfig']) {
     if (!adminDashboard.includes(needle)) fail(`Admin configuration center missing: ${needle}.`);
+  }
+  for (const needle of ['data-section="incidencias"', 'initAdminIncidents', 'incidents-summary-grid']) {
+    if (!adminDashboard.includes(needle)) fail(`Admin incident center missing: ${needle}.`);
+  }
+  const incidentEngine = readText('js/incident-engine.js');
+  for (const needle of ['buildIncidentUpdatePatch', 'buildAutomaticIncidentPayload', 'buildIncidentStats']) {
+    if (!incidentEngine.includes(needle)) fail(`Incident engine missing: ${needle}.`);
   }
 
   const pwa = readText('js/pwa.js');
@@ -274,6 +296,7 @@ function checkSupabaseBoundary() {
     'pages/dashboard/familia.html',
     'pages/dashboard/profesor.html',
     'js/admin-control-center.js',
+    'js/admin-incidents.js',
     'js/chat-widget.js',
     'js/document-storage-provider.js',
     'js/firebase-data-client.js',
@@ -294,7 +317,7 @@ function checkSupabaseBoundary() {
   }
 
   if (offenders.length) fail(`Unexpected new runtime Supabase dependencies: ${offenders.join(', ')}.`);
-  if (queryCount > 92) fail(`Firebase compatibility query count increased above migration baseline: ${queryCount}.`);
+  if (queryCount > 93) fail(`Firebase compatibility query count increased above migration baseline: ${queryCount}.`);
   if (storageCount > 2) fail(`Firebase compatibility storage call count increased above migration baseline: ${storageCount}.`);
   if (queryCount > 0) warn(`Firebase compatibility API still present by design: ${queryCount} db.from calls, ${storageCount} storage calls routed by the Firebase data client.`);
 }

@@ -1,3 +1,5 @@
+import { buildIncidentCreatePayload } from './incident-engine.js?v=20260628-incidents';
+
 /**
  * Shared calendar/class lifecycle engine for ClasesDe10.
  *
@@ -305,7 +307,7 @@ export function buildClassIncidentPayload(classId, classData = {}, source = 'aut
     : source === 'teacher_update'
       ? 'Incidencia comunicada por profesor'
       : 'Incidencia detectada automaticamente';
-  return {
+  return buildIncidentCreatePayload({
     classId,
     clase_id: classId,
     familyUid: classData.familyUid || classData.familia_id || null,
@@ -322,7 +324,7 @@ export function buildClassIncidentPayload(classId, classData = {}, source = 'aut
     prioridad: source === 'automation' ? 'media' : 'alta',
     reportado_por: reporterUid || null,
     source,
-  };
+  }, { uid: reporterUid || 'automation', role: reporterUid ? 'user' : 'system' });
 }
 
 export function classReminderWindows(classData = {}, nowMs = Date.now()) {

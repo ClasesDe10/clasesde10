@@ -29,6 +29,7 @@ import {
 import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
 import { recordDataAudit } from './audit-client.js?v=20260628-audit';
 import { lifecycleStatusForClassStatus } from './calendar-engine.js';
+import { buildIncidentCreatePayload, normalizeIncident } from './incident-engine.js?v=20260628-incidents';
 import { getConfigValue } from './platform-config.js?v=20260628-config';
 import {
   buildFamilyPaymentPayload,
@@ -339,6 +340,16 @@ function normalizeWritePayload(table, payload, isCreate = false) {
       data.due_at = data.due_at || data.dueAt;
     }
     data.idempotencyKey = data.idempotencyKey || paymentFingerprint(data);
+  }
+
+  if (table === 'incidencias') {
+    const platformConfig = globalThis.CD10PlatformConfig || {};
+    const normalized = isCreate
+      ? buildIncidentCreatePayload(data, globalThis.CD10CurrentUser || {}, { config: platformConfig })
+      : normalizeIncident(data, { config: platformConfig });
+    Object.assign(data, normalized);
+    if (isCreate) delete data.createdAt;
+    delete data.updatedAt;
   }
 
   if (table === 'clases') {
