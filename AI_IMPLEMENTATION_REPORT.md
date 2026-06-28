@@ -8,6 +8,12 @@ Fecha: 2026-06-28
 - Scoring de calidad de perfiles de profesores.
 - Ranking de profesores para una solicitud concreta.
 - Explicaciones de matching: motivos, riesgos y problemas de perfil.
+- Asistente de perfiles con descripcion sugerida, acciones siguientes y checks admin.
+- Brief inteligente de solicitudes familiares con campos faltantes y urgencia.
+- Moderacion local de contenido para spam, datos bancarios, pagos fuera de plataforma y seguridad.
+- Clasificacion local de incidencias con categoria, prioridad, SLA y acciones sugeridas.
+- Busqueda semantica local sin embeddings externos.
+- Politica de ejecucion de IA con cache key, TTL, coste y control anti-alucinacion.
 - Diagnostico IA visible en el listado de profesores del admin.
 - Diagnostico IA visible en el detalle de cada profesor.
 - Recomendaciones IA en el modal de asignacion de solicitudes.
@@ -48,7 +54,7 @@ En el estado real de datos hay 26 profesores y 1 solicitud. El sistema calcula 5
 
 ## Bloqueos externos restantes
 
-- IA generativa, embeddings, RAG, OCR avanzado y asistentes con LLM requieren una clave/modelo o una decision de proveedor.
+- IA generativa amplia, embeddings externos, RAG, OCR avanzado y asistentes con LLM requieren una clave/modelo o una decision de proveedor.
 - Persistir matching automatico en Cloud Functions requiere desplegar Functions; el despliegue estaba bloqueado por facturacion/Blaze.
 - Procesamiento de documentos e imagenes depende de Firebase Storage; el bucket seguia bloqueado por permisos externos.
 
@@ -57,4 +63,4 @@ En el estado real de datos hay 26 profesores y 1 solicitud. El sistema calcula 5
 1. Completar/verificar perfiles de profesores hasta tener al menos un profesor asignable.
 2. Migrar el calculo de ranking a Cloud Functions cuando Blaze este disponible.
 3. Guardar cada resultado en `solicitudMatches`.
-4. Activar un proveedor LLM solo para tareas donde aporte valor medible: resumen de solicitudes, mejora de perfiles, moderacion de mensajes y emails.
+4. Activar un proveedor LLM solo para tareas donde aporte valor medible y no cubra el modo local: pulido de textos, emails delicados, reranking avanzado y resumen largo de documentos.

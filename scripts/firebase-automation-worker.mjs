@@ -2,10 +2,15 @@
 
 import admin from 'firebase-admin';
 import {
+  AI_FEATURES_VERSION,
   MATCHING_VERSION,
+  buildFamilyRequestBrief,
   buildMatchingAiPrompt,
+  buildTeacherProfileRecommendations,
+  classifyIncident,
   getRequestProfile as getMatchingRequestProfile,
   mergeAiRanking as mergeProfessionalAiRanking,
+  moderateContent,
   rankTeachersForRequest,
 } from '../js/ai-engine.js';
 import {
@@ -65,6 +70,14 @@ function tokenize(value) {
     .replace(/[\u0300-\u036f]/g, '')
     .split(/[^a-z0-9]+/)
     .filter((item) => item.length > 2);
+}
+
+function textFromValues(...values) {
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') return Object.values(value);
+    return [value];
+  }).map((value) => clean(value, 1000)).filter(Boolean).join(' ');
 }
 
 function now() {
@@ -428,14 +441,36 @@ async function processPublicLeads(db, stats) {
 
     if (lead.automationStatus === 'request_created' || lead.automationStatus === 'review_teacher_lead') continue;
 
+    const leadContext = { channel: 'public_lead', role: type };
+    const aiModeration = moderateContent(textFromValues(lead.nombre, lead.email, lead.telefono, lead.asunto, lead.mensaje, lead.metadata), leadContext);
+    const aiPatch = {
+      aiModeration,
+      aiPolicy: aiModeration.policy,
+      aiVersion: AI_FEATURES_VERSION,
+    };
+    if (aiModeration.action === 'review') stats.leadsFlaggedForReview += 1;
+
     await addAutomationEvent(db, { type: 'lead_received', leadId: doc.id, leadType: type });
 
     if (type === 'profesor') {
       const price = calculateTeacherPrice({ ...lead, ...(lead.metadata || {}) });
       const diagnostic = teacherDiagnostic({ ...lead, ...(lead.metadata || {}) }, price);
+      const profileAssistant = buildTeacherProfileRecommendations({
+        ...lead,
+        ...(lead.metadata || {}),
+        nombre: lead.nombre,
+        email: lead.email,
+        telefono: lead.telefono,
+        status: 'pendiente_revision',
+      });
       await updateRef(doc.ref, {
+        ...aiPatch,
         suggestedHourlyRate: price,
-        diagnostico: diagnostic,
+        diagnostico: {
+          ...diagnostic,
+          profileAssistant,
+          moderation: aiModeration,
+        },
         automationStatus: 'review_teacher_lead',
         estado: 'procesado',
         updatedAt: now(),
@@ -451,12 +486,23 @@ async function processPublicLeads(db, stats) {
     if (type === 'familia') {
       const requestRef = db.collection('solicitudes').doc(`lead_${doc.id}`);
       const requestPayload = leadToPublicRequest(doc.id, lead);
-      await writeDoc(db.collection('solicitudes'), requestRef.id, requestPayload);
+      const requestBrief = buildFamilyRequestBrief(requestPayload);
+      await writeDoc(db.collection('solicitudes'), requestRef.id, {
+        ...requestPayload,
+        aiBrief: requestBrief,
+        aiModeration,
+        aiVersion: AI_FEATURES_VERSION,
+      });
       await updateRef(doc.ref, {
+        ...aiPatch,
         automationStatus: 'request_created',
         estado: 'procesado',
         solicitudId: requestRef.id,
-        diagnostico: studentDiagnostic({ ...lead, ...(lead.metadata || {}) }),
+        diagnostico: {
+          ...studentDiagnostic({ ...lead, ...(lead.metadata || {}) }),
+          requestBrief,
+          moderation: aiModeration,
+        },
         updatedAt: now(),
       });
       await notifyAdmins(db, 'Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
@@ -469,6 +515,7 @@ async function processPublicLeads(db, stats) {
     }
 
     await updateRef(doc.ref, {
+      ...aiPatch,
       automationStatus: 'contact_notified',
       estado: 'procesado',
       updatedAt: now(),
@@ -483,6 +530,7 @@ async function processPublicLeads(db, stats) {
 
 async function generateMatchesForRequest(db, requestId, request, stats, reason = 'worker_scan') {
   const profile = getMatchingRequestProfile({ id: requestId, ...request });
+  const requestBrief = buildFamilyRequestBrief({ id: requestId, ...request });
   const teachers = await loadTeachers(db);
   const baseCandidates = rankTeachersForRequest({ id: requestId, ...request }, teachers, {
     limit: 10,
@@ -510,6 +558,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       reason,
       status: candidates.length ? 'completed' : 'no_match',
       profile,
+      requestBrief,
       candidatesCount: candidates.length,
       matchingVersion: MATCHING_VERSION,
       aiUsed,
@@ -558,6 +607,8 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       bestScore: candidates[0]?.score || 0,
       matchRunId: runRef.id,
       matchComputedAt: now(),
+      aiBrief: requestBrief,
+      aiVersion: AI_FEATURES_VERSION,
       updatedAt: now(),
       updated_at: isoNow(),
     });
@@ -723,9 +774,20 @@ async function createClassIncidentOnce(db, classId, classData, source, notes, st
   const ref = db.collection('incidencias').doc(id);
   const existing = await ref.get();
   if (existing.exists) return false;
+  const aiClassification = classifyIncident(textFromValues(source, notes, classLabel(classData), classData), {
+    source,
+    classId,
+    status: classStatus(classData),
+  });
 
   await writeDoc(db.collection('incidencias'), id, {
     ...buildClassIncidentPayload(classId, classData, source, notes, 'automation'),
+    aiClassification,
+    aiVersion: AI_FEATURES_VERSION,
+    categoria: aiClassification.category,
+    priority: aiClassification.priority,
+    prioridad: aiClassification.priority,
+    suggestedActions: aiClassification.suggestedActions,
     reportado_por: 'automation',
     createdByUid: 'automation',
     createdAt: now(),
@@ -901,6 +963,52 @@ async function processAttendanceConfirmations(db, stats) {
           `class_incident_${source}_${doc.id}_admin`,
         );
       }
+    }
+  }
+}
+
+async function processIncidentClassification(db, stats) {
+  const snap = await db.collection('incidencias').limit(limit).get();
+  for (const doc of snap.docs) {
+    const data = doc.data();
+    const status = lower(data.estado || data.status);
+    if (['cerrada', 'resuelta', 'closed', 'resolved'].includes(status)) continue;
+    if (data.aiClassification?.version === AI_FEATURES_VERSION) continue;
+
+    const aiClassification = classifyIncident(textFromValues(
+      data.titulo,
+      data.title,
+      data.descripcion,
+      data.description,
+      data.notas,
+      data.notes,
+      data.source,
+      data.tipo,
+      data.type,
+    ), data);
+
+    await updateRef(doc.ref, {
+      aiClassification,
+      aiVersion: AI_FEATURES_VERSION,
+      categoria: data.categoria || aiClassification.category,
+      priority: data.priority || aiClassification.priority,
+      prioridad: data.prioridad || aiClassification.priority,
+      suggestedActions: data.suggestedActions || aiClassification.suggestedActions,
+      updatedAt: now(),
+    });
+    stats.incidentsClassified += 1;
+
+    if (aiClassification.priority <= 2) {
+      const title = aiClassification.category === 'seguridad'
+        ? 'Incidencia critica pendiente'
+        : 'Incidencia prioritaria pendiente';
+      await notifyAdminsOnce(
+        db,
+        title,
+        `Revisar incidencia ${doc.id}: categoria ${aiClassification.category}, prioridad ${aiClassification.priority}.`,
+        { type: 'incident_priority', incidentId: doc.id, category: aiClassification.category, url: '/pages/login.html' },
+        `incident_priority_${doc.id}`,
+      );
     }
   }
 }
@@ -1111,6 +1219,7 @@ async function main() {
   const stats = {
     dryRun,
     leadsSeen: 0,
+    leadsFlaggedForReview: 0,
     familyLeadsProcessed: 0,
     teacherLeadsProcessed: 0,
     contactLeadsProcessed: 0,
@@ -1122,6 +1231,7 @@ async function main() {
     upcomingClassRemindersCreated: 0,
     attendanceRemindersCreated: 0,
     incidentsCreated: 0,
+    incidentsClassified: 0,
     paymentRemindersCreated: 0,
     paymentsMarkedOverdue: 0,
     paymentsReconciled: 0,
@@ -1135,6 +1245,7 @@ async function main() {
   await processUpcomingClassReminders(db, stats);
   await processUnmarkedClasses(db, stats);
   await processAttendanceConfirmations(db, stats);
+  await processIncidentClassification(db, stats);
   await reconcileVerifiedPayments(db, stats);
   await processPaymentReminders(db, stats);
 

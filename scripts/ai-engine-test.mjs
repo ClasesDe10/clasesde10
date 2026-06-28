@@ -1,12 +1,19 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import {
+  AI_FEATURES_VERSION,
   MATCHING_VERSION,
+  buildFamilyRequestBrief,
   buildMatchingAiPrompt,
+  buildTeacherProfileRecommendations,
+  classifyIncident,
   evaluateTeacherProfile,
+  getAiExecutionPolicy,
   mergeAiRanking,
+  moderateContent,
   rankTeachersForRequest,
   scoreTeacherForRequest,
+  semanticSearchItems,
   summarizeTeacherProfile,
 } from '../js/ai-engine.js';
 
@@ -182,6 +189,51 @@ assert.ok(aiMerged.find((match) => match.teacherUid === 'teacher_slow').aiAdjust
 const prompt = buildMatchingAiPrompt(request, ranking);
 assert.ok(prompt.includes('No inventes datos'));
 assert.ok(prompt.includes('JSON requerido'));
+
+const profileAssistant = buildTeacherProfileRecommendations(completeTeacher);
+assert.equal(profileAssistant.version, AI_FEATURES_VERSION);
+assert.equal(profileAssistant.assignable, true);
+assert.ok(profileAssistant.generatedDescription.includes('Matematicas'));
+assert.ok(profileAssistant.policy.costTier === 'free');
+
+const incompleteAssistant = buildTeacherProfileRecommendations(incompleteTeacher);
+assert.ok(incompleteAssistant.nextActions.length > 0);
+assert.equal(incompleteAssistant.policy.externalCallAllowed, false);
+
+const requestBrief = buildFamilyRequestBrief({
+  materia: 'Ingles',
+  nivel: 'Bachillerato',
+  modalidad: 'online',
+  preferencia_horario: 'Urgente esta semana por examen',
+});
+assert.equal(requestBrief.urgency, 'alta');
+assert.ok(requestBrief.missing.includes('zona/codigo postal'));
+
+const moderation = moderateContent('Te pago directo por fuera de ClasesDe10, mi IBAN es ES9121000418450200051332', { channel: 'chat', role: 'familia' });
+assert.equal(moderation.action, 'allow');
+assert.ok(moderation.flags.includes('off_platform_payment'));
+assert.ok(moderation.flags.includes('iban_or_bank_data'));
+assert.equal(moderation.policy.costTier, 'free');
+
+const spamModeration = moderateContent('casino crypto www.spam.test https://spam.test', { channel: 'lead' });
+assert.equal(spamModeration.action, 'review');
+assert.equal(spamModeration.severity, 'high');
+
+const paymentIncident = classifyIncident('La familia no ha hecho el Bizum y el pago esta vencido.');
+assert.equal(paymentIncident.category, 'pago');
+assert.equal(paymentIncident.priority, 2);
+assert.ok(paymentIncident.suggestedActions.length > 0);
+
+const search = semanticSearchItems('mates eso online madrid', [completeTeacher, guitarTeacher], {
+  fields: ['nombre', 'materias', 'niveles_educativos', 'modalidad', 'zona', 'bio'],
+});
+assert.equal(search[0].item.id, 'teacher_complete');
+assert.ok(search[0].score > 0);
+
+const policy = getAiExecutionPolicy('matching_rerank', { request, ranking });
+assert.equal(policy.mode, 'optional_llm');
+assert.equal(policy.externalCallAllowed, true);
+assert.ok(policy.cacheKey.startsWith('matching_rerank_'));
 
 console.log(JSON.stringify({
   ok: true,

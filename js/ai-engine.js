@@ -6,6 +6,7 @@
  */
 
 export const MATCHING_VERSION = 'professional_matching_v2';
+export const AI_FEATURES_VERSION = 'impact_ai_v1';
 
 export const MATCHING_WEIGHTS = Object.freeze({
   subject: 24,
@@ -110,6 +111,30 @@ function clamp(value, min = 0, max = 100) {
 function round(value, decimals = 0) {
   const factor = 10 ** decimals;
   return Math.round((Number(value) + Number.EPSILON) * factor) / factor;
+}
+
+function stableHash(value) {
+  const text = normalizeText(typeof value === 'string' ? value : JSON.stringify(value || {}));
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function joinNatural(values, fallback = 'sin especificar') {
+  const items = unique(values.map((item) => clean(item, 120)).filter(Boolean));
+  if (!items.length) return fallback;
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, -1).join(', ')} y ${items.at(-1)}`;
+}
+
+function textFromValues(...values) {
+  return values.flatMap((value) => {
+    if (Array.isArray(value)) return value;
+    if (value && typeof value === 'object') return Object.values(value);
+    return [value];
+  }).map((value) => clean(value, 1000)).filter(Boolean).join(' ');
 }
 
 function numberOrNull(value) {
@@ -661,6 +686,235 @@ export function mergeAiRanking(baseCandidates, aiResult) {
     if (Number(b.assignable) !== Number(a.assignable)) return Number(b.assignable) - Number(a.assignable);
     return b.score - a.score;
   });
+}
+
+export function getAiExecutionPolicy(task, payload = {}) {
+  const taskName = clean(task, 80) || 'unknown';
+  const localTasks = new Set([
+    'matching',
+    'profile_recommendations',
+    'profile_description',
+    'family_request_brief',
+    'incident_classification',
+    'content_moderation',
+    'semantic_search',
+    'admin_automation',
+  ]);
+  const generativeOptional = new Set(['matching_rerank', 'profile_copy_polish', 'email_draft']);
+  const localFirst = localTasks.has(taskName) || !generativeOptional.has(taskName);
+  return {
+    version: AI_FEATURES_VERSION,
+    task: taskName,
+    mode: localFirst ? 'local_deterministic' : 'optional_llm',
+    externalCallAllowed: !localFirst,
+    cacheKey: `${taskName}_${stableHash(payload)}`,
+    cacheTtlHours: taskName === 'matching_rerank' ? 24 : 168,
+    maxLatencyMs: localFirst ? 80 : 2500,
+    costTier: localFirst ? 'free' : 'metered_optional',
+    hallucinationControl: localFirst
+      ? 'No generative output; deterministic rules only.'
+      : 'LLM output must be bounded, cached and validated against existing records.',
+  };
+}
+
+export function buildTeacherProfileRecommendations(teacher = {}) {
+  const quality = evaluateTeacherProfile(teacher);
+  const profile = quality.profile;
+  const subjects = joinNatural(profile.subjects, 'las materias indicadas');
+  const levels = joinNatural(profile.levels, 'los niveles indicados');
+  const modality = profile.modality || 'modalidad por confirmar';
+  const zone = profile.zone || profile.city || 'zona por confirmar';
+  const study = profile.exactStudy || profile.studyLevel || 'formacion por completar';
+  const experience = profile.experienceYears > 0
+    ? `${profile.experienceYears} anio(s) de experiencia`
+    : 'experiencia pendiente de detallar';
+
+  const generatedDescription = [
+    `${profile.name || 'Este profesor'} imparte ${subjects} para ${levels}.`,
+    `Trabaja en ${modality} en ${zone}.`,
+    `Cuenta con ${study} y ${experience}.`,
+    profile.availability ? `Disponibilidad: ${profile.availability}.` : 'Falta concretar la disponibilidad horaria.',
+  ].join(' ');
+
+  const headline = `${profile.name || 'Profesor'} - ${subjects} (${levels})`;
+  const nextActions = quality.issues.slice(0, 6).map((issue) => ({
+    field: issue.field,
+    label: issue.label,
+    priority: issue.weight >= 10 ? 'alta' : issue.weight >= 7 ? 'media' : 'baja',
+  }));
+
+  return {
+    version: AI_FEATURES_VERSION,
+    type: 'teacher_profile_assistant',
+    readiness: quality.readiness,
+    score: quality.score,
+    assignable: quality.assignable,
+    headline: clean(headline, 180),
+    generatedDescription: clean(generatedDescription, 900),
+    nextActions,
+    trustSignals: quality.strengths.slice(0, 6),
+    adminChecks: [
+      !['verificado', 'verified', 'activo', 'active'].includes(profile.status) ? 'Validar identidad, formacion y disponibilidad antes de asignar.' : '',
+      !profile.hasBizum ? 'Confirmar Bizum antes de activar pagos.' : '',
+      !profile.availability && !profile.availabilitySlots.length ? 'Pedir disponibilidad real por franjas.' : '',
+    ].filter(Boolean),
+    policy: getAiExecutionPolicy('profile_recommendations', { teacher }),
+  };
+}
+
+export function buildFamilyRequestBrief(request = {}) {
+  const profile = getRequestProfile(request);
+  const missing = [
+    !profile.subject ? 'materia' : '',
+    !profile.level ? 'nivel' : '',
+    !profile.modality ? 'modalidad' : '',
+    !profile.zone && !profile.postalCode ? 'zona/codigo postal' : '',
+    !profile.schedule ? 'horario' : '',
+  ].filter(Boolean);
+  const urgencyText = normalizeText(textFromValues(request.urgencia, request.inicio, request.observaciones, request.mensaje, profile.schedule));
+  const urgency = /(urgente|hoy|manana|esta semana|cuanto antes|examen|recuperacion)/.test(urgencyText)
+    ? 'alta'
+    : missing.length >= 3
+      ? 'media'
+      : 'normal';
+  return {
+    version: AI_FEATURES_VERSION,
+    type: 'family_request_brief',
+    summary: clean(`Solicitud de ${profile.subject || 'materia sin indicar'} para ${profile.level || 'nivel sin indicar'}, ${profile.modality || 'modalidad sin indicar'}, zona ${profile.zone || profile.postalCode || 'sin zona'}, horario ${profile.schedule || 'sin horario'}.`, 600),
+    normalized: profile,
+    missing,
+    urgency,
+    recommendedQuestions: missing.map((field) => ({
+      field,
+      question: `Confirmar ${field} para mejorar el matching antes de asignar profesor.`,
+    })),
+    policy: getAiExecutionPolicy('family_request_brief', { request }),
+  };
+}
+
+export function moderateContent(content = '', context = {}) {
+  const raw = clean(content, 5000);
+  const text = normalizeText(raw);
+  const flags = [];
+  const urlCount = (raw.match(/https?:\/\/|www\./gi) || []).length;
+  const emailCount = (raw.match(/[^\s@]+@[^\s@]+\.[^\s@]+/g) || []).length;
+  const phoneCount = (raw.match(/(?:\+34\s*)?(?:\d[\s.-]?){9,}/g) || []).length;
+  const ibanCount = (raw.match(/\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/gi) || []).length;
+
+  if (urlCount >= 2 || /(casino|crypto|prestamo rapido|viagra|seo barato|followers|apuesta)/.test(text)) flags.push('spam_probable');
+  if (ibanCount) flags.push('iban_or_bank_data');
+  if (emailCount || phoneCount) flags.push('contact_data');
+  if (/(pago por fuera|evitar la plataforma|sin pasar por clasesde10|te pago directo)/.test(text)) flags.push('off_platform_payment');
+  if (/(amenaza|acoso|insulto|agresion|violencia|contenido sexual)/.test(text)) flags.push('safety_review');
+  if (/(mierda|idiota|gilipollas|estafa)/.test(text)) flags.push('abusive_language');
+
+  const severity = flags.includes('safety_review') || flags.includes('spam_probable')
+    ? 'high'
+    : flags.includes('off_platform_payment') || flags.includes('iban_or_bank_data')
+      ? 'medium'
+      : flags.length
+        ? 'low'
+        : 'none';
+
+  return {
+    version: AI_FEATURES_VERSION,
+    type: 'content_moderation',
+    action: severity === 'high' ? 'review' : 'allow',
+    severity,
+    flags: unique(flags),
+    confidence: flags.length ? Math.min(0.95, 0.55 + flags.length * 0.12) : 0.92,
+    context: {
+      channel: clean(context.channel, 80),
+      role: clean(context.role, 80),
+    },
+    policy: getAiExecutionPolicy('content_moderation', { content, context }),
+  };
+}
+
+export function classifyIncident(input = '', metadata = {}) {
+  const text = normalizeText(textFromValues(input, metadata));
+  const categories = [
+    ['seguridad', /(acoso|amenaza|agresion|violencia|inapropiado|contenido sexual|menor)/],
+    ['pago', /(pago|cobro|bizum|transferencia|dinero|factura|pendiente|vencido|deuda)/],
+    ['asistencia', /(no vino|no se presento|ausencia|falto|asistencia|marcar clase|realizada)/],
+    ['horario', /(cancelar|cancelada|reprogramar|cambiar hora|retraso|llego tarde|horario)/],
+    ['calidad', /(no entiende|mala clase|metodologia|explicacion|nivel bajo|queja|suspenso)/],
+    ['comunicacion', /(no responde|whatsapp|mensaje|llamada|contacto|email)/],
+    ['documentacion', /(dni|documento|titulo|certificado|verificacion|perfil)/],
+    ['tecnica', /(login|error|app|web|no carga|firebase|supabase|pantalla)/],
+  ];
+  const found = categories.find(([, pattern]) => pattern.test(text));
+  const category = found?.[0] || 'operativa';
+  const priority = category === 'seguridad'
+    ? 1
+    : ['pago', 'asistencia'].includes(category)
+      ? 2
+      : ['horario', 'calidad', 'tecnica'].includes(category)
+        ? 3
+        : 4;
+  const slaHours = priority === 1 ? 2 : priority === 2 ? 12 : priority === 3 ? 24 : 48;
+  const suggestedActions = {
+    seguridad: ['Revisar manualmente antes de responder.', 'Contactar con ambas partes por canal seguro.', 'Escalar al administrador.'],
+    pago: ['Verificar pago/Bizum y clases asociadas.', 'Actualizar estado de pago.', 'Notificar a familia o profesor si falta informacion.'],
+    asistencia: ['Confirmar con profesor y familia si la clase se realizo.', 'Crear incidencia si hay discrepancia.', 'Actualizar estado de clase.'],
+    horario: ['Proponer nueva franja.', 'Actualizar calendario.', 'Avisar a ambas partes.'],
+    calidad: ['Pedir detalle concreto.', 'Revisar perfil y matching.', 'Valorar cambio de profesor si se repite.'],
+    comunicacion: ['Comprobar ultimo mensaje.', 'Enviar recordatorio.', 'Escalar si no hay respuesta.'],
+    documentacion: ['Solicitar documento faltante.', 'Revisar verificacion admin.', 'No asignar hasta completar si es critico.'],
+    tecnica: ['Reproducir error.', 'Pedir captura si falta contexto.', 'Registrar modulo afectado.'],
+    operativa: ['Revisar manualmente.', 'Completar datos faltantes.', 'Asignar responsable.'],
+  }[category];
+
+  return {
+    version: AI_FEATURES_VERSION,
+    type: 'incident_classification',
+    category,
+    priority,
+    slaHours,
+    suggestedActions,
+    confidence: found ? 0.78 : 0.45,
+    policy: getAiExecutionPolicy('incident_classification', { input, metadata }),
+  };
+}
+
+function searchableText(item, fields) {
+  if (typeof item === 'string') return item;
+  const source = fields?.length ? fields.map((field) => item?.[field]) : Object.values(item || {});
+  return textFromValues(source);
+}
+
+export function semanticSearchItems(query = '', items = [], options = {}) {
+  const q = normalizeText(query);
+  const queryTokens = new Set(tokenize(q));
+  const querySubjects = subjectTags(q);
+  const queryLevels = levelTags(q);
+  const fields = options.fields || [];
+  if (!q || !queryTokens.size) return [];
+
+  return items.map((item) => {
+    const text = normalizeText(searchableText(item, fields));
+    const tokens = new Set(tokenize(text));
+    const subjectOverlap = overlapCount(querySubjects, subjectTags(text));
+    const levelOverlap = overlapCount(queryLevels, levelTags(text));
+    const tokenOverlap = overlapCount(queryTokens, tokens);
+    const phraseBonus = text.includes(q) ? 20 : 0;
+    const score = Math.min(100, Math.round(
+      phraseBonus
+      + tokenOverlap * 9
+      + subjectOverlap * 24
+      + levelOverlap * 14
+    ));
+    const reasons = [
+      subjectOverlap ? 'Coincide en materia/actividad.' : '',
+      levelOverlap ? 'Coincide en nivel.' : '',
+      tokenOverlap ? `${tokenOverlap} termino(s) relacionados.` : '',
+      phraseBonus ? 'Coincidencia literal.' : '',
+    ].filter(Boolean);
+    return { item, score, reasons };
+  })
+    .filter((result) => result.score >= Number(options.minScore || 12))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Number(options.limit || 10));
 }
 
 export function summarizeTeacherProfile(teacher = {}) {
