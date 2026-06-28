@@ -140,8 +140,8 @@
   box-shadow: 0 8px 40px rgba(0,0,0,0.2);
 }
 .cf-title { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--navy); font-weight: 700; margin-bottom: 28px; }
-.teacher-entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
-.teacher-entry-actions a {
+.entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.entry-actions a {
   min-height: 44px;
   border-radius: 10px;
   display: flex;
@@ -151,39 +151,26 @@
   font-weight: 800;
   font-size: .9rem;
 }
-.teacher-entry-actions .primary { background: var(--teal); color: var(--white); }
-.teacher-entry-actions .secondary { background: var(--gray-soft); color: var(--navy); }
+.entry-actions .primary { background: var(--teal); color: var(--white); }
+.entry-actions .secondary { background: var(--gray-soft); color: var(--navy); }
 .cf-subtitle { font-size: .86rem; color: var(--gray-mid); line-height: 1.6; margin: -12px 0 18px; }
-.cf-field:has(#prof-canal),
-.cf-field:has(#prof-niveles),
-.cf-field:has(#prof-anios),
-.cf-field:has(#prof-tarifa),
-.cf-field:has(#prof-experiencia),
-.cf-field:has(#prof-disponibilidad),
-.cf-field:has(#prof-verificacion) {
-  display: none;
+.entry-steps {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 0;
 }
-.cf-form { display: flex; flex-direction: column; gap: 16px; }
-.cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.cf-field { display: flex; flex-direction: column; gap: 6px; }
-.cf-field label { font-size: .76rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--navy); }
-.cf-field input,
-.cf-field select,
-.cf-field textarea {
-  border: 1.5px solid rgba(0,0,0,0.1); border-radius: 8px;
-  padding: 12px 14px; font-size: .92rem; font-family: 'DM Sans', sans-serif;
-  color: var(--text-dark); background: var(--cream);
-  transition: border-color .2s, background .2s; outline: none;
+.entry-steps li {
+  background: var(--cream);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text-body);
+  font-size: .88rem;
+  line-height: 1.55;
 }
-.cf-field input:focus, .cf-field select:focus, .cf-field textarea:focus { border-color: var(--teal); background: var(--white); }
-.cf-field textarea { resize: vertical; min-height: 100px; }
-.cf-submit {
-  background: var(--teal); color: var(--white);
-  font-weight: 700; font-size: 1rem; padding: 15px;
-  border: none; border-radius: 10px; cursor: pointer;
-  transition: background .2s, transform .15s; margin-top: 4px;
-}
-.cf-submit:hover { background: #165f52; transform: translateY(-1px); }
+.entry-steps strong { color: var(--navy); }
 .cf-note { font-size: .76rem; color: var(--gray-mid); text-align: center; }
 
 @media (max-width:900px) {
@@ -193,9 +180,8 @@
   .compare-table td, .compare-table thead th { padding: 12px 14px; }
 }
 @media (max-width:680px) {
-  .cf-row { grid-template-columns: 1fr; }
   .contact-form-card { padding: 32px 22px; }
-  .teacher-entry-actions { grid-template-columns: 1fr; }
+  .entry-actions { grid-template-columns: 1fr; }
 }
 </style>
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para profesores","item":"https://clasesde10.com/para-profesores.html"}]},{"@type":"WebPage","name":"Para profesores — ClasesDe10","description":"Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.","url":"https://clasesde10.com/para-profesores.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
@@ -345,21 +331,21 @@
   <a href="pages/registro.html?rol=profesor" class="btn-primary">Crear cuenta gratis</a>
 </div>
 
-<!-- FORMULARIO -->
+<!-- ACCESO -->
 <section class="form-section" id="formulario">
   <div class="section-inner">
     <div class="form-grid">
       <div class="form-info">
-        <span class="section-label">Únete como profesor</span>
-        <h2 class="section-title">Preséntate y<br>empieza a enseñar</h2>
-        <p class="section-desc">Rellena el formulario y en menos de 48h te contactamos con tu primera propuesta de alumno.</p>
+        <span class="section-label">Acceso profesor</span>
+        <h2 class="section-title">Crea tu cuenta y<br>completa tu perfil</h2>
+        <p class="section-desc">El alta empieza con una cuenta real. Después, dentro del panel, completas la ficha que usamos para verificarte y proponerte a familias.</p>
         <div class="fi-item">
           <div class="fi-ico">🔐</div>
           <div><h4>Datos protegidos</h4><p>Tu información solo se usa para conectarte con familias. Nunca se publica sin tu consentimiento.</p></div>
         </div>
         <div class="fi-item">
           <div class="fi-ico">💬</div>
-          <div><h4>Te contactamos pronto</h4><p>En menos de 48 horas recibirás noticias nuestras con tu primera propuesta.</p></div>
+          <div><h4>Datos bien asociados</h4><p>Todo queda vinculado a tu usuario: perfil, materias, documentos, disponibilidad y futuras asignaciones.</p></div>
         </div>
         <div class="fi-item">
           <div class="fi-ico">🆓</div>
@@ -368,113 +354,18 @@
       </div>
 
       <div class="contact-form-card reveal">
-        <div class="cf-title">Empieza como profesor/a</div>
-        <div class="teacher-entry-actions">
-          <a class="primary" href="pages/registro.html?rol=profesor">Crear cuenta</a>
+        <div class="cf-title">Empieza desde tu cuenta</div>
+        <p class="cf-subtitle">Para evitar datos sueltos y perfiles duplicados, el alta de profesor empieza creando una cuenta. La ficha completa se rellena dentro del panel privado.</p>
+        <div class="entry-actions">
+          <a class="primary" href="pages/registro.html?rol=profesor">Crear cuenta de profesor</a>
           <a class="secondary" href="pages/login.html">Iniciar sesion</a>
         </div>
-        <p class="cf-subtitle">La ficha completa se rellena dentro del panel. Si prefieres que te contactemos primero, deja solo estos datos basicos.</p>
-        <form class="cf-form" id="form-profesor" method="post">
-          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
-            <label for="prof-website">Website</label>
-            <input id="prof-website" name="website_url" type="text" tabindex="-1" autocomplete="off">
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="prof-nombre">Nombre completo</label>
-              <input id="prof-nombre" name="nombre" type="text" placeholder="Tu nombre y apellidos" autocomplete="name" maxlength="160" required>
-            </div>
-            <div class="cf-field">
-              <label for="prof-email">Email</label>
-              <input id="prof-email" name="email" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
-            </div>
-          </div>
-          <div class="cf-field">
-            <label for="prof-telefono">Teléfono / WhatsApp</label>
-            <input id="prof-telefono" name="telefono" type="tel" placeholder="+34 600 000 000" autocomplete="tel" maxlength="40">
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="prof-zona">Zona donde das clase</label>
-              <input id="prof-zona" name="zona" type="text" placeholder="Ej: Madrid centro, online, zona norte..." autocomplete="address-level2" maxlength="120">
-            </div>
-            <div class="cf-field">
-              <label for="prof-canal">Canal preferido</label>
-              <select id="prof-canal" name="canal">
-                <option value="">Selecciona</option>
-                <option>WhatsApp</option>
-                <option>Email</option>
-                <option>Llamada</option>
-              </select>
-            </div>
-          </div>
-          <div class="cf-field">
-            <label for="prof-materias">Materias que impartes</label>
-            <input id="prof-materias" name="materias" type="text" placeholder="Ej: Matemáticas, Física, Inglés..." maxlength="180" required>
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="prof-niveles">Niveles</label>
-              <select id="prof-niveles" name="niveles">
-                <option value="">Selecciona</option>
-                <option>Primaria</option>
-                <option>ESO</option>
-                <option>Bachillerato</option>
-                <option>Universidad</option>
-                <option>Idiomas adultos</option>
-                <option>Varios niveles</option>
-              </select>
-            </div>
-            <div class="cf-field">
-              <label for="prof-modalidad">Modalidad</label>
-              <select id="prof-modalidad" name="modalidad">
-                <option value="">Selecciona</option>
-                <option>Presencial</option>
-                <option>Online</option>
-                <option>Ambas</option>
-              </select>
-            </div>
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="prof-anios">Años de experiencia</label>
-              <select id="prof-anios" name="anios">
-                <option value="">Selecciona</option>
-                <option>Menos de 1 año</option>
-                <option>1-2 años</option>
-                <option>3-5 años</option>
-                <option>Más de 5 años</option>
-              </select>
-            </div>
-            <div class="cf-field">
-              <label for="prof-tarifa">Tarifa orientativa</label>
-              <input id="prof-tarifa" name="tarifa" type="text" placeholder="Ej: 18 €/h, 20-25 €/h..." inputmode="decimal" maxlength="60">
-            </div>
-          </div>
-          <div class="cf-field">
-            <label for="prof-experiencia">Formación y experiencia</label>
-            <textarea id="prof-experiencia" name="experiencia" maxlength="3000" placeholder="Cuéntanos tu titulación, años de experiencia y cualquier detalle relevante..."></textarea>
-          </div>
-          <div class="cf-field">
-            <label for="prof-disponibilidad">Disponibilidad horaria</label>
-            <input id="prof-disponibilidad" name="disponibilidad" type="text" placeholder="Ej: Tardes de lunes a viernes, fines de semana..." maxlength="180">
-          </div>
-          <div class="cf-field">
-            <label for="prof-verificacion">Documentación de verificación</label>
-            <select id="prof-verificacion" name="verificacion">
-              <option value="">Selecciona</option>
-              <option>Puedo aportar titulación y documento de identidad</option>
-              <option>Puedo aportar titulación</option>
-              <option>No lo tengo ahora, puedo enviarlo después</option>
-            </select>
-          </div>
-          <label class="cf-check" for="prof-privacidad">
-            <input id="prof-privacidad" name="privacidad" type="checkbox" required>
-            <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para valorar mi perfil y contactarme.</span>
-          </label>
-          <button class="cf-submit" id="submitBtn" type="submit">Dejar mis datos</button>
-          <p class="cf-note">Datos confidenciales. La ficha completa se rellena dentro de tu cuenta.</p>
-        </form>
+        <ul class="entry-steps">
+          <li><strong>1. Crea tu cuenta.</strong> Guardamos tu identidad y acceso en Firebase.</li>
+          <li><strong>2. Completa tu perfil.</strong> Foto, teléfono, dirección, zona, materias, niveles, tarifa, disponibilidad y presentación.</li>
+          <li><strong>3. Revisión admin.</strong> Solo los perfiles completos y verificados pueden recibir asignaciones.</li>
+        </ul>
+        <p class="cf-note">No publicamos tu perfil ni te asignamos alumnos hasta que esté completo y revisado.</p>
       </div>
     </div>
   </div>
@@ -522,67 +413,6 @@ document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.targe
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
-document.getElementById('form-profesor').addEventListener('submit', async function(e){
-  e.preventDefault();
-  if (!this.reportValidity()) return;
-  const button = document.getElementById('submitBtn');
-  const nombre        = document.getElementById('prof-nombre').value.trim();
-  const email         = document.getElementById('prof-email').value.trim();
-  const telefono      = document.getElementById('prof-telefono').value.trim();
-  const zona          = document.getElementById('prof-zona').value.trim();
-  const canal         = document.getElementById('prof-canal').value.trim();
-  const materias      = document.getElementById('prof-materias').value.trim();
-  const niveles       = document.getElementById('prof-niveles').value.trim();
-  const modalidad     = document.getElementById('prof-modalidad').value.trim();
-  const anios         = document.getElementById('prof-anios').value.trim();
-  const tarifa        = document.getElementById('prof-tarifa').value.trim();
-  const experiencia   = document.getElementById('prof-experiencia').value.trim();
-  const disponibilidad = document.getElementById('prof-disponibilidad').value.trim();
-  const verificacion  = document.getElementById('prof-verificacion').value.trim();
-  const website_url = document.getElementById('prof-website').value.trim();
-  const defaultText = 'Dejar mis datos';
-  const { submitLead, setButtonState } = await import('./js/public-leads.js');
-  const detalles = [
-    experiencia,
-    anios && `Años de experiencia: ${anios}`,
-    tarifa && `Tarifa: ${tarifa}`,
-    disponibilidad && `Disponibilidad: ${disponibilidad}`,
-    verificacion && `Verificación: ${verificacion}`,
-  ].filter(Boolean).join('\n');
-
-  setButtonState(button, 'loading', 'Enviando...');
-  const { data, error } = await submitLead({
-    tipo: 'profesor',
-    nombre,
-    email,
-    telefono,
-    perfil: 'profesor',
-    asunto: materias ? `Profesor: ${materias}` : 'Alta de profesor',
-    mensaje: detalles,
-    website_url,
-    metadata: { materias, niveles, modalidad, zona, canal, anios, tarifa, disponibilidad, verificacion, consent_privacy: true },
-  });
-
-  if (error) {
-    setButtonState(button, 'error', error.message || 'No se pudo enviar.');
-    setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
-    return;
-  }
-
-  if (data?.spam) {
-    setButtonState(button, 'success', 'Datos enviados. Gracias.');
-    this.reset();
-    return;
-  }
-
-  try {
-    const { trackContacto } = await import('./js/analytics.js');
-    trackContacto('alta_profesor_publica');
-  } catch (_) {}
-
-  setButtonState(button, 'success', 'Datos enviados. Te contactamos pronto.');
-  this.reset();
-});
 </script>
 <script src="/js/pwa.js" defer></script>
 </body>

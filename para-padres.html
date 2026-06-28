@@ -68,7 +68,7 @@
 .mp-ico { font-size: 1.6rem; margin-bottom: 6px; }
 .mp-name { font-size: .82rem; font-weight: 600; color: var(--navy); }
 
-/* FORMULARIO */
+/* ACCESO */
 .form-section {
   padding: 90px 0;
   background: var(--navy);
@@ -104,29 +104,37 @@
   font-family: 'Playfair Display', serif;
   font-size: 1.3rem; color: var(--navy); font-weight: 700; margin-bottom: 28px;
 }
-.cf-form { display: flex; flex-direction: column; gap: 16px; }
-.cf-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.cf-field { display: flex; flex-direction: column; gap: 6px; }
-.cf-field label { font-size: .76rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--navy); }
-.cf-field input,
-.cf-field select,
-.cf-field textarea {
-  border: 1.5px solid rgba(0,0,0,0.1); border-radius: 8px;
-  padding: 12px 14px; font-size: .92rem; font-family: 'DM Sans', sans-serif;
-  color: var(--text-dark); background: var(--cream);
-  transition: border-color .2s, background .2s; outline: none;
+.cf-subtitle { font-size: .9rem; color: var(--gray-mid); line-height: 1.65; margin: -12px 0 20px; }
+.entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+.entry-actions a {
+  min-height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 800;
+  font-size: .9rem;
 }
-.cf-field input:focus,
-.cf-field select:focus,
-.cf-field textarea:focus { border-color: var(--gold); background: var(--white); }
-.cf-field textarea { resize: vertical; min-height: 100px; }
-.cf-submit {
-  background: var(--navy); color: var(--white);
-  font-weight: 700; font-size: 1rem; padding: 15px;
-  border: none; border-radius: 10px; cursor: pointer;
-  transition: background .2s, transform .15s; margin-top: 4px;
+.entry-actions .primary { background: var(--navy); color: var(--white); }
+.entry-actions .secondary { background: var(--gray-soft); color: var(--navy); }
+.entry-steps {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 0;
 }
-.cf-submit:hover { background: var(--navy-light); transform: translateY(-1px); }
+.entry-steps li {
+  background: var(--cream);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text-body);
+  font-size: .88rem;
+  line-height: 1.55;
+}
+.entry-steps strong { color: var(--navy); }
 .cf-note { font-size: .76rem; color: var(--gray-mid); text-align: center; }
 
 @media (max-width: 900px) {
@@ -134,8 +142,8 @@
   .form-grid { grid-template-columns: 1fr; gap: 40px; }
 }
 @media (max-width: 680px) {
-  .cf-row { grid-template-columns: 1fr; }
   .contact-form-card { padding: 32px 24px; }
+  .entry-actions { grid-template-columns: 1fr; }
 }
 </style>
 <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para familias","item":"https://clasesde10.com/para-padres.html"}]},{"@type":"WebPage","name":"Para familias — ClasesDe10","description":"Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.","url":"https://clasesde10.com/para-padres.html","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
@@ -249,21 +257,21 @@
   </div>
 </section>
 
-<!-- FORMULARIO -->
+<!-- ACCESO -->
 <section class="form-section" id="formulario">
   <div class="section-inner">
     <div class="form-grid">
       <div class="form-info">
-        <span class="section-label">Solicitar profesor</span>
-        <h2 class="section-title">Un paso y<br>nos ponemos a buscar</h2>
-        <p class="section-desc">Rellena el formulario y en menos de 48 horas te proponemos un profesor que encaja con lo que necesitas.</p>
+        <span class="section-label">Acceso familias</span>
+        <h2 class="section-title">Crea tu cuenta y<br>solicita profesor</h2>
+        <p class="section-desc">El proceso empieza en tu cuenta para que alumnos, solicitudes, mensajes y asignaciones queden siempre asociados a la familia correcta.</p>
         <div class="fi-item">
           <div class="fi-ico">🔐</div>
           <div><h4>Datos protegidos</h4><p>Tu información es privada. Solo se usa para encontrarte el profesor adecuado.</p></div>
         </div>
         <div class="fi-item">
           <div class="fi-ico">💬</div>
-          <div><h4>Respuesta por email o WhatsApp</h4><p>Elige cómo quieres que te contactemos y te llegará la propuesta por ese canal.</p></div>
+          <div><h4>Seguimiento desde el panel</h4><p>Podrás añadir alumnos, enviar solicitudes y consultar el estado sin repetir datos.</p></div>
         </div>
         <div class="fi-item">
           <div class="fi-ico">🆓</div>
@@ -272,131 +280,18 @@
       </div>
 
       <div class="contact-form-card reveal">
-        <div class="cf-title">📋 Solicitar profesor para mi hijo/a</div>
-        <form class="cf-form" id="form-familia" method="post">
-          <div aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden">
-            <label for="pad-website">Website</label>
-            <input id="pad-website" name="website_url" type="text" tabindex="-1" autocomplete="off">
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="pad-nombre">Tu nombre</label>
-              <input id="pad-nombre" name="nombre" type="text" placeholder="Nombre del padre/madre" autocomplete="name" maxlength="160" required>
-            </div>
-            <div class="cf-field">
-              <label for="pad-email">Email</label>
-              <input id="pad-email" name="email" type="email" placeholder="tu@email.com" autocomplete="email" maxlength="254" required>
-            </div>
-          </div>
-          <div class="cf-field">
-            <label for="pad-telefono">Teléfono / WhatsApp</label>
-            <input id="pad-telefono" name="telefono" type="tel" placeholder="+34 600 000 000" autocomplete="tel" maxlength="40">
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="pad-zona">Zona o localidad</label>
-              <input id="pad-zona" name="zona" type="text" placeholder="Ej: Chamberí, Getafe, Madrid centro..." autocomplete="address-level2" maxlength="120">
-            </div>
-            <div class="cf-field">
-              <label for="pad-canal">Canal preferido</label>
-              <select id="pad-canal" name="canal">
-                <option value="">Selecciona</option>
-                <option>WhatsApp</option>
-                <option>Email</option>
-                <option>Llamada</option>
-              </select>
-            </div>
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="pad-alumno">Nombre del alumno/a</label>
-              <input id="pad-alumno" name="alumno" type="text" placeholder="Nombre" maxlength="160">
-            </div>
-            <div class="cf-field">
-              <label for="pad-nivel">Curso / Nivel</label>
-              <select id="pad-nivel" name="nivel">
-                <option value="">Selecciona</option>
-                <option>Primaria (1º–6º)</option>
-                <option>1º ESO</option><option>2º ESO</option><option>3º ESO</option><option>4º ESO</option>
-                <option>1º Bachillerato</option><option>2º Bachillerato</option>
-                <option>Idiomas (adultos)</option>
-                <option>Universidad</option>
-                <option>Otro</option>
-              </select>
-            </div>
-          </div>
-          <div class="cf-field">
-            <label for="pad-materia">Asignatura / materia</label>
-            <input id="pad-materia" name="materia" type="text" placeholder="Ej: Matemáticas, Inglés, Física..." maxlength="180" required>
-          </div>
-          <div class="cf-field">
-            <label for="pad-modalidad">Modalidad preferida</label>
-            <select id="pad-modalidad" name="modalidad">
-              <option value="">Selecciona</option>
-              <option>Presencial en casa</option>
-              <option>Online (videollamada)</option>
-              <option>Indiferente</option>
-            </select>
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="pad-objetivo">Objetivo principal</label>
-              <select id="pad-objetivo" name="objetivo">
-                <option value="">Selecciona</option>
-                <option>Recuperar la asignatura</option>
-                <option>Subir nota</option>
-                <option>Preparar examen concreto</option>
-                <option>Preparar EBAU / Selectividad</option>
-                <option>Mejorar hábito de estudio</option>
-                <option>Otro objetivo</option>
-              </select>
-            </div>
-            <div class="cf-field">
-              <label for="pad-frecuencia">Frecuencia estimada</label>
-              <select id="pad-frecuencia" name="frecuencia">
-                <option value="">Selecciona</option>
-                <option>1 clase por semana</option>
-                <option>2 clases por semana</option>
-                <option>3 o más clases por semana</option>
-                <option>Intensivo puntual</option>
-                <option>A definir con el profesor</option>
-              </select>
-            </div>
-          </div>
-          <div class="cf-row">
-            <div class="cf-field">
-              <label for="pad-inicio">Cuándo quieres empezar</label>
-              <select id="pad-inicio" name="inicio">
-                <option value="">Selecciona</option>
-                <option>Cuanto antes</option>
-                <option>Esta semana</option>
-                <option>Este mes</option>
-                <option>Más adelante</option>
-              </select>
-            </div>
-            <div class="cf-field">
-              <label for="pad-presupuesto">Presupuesto orientativo</label>
-              <select id="pad-presupuesto" name="presupuesto">
-                <option value="">Selecciona</option>
-                <option>Hasta 15 €/h</option>
-                <option>15-20 €/h</option>
-                <option>20-25 €/h</option>
-                <option>Más de 25 €/h si encaja</option>
-                <option>Prefiero que me orientéis</option>
-              </select>
-            </div>
-          </div>
-          <div class="cf-field">
-            <label for="pad-disponibilidad">Disponibilidad horaria</label>
-            <textarea id="pad-disponibilidad" name="disponibilidad" maxlength="3000" placeholder="Ej: Tardes entre semana a partir de las 17h, sábados por la mañana..."></textarea>
-          </div>
-          <label class="cf-check" for="pad-privacidad">
-            <input id="pad-privacidad" name="privacidad" type="checkbox" required>
-            <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para buscar un profesor adecuado.</span>
-          </label>
-          <button class="cf-submit" id="submitBtn" type="submit">Enviar solicitud →</button>
-          <p class="cf-note">🔐 Tus datos son confidenciales y solo se usan para encontrarte el profesor adecuado</p>
-        </form>
+        <div class="cf-title">Empieza desde tu cuenta</div>
+        <p class="cf-subtitle">Para buscar profesor con seguimiento real, crea una cuenta de familia. Desde tu panel podrás añadir hijos, enviar solicitudes y ver el estado de cada asignación.</p>
+        <div class="entry-actions">
+          <a class="primary" href="pages/registro.html?rol=familia">Crear cuenta de familia</a>
+          <a class="secondary" href="pages/login.html">Iniciar sesion</a>
+        </div>
+        <ul class="entry-steps">
+          <li><strong>1. Crea tu cuenta.</strong> Guardamos tus datos de acceso y contacto de forma ordenada.</li>
+          <li><strong>2. Añade al alumno.</strong> Dentro del panel registras hijo, curso, materia y disponibilidad.</li>
+          <li><strong>3. Solicita profesor.</strong> El admin ve la solicitud completa y puede hacer el matching sin datos duplicados.</li>
+        </ul>
+        <p class="cf-note">Si ya tienes cuenta, entra directamente y usa el botón "Solicitar profesor" del panel.</p>
       </div>
     </div>
   </div>
@@ -444,68 +339,6 @@ document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.targe
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
-document.getElementById('form-familia').addEventListener('submit', async function(e){
-  e.preventDefault();
-  if (!this.reportValidity()) return;
-  const button = document.getElementById('submitBtn');
-  const nombre       = document.getElementById('pad-nombre').value.trim();
-  const email        = document.getElementById('pad-email').value.trim();
-  const telefono     = document.getElementById('pad-telefono').value.trim();
-  const zona         = document.getElementById('pad-zona').value.trim();
-  const canal        = document.getElementById('pad-canal').value.trim();
-  const alumno       = document.getElementById('pad-alumno').value.trim();
-  const nivel        = document.getElementById('pad-nivel').value.trim();
-  const materia      = document.getElementById('pad-materia').value.trim();
-  const modalidad    = document.getElementById('pad-modalidad').value.trim();
-  const objetivo     = document.getElementById('pad-objetivo').value.trim();
-  const frecuencia   = document.getElementById('pad-frecuencia').value.trim();
-  const inicio       = document.getElementById('pad-inicio').value.trim();
-  const presupuesto  = document.getElementById('pad-presupuesto').value.trim();
-  const disponibilidad = document.getElementById('pad-disponibilidad').value.trim();
-  const website_url = document.getElementById('pad-website').value.trim();
-  const defaultText = 'Enviar solicitud →';
-  const { submitLead, setButtonState } = await import('./js/public-leads.js');
-  const detalles = [
-    objetivo && `Objetivo: ${objetivo}`,
-    frecuencia && `Frecuencia: ${frecuencia}`,
-    inicio && `Inicio: ${inicio}`,
-    presupuesto && `Presupuesto: ${presupuesto}`,
-    disponibilidad && `Disponibilidad: ${disponibilidad}`,
-  ].filter(Boolean).join('\n');
-
-  setButtonState(button, 'loading', 'Enviando...');
-  const { data, error } = await submitLead({
-    tipo: 'familia',
-    nombre,
-    email,
-    telefono,
-    perfil: 'familia',
-    asunto: materia ? `Solicitud de profesor: ${materia}` : 'Solicitud de profesor',
-    mensaje: detalles || materia,
-    website_url,
-    metadata: { alumno, nivel, materia, modalidad, zona, canal, objetivo, frecuencia, inicio, presupuesto, consent_privacy: true },
-  });
-
-  if (error) {
-    setButtonState(button, 'error', error.message || 'No se pudo enviar.');
-    setTimeout(() => setButtonState(button, 'idle', defaultText), 2600);
-    return;
-  }
-
-  if (data?.spam) {
-    setButtonState(button, 'success', 'Solicitud enviada. Gracias.');
-    this.reset();
-    return;
-  }
-
-  try {
-    const { trackSolicitudProfesor } = await import('./js/analytics.js');
-    trackSolicitudProfesor(materia || 'sin_especificar');
-  } catch (_) {}
-
-  setButtonState(button, 'success', '✅ Solicitud enviada — ¡te contactamos pronto!');
-  this.reset();
-});
 </script>
 <script src="/js/pwa.js" defer></script>
 </body>
