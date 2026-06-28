@@ -284,7 +284,7 @@ function checkCodeTouchpoints() {
 
   if (runtimeFiles.length === 0) ok('No runtime Supabase touchpoints outside legacy modules');
   else {
-    warn('Runtime Supabase touchpoints still present', `${runtimeFiles.length} files`);
+    warn('Legacy Supabase-shaped compatibility API touchpoints still present', `${runtimeFiles.length} files`);
     for (const file of runtimeFiles) {
       console.log(`       - ${file}`);
     }
@@ -306,7 +306,7 @@ async function main() {
   checkCodeTouchpoints();
   console.log('\nNext external gates');
   console.log('- Firebase Storage: initialize the default bucket.');
-  console.log('- Private app: migrate dashboards from Supabase queries to Firestore before switching auth-provider to Firebase.');
+  console.log('- Private app: replace legacy db.from compatibility calls with dedicated Firebase adapters when each dashboard is migrated module by module.');
 }
 
 main().catch((error) => {

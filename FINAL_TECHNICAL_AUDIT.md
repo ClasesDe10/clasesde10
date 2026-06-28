@@ -57,15 +57,21 @@ Impacto:
 - Las reglas Storage endurecidas estan preparadas en el repositorio, pero no pueden desplegarse hasta inicializar Firebase Storage.
 - Las subidas reales de documentos/fotos dependen de que exista el bucket.
 
-### Supabase legacy runtime
+### API legacy con forma Supabase
 
-Estado: deuda tecnica controlada, no eliminada.
+Estado: deuda tecnica controlada, no trafico Supabase runtime directo detectado.
+
+Matiz importante:
+
+- `js/supabase-client.js` ya no crea un cliente Supabase real.
+- Ese archivo es un cliente de compatibilidad que mantiene la forma antigua `db.from()`/`db.storage`, pero enruta datos a Firebase (`firebaseDb` y `firebaseStorage`).
+- Por tanto, lo pendiente no es "que los dashboards sigan leyendo Supabase real", sino eliminar la capa de compatibilidad legacy y sustituirla por adaptadores Firebase especificos por dominio.
 
 Inventario actual:
 
-- 6 archivos runtime con dependencia Supabase legacy.
+- 6 archivos runtime con dependencia de la API legacy compatible.
 - 91 llamadas `db.from()` detectadas por el auditor dedicado.
-- 2 llamadas `db.storage.from()`.
+- 2 llamadas `db.storage.from()` que intentan terminar en Firebase Storage.
 - 0 llamadas `db.auth()`.
 - 0 canales realtime Supabase.
 
@@ -81,7 +87,9 @@ Archivos:
 Impacto:
 
 - Auth ya esta centralizado fuera de Supabase.
-- La migracion completa a Firebase como backend unico requiere mover dashboards privados y storage/documentos a Firestore/Storage cuando el bucket este activo.
+- Los dashboards privados ya tienen una ruta de compatibilidad hacia Firestore, pero aun no usan adaptadores Firebase explicitos en todo el codigo.
+- La eliminacion total del shim legacy requiere reemplazar esas llamadas `db.from()` por adaptadores Firebase modulo a modulo.
+- Documentos/fotos seguiran bloqueados operativamente hasta que Firebase Storage tenga bucket activo.
 
 ## Riesgos operativos observados
 
@@ -91,4 +99,4 @@ Impacto:
 
 ## Conclusion
 
-El proyecto queda endurecido y verificado con estandares razonables para la fase actual: hosting, PWA, seguridad frontend, reglas Firestore, indices, funciones, checks y smoke tests principales estan operativos. Lo que impide afirmar "Firebase backend unico" no es un fallo de codigo nuevo, sino dos limites demostrados: Storage sin inicializar y dashboards legacy que aun leen Supabase.
+El proyecto queda endurecido y verificado con estandares razonables para la fase actual: hosting, PWA, seguridad frontend, reglas Firestore, indices, funciones, checks y smoke tests principales estan operativos. Lo que impide afirmar "Firebase sin deuda legacy" no es un fallo de codigo nuevo, sino dos limites demostrados: Storage sin inicializar y dashboards que aun usan la API de compatibilidad `db.from()` en vez de adaptadores Firebase especificos.

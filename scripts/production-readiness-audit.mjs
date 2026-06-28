@@ -225,7 +225,7 @@ function checkSupabaseBoundary() {
   if (offenders.length) fail(`Unexpected new runtime Supabase dependencies: ${offenders.join(', ')}.`);
   if (queryCount > 92) fail(`Runtime Supabase query count increased above migration baseline: ${queryCount}.`);
   if (storageCount > 2) fail(`Runtime Supabase storage call count increased above migration baseline: ${storageCount}.`);
-  if (queryCount > 0) warn(`Legacy Supabase runtime still present by design during migration: ${queryCount} queries, ${storageCount} storage calls.`);
+  if (queryCount > 0) warn(`Legacy Supabase-shaped compatibility API still present by design: ${queryCount} db.from calls, ${storageCount} storage calls routed by the Firebase compatibility client.`);
 }
 
 checkHosting();
