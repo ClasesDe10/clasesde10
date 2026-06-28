@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-reputation-v2">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-scheduling">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -494,7 +494,7 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260628-audit';
+import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260628-documents';
@@ -513,7 +513,7 @@ import {
 } from '../../js/calendar-engine.js?v=20260628-calendar';
 import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-scheduling';
 import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {

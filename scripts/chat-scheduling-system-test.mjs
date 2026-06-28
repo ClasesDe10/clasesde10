@@ -1,0 +1,45 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+
+const root = process.cwd();
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function read(relativePath) {
+  return readFile(path.join(root, relativePath), 'utf8');
+}
+
+const [admin, chat, rules, css] = await Promise.all([
+  read('pages/dashboard/admin.html'),
+  read('js/chat-widget.js'),
+  read('firebase/firestore.rules'),
+  read('css/dashboard.css'),
+]);
+
+assert(admin.includes('prepararFlujoAsignacion'), 'Admin assignment must prepare chat scheduling flow.');
+assert(admin.includes("schedulingStatus: 'pendiente_horario'"), 'Assignments must start as pending scheduling.');
+assert(admin.includes('Profesor asignado, chat creado'), 'Admin must confirm chat creation after assignment.');
+assert(admin.includes('assignment_ready_for_scheduling'), 'Admin must register the scheduling automation event.');
+assert(admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment must notify family and teacher.');
+
+assert(chat.includes('data-schedule-form'), 'Chat widget must render schedule proposal form.');
+assert(chat.includes("collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones')"), 'Chat widget must persist schedule proposals.');
+assert(chat.includes('acceptScheduleProposal'), 'Chat widget must support accepting schedule proposals.');
+assert(chat.includes("createdFrom: 'chat_schedule_proposal'"), 'Accepted proposals must create traceable class documents.');
+assert(chat.includes('buildAdminClassPayload'), 'Accepted proposals must reuse the shared class payload engine.');
+assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
+
+assert(rules.includes('match /programaciones/{proposalId}'), 'Firestore rules must protect chat schedule proposals.');
+assert(rules.includes('validClassScheduleProposalCreate'), 'Firestore rules must validate proposal creation.');
+assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must validate proposal responses.');
+assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
+assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');
+assert(rules.includes("'assignmentIntroSentAt'"), 'Chat creation rules must allow the assignment intro marker.');
+
+assert(css.includes('.chat-schedule-panel'), 'Dashboard CSS must style the schedule panel.');
+assert(css.includes('.schedule-proposal'), 'Dashboard CSS must style schedule proposals.');
+
+console.log('Chat scheduling system validation passed.');

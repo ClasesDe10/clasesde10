@@ -399,6 +399,49 @@ textarea {
   gap: 12px;
   background: linear-gradient(180deg, #fff, #fbfaf7);
 }
+.chat-schedule-panel {
+  border-top: 1px solid rgba(0,0,0,0.08);
+  background: #fffdf8;
+  padding: 14px 16px;
+}
+.chat-schedule-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.chat-schedule-form {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) minmax(96px, .7fr) minmax(96px, .7fr) minmax(140px, 1fr) minmax(160px, 1.4fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+.schedule-proposal-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.schedule-proposal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  background: var(--white);
+}
+.schedule-proposal.active {
+  border-color: rgba(232,160,48,.55);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.schedule-proposal strong,
+.schedule-proposal div,
+.schedule-proposal small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .notifications-panel {
   min-width: 0;
 }
@@ -2251,6 +2294,16 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     grid-template-columns: 1fr;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
+  .chat-schedule-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .chat-schedule-form [data-schedule-notes],
+  .chat-schedule-form button {
+    grid-column: 1 / -1;
+  }
+  .schedule-proposal {
+    grid-template-columns: 1fr;
+  }
   .admin-notification-form {
     grid-template-columns: 1fr;
   }
@@ -2566,6 +2619,16 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .chat-messages {
     min-height: 280px;
     padding: 12px;
+  }
+  .chat-schedule-panel {
+    padding: 12px;
+  }
+  .chat-schedule-form {
+    grid-template-columns: 1fr;
+  }
+  .chat-schedule-form [data-schedule-notes],
+  .chat-schedule-form button {
+    grid-column: auto;
   }
   .chat-message {
     max-width: 96%;

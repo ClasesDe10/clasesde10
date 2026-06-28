@@ -940,6 +940,8 @@ service cloud.firestore {
           'studentName',
           'participantUids',
           'active',
+          'schedulingStatus',
+          'assignmentIntroSentAt',
           'createdAt',
           'updatedAt',
           'lastMessage',
@@ -958,9 +960,180 @@ service cloud.firestore {
         && request.resource.data.participantUids[request.resource.data.familyUid] == true
         && request.resource.data.participantUids[request.resource.data.teacherUid] == true
         && request.resource.data.active == true
+        && (
+          !request.resource.data.keys().hasAny(['assignmentIntroSentAt'])
+          || request.resource.data.assignmentIntroSentAt == request.time
+        )
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && (isAdmin() || isChatParticipant(request.resource.data));
+    }
+
+    function validClassScheduleProposalCreate(chatId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && request.resource.data.keys().hasOnly([
+          'assignmentId',
+          'familyUid',
+          'teacherUid',
+          'studentId',
+          'materia',
+          'fecha',
+          'hora_inicio',
+          'hora_fin',
+          'durationMinutes',
+          'modalidad',
+          'notas',
+          'status',
+          'proposedByUid',
+          'proposedByRole',
+          'proposedAt',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.assignmentId == chatId
+        && request.resource.data.familyUid == get(/databases/$(database)/documents/chats/$(chatId)).data.familyUid
+        && request.resource.data.teacherUid == get(/databases/$(database)/documents/chats/$(chatId)).data.teacherUid
+        && request.resource.data.studentId == get(/databases/$(database)/documents/chats/$(chatId)).data.studentId
+        && request.resource.data.status == 'propuesta'
+        && request.resource.data.proposedByUid == request.auth.uid
+        && request.resource.data.proposedByRole in ['familia', 'profesor', 'admin']
+        && request.resource.data.fecha is string
+        && request.resource.data.fecha.size() == 10
+        && request.resource.data.hora_inicio is string
+        && request.resource.data.hora_inicio.size() == 5
+        && request.resource.data.hora_fin is string
+        && request.resource.data.hora_fin.size() == 5
+        && request.resource.data.durationMinutes is number
+        && request.resource.data.durationMinutes > 0
+        && request.resource.data.durationMinutes <= 480
+        && optionalString('materia', 180)
+        && optionalString('modalidad', 40)
+        && optionalString('notas', 300)
+        && request.resource.data.proposedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validClassScheduleProposalUpdate(chatId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && resource.data.status == 'propuesta'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status',
+          'classId',
+          'respondedByUid',
+          'respondedByRole',
+          'respondedAt',
+          'rejectionReason',
+          'updatedAt'
+        ])
+        && request.resource.data.status in ['aceptada', 'rechazada', 'cancelada']
+        && request.resource.data.respondedByUid == request.auth.uid
+        && request.resource.data.respondedByRole in ['familia', 'profesor', 'admin']
+        && (
+          isAdmin()
+          || request.resource.data.status == 'cancelada'
+          || request.auth.uid != resource.data.proposedByUid
+        )
+        && (!request.resource.data.keys().hasAny(['classId']) || request.resource.data.classId is string)
+        && optionalString('rejectionReason', 300)
+        && request.resource.data.respondedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validParticipantClassCreate() {
+      let chatPath = /databases/$(database)/documents/chats/$(request.resource.data.assignmentId);
+      let proposalPath = /databases/$(database)/documents/chats/$(request.resource.data.assignmentId)/programaciones/$(request.resource.data.scheduleProposalId);
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'profesor_id',
+          'teacherUid',
+          'familia_id',
+          'familyUid',
+          'alumno_id',
+          'studentId',
+          'fecha',
+          'date',
+          'materia',
+          'subject',
+          'hora_inicio',
+          'startTime',
+          'hora_fin',
+          'endTime',
+          'duracion_minutos',
+          'durationMinutes',
+          'precio_total',
+          'amount',
+          'familyAmount',
+          'importe_profesor',
+          'teacherAmount',
+          'comision_clasesde10',
+          'platformFee',
+          'marginPct',
+          'estado',
+          'status',
+          'lifecycleStatus',
+          'attendanceStatus',
+          'teacherConfirmationStatus',
+          'familyConfirmationStatus',
+          'confirmacion_familia',
+          'paymentStatus',
+          'familyPaymentStatus',
+          'estado_pago',
+          'estado_pago_familia',
+          'teacherPaymentStatus',
+          'estado_pago_profesor',
+          'observaciones',
+          'calendarUid',
+          'calendarSync',
+          'previousSchedule',
+          'lastScheduleChangeAt',
+          'assignmentId',
+          'asignacion_id',
+          'scheduleProposalId',
+          'createdFrom',
+          'schedulingStatus',
+          'modality',
+          'modalidad',
+          'createdByUid',
+          'createdByRole',
+          'createdAt',
+          'updatedAt',
+          'updated_at'
+        ])
+        && request.resource.data.createdFrom == 'chat_schedule_proposal'
+        && request.resource.data.estado == 'confirmada'
+        && request.resource.data.status == 'confirmada'
+        && request.resource.data.lifecycleStatus == 'clase_programada'
+        && request.resource.data.attendanceStatus == 'pendiente'
+        && request.resource.data.assignmentId == request.resource.data.asignacion_id
+        && exists(chatPath)
+        && exists(proposalPath)
+        && isChatParticipant(get(chatPath).data)
+        && get(proposalPath).data.status == 'propuesta'
+        && (isAdmin() || request.auth.uid != get(proposalPath).data.proposedByUid)
+        && request.resource.data.teacherUid == get(chatPath).data.teacherUid
+        && request.resource.data.profesor_id == get(chatPath).data.teacherUid
+        && request.resource.data.familyUid == get(chatPath).data.familyUid
+        && request.resource.data.familia_id == get(chatPath).data.familyUid
+        && request.resource.data.studentId == get(chatPath).data.studentId
+        && request.resource.data.alumno_id == get(chatPath).data.studentId
+        && request.resource.data.fecha == get(proposalPath).data.fecha
+        && request.resource.data.date == get(proposalPath).data.fecha
+        && request.resource.data.hora_inicio == get(proposalPath).data.hora_inicio
+        && request.resource.data.startTime == get(proposalPath).data.hora_inicio
+        && request.resource.data.hora_fin == get(proposalPath).data.hora_fin
+        && request.resource.data.endTime == get(proposalPath).data.hora_fin
+        && request.resource.data.durationMinutes == get(proposalPath).data.durationMinutes
+        && request.resource.data.duracion_minutos == get(proposalPath).data.durationMinutes
+        && request.resource.data.scheduleProposalId is string
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.createdByRole in ['familia', 'profesor', 'admin']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
     }
 
     function validChatMessageCreate() {
@@ -1155,7 +1328,7 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow create: if validChatCreate(chatId);
+      allow create: if isAdmin() || validChatCreate(chatId);
       allow read: if isAdmin() || isChatParticipant(resource.data);
       allow update: if isAdmin()
         || (
@@ -1184,10 +1357,23 @@ service cloud.firestore {
           && validChatMessageCreate();
         allow update, delete: if isAdmin();
       }
+
+      match /programaciones/{proposalId} {
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+        allow create: if validClassScheduleProposalCreate(chatId);
+        allow update: if validClassScheduleProposalUpdate(chatId);
+        allow delete: if isAdmin();
+      }
     }
 
     match /clases/{classId} {
-      allow create, delete: if isAdmin();
+      allow create: if isAdmin() || validParticipantClassCreate();
+      allow delete: if isAdmin();
       allow read: if isAdmin() || isParticipant(resource.data);
       allow update: if isAdmin()
         || validTeacherClassUpdate()

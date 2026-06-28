@@ -15,6 +15,10 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 import {
+  buildAdminClassPayload,
+  validateClassTimeRange,
+} from './calendar-engine.js?v=20260628-calendar';
+import {
   createAdminNotification,
   loadNotificationSettings,
   markAllNotificationsRead,
@@ -71,8 +75,19 @@ function formatDateTime(value) {
   });
 }
 
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return clean(value, 20);
+  return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 function fullName(...parts) {
   return parts.map(clean).filter(Boolean).join(' ').trim();
+}
+
+function classIdFromProposal(chatId, proposalId) {
+  return `chat_${chatId}_${proposalId}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 900);
 }
 
 function participantMap(ids) {
@@ -169,6 +184,7 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     studentName,
     participantUids,
     active: true,
+    schedulingStatus: assignment.schedulingStatus || assignment.estado_programacion || 'pendiente_horario',
     updatedAt: serverTimestamp(),
   };
 
@@ -232,6 +248,7 @@ function renderShell(container, role) {
           <div class="chat-empty-subtitle">Solo aparecen chats de asignaciones activas.</div>
         </div>
         <div class="chat-messages" data-chat-messages></div>
+        <section class="chat-schedule-panel" data-chat-schedule-panel style="display:none"></section>
         <form class="chat-compose" data-chat-form style="display:none">
           <textarea class="form-control" data-chat-input rows="2" maxlength="2000" aria-label="Escribe un mensaje" placeholder="Escribe un mensaje..."></textarea>
           <button class="btn btn-primary" type="submit">Enviar</button>
@@ -283,6 +300,57 @@ function renderShell(container, role) {
         </div>
       </section>
     </div>`;
+}
+
+function renderSchedulePanel(container, chat, proposals, role, currentUid) {
+  const panel = container.querySelector('[data-chat-schedule-panel]');
+  if (!panel || !chat) return;
+  panel.style.display = '';
+  const activeProposal = proposals.find((proposal) => proposal.status === 'propuesta');
+  const accepted = proposals.find((proposal) => proposal.status === 'aceptada');
+  const proposalRows = proposals.length
+    ? proposals.slice(0, 5).map((proposal) => {
+      const mine = proposal.proposedByUid === currentUid;
+      const canRespond = proposal.status === 'propuesta' && (role === 'admin' || !mine);
+      const statusLabel = proposal.status === 'aceptada' ? 'Aceptada'
+        : proposal.status === 'rechazada' ? 'Rechazada'
+          : proposal.status === 'cancelada' ? 'Cancelada'
+            : 'Pendiente';
+      return `
+        <article class="schedule-proposal ${proposal.status === 'propuesta' ? 'active' : ''}" data-schedule-proposal-id="${escapeHtml(proposal.id)}">
+          <div>
+            <strong>${escapeHtml(formatDate(proposal.fecha))} · ${escapeHtml(proposal.hora_inicio)}-${escapeHtml(proposal.hora_fin)}</strong>
+            <div>${escapeHtml(proposal.materia || chat.materia || 'Clase')} · ${escapeHtml(proposal.modalidad || 'online/presencial por acordar')}</div>
+            ${proposal.notas ? `<small>${escapeHtml(proposal.notas)}</small>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <span class="badge ${proposal.status === 'aceptada' ? 'badge-success' : proposal.status === 'rechazada' ? 'badge-danger' : 'badge-warning'}">${statusLabel}</span>
+            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-reject-schedule>Rechazar</button>' : ''}
+          </div>
+        </article>`;
+    }).join('')
+    : '<div class="chat-empty-state">Aun no hay horarios propuestos.</div>';
+
+  panel.innerHTML = `
+    <div class="chat-schedule-header">
+      <div>
+        <div class="chat-thread-title">Coordinar primera clase</div>
+        <div class="chat-thread-subtitle">${accepted ? 'Ya hay una clase creada desde el chat.' : activeProposal ? 'Hay una propuesta pendiente de respuesta.' : 'Propón fecha y hora para convertir el acuerdo en clase programada.'}</div>
+      </div>
+    </div>
+    <form class="chat-schedule-form" data-schedule-form>
+      <input class="form-control" type="date" data-schedule-date required aria-label="Fecha de clase">
+      <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio">
+      <input class="form-control" type="time" data-schedule-end required aria-label="Hora de fin">
+      <select class="form-control" data-schedule-modality aria-label="Modalidad">
+        <option value="por_acordar">Modalidad por acordar</option>
+        <option value="online">Online</option>
+        <option value="presencial">Presencial</option>
+      </select>
+      <input class="form-control" type="text" maxlength="300" data-schedule-notes placeholder="Notas: lugar, material, frecuencia...">
+      <button class="btn btn-primary btn-sm" type="submit">Proponer horario</button>
+    </form>
+    <div class="schedule-proposal-list">${proposalRows}</div>`;
 }
 
 function renderChatList(container, chats, selectedId, role) {
@@ -431,6 +499,7 @@ export async function initChatWidget({
     lastUnreadCount: 0,
     selectedChat: null,
     unsubscribe: null,
+    unsubscribeProposals: null,
     unsubscribeNotifications: null,
     unsubscribePushMessages: null,
     notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
@@ -486,6 +555,26 @@ export async function initChatWidget({
     })));
   }
 
+  async function addSystemChatMessage(chat, body) {
+    const chatRef = doc(firebaseDb, 'chats', chat.id);
+    const messageRef = await addDoc(collection(chatRef, 'mensajes'), {
+      senderUid: currentUid,
+      senderRole: role,
+      senderName,
+      body,
+      createdAt: serverTimestamp(),
+      readBy: { [currentUid]: true },
+    });
+    await updateDoc(chatRef, {
+      lastMessage: body.slice(0, 180),
+      lastMessageAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await notifyChatRecipients(chat, messageRef.id, body).catch((error) => {
+      console.warn('No se pudieron crear notificaciones de coordinacion', error);
+    });
+  }
+
   async function refreshChats() {
     container.querySelector('[data-chat-list]').innerHTML = '<div class="chat-empty-state">Cargando chats...</div>';
     state.chats = await loadChats(db, role, profileId, usuario);
@@ -502,6 +591,7 @@ export async function initChatWidget({
     container.querySelector('[data-chat-form]').style.display = '';
 
     if (state.unsubscribe) state.unsubscribe();
+    if (state.unsubscribeProposals) state.unsubscribeProposals();
     const messagesQuery = query(
       collection(firebaseDb, 'chats', chat.id, 'mensajes'),
       orderBy('createdAt', 'asc'),
@@ -512,6 +602,19 @@ export async function initChatWidget({
     }, (error) => {
       console.error('No se pudo abrir el chat', error);
       showToast('Chat no disponible', error.message || 'No se pudo abrir la conversacion.', 'error');
+    });
+
+    const proposalsQuery = query(
+      collection(firebaseDb, 'chats', chat.id, 'programaciones'),
+      orderBy('createdAt', 'desc'),
+      limit(20),
+    );
+    state.unsubscribeProposals = onSnapshot(proposalsQuery, (snap) => {
+      state.scheduleProposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+      renderSchedulePanel(container, chat, state.scheduleProposals, role, currentUid);
+    }, (error) => {
+      console.error('No se pudieron abrir propuestas de horario', error);
+      showToast('Horarios no disponibles', error.message || 'No se pudieron abrir las propuestas.', 'error');
     });
   }
 
@@ -572,9 +675,141 @@ export async function initChatWidget({
     }
 
     const item = event.target.closest('[data-chat-id]');
-    if (!item) return;
-    selectChat(item.dataset.chatId);
+    if (item) {
+      selectChat(item.dataset.chatId);
+      return;
+    }
+
+    const accept = event.target.closest('[data-accept-schedule]');
+    const reject = event.target.closest('[data-reject-schedule]');
+    if (!accept && !reject) return;
+    const proposalNode = event.target.closest('[data-schedule-proposal-id]');
+    const proposal = state.scheduleProposals?.find((entry) => entry.id === proposalNode?.dataset.scheduleProposalId);
+    if (!proposal || !state.selectedChat) return;
+    if (accept) {
+      acceptScheduleProposal(proposal).catch((error) => {
+        console.error('No se pudo aceptar horario', error);
+        showToast('No se creo la clase', error.message || 'Revisa permisos o datos de horario.', 'error');
+      });
+    } else {
+      rejectScheduleProposal(proposal).catch((error) => {
+        console.error('No se pudo rechazar horario', error);
+        showToast('No se rechazo', error.message || 'Revisa permisos.', 'error');
+      });
+    }
   });
+
+  container.addEventListener('submit', async (event) => {
+    const scheduleForm = event.target.closest('[data-schedule-form]');
+    if (!scheduleForm) return;
+    event.preventDefault();
+    if (!state.selectedChat) return;
+    const fecha = clean(scheduleForm.querySelector('[data-schedule-date]')?.value, 20);
+    const horaInicio = clean(scheduleForm.querySelector('[data-schedule-start]')?.value, 8);
+    const horaFin = clean(scheduleForm.querySelector('[data-schedule-end]')?.value, 8);
+    const modalidad = clean(scheduleForm.querySelector('[data-schedule-modality]')?.value, 40);
+    const notas = clean(scheduleForm.querySelector('[data-schedule-notes]')?.value, 300);
+    const validation = validateClassTimeRange(fecha, horaInicio, horaFin);
+    if (!validation.valid) {
+      showToast('Horario no valido', 'La fecha y la hora de fin deben ser correctas.', 'warning');
+      return;
+    }
+    const button = scheduleForm.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const proposal = {
+        assignmentId: state.selectedChat.assignmentId || state.selectedChat.asignacion_id || state.selectedChat.id,
+        familyUid: state.selectedChat.familyUid || state.selectedChat.familia_id,
+        teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+        studentId: state.selectedChat.studentId || state.selectedChat.alumno_id || null,
+        materia: state.selectedChat.materia || '',
+        fecha,
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+        durationMinutes: validation.durationMinutes,
+        modalidad,
+        notas,
+        status: 'propuesta',
+        proposedByUid: currentUid,
+        proposedByRole: role,
+        proposedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      await addDoc(collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones'), proposal);
+      scheduleForm.reset();
+      await addSystemChatMessage(state.selectedChat, `Horario propuesto: ${formatDate(fecha)} de ${horaInicio} a ${horaFin}.`);
+      showToast('Horario propuesto', 'La otra parte puede aceptarlo desde este chat.', 'success');
+    } catch (error) {
+      showToast('No se pudo proponer', error.message || 'Revisa permisos de chat.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+  async function rejectScheduleProposal(proposal) {
+    const ref = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposal.id);
+    await updateDoc(ref, {
+      status: 'rechazada',
+      respondedByUid: currentUid,
+      respondedByRole: role,
+      respondedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addSystemChatMessage(state.selectedChat, `Horario rechazado: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);
+    showToast('Horario rechazado', 'Podéis proponer otra alternativa.', 'info');
+  }
+
+  async function acceptScheduleProposal(proposal) {
+    const classId = classIdFromProposal(state.selectedChat.id, proposal.id);
+    const proposalRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposal.id);
+    const nowIso = new Date().toISOString();
+    const input = {
+      assignmentId: state.selectedChat.assignmentId || state.selectedChat.asignacion_id || state.selectedChat.id,
+      scheduleProposalId: proposal.id,
+      profesor_id: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+      teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+      familia_id: state.selectedChat.familyUid || state.selectedChat.familia_id,
+      familyUid: state.selectedChat.familyUid || state.selectedChat.familia_id,
+      alumno_id: state.selectedChat.studentId || state.selectedChat.alumno_id,
+      studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
+      materia: proposal.materia || state.selectedChat.materia || '',
+      subject: proposal.materia || state.selectedChat.materia || '',
+      fecha: proposal.fecha,
+      hora_inicio: proposal.hora_inicio,
+      hora_fin: proposal.hora_fin,
+      estado: 'confirmada',
+      observaciones: proposal.notas || '',
+      calendarUid: classId,
+    };
+    const payload = {
+      ...buildAdminClassPayload(input, {}, { nowIso, calendarUid: classId }),
+      assignmentId: input.assignmentId,
+      asignacion_id: input.assignmentId,
+      scheduleProposalId: proposal.id,
+      createdFrom: 'chat_schedule_proposal',
+      schedulingStatus: 'confirmed',
+      modality: proposal.modalidad || 'por_acordar',
+      modalidad: proposal.modalidad || 'por_acordar',
+      createdByUid: currentUid,
+      createdByRole: role,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    const classRef = doc(firebaseDb, 'clases', classId);
+    const existingClass = await getDoc(classRef);
+    if (!existingClass.exists()) await setDoc(classRef, payload);
+    await updateDoc(proposalRef, {
+      status: 'aceptada',
+      classId,
+      respondedByUid: currentUid,
+      respondedByRole: role,
+      respondedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addSystemChatMessage(state.selectedChat, `Horario aceptado y clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);
+    showToast('Clase creada', 'La clase ya aparece en el calendario de familia y profesor.', 'success');
+  }
 
   container.querySelector('[data-chat-form]').addEventListener('submit', async (event) => {
     event.preventDefault();

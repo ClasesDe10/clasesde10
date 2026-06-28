@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-analytics">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-scheduling">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1177,7 +1177,7 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260628-audit';
+import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
 import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-rules';
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
@@ -1187,10 +1187,11 @@ import { initAdminDocuments } from '../../js/admin-documents.js?v=20260628-docum
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
 import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
+import { buildNotificationDocument, NOTIFICATION_EVENTS } from '../../js/notification-engine.js';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-scheduling';
 import {
   addDoc,
   collection,
@@ -3241,6 +3242,155 @@ async function getSolicitudFirestore(id) {
   return mapSolicitudFirestore(solicitudSnap, familiasMap, alumnosMap, profesoresMap);
 }
 
+function adminPlainText(value, max = 500) {
+  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+function adminParticipantMap(ids = []) {
+  return [...new Set(ids.map((id) => adminPlainText(id, 180)).filter(Boolean))]
+    .reduce((acc, id) => {
+      acc[id] = true;
+      return acc;
+    }, {});
+}
+
+function nombreAlumnoSolicitud(solicitud = {}) {
+  return [
+    solicitud.alumnos?.nombre || solicitud.alumno_nombre || solicitud.studentName || '',
+    solicitud.alumnos?.apellidos || solicitud.alumno_apellidos || '',
+  ].filter(Boolean).join(' ').trim();
+}
+
+function nombreFamiliaSolicitud(solicitud = {}) {
+  return [
+    solicitud.familias?.usuarios?.nombre || solicitud.familyName || '',
+    solicitud.familias?.usuarios?.apellidos || '',
+  ].filter(Boolean).join(' ').trim()
+    || solicitud.familias?.usuarios?.email
+    || solicitud.familyEmail
+    || 'Familia';
+}
+
+async function crearNotificacionAsignacion({ userUid, role, asignacionId, solicitud, profesor, title, body }) {
+  if (!userUid) return;
+  await addDoc(collection(firebaseDb, 'notificaciones'), {
+    ...buildNotificationDocument({
+      userUid,
+      role,
+      title,
+      body,
+      type: NOTIFICATION_EVENTS.ASSIGNMENT_CREATED,
+      source: 'admin',
+      createdByUid: usuario.uid || usuario.id || '',
+      payload: {
+        assignmentId: asignacionId,
+        requestId: solicitud?.id || '',
+        teacherUid: profesor?.id || '',
+        familyUid: solicitud?.familia_id || solicitud?.familyUid || '',
+        studentId: solicitud?.alumno_id || solicitud?.studentId || '',
+        url: '/pages/login.html',
+      },
+    }),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, notas }) {
+  const familyUid = adminPlainText(solicitud?.familia_id || solicitud?.familyUid || '', 180);
+  const teacherUid = adminPlainText(profesor?.id || solicitud?.profesor_asignado_id || solicitud?.assignedTeacherUid || '', 180);
+  const studentId = adminPlainText(solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid || '', 180);
+  const materia = adminPlainText(solicitud?.materia || solicitud?.subject || '', 180);
+  const familyName = nombreFamiliaSolicitud(solicitud);
+  const teacherName = nombreProfesor(profesor);
+  const studentName = nombreAlumnoSolicitud(solicitud);
+  const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const chatRef = firestoreDoc(firebaseDb, 'chats', asignacionId);
+  const existing = await getDoc(chatRef);
+  const introAlreadySent = existing.exists() && existing.data()?.assignmentIntroSentAt;
+  const baseChat = {
+    assignmentId: asignacionId,
+    asignacion_id: asignacionId,
+    familyUid,
+    familia_id: familyUid,
+    teacherUid,
+    profesor_id: teacherUid,
+    studentId: studentId || null,
+    alumno_id: studentId || null,
+    materia,
+    familyName,
+    teacherName,
+    studentName,
+    participantUids: adminParticipantMap([
+      familyUid,
+      teacherUid,
+      usuario.uid,
+      usuario.id,
+      usuario.firebase_uid,
+    ]),
+    active: true,
+    schedulingStatus: 'pendiente_horario',
+    updatedAt: serverTimestamp(),
+  };
+
+  await setDoc(chatRef, {
+    ...baseChat,
+    createdAt: existing.exists() ? existing.data()?.createdAt || serverTimestamp() : serverTimestamp(),
+    ...(introAlreadySent ? {} : {
+      lastMessage: introBody,
+      lastMessageAt: serverTimestamp(),
+      assignmentIntroSentAt: serverTimestamp(),
+    }),
+  }, { merge: true });
+
+  if (!introAlreadySent) {
+    await addDoc(collection(chatRef, 'mensajes'), {
+      senderUid: usuario.uid || usuario.id || '',
+      senderRole: 'admin',
+      senderName: [usuario.nombre, usuario.apellidos].filter(Boolean).join(' ').trim() || usuario.email || 'Admin',
+      body: introBody,
+      createdAt: serverTimestamp(),
+      readBy: adminParticipantMap([usuario.uid, usuario.id, usuario.firebase_uid]),
+    });
+  }
+
+  await Promise.all([
+    crearNotificacionAsignacion({
+      userUid: familyUid,
+      role: 'familia',
+      asignacionId,
+      solicitud,
+      profesor,
+      title: 'Profesor asignado',
+      body: `Ya tienes profesor para ${materia || 'la solicitud'}. Entra en el chat para acordar horario.`,
+    }),
+    crearNotificacionAsignacion({
+      userUid: teacherUid,
+      role: 'profesor',
+      asignacionId,
+      solicitud,
+      profesor,
+      title: 'Nueva familia asignada',
+      body: `Tienes una nueva asignacion${studentName ? ` con ${studentName}` : ''}. Entra en el chat para acordar horario.`,
+    }),
+  ]);
+
+  await addDoc(collection(firebaseDb, 'automationEvents'), {
+    type: 'assignment_ready_for_scheduling',
+    status: 'completed',
+    assignmentId: asignacionId,
+    requestId: solicitud?.id || '',
+    teacherUid,
+    familyUid,
+    studentId,
+    subject: materia,
+    notes: adminPlainText(notas, 500),
+    createdByUid: usuario.uid || usuario.id || '',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 async function cargarSolicitudMatchesFirestore(solicitudId) {
   const snap = await getDocs(collection(firebaseDb, 'solicitudMatches'));
   return snap.docs
@@ -4169,6 +4319,10 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
     showToast('Solicitud incompleta', 'La solicitud no tiene alumno asociado. Edita o crea el alumno antes de asignar profesor.', 'warning');
     return;
   }
+  if (!familiaId) {
+    showToast('Solicitud incompleta', 'La solicitud no tiene familia asociada. Sin familia no se puede abrir el chat de coordinacion.', 'warning');
+    return;
+  }
 
   const notas = document.getElementById('asignar-notas').value.trim();
   const now = new Date().toISOString();
@@ -4179,6 +4333,10 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       status: 'asignada',
       profesor_asignado_id: profId,
       assignedTeacherUid: profId,
+      asignacion_id: asignacionId,
+      assignmentId: asignacionId,
+      chatId: asignacionId,
+      schedulingStatus: 'pendiente_horario',
       fecha_asignacion: now,
       assignedAt: serverTimestamp(),
       notas_admin: notas,
@@ -4203,6 +4361,9 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       active: true,
       estado: 'activa',
       status: 'activa',
+      chatId: asignacionId,
+      schedulingStatus: 'pendiente_horario',
+      estado_programacion: 'pendiente_horario',
       source: 'admin_manual',
       notas_admin: notas,
       assignedAt: serverTimestamp(),
@@ -4210,6 +4371,22 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }, { merge: true });
+
+    await prepararFlujoAsignacion({
+      asignacionId,
+      solicitud: {
+        ...solicitud,
+        id,
+        familia_id: familiaId,
+        familyUid: familiaId,
+        alumno_id: alumnoId,
+        studentId: alumnoId,
+        profesor_asignado_id: profId,
+        assignedTeacherUid: profId,
+      },
+      profesor,
+      notas,
+    });
 
     await recordAdminAudit('assignment.manual_created', {
       module: 'matching',
@@ -4242,7 +4419,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
   }
 
   closeModal('modal-asignar');
-  showToast('Asignado', 'Profesor asignado y relacion activa creada correctamente.', 'success');
+  showToast('Asignado', 'Profesor asignado, chat creado y coordinacion de horario activada.', 'success');
   cargarSolicitudes();
 });
 
