@@ -1,104 +1,90 @@
-# Sistema de confianza y reputacion
+# Sistema de reputacion ClasesDe10 v2
 
-## Problema auditado
+El sistema de reputacion ya no es un contador manual ni una simple media de valoraciones. Es un motor automatico y explicable que usa datos operativos de la plataforma para responder a una pregunta: si una familia ve este perfil, puede decidir en menos de 30 segundos si transmite confianza.
 
-Antes de contratar o aceptar una asignacion, una familia puede dudar por:
+## Principios
 
-- si el profesor existe y esta validado por ClasesDe10;
-- si su formacion y documentacion son reales;
-- si el perfil esta completo y permite comparar rapido;
-- si responde a tiempo;
-- si suele realizar las clases programadas;
-- si cancela demasiado;
-- si tiene experiencia suficiente para la materia/nivel;
-- si tiene disponibilidad real;
-- si tiene historial operativo dentro de la plataforma;
-- si hay incidencias abiertas o pagos pendientes relacionados.
-
-Tambien tiene sentido medir confianza de familias cuando afecta a operacion:
-
-- contacto operativo;
-- direccion/zona para matching presencial;
-- alumnos activos;
-- pagos pendientes;
-- historial de clases;
-- incidencias abiertas;
-- actividad reciente.
-
-## Arquitectura implementada
-
-El sistema vive en `js/trust-engine.js` y es determinista, gratuito y explicable.
-
-Entradas:
-
-- `profesores` y `familias`;
-- `documentos`;
-- `clases`;
-- `pagos`;
-- `solicitudes`;
-- `solicitudMatches`;
-- `asignaciones`;
-- `incidencias`;
-- `alumnos`.
-
-Salidas:
-
-- `trustScore`;
-- `trustLevel`;
-- `trustBadges`;
-- `trustWarnings`;
-- `trustComponents`;
-- `reputationMetrics`;
-- `publicTrustStats`;
-- `trustVersion`;
-- `trustUpdatedAt`.
+- La reputacion no la escribe el usuario. Se calcula desde `documentos`, `clases`, `pagos`, `solicitudes`, `solicitudMatches`, `asignaciones`, `incidencias`, `alumnos` y el perfil.
+- Un perfil completo ayuda, pero no sustituye al historial real.
+- Las muestras pequenas se suavizan con puntuacion bayesiana para no castigar ni inflar injustamente a usuarios nuevos.
+- Las metricas sensibles o facilmente malinterpretables quedan para admin.
+- Cada insignia representa un criterio objetivo y verificable.
 
 ## Niveles
 
-- `destacado`: 90-100.
-- `alto`: 78-89.
-- `medio`: 60-77.
-- `inicial`: menos de 60.
+- Bronce: perfil inicial o historial todavia limitado.
+- Plata: perfil operativo con verificacion o actividad minima.
+- Oro: buen historial, baja friccion y sin incidencias abiertas relevantes.
+- Platino: confianza sobresaliente con documentos validados, volumen suficiente y comportamiento consistente.
 
-## Badges principales
+Un profesor no puede llegar a Platino solo rellenando campos. Necesita identidad y formacion validadas, al menos 20 clases realizadas y cero incidencias abiertas.
 
-Profesores:
+## Metricas principales de profesores
 
-- verificado por ClasesDe10;
-- identidad validada;
-- formacion validada;
-- perfil completo;
-- experiencia alta;
-- historial contrastado;
-- alta asistencia;
-- pocas cancelaciones;
-- responde rapido;
-- perfil destacado;
-- Bizum confirmado.
+- clases realizadas, canceladas y no realizadas;
+- porcentaje de realizacion y cancelacion;
+- horas impartidas;
+- alumnos activos;
+- puntualidad por check-ins cuando existan;
+- tiempo medio de respuesta;
+- tiempo medio de aceptacion/aceptacion de solicitudes;
+- regularidad semanal;
+- antiguedad;
+- experiencia declarada;
+- documentos subidos y documentos validados;
+- incidencias, reclamaciones y pagos pendientes;
+- valoraciones con factor de confianza por volumen.
 
-Familias:
+## Metricas principales de familias
 
-- familia validada;
-- tutor validado;
-- perfil completo;
-- alumno registrado;
-- pagos fiables;
-- buena asistencia.
+- alumnos activos;
+- clases realizadas y canceladas;
+- horas realizadas;
+- fiabilidad de pagos;
+- pagos pendientes;
+- incidencias;
+- identidad del tutor;
+- completitud del perfil;
+- actividad reciente y antiguedad.
 
-## Actualizacion automatica
+## Visibilidad
 
-El worker `scripts/firebase-automation-worker.mjs` recalcula y persiste reputacion en Firestore para profesores y familias mediante `processTrustReputation`.
+Publico:
 
-El admin tambien calcula la reputacion al cargar datos vivos, por lo que ve informacion actual aunque el resumen persistido aun no se haya refrescado.
+- `trustScore`;
+- nivel Bronce/Plata/Oro/Platino;
+- insignias publicas;
+- `publicTrustStats`.
 
-## Uso en producto
+Solo admin:
 
-- Panel admin: columna de confianza en profesores y familias.
-- Detalle admin de profesor/familia: panel explicable con componentes, badges, metricas publicas y alertas.
-- Asignacion de profesor: las recomendaciones muestran reputacion junto al score de matching.
-- Panel familia: los profesores asignados muestran score, badges y estadisticas publicas.
-- Matching: `ai-engine.js` usa `trustScore`, `reputationMetrics` y senales operativas dentro del componente `reputation`.
+- `trustWarnings`;
+- `trustComponents`;
+- `adminTrustStats`;
+- `trustRiskFlags`;
+- pagos pendientes;
+- incidencias abiertas;
+- documentos pendientes;
+- confianza estadistica de la muestra.
 
-## Principio de seguridad
+## Persistencia
 
-No se inventan datos. Si no hay historico, se usa una puntuacion neutra y se muestra como falta de historico, no como garantia.
+El snapshot persistido se genera con `buildTrustSnapshotPatch()`:
+
+- `trustScore`;
+- `trustLevel`;
+- `trustLevelKey`;
+- `trustLevelRank`;
+- `trustLevelLabel`;
+- `trustBadges`;
+- `trustWarnings`;
+- `trustComponents`;
+- `trustSignals`;
+- `trustRiskFlags`;
+- `trustVisibility`;
+- `reputationMetrics`;
+- `publicTrustStats`;
+- `adminTrustStats`;
+- `trustVersion`.
+
+Los formularios de profesor y familia ya no guardan `trustScore` ni `trustLevel`. La automatizacion `npm run automation:trust` y el worker de GitHub Actions recalculan y persisten la reputacion.

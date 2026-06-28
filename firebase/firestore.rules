@@ -288,8 +288,6 @@ service cloud.firestore {
           'profileCompletionPercent',
           'profileCompletion',
           'profileIssues',
-          'trustScore',
-          'trustLevel',
           'updatedAt',
           'updated_at'
         ])
@@ -380,8 +378,6 @@ service cloud.firestore {
           'profileCompletionPercent',
           'profileCompletion',
           'profileIssues',
-          'trustScore',
-          'trustLevel',
           'estado_verificacion',
           'verificationStatus',
           'status',

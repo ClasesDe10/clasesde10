@@ -44,7 +44,9 @@ const teacher = evaluateTeacherProfileProfessional({
 
 assert.equal(teacher.complete, true);
 assert.ok(teacher.percent >= 90, `Teacher percent too low: ${teacher.percent}`);
-assert.ok(teacher.trustScore >= 70, `Teacher trust too low: ${teacher.trustScore}`);
+assert.ok(teacher.trustScore >= 60, `Teacher trust too low: ${teacher.trustScore}`);
+assert.equal(teacher.trustProfile.adminStats.reputationCanBeManipulatedByProfileOnly, false);
+assert.ok(teacher.trustProfile.riskFlags.includes('low_activity_sample'));
 assert.deepEqual(teacher.normalized.subjects, ['Matematicas', 'Padel']);
 
 const family = evaluateFamilyProfileProfessional({
@@ -68,7 +70,7 @@ const family = evaluateFamilyProfileProfessional({
 
 assert.equal(family.complete, true);
 assert.ok(family.percent >= 90, `Family percent too low: ${family.percent}`);
-assert.ok(family.trustScore >= 75, `Family trust too low: ${family.trustScore}`);
+assert.ok(family.trustScore >= 70, `Family trust too low: ${family.trustScore}`);
 
 const incompleteFamily = evaluateFamilyProfileProfessional({
   nombre: 'F',

@@ -36,8 +36,6 @@ for (const id of [
 for (const field of [
   'profileCompletionPercent',
   'profileIssues',
-  'trustScore',
-  'trustLevel',
   'preferredContact',
   'emergencyContactPhone',
   'specialties',
@@ -49,6 +47,14 @@ for (const field of [
     `Dashboards must persist ${field}`,
   );
   assert.ok(firestoreRules.includes(`'${field}'`), `Firestore rules must allow ${field}`);
+}
+
+for (const computedField of ['trustScore', 'trustLevel']) {
+  assert.ok(
+    familyDashboard.includes(computedField) || professorDashboard.includes(computedField) || profileEngine.includes(computedField),
+    `Dashboards must display calculated ${computedField}`,
+  );
+  assert.ok(!firestoreRules.includes(`'${computedField}'`), `Users must not self-write calculated ${computedField}`);
 }
 
 assert.ok(profileEngine.includes('evaluateTeacherProfileProfessional'), 'Missing teacher profile evaluator');

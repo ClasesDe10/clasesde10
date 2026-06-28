@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-trust">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-reputation-v2">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -880,11 +880,11 @@ import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
 import { collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260628-trust';
+import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260628-reputation-v2';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
-} from '../../js/trust-engine.js?v=20260628-trust';
+} from '../../js/trust-engine.js?v=20260628-reputation-v2';
 import {
   SCHEDULED_CLASS_STATUSES,
   buildAdminClassPayload,
@@ -2001,10 +2001,12 @@ function trustBadgeClass(score) {
 }
 
 function formatTrustPercent(value) {
+  if (value === null || value === undefined || value === '') return '-';
   return Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 100)}%` : '-';
 }
 
 function formatTrustHours(value) {
+  if (value === null || value === undefined || value === '') return '-';
   return Number.isFinite(Number(value)) ? `${Math.round(Number(value) * 10) / 10}h` : '-';
 }
 
@@ -2030,6 +2032,8 @@ function renderTrustPanel(trust) {
   if (!trust) return '';
   const metrics = trust.metrics || {};
   const publicStats = trust.publicStats || {};
+  const adminStats = trust.adminStats || {};
+  const levelLabel = trust.publicLevelLabel || trust.trustLevelLabel || trust.level || trust.trustLevel || 'Bronce';
   const components = (trust.components || []).map((item) => `
     <div class="trust-component-row">
       <div>
@@ -2052,9 +2056,18 @@ function renderTrustPanel(trust) {
       <div class="trust-badges">${renderTrustBadges(trust.badges, 6)}</div>
       <div class="trust-public-stats">
         <div><strong>${sanitize(publicStats.completedClasses ?? metrics.completedClasses ?? 0)}</strong><span>clases realizadas</span></div>
+        <div><strong>${sanitize(publicStats.completedHours ?? metrics.completedHours ?? 0)}h</strong><span>horas impartidas</span></div>
+        <div><strong>${sanitize(publicStats.activeStudents ?? metrics.activeStudents ?? 0)}</strong><span>alumnos activos</span></div>
         <div><strong>${formatTrustPercent(publicStats.completionRate ?? metrics.completionRate)}</strong><span>realizacion</span></div>
         <div><strong>${formatTrustPercent(publicStats.cancellationRate ?? metrics.cancellationRate)}</strong><span>cancelacion</span></div>
+        <div><strong>${formatTrustPercent(publicStats.punctualityRate ?? metrics.punctualityRate)}</strong><span>puntualidad</span></div>
         <div><strong>${formatTrustHours(publicStats.averageResponseHours ?? metrics.averageResponseHours)}</strong><span>respuesta media</span></div>
+      </div>
+      <div class="trust-public-stats trust-public-stats-compact" style="margin-top:10px">
+        <div><strong>${formatTrustPercent(publicStats.acceptanceRate ?? metrics.acceptanceRate)}</strong><span>aceptacion</span></div>
+        <div><strong>${sanitize(metrics.verifiedDocuments ?? publicStats.verifiedDocuments ?? 0)}</strong><span>docs validados</span></div>
+        <div><strong>${sanitize(metrics.openIncidents ?? adminStats.openIncidents ?? 0)}</strong><span>incidencias abiertas</span></div>
+        <div><strong>${formatTrustPercent(adminStats.sampleConfidence)}</strong><span>confianza muestra</span></div>
       </div>
       ${components ? `<div class="trust-components">${components}</div>` : ''}
       ${warnings.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Senales a revisar</div>${warnings.map(sanitize).join(' Â· ')}</div></div>` : ''}

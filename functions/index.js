@@ -1022,6 +1022,8 @@ async function loadTeachers() {
         trustScore: Number(data.trustScore || data.reputationScore || 0),
         trustLevel: data.trustLevel || '',
         reputationMetrics: data.reputationMetrics || {},
+        publicTrustStats: data.publicTrustStats || {},
+        trustWarnings: Array.isArray(data.trustWarnings) ? data.trustWarnings : [],
         raw: data,
       };
     })
@@ -1107,6 +1109,36 @@ function scoreTeacher(profile, teacher) {
   } else if (teacher.trustScore > 0) {
     risks.push(`Confianza operativa baja (${teacher.trustScore}/100).`);
   }
+
+  const reputation = teacher.reputationMetrics || {};
+  const publicTrust = teacher.publicTrustStats || {};
+  const completionRate = Number(reputation.adjustedCompletionRate ?? reputation.completionRate ?? publicTrust.completionRate);
+  const cancellationRate = Number(reputation.adjustedCancellationRate ?? reputation.cancellationRate ?? publicTrust.cancellationRate);
+  const punctualityRate = Number(reputation.punctualityRate ?? publicTrust.punctualityRate);
+  const completedHours = Number(reputation.completedHours ?? publicTrust.completedHours);
+  const activeStudents = Number(reputation.activeStudents ?? publicTrust.activeStudents);
+
+  if (Number.isFinite(completionRate) && completionRate >= 0.9) {
+    score += 4;
+    reasons.push('Historial de clases realizadas muy alto.');
+  }
+  if (Number.isFinite(cancellationRate) && cancellationRate > 0.18) {
+    score -= 8;
+    risks.push('Tasa de cancelacion elevada.');
+  }
+  if (Number.isFinite(punctualityRate) && punctualityRate >= 0.9) {
+    score += 3;
+    reasons.push('Puntualidad contrastada.');
+  }
+  if (Number.isFinite(completedHours) && completedHours >= 30) {
+    score += 3;
+    reasons.push(`${Math.round(completedHours)}h impartidas registradas.`);
+  }
+  if (Number.isFinite(activeStudents) && activeStudents >= 2) {
+    score += 2;
+    reasons.push(`${Math.round(activeStudents)} alumno(s) activo(s).`);
+  }
+  if (teacher.trustWarnings.length) risks.push(...teacher.trustWarnings.slice(0, 2));
 
   return {
     score: Math.max(0, Math.min(100, Math.round(score))),

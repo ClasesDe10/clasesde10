@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-trust">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-reputation-v2">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -504,7 +504,7 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260628-trust';
+} from '../../js/profile-engine.js?v=20260628-reputation-v2';
 import {
   buildClassIncidentPayload,
   buildFamilyConfirmationPayload,
@@ -574,6 +574,7 @@ function renderQualityPanel(targetId, evaluation) {
   const recommendations = evaluation.recommendations.slice(0, 4);
   const trustBadges = (evaluation.trustBadges || []).filter((item) => item.public !== false).slice(0, 5);
   const trustStats = evaluation.publicTrustStats || {};
+  const fmtPercent = (value) => (value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? '-' : `${Math.round(Number(value) * 100)}%`);
   const indicatorHtml = evaluation.indicators.map((indicator) => `
     <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:${indicator.complete ? 'rgba(22,163,74,.10)' : 'rgba(217,119,6,.10)'};color:${indicator.complete ? 'var(--success)' : 'var(--warning)'};font-size:.78rem;font-weight:700">
       ${indicator.complete ? 'OK' : '!'} ${sanitize(indicator.label)}
@@ -591,7 +592,7 @@ function renderQualityPanel(targetId, evaluation) {
       <div>
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${indicatorHtml}</div>
         <div style="font-size:.88rem;color:var(--gray-dark)">
-          <strong>Confianza:</strong> ${evaluation.trustScore}/100 (${sanitize(evaluation.trustLevel)}).
+          <strong>Reputacion:</strong> ${evaluation.trustScore}/100 (${sanitize(trustStats.level || evaluation.trustLevel)}).
           ${evaluation.pendingDocuments ? `${evaluation.pendingDocuments} documento(s) pendiente(s) de validacion.` : ''}
         </div>
         <div class="trust-badges trust-badges-compact" style="margin-top:10px">
@@ -600,8 +601,9 @@ function renderQualityPanel(targetId, evaluation) {
         <div class="trust-public-stats trust-public-stats-compact" style="margin-top:10px">
           <div><strong>${sanitize(trustStats.activeStudents ?? 0)}</strong><span>alumnos</span></div>
           <div><strong>${sanitize(trustStats.completedClasses ?? 0)}</strong><span>clases</span></div>
-          <div><strong>${Math.round(Number(trustStats.paymentReliability ?? 0) * 100)}%</strong><span>pagos ok</span></div>
-          <div><strong>${Math.round(Number(trustStats.cancellationRate ?? 0) * 100)}%</strong><span>cancelacion</span></div>
+          <div><strong>${sanitize(trustStats.completedHours ?? 0)}h</strong><span>realizadas</span></div>
+          <div><strong>${fmtPercent(trustStats.paymentReliability)}</strong><span>pagos ok</span></div>
+          <div><strong>${fmtPercent(trustStats.cancellationRate)}</strong><span>cancelacion</span></div>
         </div>
         ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Datos necesarios para asignaciones mas precisas</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
         ${!missing.length && recommendations.length ? `<div style="margin-top:10px;color:var(--gray-mid);font-size:.84rem">Siguiente mejora: ${recommendations.map(sanitize).join(', ')}</div>` : ''}
@@ -737,7 +739,7 @@ async function cargarInicio() {
               ${(p.trustBadges || []).filter((item) => item.public !== false).slice(0,2).map((item) => `<span class="badge badge-gray">${sanitize(item.label)}</span>`).join('')}
             </div>
             <div style="font-size:.78rem;color:var(--gray-mid);margin-bottom:4px">
-              ${(p.publicTrustStats?.completedClasses ?? p.reputationMetrics?.completedClasses ?? 0)} clases registradas · cancelacion ${Math.round(Number(p.publicTrustStats?.cancellationRate ?? p.reputationMetrics?.cancellationRate ?? 0) * 100)}%
+              ${(p.publicTrustStats?.completedClasses ?? p.reputationMetrics?.completedClasses ?? 0)} clases · ${(p.publicTrustStats?.completedHours ?? p.reputationMetrics?.completedHours ?? 0)}h · cancelacion ${p.publicTrustStats?.cancellationRate === null || p.publicTrustStats?.cancellationRate === undefined ? '-' : `${Math.round(Number(p.publicTrustStats?.cancellationRate ?? p.reputationMetrics?.cancellationRate ?? 0) * 100)}%`}
             </div>
             <div style="font-size:.82rem">📞 ${sanitize(p.usuarios?.telefono||'—')}</div>
           </div>
@@ -1295,8 +1297,6 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     profileCompletionPercent: evaluation.percent,
     profileCompletion: evaluation.percent,
     profileIssues: evaluation.issueLabels,
-    trustScore: evaluation.trustScore,
-    trustLevel: evaluation.trustLevel,
     updatedAt: serverTimestamp(),
     updated_at: new Date().toISOString(),
   };
@@ -1355,8 +1355,6 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
         profileComplete: evaluation.complete,
         profileCompletionPercent: evaluation.percent,
         profileIssues: evaluation.issueLabels,
-        trustScore: evaluation.trustScore,
-        trustLevel: evaluation.trustLevel,
       }).eq('id', familiaLegacy.id);
     }
   } catch (error) {

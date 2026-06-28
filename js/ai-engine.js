@@ -319,8 +319,10 @@ export function getTeacherProfile(teacher = {}) {
     trustScore: firstNumber(teacher.reputationScore, teacher.publicTrustScore, teacher.trustScore, teacher.trust_profile_score),
     trustLevel: clean(teacher.trustLevel || teacher.trust_level, 80),
     trustBadges: Array.isArray(teacher.trustBadges) ? teacher.trustBadges : [],
+    trustWarnings: Array.isArray(teacher.trustWarnings) ? teacher.trustWarnings : [],
     publicTrustStats: teacher.publicTrustStats || {},
     reputationMetrics: teacher.reputationMetrics || {},
+    adminTrustStats: teacher.adminTrustStats || {},
     raw: teacher,
   };
 }
@@ -516,15 +518,20 @@ function scoreReputation(teacherProfile) {
       score: clamp(teacherProfile.trustScore, 0, 100),
       level: teacherProfile.trustLevel || '',
       badges: teacherProfile.trustBadges || [],
+      warnings: teacherProfile.trustWarnings || [],
       metrics: teacherProfile.reputationMetrics || {},
       publicStats: teacherProfile.publicTrustStats || {},
+      adminStats: teacherProfile.adminTrustStats || {},
     }
     : null;
   const computedTrust = persistedTrust || buildTeacherTrustProfile(teacherProfile.raw || teacherProfile, {
     stats: {
       completedClasses: teacherProfile.reputationMetrics?.completedClasses ?? teacherProfile.publicTrustStats?.completedClasses,
+      completedHours: teacherProfile.reputationMetrics?.completedHours ?? teacherProfile.publicTrustStats?.completedHours,
+      activeStudents: teacherProfile.reputationMetrics?.activeStudents ?? teacherProfile.publicTrustStats?.activeStudents,
       completionRate: teacherProfile.completionRate ?? teacherProfile.reputationMetrics?.completionRate,
       cancellationRate: teacherProfile.cancellationRate ?? teacherProfile.reputationMetrics?.cancellationRate,
+      punctualityRate: teacherProfile.reputationMetrics?.punctualityRate ?? teacherProfile.publicTrustStats?.punctualityRate,
       averageResponseHours: teacherProfile.responseTimeHours ?? teacherProfile.reputationMetrics?.averageResponseHours,
       acceptanceRate: teacherProfile.acceptanceRate ?? teacherProfile.reputationMetrics?.acceptanceRate,
       activeAssignments: teacherProfile.activeAssignments,
@@ -534,6 +541,28 @@ function scoreReputation(teacherProfile) {
     parts.push(clamp(computedTrust.score, 0, 100) / 100);
     reasons.push(`Confianza operativa ${Math.round(computedTrust.score)}/100.`);
     if ((computedTrust.warnings || []).length) risks.push(...computedTrust.warnings.slice(0, 2));
+  }
+  const reputationMetrics = computedTrust.metrics || {};
+  const publicStats = computedTrust.publicStats || {};
+  const completedHours = firstNumber(reputationMetrics.completedHours, publicStats.completedHours);
+  const activeStudents = firstNumber(reputationMetrics.activeStudents, publicStats.activeStudents);
+  const punctualityRate = rate01(reputationMetrics.punctualityRate ?? publicStats.punctualityRate);
+  const adjustedCompletionRate = rate01(reputationMetrics.adjustedCompletionRate);
+  const adjustedCancellationRate = rate01(reputationMetrics.adjustedCancellationRate);
+
+  if (adjustedCompletionRate !== null) parts.push(adjustedCompletionRate);
+  if (adjustedCancellationRate !== null) parts.push(1 - adjustedCancellationRate);
+  if (punctualityRate !== null) {
+    parts.push(punctualityRate);
+    reasons.push(`Puntualidad ${Math.round(punctualityRate * 100)}%.`);
+  }
+  if (completedHours !== null && completedHours > 0) {
+    parts.push(Math.min(1, completedHours / 40));
+    reasons.push(`${round(completedHours, 1)}h impartidas registradas.`);
+  }
+  if (activeStudents !== null && activeStudents > 0) {
+    parts.push(Math.min(1, activeStudents / 4));
+    reasons.push(`${activeStudents} alumno(s) activo(s).`);
   }
 
   if (teacherProfile.rating !== null) {

@@ -116,8 +116,6 @@ async (page) => {
       profileCompletionPercent: 96,
       profileCompletion: 96,
       profileIssues: [],
-      trustScore: 82,
-      trustLevel: 'medio',
     });
     return {
       uid,

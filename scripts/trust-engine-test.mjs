@@ -83,11 +83,15 @@ const context = {
 
 const teacherTrust = buildTeacherTrustProfile(teacher, context);
 assert.equal(teacherTrust.version, TRUST_VERSION);
-assert.ok(teacherTrust.score >= 85, `Expected strong trust score, got ${teacherTrust.score}`);
+assert.ok(teacherTrust.score >= 80, `Expected strong trust score, got ${teacherTrust.score}`);
+assert.ok(['Bronce', 'Plata', 'Oro', 'Platino'].includes(teacherTrust.level), `Unexpected teacher level ${teacherTrust.level}`);
+assert.notEqual(teacherTrust.level, 'Platino', 'Three classes must not produce a top tier automatically.');
 assert.ok(teacherTrust.badges.some((item) => item.key === 'admin_verified'));
 assert.ok(teacherTrust.badges.some((item) => item.key === 'identity_verified'));
 assert.equal(teacherTrust.metrics.completedClasses, 3);
 assert.equal(teacherTrust.metrics.openIncidents, 0);
+assert.equal(teacherTrust.adminStats.reputationCanBeManipulatedByProfileOnly, false);
+assert.ok(teacherTrust.adminStats.sampleConfidence < 0.5);
 
 const weakTrust = buildTeacherTrustProfile(weakTeacher, context);
 assert.ok(weakTrust.score < teacherTrust.score);
@@ -112,12 +116,16 @@ assert.equal(familyTrust.metrics.pendingPayments, 0);
 const patch = buildTrustSnapshotPatch(teacherTrust);
 assert.equal(patch.trustScore, teacherTrust.score);
 assert.equal(patch.trustVersion, TRUST_VERSION);
+assert.equal(patch.trustLevelKey, teacherTrust.levelKey);
 assert.ok(Array.isArray(patch.trustBadges));
 assert.ok(patch.reputationMetrics.completedClasses >= 3);
+assert.ok(Array.isArray(patch.trustRiskFlags));
+assert.ok(patch.adminTrustStats.sourceCollections.includes('clases'));
 
 const display = summarizeTrustForDisplay(teacherTrust);
 assert.equal(display.score, teacherTrust.score);
 assert.ok(display.topBadges.length > 0);
+assert.equal(display.levelLabel, teacherTrust.publicLevelLabel);
 
 const request = {
   materia: 'Matematicas',
