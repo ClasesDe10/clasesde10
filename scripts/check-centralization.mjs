@@ -315,7 +315,8 @@ function checkCodeTouchpoints() {
   const firebaseConfig = fs.existsSync(path.join(ROOT, 'firebase.json'));
   if (firebaseConfig) ok('Firebase hosting config present', 'firebase.json');
   else fail('Firebase hosting config missing');
-  if (netlifyConfig) warn('Netlify config still present', 'legacy rollback artifact; Firebase DNS is already verified');
+  if (netlifyConfig) fail('Netlify config still present', 'Firebase Hosting is the single production target now');
+  else ok('Netlify config removed', 'Firebase Hosting is the only production hosting config');
 }
 
 async function main() {

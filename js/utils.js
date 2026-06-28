@@ -234,8 +234,138 @@ export function initFormValidationFeedback(root = document) {
 }
 
 function initPageUtilities() {
+  initMojibakeRepair();
   initResponsiveTables();
   initFormValidationFeedback();
+}
+
+const CP1252_BYTES = new Map(Object.entries({
+  '€': 0x80,
+  '‚': 0x82,
+  'ƒ': 0x83,
+  '„': 0x84,
+  '…': 0x85,
+  '†': 0x86,
+  '‡': 0x87,
+  'ˆ': 0x88,
+  '‰': 0x89,
+  'Š': 0x8A,
+  '‹': 0x8B,
+  'Œ': 0x8C,
+  'Ž': 0x8E,
+  '‘': 0x91,
+  '’': 0x92,
+  '“': 0x93,
+  '”': 0x94,
+  '•': 0x95,
+  '–': 0x96,
+  '—': 0x97,
+  '˜': 0x98,
+  '™': 0x99,
+  'š': 0x9A,
+  '›': 0x9B,
+  'œ': 0x9C,
+  'ž': 0x9E,
+  'Ÿ': 0x9F,
+}));
+
+const MOJIBAKE_PATTERN = /Ã|Â|â€|â€¦|â€”|â€“|âœ|âš|â„|ðŸ|Ã¢/;
+const VISIBLE_TEXT_ATTRIBUTES = ['aria-label', 'placeholder', 'title', 'alt', 'value'];
+const UTF8_DECODER = typeof TextDecoder !== 'undefined' ? new TextDecoder('utf-8') : null;
+
+function mojibakeScore(value) {
+  return (String(value).match(/Ã|Â|â|ðŸ|�/g) || []).length;
+}
+
+function cp1252Bytes(value) {
+  const bytes = [];
+  for (const char of String(value)) {
+    const code = char.charCodeAt(0);
+    if (code <= 255) {
+      bytes.push(code);
+    } else if (CP1252_BYTES.has(char)) {
+      bytes.push(CP1252_BYTES.get(char));
+    } else {
+      return null;
+    }
+  }
+  return new Uint8Array(bytes);
+}
+
+export function repairMojibakeText(value) {
+  if (!UTF8_DECODER || !MOJIBAKE_PATTERN.test(String(value))) return value;
+  let current = String(value);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const bytes = cp1252Bytes(current);
+    if (!bytes) break;
+    const decoded = UTF8_DECODER.decode(bytes);
+    if (!decoded || decoded === current || mojibakeScore(decoded) > mojibakeScore(current)) break;
+    current = decoded;
+    if (!MOJIBAKE_PATTERN.test(current)) break;
+  }
+  return current;
+}
+
+function repairTextNode(node) {
+  const repaired = repairMojibakeText(node.nodeValue || '');
+  if (repaired !== node.nodeValue) node.nodeValue = repaired;
+}
+
+function repairElementAttributes(element) {
+  for (const attribute of VISIBLE_TEXT_ATTRIBUTES) {
+    if (!element.hasAttribute?.(attribute)) continue;
+    const value = element.getAttribute(attribute);
+    const repaired = repairMojibakeText(value);
+    if (repaired !== value) element.setAttribute(attribute, repaired);
+  }
+}
+
+function repairVisibleText(root = document.body) {
+  if (!root) return;
+  if (root.nodeType === Node.TEXT_NODE) {
+    repairTextNode(root);
+    return;
+  }
+  if (root.nodeType !== Node.ELEMENT_NODE && root !== document.body) return;
+
+  repairElementAttributes(root);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+    acceptNode(node) {
+      const parent = node.parentElement;
+      if (parent && ['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT'].includes(parent.tagName)) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.nodeType === Node.TEXT_NODE) repairTextNode(node);
+    else if (node.nodeType === Node.ELEMENT_NODE) repairElementAttributes(node);
+  }
+}
+
+function initMojibakeRepair() {
+  if (document.body?.dataset.mojibakeRepairBound === 'true') return;
+  if (!document.body) return;
+  document.body.dataset.mojibakeRepairBound = 'true';
+  document.title = repairMojibakeText(document.title);
+  repairVisibleText(document.body);
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      mutation.addedNodes.forEach((node) => repairVisibleText(node));
+      if (mutation.type === 'characterData') repairTextNode(mutation.target);
+      if (mutation.type === 'attributes') repairElementAttributes(mutation.target);
+    }
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: VISIBLE_TEXT_ATTRIBUTES,
+  });
 }
 
 if (typeof document !== 'undefined') {

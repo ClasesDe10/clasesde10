@@ -34,6 +34,7 @@ async (page) => {
       scrollWidth: document.documentElement.scrollWidth,
       bodyScrollWidth: document.body.scrollWidth,
       overflow: document.documentElement.scrollWidth > vw + 1,
+      badText: /Ã|Â|â€|â€¦|â€”|â€“|âœ|âš|â„|ðŸ|Ã¢/.test(document.body.innerText || document.title || ''),
       bad: bad.slice(0, 5),
     };
   }, rootSelector);
@@ -69,13 +70,14 @@ async (page) => {
         await page.waitForTimeout(900);
         const data = await visibleOverflow(`#section-${section}`);
         total += 1;
-        if (data.overflow || data.bad.length) {
+        if (data.overflow || data.bad.length || data.badText) {
           failures.push({
             width,
             section,
             url: data.url,
             scrollWidth: data.scrollWidth,
             clientWidth: data.clientWidth,
+            badText: data.badText,
             bad: data.bad,
           });
         }
@@ -99,17 +101,19 @@ async (page) => {
   for (const width of auditWidths) {
     await page.setViewportSize({ width, height: 844 });
     for (const path of paths) {
-      await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+      await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(700);
       const data = await visibleOverflow('body');
       total += 1;
-      if (data.overflow || data.bad.length) {
+      if (data.overflow || data.bad.length || data.badText) {
         failures.push({
           width,
           path,
           url: data.url,
           scrollWidth: data.scrollWidth,
           clientWidth: data.clientWidth,
+          badText: data.badText,
           bad: data.bad,
         });
       }

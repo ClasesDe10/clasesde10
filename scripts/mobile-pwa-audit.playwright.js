@@ -5,7 +5,8 @@ async (page) => {
   const failures = [];
   const fail = (type, detail = {}) => failures.push({ type, ...detail });
 
-  await page.goto(`${baseUrl}/`, { waitUntil: 'networkidle', timeout: 30000 });
+  await page.goto(`${baseUrl}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
 
   const manifest = await page.evaluate(async () => {
     const response = await fetch('/manifest.json', { cache: 'reload' });
@@ -53,7 +54,8 @@ async (page) => {
   if (!serviceWorker.supported) fail('service-worker-unsupported');
   if (!serviceWorker.active) fail('service-worker-not-active', serviceWorker);
   if (!serviceWorker.controller) {
-    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
     serviceWorker.controllerAfterReload = await page.evaluate(() => Boolean(navigator.serviceWorker.controller));
   }
   if (!serviceWorker.controller && !serviceWorker.controllerAfterReload) {
