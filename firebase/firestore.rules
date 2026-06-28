@@ -263,11 +263,24 @@ service cloud.firestore {
           'nombre',
           'apellidos',
           'telefono',
-          'updatedAt'
+          'direccion',
+          'address',
+          'ciudad',
+          'city',
+          'codigo_postal',
+          'postalCode',
+          'updatedAt',
+          'updated_at'
         ])
         && requiredString('nombre', 1, 80)
         && optionalString('apellidos', 120)
         && optionalString('telefono', 40)
+        && optionalString('direccion', 240)
+        && optionalString('address', 240)
+        && optionalString('ciudad', 160)
+        && optionalString('city', 160)
+        && optionalString('codigo_postal', 20)
+        && optionalString('postalCode', 20)
         && validClientUpdatedAt()
         && (
           request.resource.data.userUid == resource.data.userUid

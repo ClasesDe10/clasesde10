@@ -420,6 +420,8 @@ import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
+import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   formatEuros, badgeEstado, getIniciales, sanitize, fechaHoy
@@ -432,8 +434,32 @@ if (!usuario) throw new Error('No autorizado');
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
-const { data: familiaData } = await db.from('familias').select('*').eq('usuario_id', usuario.id).single();
-const familiaId = familiaData?.id || usuario.uid || usuario.firebase_uid || usuario.id;
+const familiaFirestoreId = usuario.uid || usuario.firebase_uid || usuario.id;
+let familiaLegacy = null;
+try {
+  const { data } = await db.from('familias').select('*').eq('usuario_id', usuario.id).single();
+  familiaLegacy = data || null;
+} catch (error) {
+  console.warn('Perfil legacy de familia no disponible', error);
+}
+const familiaFirestoreSnap = await getDoc(firestoreDoc(firebaseDb, 'familias', familiaFirestoreId)).catch((error) => {
+  console.warn('Perfil Firestore de familia no disponible', error);
+  return null;
+});
+const familiaFirestoreExists = familiaFirestoreSnap?.exists() === true;
+let familiaData = familiaFirestoreExists
+  ? { id: familiaFirestoreSnap.id, ...familiaFirestoreSnap.data(), legacy: familiaLegacy }
+  : (familiaLegacy || {
+      id: familiaFirestoreId,
+      userUid: familiaFirestoreId,
+      email: usuario.email,
+      nombre: usuario.nombre,
+      apellidos: usuario.apellidos,
+      telefono: usuario.telefono,
+      status: 'activo',
+      active: true,
+    });
+const familiaId = familiaLegacy?.id || familiaData?.id || familiaFirestoreId;
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
@@ -922,31 +948,81 @@ async function cargarChat() {
 }
 
 async function cargarPerfil() {
-  document.getElementById('p-nombre').value    = usuario.nombre || '';
-  document.getElementById('p-apellidos').value = usuario.apellidos || '';
-  document.getElementById('p-telefono').value  = usuario.telefono || '';
-  if (familiaData) {
-    document.getElementById('p-direccion').value = familiaData.direccion || '';
-    document.getElementById('p-ciudad').value    = familiaData.ciudad || 'Madrid';
-    document.getElementById('p-cp').value        = familiaData.codigo_postal || '';
-  }
+  document.getElementById('p-nombre').value    = usuario.nombre || familiaData.nombre || '';
+  document.getElementById('p-apellidos').value = usuario.apellidos || familiaData.apellidos || '';
+  document.getElementById('p-telefono').value  = usuario.telefono || familiaData.telefono || '';
+  document.getElementById('p-direccion').value = familiaData.direccion || familiaData.address || '';
+  document.getElementById('p-ciudad').value    = familiaData.ciudad || familiaData.city || 'Madrid';
+  document.getElementById('p-cp').value        = familiaData.codigo_postal || familiaData.postalCode || '';
 }
 
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const [{ error: e1 }, { error: e2 }] = await Promise.all([
-    db.from('usuarios').update({
-      nombre:    document.getElementById('p-nombre').value.trim(),
-      apellidos: document.getElementById('p-apellidos').value.trim(),
-      telefono:  document.getElementById('p-telefono').value.trim(),
-    }).eq('id', usuario.id),
-    db.from('familias').update({
-      direccion:    document.getElementById('p-direccion').value.trim(),
-      ciudad:       document.getElementById('p-ciudad').value.trim(),
-      codigo_postal: document.getElementById('p-cp').value.trim(),
-    }).eq('id', familiaId),
-  ]);
-  if (e1 || e2) { showToast('Error', (e1||e2).message, 'error'); return; }
+  const nombre = document.getElementById('p-nombre').value.trim();
+  const apellidos = document.getElementById('p-apellidos').value.trim();
+  const telefono = document.getElementById('p-telefono').value.trim();
+  const direccion = document.getElementById('p-direccion').value.trim();
+  const ciudad = document.getElementById('p-ciudad').value.trim();
+  const codigoPostal = document.getElementById('p-cp').value.trim();
+
+  if (!nombre || !apellidos || !telefono || !direccion || !ciudad || !codigoPostal) {
+    showToast('Perfil incompleto', 'Completa nombre, apellidos, telefono, direccion, ciudad y codigo postal.', 'warning');
+    return;
+  }
+
+  const familiaPayload = {
+    nombre,
+    apellidos,
+    telefono,
+    direccion,
+    ciudad,
+    codigo_postal: codigoPostal,
+    updatedAt: serverTimestamp(),
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    await setDoc(firestoreDoc(firebaseDb, 'users', familiaFirestoreId), {
+      nombre,
+      apellidos,
+      telefono,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    if (!familiaFirestoreExists) {
+      await setDoc(firestoreDoc(firebaseDb, 'familias', familiaFirestoreId), {
+        userUid: familiaFirestoreId,
+        email: usuario.email || familiaData.email || '',
+        nombre,
+        apellidos,
+        telefono,
+        active: familiaData.active !== false,
+        status: 'activo',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    await setDoc(firestoreDoc(firebaseDb, 'familias', familiaFirestoreId), familiaPayload, { merge: true });
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo guardar el perfil en Firebase.', 'error');
+    return;
+  }
+
+  try {
+    await db.from('usuarios').update({ nombre, apellidos, telefono }).eq('id', usuario.id);
+    if (familiaLegacy?.id) {
+      await db.from('familias').update({
+        direccion,
+        ciudad,
+        codigo_postal: codigoPostal,
+      }).eq('id', familiaLegacy.id);
+    }
+  } catch (error) {
+    console.warn('No se pudo sincronizar perfil legacy de familia', error);
+  }
+
+  familiaData = { ...familiaData, ...familiaPayload };
   showToast('Guardado', 'Perfil actualizado.', 'success');
 });
 
