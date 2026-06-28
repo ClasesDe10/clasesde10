@@ -122,12 +122,35 @@ function addSystemJob(plan, event, type, payload = {}, options = {}) {
 }
 
 function addAudit(plan, event, action, metadata = {}, actorUid = 'system') {
+  const module = (() => {
+    const entity = clean(event.entityType, 80);
+    const combined = `${entity}.${action}`.toLowerCase();
+    if (/auth|login|register|password/.test(combined)) return 'auth';
+    if (/profesor|familia|alumno|profile|perfil/.test(combined)) return 'profiles';
+    if (/clase|class/.test(combined)) return 'classes';
+    if (/pago|payment/.test(combined)) return 'payments';
+    if (/solicitud|matching|assignment|asignacion/.test(combined)) return 'matching';
+    if (/document/.test(combined)) return 'documents';
+    if (/incident|incidencia/.test(combined)) return 'incidents';
+    return 'automation';
+  })();
   plan.auditLogs.push({
     id: slug('audit', action, event.entityType, dataId(event)),
+    schemaVersion: 'audit_log_v1',
     actorUid: clean(actorUid || 'system', 180),
+    actorEmail: '',
+    actorRole: actorUid === 'system' ? 'system' : '',
+    actorType: actorUid === 'system' ? 'automation' : 'user',
+    responsibleUid: clean(actorUid || 'system', 180),
+    responsibleEmail: '',
     action: clean(action, 120),
+    module,
     entityType: clean(event.entityType, 80),
     entityId: dataId(event),
+    origin: 'automation',
+    source: clean(event.source || 'platform_automation', 120),
+    severity: 'info',
+    description: clean(action.replaceAll('.', ' '), 300),
     metadata: {
       ...metadata,
       sourceEventType: clean(event.type, 120),

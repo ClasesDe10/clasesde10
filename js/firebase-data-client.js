@@ -27,6 +27,7 @@ import {
   uploadBytes,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
 import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
+import { recordDataAudit } from './audit-client.js?v=20260628-audit';
 import { lifecycleStatusForClassStatus } from './calendar-engine.js';
 import {
   buildFamilyPaymentPayload,
@@ -372,6 +373,59 @@ function normalizeWritePayload(table, payload, isCreate = false) {
   return data;
 }
 
+function auditModuleForTable(table) {
+  if (['users', 'usuarios', 'profesores', 'familias', 'alumnos', 'disponibilidad'].includes(table)) return 'profiles';
+  if (['clases', 'v_clases_completas'].includes(table)) return 'classes';
+  if (['pagos', 'resumenMensual'].includes(table)) return 'payments';
+  if (['solicitudes', 'solicitudMatches', 'matchingRuns', 'asignaciones'].includes(table)) return 'matching';
+  if (['documentos'].includes(table)) return 'documents';
+  if (['incidencias'].includes(table)) return 'incidents';
+  if (['notificaciones', 'notificationPreferences', 'notificationTokens'].includes(table)) return 'notifications';
+  if (['chats', 'mensajes'].includes(table)) return 'messaging';
+  if (['automationEvents', 'systemJobs', 'deadLetters', 'metricSnapshots', 'opsAlerts'].includes(table)) return 'automation';
+  return 'data';
+}
+
+function auditActionForWrite(table, mode) {
+  const target = collectionName(table);
+  if (mode === 'insert') return `${target}.created`;
+  if (mode === 'update') return `${target}.updated`;
+  if (mode === 'delete') return `${target}.deleted`;
+  return `${target}.changed`;
+}
+
+function auditDescription(table, mode, count = 1) {
+  const label = collectionName(table);
+  if (mode === 'insert') return `${count} registro(s) creado(s) en ${label}.`;
+  if (mode === 'update') return `${count} registro(s) actualizado(s) en ${label}.`;
+  if (mode === 'delete') return `${count} registro(s) eliminado(s) de ${label}.`;
+  return `${count} registro(s) modificados en ${label}.`;
+}
+
+async function auditDataWrite(table, mode, records = [], extra = {}) {
+  if (collectionName(table) === 'auditLogs') return;
+  const items = Array.isArray(records) ? records : [records];
+  await Promise.all(items.filter(Boolean).map((item) => recordDataAudit(auditActionForWrite(table, mode), {
+    module: auditModuleForTable(table),
+    entityType: collectionName(table),
+    entityId: item.id || item.after?.id || item.before?.id || 'unknown',
+    description: auditDescription(table, mode, 1),
+    severity: mode === 'delete' ? 'warning' : 'info',
+    before: item.before || null,
+    after: item.after || null,
+    metadata: {
+      table,
+      targetCollection: collectionName(table),
+      writeMode: mode,
+      filters: extra.filters || [],
+      count: items.length,
+      source: 'compat_db_from',
+    },
+  }).catch((error) => {
+    console.warn('Data audit failed', table, mode, error);
+  })));
+}
+
 class FirebaseCompatQuery {
   constructor(table) {
     this.table = table;
@@ -501,6 +555,9 @@ class FirebaseCompatQuery {
           written.push({ id: refDoc.id, ...data });
         }
       }
+      await auditDataWrite(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {
+        filters: this.filters,
+      });
       return { data: Array.isArray(this.writePayload) ? written : written[0], error: null };
     }
 
@@ -510,11 +567,22 @@ class FirebaseCompatQuery {
     if (this.writeMode === 'update') {
       const data = withWriteTimestamps(normalizeWritePayload(this.table, this.writePayload, false), false);
       await Promise.all(rows.map((row) => updateDoc(doc(firebaseDb, target, row.id), data)));
-      return { data: rows.map((row) => ({ ...row, ...data })), error: null };
+      const updatedRows = rows.map((row) => ({ ...row, ...data }));
+      await auditDataWrite(this.table, 'update', rows.map((row, index) => ({
+        id: row.id,
+        before: row,
+        after: updatedRows[index],
+      })), {
+        filters: this.filters,
+      });
+      return { data: updatedRows, error: null };
     }
 
     if (this.writeMode === 'delete') {
       await Promise.all(rows.map((row) => deleteDoc(doc(firebaseDb, target, row.id))));
+      await auditDataWrite(this.table, 'delete', rows.map((row) => ({ id: row.id, before: row })), {
+        filters: this.filters,
+      });
       return { data: rows, error: null };
     }
 

@@ -27,6 +27,7 @@ import {
   updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseAuth, firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import { recordAuthAudit } from './audit-client.js?v=20260628-audit';
 
 const CANONICAL_ORIGIN = 'https://clasesde10.com';
 const AUTH_ALLOWED_ORIGINS = new Set([
@@ -237,17 +238,52 @@ export async function login(emailRaw, passwordRaw) {
     const usuario = await getUsuarioActual();
 
     if (!usuario) {
+      await recordAuthAudit('auth.login_blocked_missing_profile', {
+        entityId: credential.user.uid,
+        actor: { actorUid: credential.user.uid, actorEmail: credential.user.email || email },
+        severity: 'high',
+        description: 'Inicio de sesion bloqueado porque no existe perfil Firestore.',
+        metadata: { provider: 'password', email },
+      });
       await signOut(firebaseAuth);
       return { error: authError('No existe perfil de usuario en Firestore.') };
     }
 
     if (!usuario.activo) {
+      await recordAuthAudit('auth.login_blocked_inactive_user', {
+        entityId: credential.user.uid,
+        actor: {
+          actorUid: credential.user.uid,
+          actorEmail: credential.user.email || email,
+          actorRole: usuario.rol || usuario.role || '',
+        },
+        severity: 'high',
+        description: 'Inicio de sesion bloqueado porque la cuenta esta desactivada.',
+        metadata: { provider: 'password', role: usuario.rol || usuario.role || '' },
+      });
       await signOut(firebaseAuth);
       return { error: authError('Tu cuenta esta desactivada. Contacta con soporte.') };
     }
 
+    await recordAuthAudit('auth.login_success', {
+      entityId: credential.user.uid,
+      actor: {
+        actorUid: credential.user.uid,
+        actorEmail: credential.user.email || email,
+        actorRole: usuario.rol || usuario.role || '',
+      },
+      description: 'Inicio de sesion correcto.',
+      metadata: { provider: 'password', role: usuario.rol || usuario.role || '' },
+    });
     return { data: credential, usuario };
   } catch (error) {
+    await recordAuthAudit('auth.login_failed', {
+      actor: { actorEmail: email },
+      severity: 'warning',
+      description: 'Intento de inicio de sesion fallido.',
+      metadata: { provider: 'password', email },
+      error,
+    });
     return { error: mapFirebaseError(error) };
   }
 }
@@ -260,6 +296,13 @@ export async function loginWithGoogle(roleForNewAccount = '') {
     if (!usuario) {
       const role = normalizeText(roleForNewAccount);
       if (!['profesor', 'familia'].includes(role)) {
+        await recordAuthAudit('auth.google_login_blocked_missing_role', {
+          entityId: credential.user.uid,
+          actor: { actorUid: credential.user.uid, actorEmail: credential.user.email || '' },
+          severity: 'warning',
+          description: 'Login con Google bloqueado porque no habia rol para crear perfil.',
+          metadata: { provider: 'google' },
+        });
         await signOut(firebaseAuth);
         return {
           error: authError('No existe perfil para esta cuenta. Entra en Crear cuenta y elige familia o profesor antes de continuar con Google.'),
@@ -269,12 +312,39 @@ export async function loginWithGoogle(roleForNewAccount = '') {
     }
 
     if (!usuario?.activo) {
+      await recordAuthAudit('auth.google_login_blocked_inactive_user', {
+        entityId: credential.user.uid,
+        actor: {
+          actorUid: credential.user.uid,
+          actorEmail: credential.user.email || '',
+          actorRole: usuario?.rol || usuario?.role || '',
+        },
+        severity: 'high',
+        description: 'Login con Google bloqueado porque la cuenta esta desactivada.',
+        metadata: { provider: 'google' },
+      });
       await signOut(firebaseAuth);
       return { error: authError('Tu cuenta esta desactivada. Contacta con soporte.') };
     }
 
+    await recordAuthAudit('auth.google_login_success', {
+      entityId: credential.user.uid,
+      actor: {
+        actorUid: credential.user.uid,
+        actorEmail: credential.user.email || '',
+        actorRole: usuario.rol || usuario.role || '',
+      },
+      description: 'Inicio de sesion con Google correcto.',
+      metadata: { provider: 'google', role: usuario.rol || usuario.role || '' },
+    });
     return { data: credential, usuario };
   } catch (error) {
+    await recordAuthAudit('auth.google_login_failed', {
+      severity: 'warning',
+      description: 'Intento de inicio de sesion con Google fallido.',
+      metadata: { provider: 'google', requestedRole: roleForNewAccount || '' },
+      error,
+    });
     return { error: mapFirebaseError(error) };
   }
 }
@@ -442,21 +512,58 @@ export async function register({
       });
     }
 
+    let emailVerificationSent = false;
     try {
       await sendEmailVerification(user, {
         url: `${getAuthActionOrigin()}/pages/login.html`,
       });
+      emailVerificationSent = true;
     } catch (verificationError) {
       console.warn('No se pudo enviar el email de verificacion en este momento.', verificationError);
     }
 
+    await recordAuthAudit('auth.register_success', {
+      entityId: user.uid,
+      actor: {
+        actorUid: user.uid,
+        actorEmail: emailClean,
+        actorRole: role,
+      },
+      description: `Registro de ${role} completado.`,
+      metadata: {
+        role,
+        teacherProfileComplete,
+        invitationUsed: Boolean(studentInvitation),
+        emailVerificationSent,
+      },
+      after: {
+        uid: user.uid,
+        email: emailClean,
+        role,
+        active: true,
+      },
+    });
+
     return { data: credential, usuario: await getUsuarioActual() };
   } catch (error) {
+    await recordAuthAudit('auth.register_failed', {
+      actor: { actorEmail: emailClean, actorRole: role },
+      severity: 'warning',
+      description: 'Intento de registro fallido.',
+      metadata: { role, email: emailClean },
+      error,
+    });
     return { error: mapFirebaseError(error) };
   }
 }
 
 export async function logout() {
+  const user = firebaseAuth.currentUser;
+  await recordAuthAudit('auth.logout', {
+    entityId: user?.uid || 'current_user',
+    actor: { actorUid: user?.uid || '', actorEmail: user?.email || '' },
+    description: 'Cierre de sesion.',
+  });
   await signOut(firebaseAuth);
   window.location.href = '/';
 }
@@ -466,8 +573,21 @@ export async function resetPassword(email) {
     await sendPasswordResetEmail(firebaseAuth, normalizeEmail(email), {
       url: `${getAuthActionOrigin()}/pages/reset-password.html`,
     });
+    await recordAuthAudit('auth.password_reset_requested', {
+      actor: { actorEmail: normalizeEmail(email) },
+      severity: 'info',
+      description: 'Solicitud de recuperacion de contrasena.',
+      metadata: { email: normalizeEmail(email) },
+    });
     return { error: null };
   } catch (error) {
+    await recordAuthAudit('auth.password_reset_request_failed', {
+      actor: { actorEmail: normalizeEmail(email) },
+      severity: 'warning',
+      description: 'Solicitud de recuperacion de contrasena fallida.',
+      metadata: { email: normalizeEmail(email) },
+      error,
+    });
     return { error: mapFirebaseError(error) };
   }
 }
@@ -484,8 +604,19 @@ export async function verifyPasswordResetCode(oobCode) {
 export async function confirmPasswordResetCode(oobCode, password) {
   try {
     await firebaseConfirmPasswordReset(firebaseAuth, String(oobCode || '').trim(), password);
+    await recordAuthAudit('auth.password_reset_confirmed', {
+      severity: 'info',
+      description: 'Cambio de contrasena confirmado con codigo de recuperacion.',
+      metadata: { oobCodePresent: Boolean(oobCode), passwordLength: password?.length || 0 },
+    });
     return { error: null };
   } catch (error) {
+    await recordAuthAudit('auth.password_reset_confirm_failed', {
+      severity: 'warning',
+      description: 'Cambio de contrasena fallido.',
+      metadata: { oobCodePresent: Boolean(oobCode) },
+      error,
+    });
     return { error: mapFirebaseError(error) };
   }
 }

@@ -101,6 +101,10 @@
         Incidencias
         <span class="sidebar-badge" id="badge-incidencias" style="display:none">0</span>
       </button>
+      <button class="sidebar-link" data-section="auditoria">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5 2a8 8 0 11-16 0 8 8 0 0116 0z"/></svg>
+        Auditoria
+      </button>
     </nav>
 
     <div class="sidebar-footer">
@@ -626,6 +630,69 @@
         </div>
       </section>
 
+      <section id="section-auditoria" class="dash-section" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <span class="card-title">Historial de auditoria</span>
+            <button class="btn btn-outline btn-sm" id="btn-export-auditoria">Exportar CSV</button>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
+              <input class="form-control" id="audit-filter-search" placeholder="Usuario, entidad o texto" aria-label="Buscar en auditoria">
+              <select class="form-control" id="audit-filter-module" aria-label="Filtrar auditoria por modulo">
+                <option value="">Todos los modulos</option>
+                <option value="auth">Auth</option>
+                <option value="profiles">Perfiles</option>
+                <option value="classes">Clases</option>
+                <option value="payments">Pagos</option>
+                <option value="matching">Matching</option>
+                <option value="documents">Documentos</option>
+                <option value="incidents">Incidencias</option>
+                <option value="messaging">Mensajes</option>
+                <option value="notifications">Notificaciones</option>
+                <option value="automation">Automatizacion</option>
+                <option value="admin">Admin</option>
+              </select>
+              <select class="form-control" id="audit-filter-severity" aria-label="Filtrar auditoria por severidad">
+                <option value="">Todas las severidades</option>
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+              <input class="form-control" id="audit-filter-action" placeholder="Accion" aria-label="Filtrar auditoria por accion">
+              <input class="form-control" id="audit-filter-entity" placeholder="Entidad" aria-label="Filtrar auditoria por entidad">
+              <input class="form-control" id="audit-filter-from" type="date" aria-label="Auditoria desde fecha">
+              <input class="form-control" id="audit-filter-to" type="date" aria-label="Auditoria hasta fecha">
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="audit-summary-grid" style="margin-bottom:16px"></div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Modulo</th>
+                  <th>Accion</th>
+                  <th>Usuario</th>
+                  <th>Entidad</th>
+                  <th>Severidad</th>
+                  <th>Contexto</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-auditoria"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="card-footer">
+            <span id="audit-count" style="font-size:.82rem;color:var(--gray-mid)"></span>
+          </div>
+        </div>
+      </section>
+
     </div><!-- /page-content -->
   </div><!-- /main-content -->
 </div><!-- /dash-layout -->
@@ -894,14 +961,27 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260628-data-client';
+import db from '../../js/firebase-data-client.js?v=20260628-audit';
 import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-bi';
-import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-admin-ai';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260627-domain-auth';
+import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-audit';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
+import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260627-domain-auth';
-import { addDoc, collection, doc as firestoreDoc, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import {
+  addDoc,
+  collection,
+  doc as firestoreDoc,
+  getDoc,
+  getDocs,
+  limit as firestoreLimit,
+  orderBy as firestoreOrderBy,
+  query as firestoreQuery,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260628-reputation-v2';
 import {
@@ -944,11 +1024,11 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // â”€â”€ NAVEGACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const secciones = ['dashboard','ia','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias'];
+const secciones = ['dashboard','ia','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
 const TITULOS = {
   dashboard:'Dashboard', ia:'IA Admin', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
-  solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias',
+  solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias', auditoria:'Auditoria',
 };
 let chatInicializado = false;
 let adminAiInicializada = false;
@@ -960,6 +1040,7 @@ let trustContextCache = null;
 const selectedProfesores = new Set();
 const selectedFamilias = new Set();
 let crmActivo = null;
+let auditLogsCache = [];
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
   profesores: { id: 'tbody-profesores', colspan: 10, countId: 'prof-count' },
@@ -1084,6 +1165,7 @@ function irA(seccion) {
   else if (seccion === 'documentos') ejecutarCargaSeccion(seccion, cargarDocumentos);
   else if (seccion === 'chats') ejecutarCargaSeccion(seccion, cargarChats);
   else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, cargarIncidencias);
+  else if (seccion === 'auditoria') ejecutarCargaSeccion(seccion, cargarAuditoria);
 }
 
 document.addEventListener('click', (e) => {
@@ -2395,17 +2477,190 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
 }
 
 async function recordCrmAudit(entityType, entityId, action, description, payload = {}) {
-  await addDoc(collection(firebaseDb, 'auditLogs'), {
+  await recordAdminAudit(action, {
+    module: 'admin',
     entityType,
     entityId,
-    action,
     description,
-    payload,
-    actorUid: usuario.uid || usuario.id || '',
-    actorEmail: usuario.email || '',
-    createdAt: serverTimestamp(),
+    actor: {
+      actorUid: usuario.uid || usuario.id || '',
+      actorEmail: usuario.email || '',
+      actorRole: usuario.rol || usuario.role || 'admin',
+      actorType: 'admin',
+    },
+    metadata: payload,
   });
 }
+
+function auditCreatedAt(item = {}) {
+  return crmDate(firstCrm(item.createdAt, item.created_at, item.timestamp));
+}
+
+function auditSeverityTone(value = '') {
+  const severity = String(value || '').toLowerCase();
+  if (['critical', 'high', 'error'].includes(severity)) return 'danger';
+  if (['warning', 'warn', 'medium'].includes(severity)) return 'warning';
+  if (['success', 'ok'].includes(severity)) return 'success';
+  return 'gray';
+}
+
+function auditActor(item = {}) {
+  return firstCrm(item.actorEmail, item.actorUid, item.responsibleEmail, item.responsibleUid, 'Sistema');
+}
+
+function auditEntity(item = {}) {
+  return `${firstCrm(item.entityType, 'entidad')}/${firstCrm(item.entityId, '-')}`;
+}
+
+function auditSearchText(item = {}) {
+  return [
+    item.action,
+    item.module,
+    item.entityType,
+    item.entityId,
+    item.actorUid,
+    item.actorEmail,
+    item.responsibleUid,
+    item.responsibleEmail,
+    item.description,
+    item.source,
+    JSON.stringify(item.metadata || {}),
+  ].join(' ').toLowerCase();
+}
+
+function getAuditFilters() {
+  return {
+    search: String(document.getElementById('audit-filter-search')?.value || '').trim().toLowerCase(),
+    module: String(document.getElementById('audit-filter-module')?.value || '').trim(),
+    severity: String(document.getElementById('audit-filter-severity')?.value || '').trim(),
+    action: String(document.getElementById('audit-filter-action')?.value || '').trim().toLowerCase(),
+    entity: String(document.getElementById('audit-filter-entity')?.value || '').trim().toLowerCase(),
+    from: String(document.getElementById('audit-filter-from')?.value || '').trim(),
+    to: String(document.getElementById('audit-filter-to')?.value || '').trim(),
+  };
+}
+
+function auditMatchesFilters(item, filters) {
+  const text = auditSearchText(item);
+  const created = auditCreatedAt(item);
+  const dateKey = created ? created.slice(0, 10) : '';
+  if (filters.search && !text.includes(filters.search)) return false;
+  if (filters.module && item.module !== filters.module) return false;
+  if (filters.severity && String(item.severity || '').toLowerCase() !== filters.severity) return false;
+  if (filters.action && !String(item.action || '').toLowerCase().includes(filters.action)) return false;
+  if (filters.entity && !auditEntity(item).toLowerCase().includes(filters.entity)) return false;
+  if (filters.from && dateKey && dateKey < filters.from) return false;
+  if (filters.to && dateKey && dateKey > filters.to) return false;
+  return true;
+}
+
+function renderAuditSummary(items = []) {
+  const modules = new Set(items.map((item) => item.module).filter(Boolean));
+  const warnings = items.filter((item) => ['warning', 'high', 'critical', 'error'].includes(String(item.severity || '').toLowerCase())).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount = items.filter((item) => (auditCreatedAt(item) || '').startsWith(today)).length;
+  const automated = items.filter((item) => ['automation', 'client_data', 'client_auth'].includes(String(item.origin || '')) || item.module === 'automation').length;
+  const cards = [
+    ['Eventos visibles', items.length],
+    ['Modulos', modules.size],
+    ['Hoy', todayCount],
+    ['Alertas', warnings],
+    ['Automaticos', automated],
+  ];
+  const grid = document.getElementById('audit-summary-grid');
+  if (!grid) return;
+  grid.innerHTML = cards.map(([label, value]) => `
+    <div class="stat-card">
+      <span class="stat-label">${sanitize(label)}</span>
+      <span class="stat-value">${sanitize(value)}</span>
+    </div>
+  `).join('');
+}
+
+function renderAuditRows(items = []) {
+  const tbody = document.getElementById('tbody-auditoria');
+  if (!tbody) return;
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin eventos de auditoria con estos filtros.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = items.slice(0, 250).map((item) => {
+    const changes = Array.isArray(item.changes) ? item.changes : [];
+    const context = [
+      firstCrm(item.description, item.source, ''),
+      changes.length ? `${changes.length} cambio(s)` : '',
+      item.error?.message ? `Error: ${item.error.message}` : '',
+    ].filter(Boolean).join(' · ');
+    return `
+      <tr>
+        <td>${sanitize(crmDateShort(auditCreatedAt(item)) || auditCreatedAt(item) || '-')}</td>
+        <td>${sanitize(item.module || '-')}</td>
+        <td><code style="font-size:.76rem">${sanitize(item.action || '-')}</code></td>
+        <td>${sanitize(auditActor(item))}</td>
+        <td>${sanitize(auditEntity(item))}</td>
+        <td>${crmBadge(item.severity || 'info').replace('badge-gray', `badge-${auditSeverityTone(item.severity)}`)}</td>
+        <td style="max-width:360px">${sanitize(context || '-')}</td>
+      </tr>`;
+  }).join('');
+}
+
+function applyAuditFilters() {
+  const filters = getAuditFilters();
+  const filtered = auditLogsCache
+    .filter((item) => auditMatchesFilters(item, filters))
+    .sort((a, b) => timestampMillis(firstCrm(b.createdAt, b.created_at)) - timestampMillis(firstCrm(a.createdAt, a.created_at)));
+  renderAuditSummary(filtered);
+  renderAuditRows(filtered);
+  const count = document.getElementById('audit-count');
+  if (count) count.textContent = `${filtered.length} evento(s) encontrados`;
+  return filtered;
+}
+
+async function cargarAuditoria() {
+  try {
+    const snapshot = await getDocs(firestoreQuery(
+      collection(firebaseDb, 'auditLogs'),
+      firestoreOrderBy('createdAt', 'desc'),
+      firestoreLimit(1000),
+    ));
+    auditLogsCache = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    console.warn('No se pudo cargar auditoria ordenada, usando lectura simple', error);
+    auditLogsCache = await safeListFirestore('auditLogs');
+  }
+  applyAuditFilters();
+}
+
+function initAuditFilters() {
+  ['audit-filter-search', 'audit-filter-module', 'audit-filter-severity', 'audit-filter-action', 'audit-filter-entity', 'audit-filter-from', 'audit-filter-to']
+    .forEach((id) => document.getElementById(id)?.addEventListener('input', debounce(applyAuditFilters, 150)));
+  document.getElementById('btn-export-auditoria')?.addEventListener('click', () => {
+    const rows = applyAuditFilters().map((item) => ({
+      fecha: auditCreatedAt(item),
+      modulo: item.module || '',
+      accion: item.action || '',
+      usuario: auditActor(item),
+      entidad: auditEntity(item),
+      severidad: item.severity || '',
+      descripcion: item.description || '',
+      origen: item.origin || '',
+      fuente: item.source || '',
+    }));
+    exportarCSV(rows, `auditoria-${fechaHoy()}.csv`, [
+      { campo: 'fecha', titulo: 'Fecha' },
+      { campo: 'modulo', titulo: 'Modulo' },
+      { campo: 'accion', titulo: 'Accion' },
+      { campo: 'usuario', titulo: 'Usuario' },
+      { campo: 'entidad', titulo: 'Entidad' },
+      { campo: 'severidad', titulo: 'Severidad' },
+      { campo: 'descripcion', titulo: 'Descripcion' },
+      { campo: 'origen', titulo: 'Origen' },
+      { campo: 'fuente', titulo: 'Fuente' },
+    ]);
+  });
+}
+
+initAuditFilters();
 
 async function refreshCrmEntity() {
   if (!crmActivo) return;
@@ -3543,6 +3798,32 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     }, { merge: true });
+
+    await recordAdminAudit('assignment.manual_created', {
+      module: 'matching',
+      entityType: 'asignaciones',
+      entityId: asignacionId,
+      description: 'Asignacion manual de profesor a solicitud.',
+      actor: {
+        actorUid: usuario.uid || usuario.id || '',
+        actorEmail: usuario.email || '',
+        actorRole: usuario.rol || usuario.role || 'admin',
+        actorType: 'admin',
+      },
+      after: {
+        asignacionId,
+        solicitudId: id,
+        profesorId: profId,
+        alumnoId,
+        familiaId: familiaId || null,
+        materia: solicitud?.materia || solicitud?.subject || '',
+        notas,
+      },
+      metadata: {
+        source: 'admin_manual',
+        requestStatusBefore: solicitud?.status || solicitud?.estado || '',
+      },
+    });
   } catch (error) {
     showToast('Error', error.message, 'error');
     return;

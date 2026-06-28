@@ -29,6 +29,7 @@ const LIVE_COLLECTIONS = [
   'solicitudMatches',
   'classLifecycleEvents',
   'automationEvents',
+  'auditLogs',
 ];
 
 function clean(value, max = 4000) {

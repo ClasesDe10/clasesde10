@@ -416,12 +416,29 @@ async function materializeWorkerAutomationPlan(db, event, stats) {
     const existing = await ref.get();
     if (existing.exists) continue;
     await writeDoc(db.collection('auditLogs'), audit.id, {
+      schemaVersion: audit.schemaVersion || 'audit_log_v1',
+      module: audit.module || 'automation',
+      severity: audit.severity || 'info',
+      origin: audit.origin || 'github_actions_worker',
+      source: audit.source || 'platform_automation',
       actorUid: audit.actorUid || 'system',
+      actorEmail: audit.actorEmail || '',
+      actorRole: audit.actorRole || 'system',
+      actorType: audit.actorType || 'automation',
+      responsibleUid: audit.responsibleUid || audit.actorUid || 'system',
+      responsibleEmail: audit.responsibleEmail || audit.actorEmail || '',
       action: audit.action,
       entityType: audit.entityType,
       entityId: audit.entityId || null,
+      description: audit.description || audit.action,
+      before: audit.before || null,
+      after: audit.after || null,
+      changes: audit.changes || [],
       metadata: audit.metadata || {},
+      context: audit.context || {},
+      error: audit.error || null,
       createdAt: now(),
+      created_at: isoNow(),
       updatedAt: now(),
     }, { merge: false });
     stats.platformAuditLogsCreated += 1;
@@ -1043,13 +1060,30 @@ async function dispatchSystemJob(db, job, stats) {
     const action = clean(payload.action, 120);
     if (!entityType || !action) throw new Error('audit.event requires entityType and action.');
     await writeDoc(db.collection('auditLogs'), null, {
+      schemaVersion: 'audit_log_v1',
+      module: clean(payload.module || 'automation', 80),
+      severity: clean(payload.severity || 'info', 40),
+      origin: clean(payload.origin || 'github_actions_job', 80),
+      source: clean(payload.source || type, 180),
       actorUid: clean(payload.actorUid || 'system', 180),
+      actorEmail: clean(payload.actorEmail || '', 254),
+      actorRole: clean(payload.actorRole || 'system', 80),
+      actorType: clean(payload.actorType || 'automation', 80),
+      responsibleUid: clean(payload.responsibleUid || payload.actorUid || 'system', 180),
+      responsibleEmail: clean(payload.responsibleEmail || payload.actorEmail || '', 254),
       action,
       entityType,
       entityId: clean(payload.entityId, 180) || null,
+      description: clean(payload.description || action, 500),
+      before: payload.before || null,
+      after: payload.after || null,
+      changes: Array.isArray(payload.changes) ? payload.changes.slice(0, 80) : [],
       metadata: payload.metadata || {},
+      context: payload.context || {},
+      error: payload.error || null,
       trace: job.data.trace || null,
       createdAt: now(),
+      created_at: isoNow(),
       updatedAt: now(),
     });
     return { audited: true, entityType, action };
@@ -1365,7 +1399,26 @@ async function processClassLifecycle(db, stats) {
 
     await writeDoc(db.collection('auditLogs'), `audit_${transition.transitionId}`, {
       ...transition.auditEvent,
+      schemaVersion: 'audit_log_v1',
+      module: 'classes',
+      severity: 'info',
+      origin: 'github_actions_worker',
+      source: 'class_lifecycle_engine',
+      actorUid: 'system',
+      actorEmail: '',
+      actorRole: 'system',
+      actorType: 'automation',
+      responsibleUid: 'system',
+      responsibleEmail: '',
+      action: transition.auditEvent.action || transition.auditEvent.type || 'class.lifecycle_transition',
+      description: transition.auditEvent.reason || `Clase transicionada a ${transition.to}`,
+      before: { lifecycleStatus: transition.from || null },
+      after: { lifecycleStatus: transition.to },
+      changes: [{ field: 'lifecycleStatus', before: transition.from || null, after: transition.to }],
+      context: {},
+      error: null,
       createdAt: now(),
+      created_at: isoNow(),
       updatedAt: now(),
     }, { merge: false });
 

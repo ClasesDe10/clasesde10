@@ -609,13 +609,30 @@ async function materializeAutomationPlan(event, extra = {}) {
 
   await Promise.all(plan.auditLogs.map(async (item) => {
     const created = await setDocumentOnce('auditLogs', item.id, {
-      actorUid: item.actorUid || 'system',
+      schemaVersion: item.schemaVersion || 'audit_log_v1',
       action: item.action,
+      module: item.module || 'automation',
       entityType: item.entityType,
       entityId: item.entityId || null,
+      actorUid: item.actorUid || 'system',
+      actorEmail: item.actorEmail || '',
+      actorRole: item.actorRole || 'system',
+      actorType: item.actorType || 'automation',
+      responsibleUid: item.responsibleUid || item.actorUid || 'system',
+      responsibleEmail: item.responsibleEmail || '',
+      origin: item.origin || 'automation',
+      source: item.source || 'functions',
+      severity: item.severity || 'info',
+      description: item.description || item.action,
+      before: item.before || null,
+      after: item.after || null,
+      changes: item.changes || [],
       metadata: item.metadata || {},
+      context: item.context || {},
+      error: item.error || null,
       trace: extra.trace || null,
       createdAt: now(),
+      created_at: new Date().toISOString(),
       updatedAt: now(),
     });
     if (created) counts.auditLogs += 1;
@@ -1622,13 +1639,30 @@ async function dispatchSystemJob(job) {
     const action = clean(payload.action, 120);
     if (!entityType || !action) throw new Error('audit.event requires entityType and action.');
     await db.collection('auditLogs').add({
+      schemaVersion: 'audit_log_v1',
+      module: clean(payload.module || 'automation', 80),
+      severity: clean(payload.severity || 'info', 40),
+      origin: clean(payload.origin || 'system_job', 80),
+      source: clean(payload.source || type, 180),
       actorUid: clean(payload.actorUid || 'system', 180),
+      actorEmail: clean(payload.actorEmail || '', 254),
+      actorRole: clean(payload.actorRole || 'system', 80),
+      actorType: clean(payload.actorType || 'automation', 80),
+      responsibleUid: clean(payload.responsibleUid || payload.actorUid || 'system', 180),
+      responsibleEmail: clean(payload.responsibleEmail || payload.actorEmail || '', 254),
       action,
       entityType,
       entityId: clean(payload.entityId, 180) || null,
+      description: clean(payload.description || action, 500),
+      before: payload.before || null,
+      after: payload.after || null,
+      changes: Array.isArray(payload.changes) ? payload.changes.slice(0, 80) : [],
       metadata: payload.metadata || {},
+      context: payload.context || {},
+      error: payload.error || null,
       trace: job.data.trace || null,
       createdAt: now(),
+      created_at: new Date().toISOString(),
       updatedAt: now(),
     });
     return { audited: true, entityType, action };

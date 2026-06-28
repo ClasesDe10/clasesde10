@@ -112,6 +112,80 @@ service cloud.firestore {
       return request.resource.data.updatedAt == request.time;
     }
 
+    function validAuditLogCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'schemaVersion',
+          'action',
+          'module',
+          'entityType',
+          'entityId',
+          'actorUid',
+          'actorEmail',
+          'actorRole',
+          'actorType',
+          'responsibleUid',
+          'responsibleEmail',
+          'origin',
+          'source',
+          'severity',
+          'description',
+          'before',
+          'after',
+          'changes',
+          'metadata',
+          'context',
+          'error',
+          'trace',
+          'createdAt',
+          'created_at'
+        ])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion',
+          'action',
+          'module',
+          'entityType',
+          'entityId',
+          'actorUid',
+          'origin',
+          'source',
+          'severity',
+          'description',
+          'createdAt'
+        ])
+        && request.resource.data.schemaVersion == 'audit_log_v1'
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.action is string
+        && request.resource.data.action.size() >= 3
+        && request.resource.data.action.size() <= 140
+        && request.resource.data.module is string
+        && request.resource.data.module.size() <= 80
+        && request.resource.data.entityType is string
+        && request.resource.data.entityType.size() <= 80
+        && request.resource.data.entityId is string
+        && request.resource.data.entityId.size() <= 180
+        && request.resource.data.origin is string
+        && request.resource.data.origin.size() <= 80
+        && request.resource.data.source is string
+        && request.resource.data.source.size() <= 180
+        && request.resource.data.severity is string
+        && request.resource.data.severity in ['info', 'warning', 'high', 'critical', 'error', 'success']
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 500
+        && (!request.resource.data.keys().hasAny(['actorEmail']) || request.resource.data.actorEmail is string)
+        && (!request.resource.data.keys().hasAny(['actorRole']) || request.resource.data.actorRole is string)
+        && (!request.resource.data.keys().hasAny(['actorType']) || request.resource.data.actorType is string)
+        && (!request.resource.data.keys().hasAny(['responsibleUid']) || request.resource.data.responsibleUid is string)
+        && (!request.resource.data.keys().hasAny(['responsibleEmail']) || request.resource.data.responsibleEmail is string)
+        && (!request.resource.data.keys().hasAny(['before']) || request.resource.data.before == null || request.resource.data.before is map)
+        && (!request.resource.data.keys().hasAny(['after']) || request.resource.data.after == null || request.resource.data.after is map)
+        && (!request.resource.data.keys().hasAny(['changes']) || request.resource.data.changes is list)
+        && (!request.resource.data.keys().hasAny(['metadata']) || request.resource.data.metadata is map)
+        && (!request.resource.data.keys().hasAny(['context']) || request.resource.data.context is map)
+        && (!request.resource.data.keys().hasAny(['error']) || request.resource.data.error == null || request.resource.data.error is map);
+    }
+
     function validPublicLeadMetadata() {
       return request.resource.data.metadata is map
           && request.resource.data.metadata.keys().hasOnly([
@@ -1014,7 +1088,9 @@ service cloud.firestore {
     }
 
     match /auditLogs/{logId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow create: if isAdmin() || validAuditLogCreate();
+      allow update, delete: if isAdmin();
     }
 
     match /crmNotes/{noteId} {

@@ -14,6 +14,7 @@ import {
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import { recordAdminAudit } from './audit-client.js?v=20260628-audit';
 import {
   ADMIN_AI_EXAMPLES,
   ADMIN_AI_VERSION,
@@ -39,6 +40,7 @@ const DATA_SPECS = [
   ['notifications', 'notificaciones', 900],
   ['publicLeads', 'leadsPublicos', 700],
   ['automationEvents', 'automationEvents', 700],
+  ['auditLogs', 'auditLogs', 1000],
   ['lifecycleEvents', 'classLifecycleEvents', 900],
   ['crmTasks', 'crmTasks', 500],
   ['crmNotes', 'crmNotes', 300],
@@ -260,6 +262,27 @@ export function initAdminAiAssistant({ container, onNavigate, actor } = {}) {
     const durationMs = Math.round(performance.now() - startedAt);
     output.innerHTML = renderAnswer(answer, { ...meta, durationMs });
     await logAdminAiQuery(actor, text, answer, durationMs);
+    await recordAdminAudit('ai.admin_query_answered', {
+      module: 'automation',
+      entityType: 'adminAiQueries',
+      entityId: answer.intent || 'admin_ai_query',
+      description: 'Consulta respondida por el asistente IA del administrador.',
+      actor: {
+        actorUid: actor?.uid || actor?.id || '',
+        actorEmail: actor?.email || '',
+        actorRole: actor?.rol || actor?.role || 'admin',
+        actorType: 'admin',
+      },
+      metadata: {
+        question: text,
+        intent: answer.intent,
+        confidence: answer.confidence,
+        rowCount: answer.rows.length,
+        sourceCollections: answer.sourceCollections,
+        durationMs,
+        version: ADMIN_AI_VERSION,
+      },
+    });
     return answer;
   }
 

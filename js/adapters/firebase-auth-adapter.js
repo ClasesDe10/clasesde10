@@ -16,7 +16,7 @@ import {
   resetPassword,
   verifyPasswordResetCode,
   confirmPasswordResetCode,
-} from '../firebase-auth.js?v=20260627-domain-auth';
+} from '../firebase-auth.js?v=20260628-audit';
 
 export const authAdapter = {
   getSession,

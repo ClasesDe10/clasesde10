@@ -35,7 +35,7 @@ for (const [needle, message] of [
   assertIncludes(pwa, needle, message);
 }
 
-assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v16'", 'Service worker cache version must be bumped after admin AI changes.');
+assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v17'", 'Service worker cache version must be bumped after audit system changes.');
 assertIncludes(packageJson.scripts['check:quality'], 'test:product-ux', 'check:quality must run product UX validation.');
 assertIncludes(packageJson.scripts['check:syntax'], 'scripts/product-ux-test.mjs', 'check:syntax must parse product UX validation.');
 
