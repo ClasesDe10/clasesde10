@@ -415,6 +415,7 @@ export function buildAutomaticIncidentPayload(kind, source = {}, options = {}) {
     finance_anomaly: ['Anomalia financiera detectada', 'finanzas', 'alta'],
     class_unconfirmed: ['Clase sin confirmar', 'clase', 'alta'],
     document_stale: ['Documento pendiente atascado', 'documentacion', 'media'],
+    document_expired: ['Documento caducado', 'documentacion', 'alta'],
     ai_error: ['Error de IA detectado', 'ia', 'media'],
     sync_error: ['Problema de sincronizacion', 'sincronizacion', 'media'],
     system_error: ['Error tecnico del sistema', 'tecnica', 'alta'],

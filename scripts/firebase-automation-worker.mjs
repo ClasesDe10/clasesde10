@@ -63,6 +63,11 @@ import {
   buildExperimentResults,
 } from '../js/experimentation-engine.js';
 import { buildNotificationDocument } from '../js/notification-engine.js';
+import {
+  buildDocumentExpiryPatch,
+  normalizeDocumentRecord,
+  shouldSendExpiryReminder,
+} from '../js/document-center-engine.js';
 
 const require = createRequire(import.meta.url);
 const {
@@ -2182,21 +2187,59 @@ async function processPlatformAutomationSweep(db, stats) {
 
   for (const item of documents) {
     stats.platformDocumentsChecked += 1;
-    const status = lower(item.status || item.estado);
-    if (!['pendiente', 'pending', 'revision'].includes(status)) continue;
+    const normalizedDocument = normalizeDocumentRecord({ id: item.id, ...item });
+    const expiryPatch = buildDocumentExpiryPatch({ id: item.id, ...item });
+    if (expiryPatch) {
+      await writeDoc(db.collection('documentos'), item.id, expiryPatch);
+      await materializeWorkerAutomationPlan(db, {
+        type: 'document.expired',
+        entityType: 'documentos',
+        entityId: item.id,
+        data: { id: item.id, ...normalizedDocument, ...expiryPatch },
+        source: 'githubActionsSweep',
+      }, stats);
+      await createOperationalIncidentOnce(db, 'document_expired', {
+        id: item.id,
+        documentId: item.id,
+        relatedUserUid: normalizedDocument.ownerUid,
+        descripcion: `Documento caducado: ${clean(normalizedDocument.name || normalizedDocument.typeLabel || item.id, 180)}.`,
+      }, stats);
+      stats.platformDocumentEvents += 1;
+      continue;
+    }
+
+    if (shouldSendExpiryReminder(normalizedDocument, new Date(), runtimeNumber('documents.expiryReminderDays', 30, 1, 180))) {
+      await materializeWorkerAutomationPlan(db, {
+        type: 'document.expiring_soon',
+        entityType: 'documentos',
+        entityId: item.id,
+        data: { id: item.id, ...normalizedDocument },
+        source: 'githubActionsSweep',
+      }, stats);
+      await writeDoc(db.collection('documentos'), item.id, {
+        lastExpiryReminderAt: now(),
+        ultimo_recordatorio_caducidad: isoNow(),
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+      stats.platformDocumentEvents += 1;
+      continue;
+    }
+
+    if (!['pendiente', 'pending', 'revision', 'en_revision'].includes(normalizedDocument.status)) continue;
     if (!isOlderThanMs(item, 24 * 60 * 60 * 1000)) continue;
     await materializeWorkerAutomationPlan(db, {
       type: 'document.stale',
       entityType: 'documentos',
       entityId: item.id,
-      data: { id: item.id, ...item },
+      data: { id: item.id, ...normalizedDocument },
       source: 'githubActionsSweep',
     }, stats);
     await createOperationalIncidentOnce(db, 'document_stale', {
       id: item.id,
       documentId: item.id,
-      relatedUserUid: item.ownerUid || item.userUid || item.usuario_id,
-      descripcion: `Documento pendiente demasiado tiempo: ${clean(item.nombre || item.tipo || item.type || item.id, 180)}.`,
+      relatedUserUid: normalizedDocument.ownerUid,
+      descripcion: `Documento pendiente demasiado tiempo: ${clean(normalizedDocument.name || normalizedDocument.typeLabel || item.id, 180)}.`,
     }, stats);
     stats.platformDocumentEvents += 1;
   }

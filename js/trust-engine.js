@@ -7,6 +7,8 @@
  * score itself is calculated from platform records, not from manual claims.
  */
 
+import { normalizeDocumentRecord } from './document-center-engine.js';
+
 export const TRUST_VERSION = 'trust_reputation_v2';
 
 const VERIFIED_STATUSES = new Set(['validado', 'verificado', 'aprobado', 'approved', 'verified', 'activo', 'active']);
@@ -166,11 +168,11 @@ function paymentStatus(item = {}) {
 }
 
 function documentStatus(item = {}) {
-  return normalize(first(item.estado, item.status, item.verificationStatus));
+  return normalizeDocumentRecord(item).status;
 }
 
 function documentType(item = {}) {
-  return normalize(first(item.tipo, item.documentType, item.category));
+  return normalizeDocumentRecord(item).documentType;
 }
 
 function activeStatus(entity = {}) {

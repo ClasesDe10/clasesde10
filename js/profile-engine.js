@@ -10,6 +10,7 @@ import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
 } from './trust-engine.js';
+import { normalizeDocumentRecord } from './document-center-engine.js';
 
 const VERIFIED_DOCUMENT_STATUSES = new Set(['validado', 'verificado', 'aprobado', 'approved', 'verified']);
 const PENDING_DOCUMENT_STATUSES = new Set(['pendiente', 'pending', 'en_revision']);
@@ -80,11 +81,11 @@ function firstValue(profile, fields) {
 }
 
 function documentStatus(doc) {
-  return cleanText(doc?.estado || doc?.status || doc?.verificationStatus || 'pendiente', 40).toLowerCase();
+  return normalizeDocumentRecord(doc).status;
 }
 
 function documentType(doc) {
-  return cleanText(doc?.tipo || doc?.documentType || doc?.category || 'otro', 60).toLowerCase();
+  return normalizeDocumentRecord(doc).documentType;
 }
 
 function hasDocument(docs, types, statusSet = null) {

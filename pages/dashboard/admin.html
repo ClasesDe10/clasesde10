@@ -713,6 +713,7 @@
       </section>
 
       <section id="section-documentos" class="dash-section" style="display:none">
+        <div id="admin-document-center" data-admin-document-center></div>
         <div class="card">
           <div class="card-header">
             <span class="card-title">Documentos pendientes de revisiÃ³n</span>
@@ -1182,6 +1183,7 @@ import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
 import { initAdminAnalytics } from '../../js/admin-analytics.js?v=20260628-analytics';
 import { initAdminExperimentation } from '../../js/admin-experimentation.js?v=20260628-experiments';
+import { initAdminDocuments } from '../../js/admin-documents.js?v=20260628-documents';
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
 import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
@@ -1272,6 +1274,7 @@ let chatInicializado = false;
 let adminAiInicializada = false;
 let adminAnalyticsInicializada = false;
 let adminExperimentationInicializada = false;
+let adminDocumentsInicializada = false;
 let adminConfigInicializada = false;
 let adminIncidentsInicializada = false;
 let profesoresCache = new Map();
@@ -1408,7 +1411,7 @@ function irA(seccion) {
   else if (seccion === 'pagos') ejecutarCargaSeccion(seccion, cargarPagos);
   else if (seccion === 'finanzas') ejecutarCargaSeccion(seccion, cargarFinanzas);
   else if (seccion === 'leads') ejecutarCargaSeccion(seccion, cargarLeads);
-  else if (seccion === 'documentos') ejecutarCargaSeccion(seccion, cargarDocumentos);
+  else if (seccion === 'documentos') ejecutarCargaSeccion(seccion, iniciarDocumentos);
   else if (seccion === 'chats') ejecutarCargaSeccion(seccion, cargarChats);
   else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, iniciarIncidencias);
   else if (seccion === 'auditoria') ejecutarCargaSeccion(seccion, cargarAuditoria);
@@ -1484,6 +1487,21 @@ async function iniciarExperimentacion() {
     debounce,
   });
   adminExperimentationInicializada = true;
+  return api;
+}
+
+async function iniciarDocumentos() {
+  const api = await initAdminDocuments({
+    container: document.getElementById('admin-document-center'),
+    db,
+    usuario,
+    showToast,
+    sanitize,
+    exportarCSV,
+    recordAdminAudit,
+    getDocumentUrl,
+  });
+  adminDocumentsInicializada = true;
   return api;
 }
 

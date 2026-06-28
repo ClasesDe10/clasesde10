@@ -499,6 +499,7 @@
 import db from '../../js/firebase-data-client.js?v=20260628-audit';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260628-documents';
 import {
   evaluateFamilyProfileProfessional,
   toProfileList,
@@ -1151,21 +1152,16 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
     const storagePath = up?.fullPath || up?.path || path;
 
     const { data: doc, error: docErr } = await db.from('documentos')
-      .insert({
+      .insert(buildDocumentUploadRecord({
         ownerUid: ownerUid(),
-        usuario_id: ownerUid(),
-        userUid: ownerUid(),
-        profileId: familiaFirestoreId,
         role: 'familia',
-        tipo:'justificante_pago',
-        nombre:file.name,
-        estado: 'pendiente',
-        status: 'pendiente',
-        url: storagePath,
-        storage_path: storagePath,
-        tamano_bytes:file.size,
-        mime_type:file.type,
-      })
+        type: 'justificante_pago',
+        file,
+        storagePath,
+        profileId: familiaFirestoreId,
+        uploadedByUid: ownerUid(),
+        source: 'familia_pago',
+      }))
       .select('id')
       .single();
     if (docErr) { showToast('Error', docErr.message, 'error'); return; }
@@ -1422,21 +1418,16 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
   if (upErr) { showToast('Error', upErr.message, 'error'); progress.textContent = ''; return; }
   const storagePath = up?.fullPath || up?.path || path;
 
-  const { error } = await db.from('documentos').insert({
+  const { error } = await db.from('documentos').insert(buildDocumentUploadRecord({
     ownerUid: ownerUid(),
-    usuario_id: ownerUid(),
-    userUid: ownerUid(),
-    profileId: familiaFirestoreId,
     role: 'familia',
-    tipo,
-    nombre: file.name,
-    estado: 'pendiente',
-    status: 'pendiente',
-    url: storagePath,
-    storage_path: storagePath,
-    tamano_bytes: file.size,
-    mime_type: file.type,
-  });
+    type: tipo,
+    file,
+    storagePath,
+    profileId: familiaFirestoreId,
+    uploadedByUid: ownerUid(),
+    source: 'familia_dashboard',
+  }));
 
   if (error) { showToast('Error', error.message, 'error'); progress.textContent = ''; return; }
   famDocFile.value = '';

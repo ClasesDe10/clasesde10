@@ -19,6 +19,8 @@ const EVENT_CATALOG = Object.freeze([
   { type: 'payment.verified', entityType: 'pagos', description: 'Pago recibido o validado.' },
   { type: 'message.received', entityType: 'chats', description: 'Mensaje recibido en chat.' },
   { type: 'document.created', entityType: 'documentos', description: 'Documento subido.' },
+  { type: 'document.expiring_soon', entityType: 'documentos', description: 'Documento validado proximo a caducar.' },
+  { type: 'document.expired', entityType: 'documentos', description: 'Documento caducado automaticamente.' },
   { type: 'document.stale', entityType: 'documentos', description: 'Documento pendiente demasiado tiempo.' },
   { type: 'incident.created', entityType: 'incidencias', description: 'Incidencia abierta.' },
   { type: 'incident.stale', entityType: 'incidencias', description: 'Incidencia abierta sin resolver dentro del SLA.' },

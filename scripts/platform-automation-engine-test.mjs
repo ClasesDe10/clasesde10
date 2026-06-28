@@ -116,6 +116,26 @@ assertHas(profilePlan.crmTasks, (item) => item.tags.includes('verificacion'), 'p
 assertHas(profilePlan.automationEvents, (item) => item.type === 'trust.recalculation_requested', 'profile updates must request trust recalculation');
 assertOnlySupportedJobs(profilePlan);
 
+const documentExpiredPlan = buildAutomationPlan({
+  type: 'document.expired',
+  entityType: 'documentos',
+  entityId: 'doc_1',
+  data: {
+    id: 'doc_1',
+    ownerUid: 'teacher_user_1',
+    role: 'profesor',
+    nombre: 'DNI',
+    tipo: 'dni',
+  },
+});
+
+assertHas(documentExpiredPlan.notifications, (item) => item.userUid === 'teacher_user_1' && item.type === 'document_expired', 'expired documents must notify the owner');
+assertHas(documentExpiredPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'document_expired', 'expired documents must notify admins');
+assertHas(documentExpiredPlan.patches, (item) => item.collection === 'documentos' && item.data.status === 'caducado', 'expired documents must patch document status');
+assertHas(documentExpiredPlan.crmTasks, (item) => item.tags.includes('caducado'), 'expired documents must create CRM follow-up task');
+assertHas(documentExpiredPlan.opsAlerts, (item) => item.type === 'document_expired', 'expired documents must create ops alert');
+assertOnlySupportedJobs(documentExpiredPlan);
+
 const eventIds = new Set(requestPlan.automationEvents.map((item) => item.id));
 assert.equal(eventIds.size, requestPlan.automationEvents.length, 'automation event IDs must be unique per plan');
 
@@ -136,6 +156,9 @@ for (const eventType of [
   'profile.updated',
   'incident.created',
   'document.created',
+  'document.expiring_soon',
+  'document.expired',
+  'document.stale',
   'review.created',
 ]) {
   assertHas(EVENT_CATALOG, (item) => item.type === eventType, `Event catalog must include ${eventType}`);

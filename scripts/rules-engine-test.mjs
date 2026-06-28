@@ -35,6 +35,9 @@ for (const eventType of [
   'profile.updated',
   'incident.created',
   'document.created',
+  'document.expiring_soon',
+  'document.expired',
+  'document.stale',
   'review.created',
 ]) {
   assertHas(EVENT_CATALOG, (item) => item.type === eventType, `Event catalog must include ${eventType}`);

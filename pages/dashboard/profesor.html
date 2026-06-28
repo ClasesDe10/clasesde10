@@ -543,6 +543,7 @@
 import db from '../../js/firebase-data-client.js?v=20260628-audit';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260628-documents';
 import {
   evaluateTeacherProfileProfessional,
   isValidGrade,
@@ -1576,20 +1577,16 @@ document.getElementById('btn-subir-doc').addEventListener('click', async () => {
   const storagePath = up?.fullPath || up?.path || path;
 
   // Bucket privado — no generamos URL pública, solo guardamos el path
-  const { error } = await db.from('documentos').insert({
+  const { error } = await db.from('documentos').insert(buildDocumentUploadRecord({
     ownerUid: ownerUid(),
-    usuario_id: ownerUid(),
-    userUid: ownerUid(),
-    profileId: profesorFirestoreId,
     role: 'profesor',
-    tipo,
-    nombre: file.name,
-    estado: 'pendiente',
-    status: 'pendiente',
-    url: storagePath,
-    storage_path: storagePath,
-    tamano_bytes: file.size, mime_type: file.type,
-  });
+    type: tipo,
+    file,
+    storagePath,
+    profileId: profesorFirestoreId,
+    uploadedByUid: ownerUid(),
+    source: 'profesor_dashboard',
+  }));
 
   if (error) { showToast('Error', error.message, 'error'); prog.textContent = ''; return; }
   prog.textContent = '';
