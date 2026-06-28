@@ -69,6 +69,692 @@
     document.addEventListener('focusin', keepFocusedFieldVisible);
   }
 
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function debounce(fn, wait = 180) {
+    let timer = 0;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => fn(...args), wait);
+    };
+  }
+
+  function productUxReady(callback) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', callback, { once: true });
+    } else {
+      callback();
+    }
+  }
+
+  function injectProductUxStyles() {
+    if (document.getElementById('cd10-product-ux-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'cd10-product-ux-styles';
+    style.textContent = `
+      .cd10-connection-banner {
+        position: fixed;
+        left: 50%;
+        bottom: max(18px, env(safe-area-inset-bottom));
+        transform: translateX(-50%);
+        z-index: 2147482500;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        max-width: min(520px, calc(100vw - 24px));
+        padding: 10px 14px;
+        border-radius: 999px;
+        border: 1px solid rgba(15,31,61,.12);
+        background: #ffffff;
+        color: #0f1f3d;
+        box-shadow: 0 18px 50px rgba(0,0,0,.16);
+        font: 700 .82rem/1.3 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .18s ease, transform .18s ease;
+      }
+      .cd10-connection-banner.is-visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(-4px);
+        pointer-events: auto;
+      }
+      .cd10-connection-banner[data-tone="warning"] { border-color: rgba(217,119,6,.28); }
+      .cd10-connection-banner[data-tone="success"] { border-color: rgba(22,163,74,.24); }
+      .cd10-form-progress {
+        margin: 0 0 14px;
+        padding: 10px 12px;
+        border: 1px solid rgba(15,31,61,.08);
+        border-radius: 10px;
+        background: rgba(255,255,255,.72);
+      }
+      .cd10-form-progress__top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        color: #31405d;
+        font-size: .78rem;
+        font-weight: 800;
+      }
+      .cd10-form-progress__bar {
+        height: 7px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(15,31,61,.1);
+      }
+      .cd10-form-progress__bar span {
+        display: block;
+        width: var(--cd10-progress, 0%);
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, #e8a030, #1d7a6b);
+        transition: width .22s ease;
+      }
+      .cd10-draft-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 22px;
+        margin-top: 8px;
+        color: #6f695f;
+        font-size: .78rem;
+        font-weight: 700;
+      }
+      .cd10-draft-status::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #16a34a;
+      }
+      .cd10-draft-status[data-state="dirty"]::before { background: #d97706; }
+      .cd10-draft-status[data-state="restored"]::before { background: #2563eb; }
+      .cd10-command-trigger {
+        min-height: 34px;
+        border: 1px solid rgba(15,31,61,.1);
+        border-radius: 8px;
+        background: rgba(15,31,61,.04);
+        color: #31405d;
+        padding: 6px 10px;
+        font: 800 .78rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        cursor: pointer;
+      }
+      .cd10-command-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2147482600;
+        display: none;
+        align-items: flex-start;
+        justify-content: center;
+        padding: min(12vh, 86px) 14px 24px;
+        background: rgba(15,31,61,.34);
+        backdrop-filter: blur(5px);
+      }
+      .cd10-command-overlay.open { display: flex; }
+      .cd10-command-panel {
+        width: min(640px, 100%);
+        max-height: min(680px, calc(100vh - 48px));
+        overflow: hidden;
+        border-radius: 14px;
+        border: 1px solid rgba(255,255,255,.7);
+        background: #ffffff;
+        box-shadow: 0 30px 90px rgba(0,0,0,.28);
+      }
+      .cd10-command-input {
+        width: 100%;
+        border: 0;
+        border-bottom: 1px solid rgba(15,31,61,.09);
+        outline: 0;
+        padding: 16px 18px;
+        color: #0f1f3d;
+        font: 700 1rem system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .cd10-command-list {
+        max-height: min(520px, calc(100vh - 190px));
+        overflow-y: auto;
+        padding: 8px;
+      }
+      .cd10-command-item {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        align-items: center;
+        min-height: 48px;
+        border: 0;
+        border-radius: 10px;
+        background: transparent;
+        color: #0f1f3d;
+        padding: 10px 12px;
+        text-align: left;
+        cursor: pointer;
+      }
+      .cd10-command-item:hover,
+      .cd10-command-item:focus-visible {
+        outline: 0;
+        background: rgba(232,160,48,.14);
+      }
+      .cd10-command-item strong {
+        display: block;
+        font-size: .9rem;
+      }
+      .cd10-command-item span {
+        color: #6f695f;
+        font-size: .76rem;
+        font-weight: 700;
+      }
+      .cd10-command-empty {
+        padding: 28px;
+        color: #6f695f;
+        text-align: center;
+        font-size: .9rem;
+      }
+      .cd10-tooltip-anchor {
+        position: relative;
+      }
+      .cd10-tooltip-anchor:hover::after,
+      .cd10-tooltip-anchor:focus-visible::after {
+        content: attr(data-cd10-tooltip);
+        position: absolute;
+        right: 0;
+        top: calc(100% + 8px);
+        z-index: 30;
+        width: max-content;
+        max-width: 240px;
+        padding: 7px 9px;
+        border-radius: 7px;
+        background: #0f1f3d;
+        color: #ffffff;
+        font-size: .74rem;
+        line-height: 1.35;
+        box-shadow: 0 10px 30px rgba(0,0,0,.2);
+      }
+      .cd10-context-action {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        margin-top: 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(15,31,61,.12);
+        background: #ffffff;
+        color: #0f1f3d;
+        padding: 8px 11px;
+        font-size: .8rem;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .cd10-global-search-count {
+        display: inline-flex;
+        margin-left: 8px;
+        color: #6f695f;
+        font-size: .76rem;
+        font-weight: 800;
+      }
+      @media (max-width: 768px) {
+        .cd10-command-trigger { display: none; }
+        .cd10-command-overlay { padding-top: 14px; }
+        .cd10-command-panel { border-radius: 12px; }
+        .cd10-form-progress { padding: 9px 10px; }
+        .cd10-connection-banner {
+          bottom: max(12px, env(safe-area-inset-bottom));
+          border-radius: 12px;
+          width: calc(100vw - 24px);
+          justify-content: center;
+          text-align: center;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cd10-connection-banner,
+        .cd10-form-progress__bar span {
+          transition: none;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function showConnectionBanner(message, tone = 'info', duration = 3500) {
+    let banner = document.getElementById('cd10-connection-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'cd10-connection-banner';
+      banner.className = 'cd10-connection-banner';
+      banner.setAttribute('role', 'status');
+      banner.setAttribute('aria-live', 'polite');
+      document.body.appendChild(banner);
+    }
+    banner.dataset.tone = tone;
+    banner.textContent = message;
+    banner.classList.add('is-visible');
+    clearTimeout(showConnectionBanner.timer);
+    if (duration) {
+      showConnectionBanner.timer = window.setTimeout(() => banner.classList.remove('is-visible'), duration);
+    }
+  }
+
+  function initConnectionAwareness() {
+    if (!('onLine' in navigator)) return;
+    const offline = () => showConnectionBanner('Sin conexion. Puedes seguir leyendo; los cambios se guardaran como borrador.', 'warning', 0);
+    const online = () => showConnectionBanner('Conexion recuperada. Revisa los cambios pendientes antes de enviar.', 'success', 3500);
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    if (!navigator.onLine) offline();
+
+    window.addEventListener('cd10:pwa-status', (event) => {
+      if (event.detail?.type === 'update-ready') {
+        showConnectionBanner('Nueva version lista. Se aplicara automaticamente al recargar.', 'success', 6000);
+      }
+    });
+  }
+
+  function shouldSkipSmartForm(form) {
+    if (!(form instanceof HTMLFormElement)) return true;
+    if (form.dataset.cd10Ux === 'off') return true;
+    if (form.closest('.auth-card') || /login|password|reset/i.test(form.id || form.action || window.location.pathname)) return true;
+    return Array.from(form.elements || []).some((field) => field.type === 'password');
+  }
+
+  function serializableFields(form) {
+    return Array.from(form.elements || []).filter((field) => (
+      field instanceof HTMLElement
+      && field.name
+      && !field.disabled
+      && !['hidden', 'password', 'file', 'submit', 'button', 'reset'].includes(field.type)
+    ));
+  }
+
+  function draftKey(form) {
+    const id = form.id || form.getAttribute('aria-label') || form.querySelector('button[type="submit"]')?.textContent || 'form';
+    return `cd10:draft:${window.location.pathname}:${id.trim().replace(/\s+/g, '-').toLowerCase()}`;
+  }
+
+  function readFormDraft(form) {
+    try {
+      const raw = window.localStorage.getItem(draftKey(form));
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function writeFormDraft(form) {
+    try {
+      const data = {};
+      for (const field of serializableFields(form)) {
+        if (field.type === 'checkbox') data[field.name] = field.checked;
+        else if (field.type === 'radio') {
+          if (field.checked) data[field.name] = field.value;
+        } else {
+          data[field.name] = field.value;
+        }
+      }
+      window.localStorage.setItem(draftKey(form), JSON.stringify({ data, savedAt: Date.now() }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function restoreFormDraft(form, status) {
+    const draft = readFormDraft(form);
+    if (!draft?.data) return;
+    let restored = 0;
+    for (const field of serializableFields(form)) {
+      if (!(field.name in draft.data)) continue;
+      if (field.type === 'checkbox') field.checked = Boolean(draft.data[field.name]);
+      else if (field.type === 'radio') field.checked = draft.data[field.name] === field.value;
+      else if (!field.value) field.value = draft.data[field.name] || '';
+      restored += 1;
+    }
+    if (restored) {
+      form.dispatchEvent(new CustomEvent('cd10:draft-restored', { bubbles: true }));
+      updateDraftStatus(status, 'restored', 'Borrador recuperado');
+    }
+  }
+
+  function clearFormDraft(form) {
+    try {
+      window.localStorage.removeItem(draftKey(form));
+    } catch (_) {}
+  }
+
+  function updateDraftStatus(node, state, label) {
+    if (!node) return;
+    node.dataset.state = state;
+    node.textContent = label;
+  }
+
+  function requiredProgress(form) {
+    const required = serializableFields(form).filter((field) => field.required || field.getAttribute('aria-required') === 'true');
+    if (!required.length) return null;
+    const complete = required.filter((field) => {
+      if (field.type === 'checkbox') return field.checked;
+      if (field.type === 'radio') return form.querySelector(`[name="${CSS.escape(field.name)}"]:checked`);
+      return String(field.value || '').trim().length > 0 && field.checkValidity();
+    }).length;
+    return Math.round((complete / required.length) * 100);
+  }
+
+  function ensureFormProgress(form) {
+    if (form.dataset.cd10Progress === 'true') return form.querySelector('.cd10-form-progress');
+    const firstControl = form.querySelector('input, select, textarea');
+    if (!firstControl || requiredProgress(form) === null) return null;
+    const box = document.createElement('div');
+    box.className = 'cd10-form-progress';
+    box.innerHTML = `
+      <div class="cd10-form-progress__top">
+        <span>Progreso del formulario</span>
+        <span data-cd10-form-progress-label>0%</span>
+      </div>
+      <div class="cd10-form-progress__bar" aria-hidden="true"><span></span></div>
+    `;
+    let anchor = firstControl.closest('.form-group, .cf-field, label') || firstControl;
+    while (anchor.parentElement && anchor.parentElement !== form) anchor = anchor.parentElement;
+    if (anchor.parentElement === form) form.insertBefore(box, anchor);
+    else form.prepend(box);
+    form.dataset.cd10Progress = 'true';
+    return box;
+  }
+
+  function updateFormProgress(form) {
+    const progress = requiredProgress(form);
+    const box = ensureFormProgress(form);
+    if (!box || progress === null) return;
+    box.style.setProperty('--cd10-progress', `${progress}%`);
+    const label = box.querySelector('[data-cd10-form-progress-label]');
+    if (label) label.textContent = `${progress}%`;
+  }
+
+  function initSmartForms() {
+    document.querySelectorAll('form').forEach((form) => {
+      if (shouldSkipSmartForm(form) || form.dataset.cd10SmartForm === 'true') return;
+      form.dataset.cd10SmartForm = 'true';
+      const status = document.createElement('div');
+      status.className = 'cd10-draft-status';
+      status.dataset.state = 'saved';
+      status.textContent = 'Sin cambios pendientes';
+      form.appendChild(status);
+      restoreFormDraft(form, status);
+      updateFormProgress(form);
+
+      const save = debounce(() => {
+        updateFormProgress(form);
+        if (writeFormDraft(form)) updateDraftStatus(status, 'dirty', 'Borrador guardado en este dispositivo');
+      }, 220);
+
+      form.addEventListener('input', save, true);
+      form.addEventListener('change', save, true);
+      form.addEventListener('submit', () => {
+        clearFormDraft(form);
+        updateDraftStatus(status, 'saved', 'Enviando cambios');
+      }, true);
+    });
+  }
+
+  function isDashboard() {
+    return Boolean(document.querySelector('.dash-layout'));
+  }
+
+  function visibleText(node) {
+    return String(node?.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function dashboardActions() {
+    const actions = [];
+    const seen = new Set();
+    document.querySelectorAll('.sidebar-link[data-section], [data-section]').forEach((node) => {
+      const section = node.dataset.section;
+      const label = visibleText(node) || section;
+      const key = `section:${section}`;
+      if (!section || seen.has(key)) return;
+      seen.add(key);
+      actions.push({
+        label,
+        hint: 'Ir a seccion',
+        run: () => node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
+      });
+    });
+    document.querySelectorAll('button[id], a[id], button[data-action], .btn').forEach((node) => {
+      const label = visibleText(node) || node.getAttribute('aria-label') || node.title;
+      if (!label || label.length > 60 || node.disabled) return;
+      const key = `action:${node.id || node.dataset.action || label}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      actions.push({
+        label,
+        hint: node.dataset.action ? 'Accion rapida' : 'Accion',
+        run: () => node.click(),
+      });
+    });
+    return actions;
+  }
+
+  function ensureCommandPalette() {
+    let overlay = document.getElementById('cd10-command-overlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.id = 'cd10-command-overlay';
+    overlay.className = 'cd10-command-overlay';
+    overlay.innerHTML = `
+      <div class="cd10-command-panel" role="dialog" aria-modal="true" aria-label="Acciones rapidas">
+        <input class="cd10-command-input" type="search" placeholder="Buscar secciones, acciones o flujos..." autocomplete="off">
+        <div class="cd10-command-list" role="listbox"></div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) closeCommandPalette();
+    });
+    overlay.querySelector('.cd10-command-input').addEventListener('input', () => renderCommandPalette());
+    return overlay;
+  }
+
+  function renderCommandPalette() {
+    const overlay = ensureCommandPalette();
+    const input = overlay.querySelector('.cd10-command-input');
+    const list = overlay.querySelector('.cd10-command-list');
+    const query = input.value.trim().toLowerCase();
+    const actions = dashboardActions().filter((action) => (
+      !query || `${action.label} ${action.hint}`.toLowerCase().includes(query)
+    )).slice(0, 12);
+    if (!actions.length) {
+      list.innerHTML = '<div class="cd10-command-empty">No hay acciones para esa busqueda.</div>';
+      return;
+    }
+    list.innerHTML = actions.map((action, index) => `
+      <button type="button" class="cd10-command-item" data-command-index="${index}">
+        <strong>${escapeHtml(action.label)}</strong>
+        <span>${escapeHtml(action.hint)}</span>
+      </button>
+    `).join('');
+    list.querySelectorAll('[data-command-index]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const action = actions[Number(button.dataset.commandIndex)];
+        closeCommandPalette();
+        window.setTimeout(() => action?.run(), 20);
+      });
+    });
+  }
+
+  function openCommandPalette(seed = '') {
+    if (!isDashboard()) return;
+    const overlay = ensureCommandPalette();
+    overlay.classList.add('open');
+    const input = overlay.querySelector('.cd10-command-input');
+    input.value = seed;
+    renderCommandPalette();
+    window.setTimeout(() => input.focus(), 20);
+  }
+
+  function closeCommandPalette() {
+    const overlay = document.getElementById('cd10-command-overlay');
+    overlay?.classList.remove('open');
+  }
+
+  function syncDashboardHash(section) {
+    if (!section || !history.replaceState) return;
+    const target = `#${section}`;
+    if (window.location.hash !== target) {
+      history.replaceState(null, '', target);
+    }
+  }
+
+  function initDashboardCommandPalette() {
+    if (!isDashboard()) return;
+    const topbarActions = document.querySelector('.topbar-actions');
+    if (topbarActions && !document.getElementById('cd10-command-trigger')) {
+      const trigger = document.createElement('button');
+      trigger.id = 'cd10-command-trigger';
+      trigger.className = 'cd10-command-trigger';
+      trigger.type = 'button';
+      trigger.textContent = 'Buscar / Ctrl K';
+      trigger.addEventListener('click', () => openCommandPalette());
+      topbarActions.prepend(trigger);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      const target = event.target;
+      const typing = target instanceof HTMLElement && target.matches('input, textarea, select, [contenteditable="true"]');
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openCommandPalette();
+        return;
+      }
+      if (event.key === 'Escape') closeCommandPalette();
+      if (!typing && event.key === '/') {
+        event.preventDefault();
+        openCommandPalette();
+      }
+    });
+
+    document.addEventListener('click', (event) => {
+      const trigger = event.target.closest?.('[data-section]');
+      if (trigger?.dataset.section) window.setTimeout(() => syncDashboardHash(trigger.dataset.section), 0);
+    });
+
+    const initial = window.location.hash.replace(/^#section-?/, '').replace(/^#/, '');
+    if (initial) {
+      const trigger = document.querySelector(`.sidebar-link[data-section="${CSS.escape(initial)}"]`);
+      if (trigger) window.setTimeout(() => trigger.click(), 80);
+    }
+  }
+
+  function initDashboardSearchAssist() {
+    const input = document.getElementById('busqueda-global');
+    if (!input || input.dataset.cd10SearchAssist === 'true') return;
+    input.dataset.cd10SearchAssist = 'true';
+    input.placeholder = 'Buscar en la seccion actual...';
+    const count = document.createElement('span');
+    count.className = 'cd10-global-search-count';
+    input.closest('.topbar-search')?.appendChild(count);
+
+    const apply = debounce(() => {
+      const section = Array.from(document.querySelectorAll('.dash-section'))
+        .find((item) => window.getComputedStyle(item).display !== 'none')
+        || document.querySelector('.dash-section');
+      const query = input.value.trim().toLowerCase();
+      const rows = Array.from(section?.querySelectorAll('tbody tr, .list-item, .prof-card, .card-row') || []);
+      let visible = 0;
+      rows.forEach((row) => {
+        const match = !query || visibleText(row).toLowerCase().includes(query);
+        row.style.display = match ? '' : 'none';
+        row.dataset.cd10HiddenBySearch = match ? 'false' : 'true';
+        if (match) visible += 1;
+      });
+      count.textContent = query && rows.length ? `${visible}/${rows.length}` : '';
+    }, 120);
+
+    input.addEventListener('input', apply);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && input.value.trim()) {
+        event.preventDefault();
+        openCommandPalette(input.value.trim());
+      }
+    });
+  }
+
+  function initTooltips() {
+    document.querySelectorAll('[title], [aria-label]').forEach((node) => {
+      if (!(node instanceof HTMLElement) || node.dataset.cd10TooltipBound === 'true') return;
+      const label = node.getAttribute('title') || node.getAttribute('aria-label');
+      if (!label || label.length > 90) return;
+      node.dataset.cd10Tooltip = label;
+      node.dataset.cd10TooltipBound = 'true';
+      node.classList.add('cd10-tooltip-anchor');
+      if (!node.getAttribute('aria-label')) node.setAttribute('aria-label', label);
+    });
+  }
+
+  function contextActionFor(sectionId) {
+    const key = String(sectionId || '').replace(/^section-/, '');
+    const map = {
+      solicitudes: ['Crear o revisar solicitud', '[data-action="abrir-modal-solicitud"], #btn-nueva-solicitud-top, [data-section="solicitudes"]'],
+      profesores: ['Revisar perfiles', '[data-section="profesores"]'],
+      pagos: ['Ver finanzas', '[data-section="finanzas"], [data-section="pagos"]'],
+      clases: ['Ir al calendario', '[data-section="calendario"]'],
+      calendario: ['Ver clases', '[data-section="clases"]'],
+      chat: ['Ver notificaciones', '[data-chat-tab="notificaciones"], [data-section="chats"]'],
+      chats: ['Ver notificaciones', '[data-chat-tab="notificaciones"], [data-section="chats"]'],
+      documentos: ['Subir o revisar documentos', '[data-section="documentos"]'],
+    };
+    return map[key] || null;
+  }
+
+  function enhanceEmptyStates(root = document) {
+    root.querySelectorAll?.('.empty-state').forEach((empty) => {
+      if (empty.dataset.cd10Enhanced === 'true' || empty.querySelector('button, a')) return;
+      const section = empty.closest('.dash-section');
+      const action = contextActionFor(section?.id);
+      if (!action) return;
+      const [label, selector] = action;
+      const target = document.querySelector(selector);
+      if (!target) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'cd10-context-action';
+      button.textContent = label;
+      button.addEventListener('click', () => target.click());
+      empty.appendChild(button);
+      empty.dataset.cd10Enhanced = 'true';
+    });
+  }
+
+  function initEmptyStateObserver() {
+    enhanceEmptyStates();
+    if (typeof MutationObserver === 'undefined') return;
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) enhanceEmptyStates(node);
+        });
+      });
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  function initProductUxLayer() {
+    injectProductUxStyles();
+    initConnectionAwareness();
+    initSmartForms();
+    initDashboardCommandPalette();
+    initDashboardSearchAssist();
+    initTooltips();
+    initEmptyStateObserver();
+    window.CD10ProductUX = {
+      openCommandPalette,
+      enhanceEmptyStates,
+      initSmartForms,
+    };
+  }
+
   function injectStyles() {
     if (document.getElementById('cd10-install-styles')) return;
 
@@ -257,6 +943,7 @@
     }
   });
 
+  productUxReady(initProductUxLayer);
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', bindViewportSignals, { once: true });
   } else {
