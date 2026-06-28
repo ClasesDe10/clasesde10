@@ -54,6 +54,10 @@ import {
   FINANCE_ERP_VERSION,
   buildFinanceErpReport,
 } from '../js/finance-erp-engine.js';
+import {
+  ANALYTICS_ENGINE_VERSION,
+  buildAnalyticsReport,
+} from '../js/analytics-engine.js';
 import { buildNotificationDocument } from '../js/notification-engine.js';
 
 const require = createRequire(import.meta.url);
@@ -842,6 +846,70 @@ async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
   });
 
   return { alerts };
+}
+
+async function writeAnalyticsRollup(db, stats) {
+  const [
+    events,
+    leads,
+    requests,
+    teachers,
+    families,
+    students,
+    assignments,
+    classes,
+    payments,
+    incidents,
+  ] = await Promise.all([
+    listCollection(db, 'analyticsEvents', Math.max(limit * 20, 1000)),
+    listCollection(db, 'leadsPublicos', limit * 4),
+    listCollection(db, 'solicitudes', limit * 4),
+    listCollection(db, 'profesores', limit * 4),
+    listCollection(db, 'familias', limit * 4),
+    listCollection(db, 'alumnos', limit * 4),
+    listCollection(db, 'asignaciones', limit * 4),
+    listCollection(db, 'clases', limit * 6),
+    listCollection(db, 'pagos', limit * 6),
+    listCollection(db, 'incidencias', limit * 4),
+  ]);
+
+  const generatedAt = isoNow();
+  const report = buildAnalyticsReport({
+    events,
+    leads,
+    requests,
+    teachers,
+    families,
+    students,
+    assignments,
+    classes,
+    payments,
+    incidents,
+  }, {
+    month: generatedAt.slice(0, 7),
+    nowIso: generatedAt,
+  });
+
+  await writeDoc(db.collection('analyticsDailyRollups'), generatedAt.slice(0, 10), {
+    scope: 'product_analytics',
+    period: 'daily',
+    day: generatedAt.slice(0, 10),
+    month: generatedAt.slice(0, 7),
+    analyticsVersion: ANALYTICS_ENGINE_VERSION,
+    generatedAt,
+    metrics: report.totals,
+    funnels: report.funnels,
+    insights: report.insights,
+    demand: report.demand,
+    monthly: report.monthly,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+
+  stats.analyticsEventsEvaluated = events.length;
+  stats.analyticsRollupsCreated += 1;
+  stats.analyticsEngineVersion = ANALYTICS_ENGINE_VERSION;
+  return report;
 }
 
 async function countActiveAssignmentsByTeacher(db) {
@@ -2390,6 +2458,9 @@ async function main() {
     systemJobsProcessed: 0,
     systemJobsFailed: 0,
     metricSnapshotsCreated: 0,
+    analyticsEventsEvaluated: 0,
+    analyticsRollupsCreated: 0,
+    analyticsEngineVersion: ANALYTICS_ENGINE_VERSION,
     opsAlertsCreated: 0,
     platformAutomationPlans: 0,
     platformRuleRunsEvaluated: 0,
@@ -2447,6 +2518,7 @@ async function main() {
   await reconcileVerifiedPayments(db, stats);
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
+  await writeAnalyticsRollup(db, stats);
   const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');
   stats.metricSnapshotsCreated += 1;
   stats.opsAlertsCreated += snapshot.alerts.length;

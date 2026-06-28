@@ -4,6 +4,8 @@
   const INSTALL_ID = 'cd10-install-card';
   let deferredPrompt = null;
   let installCard = null;
+  let analyticsModulePromise = null;
+  const clickTelemetry = new Map();
 
   const isStandalone = () =>
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -92,6 +94,22 @@
     } else {
       callback();
     }
+  }
+
+  function analyticsModule() {
+    analyticsModulePromise ||= import('/js/analytics-client.js?v=20260628-analytics').catch(() => null);
+    return analyticsModulePromise;
+  }
+
+  function trackProductEvent(eventName, payload = {}) {
+    analyticsModule().then((module) => module?.trackAnalyticsEvent?.(eventName, payload));
+  }
+
+  function formAnalyticsName(form) {
+    return (form.id || form.getAttribute('name') || form.getAttribute('aria-label') || form.action || window.location.pathname || 'form')
+      .replace(/^https?:\/\/[^/]+/i, '')
+      .replace(/[^a-z0-9_-]+/gi, '_')
+      .slice(0, 80);
   }
 
   function injectProductUxStyles() {
@@ -342,8 +360,23 @@
 
   function initConnectionAwareness() {
     if (!('onLine' in navigator)) return;
-    const offline = () => showConnectionBanner('Sin conexion. Puedes seguir leyendo; los cambios se guardaran como borrador.', 'warning', 0);
-    const online = () => showConnectionBanner('Conexion recuperada. Revisa los cambios pendientes antes de enviar.', 'success', 3500);
+    const offline = () => {
+      showConnectionBanner('Sin conexion. Puedes seguir leyendo; los cambios se guardaran como borrador.', 'warning', 0);
+      trackProductEvent('error.captured', {
+        category: 'error',
+        feature: 'connection',
+        severity: 'warning',
+        metadata: { state: 'offline' },
+      });
+    };
+    const online = () => {
+      showConnectionBanner('Conexion recuperada. Revisa los cambios pendientes antes de enviar.', 'success', 3500);
+      trackProductEvent('system.connection.online', {
+        category: 'system',
+        feature: 'connection',
+        metadata: { state: 'online' },
+      });
+    };
     window.addEventListener('offline', offline);
     window.addEventListener('online', online);
     if (!navigator.onLine) offline();
@@ -417,6 +450,13 @@
     if (restored) {
       form.dispatchEvent(new CustomEvent('cd10:draft-restored', { bubbles: true }));
       updateDraftStatus(status, 'restored', 'Borrador recuperado');
+      trackProductEvent('form.progress', {
+        category: 'forms',
+        feature: formAnalyticsName(form),
+        entityType: 'form',
+        entityId: formAnalyticsName(form),
+        metadata: { state: 'draft_restored', restored },
+      });
     }
   }
 
@@ -477,6 +517,7 @@
     document.querySelectorAll('form').forEach((form) => {
       if (shouldSkipSmartForm(form) || form.dataset.cd10SmartForm === 'true') return;
       form.dataset.cd10SmartForm = 'true';
+      let formStartedTracked = false;
       const status = document.createElement('div');
       status.className = 'cd10-draft-status';
       status.dataset.state = 'saved';
@@ -486,6 +527,16 @@
       updateFormProgress(form);
 
       const save = debounce(() => {
+        if (!formStartedTracked) {
+          formStartedTracked = true;
+          trackProductEvent('form.started', {
+            category: 'forms',
+            feature: formAnalyticsName(form),
+            entityType: 'form',
+            entityId: formAnalyticsName(form),
+            metadata: { progress: requiredProgress(form) ?? 0 },
+          });
+        }
         updateFormProgress(form);
         if (writeFormDraft(form)) updateDraftStatus(status, 'dirty', 'Borrador guardado en este dispositivo');
       }, 220);
@@ -493,10 +544,87 @@
       form.addEventListener('input', save, true);
       form.addEventListener('change', save, true);
       form.addEventListener('submit', () => {
+        trackProductEvent('form.submitted', {
+          category: 'forms',
+          feature: formAnalyticsName(form),
+          entityType: 'form',
+          entityId: formAnalyticsName(form),
+          metadata: { progress: requiredProgress(form) ?? 100 },
+        });
         clearFormDraft(form);
         updateDraftStatus(status, 'saved', 'Enviando cambios');
       }, true);
+      window.addEventListener('pagehide', () => {
+        const progress = requiredProgress(form);
+        if (formStartedTracked && progress !== null && progress > 0 && progress < 100) {
+          trackProductEvent('form.abandoned', {
+            category: 'forms',
+            feature: formAnalyticsName(form),
+            entityType: 'form',
+            entityId: formAnalyticsName(form),
+            metadata: { progress },
+          });
+        }
+      }, { once: true });
     });
+  }
+
+  function initProductAnalyticsLayer() {
+    analyticsModule().then((module) => module?.installGlobalAnalyticsListeners?.());
+    document.addEventListener('click', (event) => {
+      const target = event.target.closest('a[href], button, [data-section], [data-action]');
+      if (!target) return;
+      const label = (target.getAttribute('aria-label') || target.textContent || target.dataset.section || target.dataset.action || target.href || '').trim().replace(/\s+/g, ' ').slice(0, 100);
+      if (!label) return;
+      const key = `${window.location.pathname}:${label}`;
+      const last = clickTelemetry.get(key) || 0;
+      if (Date.now() - last < 1500) return;
+      clickTelemetry.set(key, Date.now());
+      trackProductEvent('cta.click', {
+        category: 'interaction',
+        feature: target.dataset.section ? 'dashboard_navigation' : 'cta',
+        entityType: target.dataset.section ? 'section' : '',
+        entityId: target.dataset.section || target.dataset.action || '',
+        metadata: {
+          label,
+          href: target.getAttribute('href') || '',
+          section: target.dataset.section || '',
+          action: target.dataset.action || '',
+        },
+      });
+    }, true);
+
+    document.addEventListener('change', (event) => {
+      const field = event.target;
+      if (!field?.matches?.('select, input[type="checkbox"], input[type="radio"]')) return;
+      trackProductEvent('filter.used', {
+        category: 'search',
+        feature: field.id || field.name || 'filter',
+        entityType: 'filter',
+        entityId: field.id || field.name || '',
+        metadata: {
+          field: field.id || field.name || '',
+          value: field.type === 'checkbox' ? field.checked : field.value,
+        },
+      });
+    }, true);
+
+    document.addEventListener('input', debounce((event) => {
+      const field = event.target;
+      if (!field?.matches?.('input[type="search"], input[id*="busqueda"], input[id*="filtro"], input[name*="search"]')) return;
+      const value = String(field.value || '').trim();
+      if (value.length < 2) return;
+      trackProductEvent('search.used', {
+        category: 'search',
+        feature: field.id || field.name || 'search',
+        entityType: 'search',
+        entityId: field.id || field.name || '',
+        metadata: {
+          field: field.id || field.name || '',
+          query_length: value.length,
+        },
+      });
+    }, 650), true);
   }
 
   function isDashboard() {
@@ -742,6 +870,7 @@
 
   function initProductUxLayer() {
     injectProductUxStyles();
+    initProductAnalyticsLayer();
     initConnectionAwareness();
     initSmartForms();
     initDashboardCommandPalette();

@@ -1,20 +1,17 @@
-/**
- * ClasesDe10 — Analytics Module
- * Google Analytics 4, Microsoft Clarity, Meta Pixel
- *
- * CONFIGURACIÓN: Reemplazar los IDs en CONFIG con los valores reales.
- * Carga diferida para no penalizar LCP ni Core Web Vitals.
- */
+import {
+  trackAnalyticsEvent,
+  trackAuthEvent,
+  trackFormEvent,
+} from './analytics-client.js?v=20260628-analytics';
 
 const CONFIG = {
-  GA4_ID:     'G-XXXXXXXXXX',    // ← Reemplazar con Measurement ID de GA4
-  CLARITY_ID: 'XXXXXXXXXX',      // ← Reemplazar con Project ID de Clarity
-  META_PIXEL: 'XXXXXXXXXXXXXXXX', // ← Reemplazar con Pixel ID de Meta
+  GA4_ID: '',
+  CLARITY_ID: '',
+  META_PIXEL: '',
 };
 
-// ── GOOGLE ANALYTICS 4 ───────────────────────────────────────────
 function initGA4() {
-  if (!CONFIG.GA4_ID || CONFIG.GA4_ID.includes('X')) return;
+  if (!CONFIG.GA4_ID) return;
   const script = document.createElement('script');
   script.src = `https://www.googletagmanager.com/gtag/js?id=${CONFIG.GA4_ID}`;
   script.async = true;
@@ -29,9 +26,8 @@ function initGA4() {
   });
 }
 
-// ── MICROSOFT CLARITY ────────────────────────────────────────────
 function initClarity() {
-  if (!CONFIG.CLARITY_ID || CONFIG.CLARITY_ID.includes('X')) return;
+  if (!CONFIG.CLARITY_ID) return;
   /* eslint-disable */
   (function(c,l,a,r,i,t,y){
     c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -41,9 +37,8 @@ function initClarity() {
   /* eslint-enable */
 }
 
-// ── META PIXEL ───────────────────────────────────────────────────
 function initMetaPixel() {
-  if (!CONFIG.META_PIXEL || CONFIG.META_PIXEL.includes('X')) return;
+  if (!CONFIG.META_PIXEL) return;
   /* eslint-disable */
   !function(f,b,e,v,n,t,s){
     if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -58,91 +53,97 @@ function initMetaPixel() {
   /* eslint-enable */
 }
 
-// ── EVENTOS PERSONALIZADOS ───────────────────────────────────────
-
-/**
- * Evento genérico
- */
-export function trackEvent(eventName, params = {}) {
-  if (window.gtag)    window.gtag('event', eventName, params);
-  if (window.fbq)     window.fbq('trackCustom', eventName, params);
-  if (window.clarity) window.clarity('event', eventName);
+function mapLegacyEventName(eventName) {
+  const map = {
+    sign_up: 'auth.signup.succeeded',
+    login: 'auth.login.succeeded',
+    solicitud_profesor: 'request.created',
+    contact: 'form.submitted',
+    page_materia: 'page.view',
+  };
+  return map[eventName] || (String(eventName).includes('.') ? eventName : `legacy.${eventName}`);
 }
 
-/**
- * Evento: registro completado
- * Llamar despues de un registro exitoso en el proveedor de auth activo.
- */
+function metadataFromLegacy(params = {}) {
+  return {
+    ...params,
+    user_rol: params.user_rol || params.role || params.rol || '',
+    event_category: params.event_category || '',
+    event_label: params.event_label || '',
+  };
+}
+
+export function trackEvent(eventName, params = {}) {
+  if (window.gtag) window.gtag('event', eventName, params);
+  if (window.fbq) window.fbq('trackCustom', eventName, params);
+  if (window.clarity) window.clarity('event', eventName);
+  return trackAnalyticsEvent(mapLegacyEventName(eventName), {
+    category: params.category || params.event_category || 'legacy',
+    feature: params.feature || params.event_label || eventName,
+    value: params.value || 0,
+    metadata: metadataFromLegacy(params),
+  });
+}
+
 export function trackRegistro(rol) {
-  trackEvent('sign_up', { method: 'email', user_rol: rol });
+  trackAuthEvent('auth.signup.succeeded', { method: 'email', role: rol });
   if (window.fbq) window.fbq('track', 'CompleteRegistration', { content_name: rol });
 }
 
-/**
- * Evento: login exitoso
- * Llamar despues de un login exitoso en el proveedor de auth activo.
- */
 export function trackLogin(rol) {
-  trackEvent('login', { method: 'email', user_rol: rol });
+  trackAuthEvent('auth.login.succeeded', { method: 'email', role: rol });
 }
 
-/**
- * Evento: solicitud de profesor enviada
- * Llamar después de INSERT en tabla solicitudes
- */
 export function trackSolicitudProfesor(materia) {
-  trackEvent('solicitud_profesor', {
-    materia,
-    event_category: 'conversión',
-    event_label: materia,
+  trackAnalyticsEvent('request.created', {
+    category: 'conversion',
+    feature: 'solicitudes',
+    entityType: 'solicitudes',
+    metadata: { materia },
     value: 1,
   });
   if (window.fbq) window.fbq('track', 'Lead', { content_name: materia, content_category: 'solicitud' });
 }
 
-/**
- * Evento: formulario de contacto enviado
- */
 export function trackContacto(origen) {
-  trackEvent('contact', { event_category: 'formulario', event_label: origen });
+  trackFormEvent('form.submitted', 'contacto', { origen });
   if (window.fbq) window.fbq('track', 'Contact');
 }
 
-/**
- * Evento: visita a página de materia SEO
- */
 export function trackPaginaMateria(materia, nivel) {
-  trackEvent('page_materia', { materia, nivel });
+  trackAnalyticsEvent('page.view', {
+    category: 'seo',
+    feature: 'materia',
+    metadata: { materia, nivel },
+  });
 }
 
-// ── CARGA DIFERIDA ──────────────────────────────────────────────
-// Se inicializa tras la primera interacción del usuario o a los 3 seg.
-// Esto evita impactar LCP y FID en páginas de entrada.
-
-let _initialized = false;
+let initialized = false;
 
 function initAll() {
-  if (_initialized) return;
-  _initialized = true;
+  if (initialized) return;
+  initialized = true;
   initGA4();
   initClarity();
   initMetaPixel();
-  // Eliminar listeners tras la primera ejecución
-  TRIGGER_EVENTS.forEach(ev => document.removeEventListener(ev, _trigger, { passive: true }));
+  TRIGGER_EVENTS.forEach((eventName) => document.removeEventListener(eventName, trigger, { passive: true }));
 }
 
-const _trigger = () => initAll();
+const trigger = () => initAll();
 const TRIGGER_EVENTS = ['scroll', 'click', 'keydown', 'touchstart'];
+setTimeout(initAll, 3000);
+TRIGGER_EVENTS.forEach((eventName) => document.addEventListener(eventName, trigger, { once: true, passive: true }));
 
-// Inicializar a los 3 segundos aunque no haya interacción
-const _timer = setTimeout(initAll, 3000);
+export function init() {
+  initAll();
+}
 
-// Inicializar en la primera interacción (antes de los 3 seg)
-TRIGGER_EVENTS.forEach(ev => document.addEventListener(ev, _trigger, { once: true, passive: true }));
-
-/**
- * API pública para inicialización manual (ej: en SPAs o dashboards)
- */
-export function init() { initAll(); }
-
-export default { init, trackEvent, trackRegistro, trackLogin, trackSolicitudProfesor, trackContacto, trackPaginaMateria };
+export default {
+  init,
+  trackEvent,
+  trackRegistro,
+  trackLogin,
+  trackSolicitudProfesor,
+  trackContacto,
+  trackPaginaMateria,
+};

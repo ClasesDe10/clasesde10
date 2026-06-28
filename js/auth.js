@@ -7,16 +7,81 @@
  */
 
 import authAdapter from './adapters/firebase-auth-adapter.js?v=20260628-audit';
+import { trackAuthEvent } from './analytics-client.js?v=20260628-analytics';
 
 export const getSession = authAdapter.getSession;
 export const getUsuarioActual = authAdapter.getCurrentUser;
 export const requireAuth = authAdapter.requireAuth;
-export const login = authAdapter.login;
-export const loginWithGoogle = authAdapter.loginWithGoogle;
-export const logout = authAdapter.logout;
-export const register = authAdapter.register;
-export const resetPassword = authAdapter.resetPassword;
 export const onAuthChange = authAdapter.onAuthChange;
+
+function authDuration(startedAt) {
+  return Math.max(0, Date.now() - startedAt);
+}
+
+function authErrorMetadata(error, startedAt, method = 'email') {
+  return {
+    method,
+    code: error?.code || '',
+    message: error?.message || 'Auth operation failed',
+    durationMs: authDuration(startedAt),
+  };
+}
+
+export async function login(email, password) {
+  const startedAt = Date.now();
+  await trackAuthEvent('auth.login.started', { method: 'email' });
+  try {
+    const result = await authAdapter.login(email, password);
+    await trackAuthEvent('auth.login.succeeded', { method: 'email', durationMs: authDuration(startedAt), role: result?.user?.role || result?.user?.rol || '' });
+    return result;
+  } catch (error) {
+    await trackAuthEvent('auth.login.failed', authErrorMetadata(error, startedAt, 'email'));
+    throw error;
+  }
+}
+
+export async function loginWithGoogle() {
+  const startedAt = Date.now();
+  await trackAuthEvent('auth.login.started', { method: 'google' });
+  try {
+    const result = await authAdapter.loginWithGoogle();
+    await trackAuthEvent('auth.login.succeeded', { method: 'google', durationMs: authDuration(startedAt), role: result?.user?.role || result?.user?.rol || '' });
+    return result;
+  } catch (error) {
+    await trackAuthEvent('auth.login.failed', authErrorMetadata(error, startedAt, 'google'));
+    throw error;
+  }
+}
+
+export async function logout() {
+  await trackAuthEvent('auth.logout', { method: 'firebase' });
+  return authAdapter.logout();
+}
+
+export async function register(...args) {
+  const startedAt = Date.now();
+  await trackAuthEvent('auth.signup.started', { method: 'email' });
+  try {
+    const result = await authAdapter.register(...args);
+    await trackAuthEvent('auth.signup.succeeded', { method: 'email', durationMs: authDuration(startedAt), role: result?.user?.role || result?.user?.rol || args?.[2] || '' });
+    return result;
+  } catch (error) {
+    await trackAuthEvent('auth.signup.failed', authErrorMetadata(error, startedAt, 'email'));
+    throw error;
+  }
+}
+
+export async function resetPassword(email) {
+  const startedAt = Date.now();
+  try {
+    const result = await authAdapter.resetPassword(email);
+    await trackAuthEvent('auth.password_reset.requested', { method: 'email', durationMs: authDuration(startedAt) });
+    return result;
+  } catch (error) {
+    await trackAuthEvent('auth.login.failed', authErrorMetadata(error, startedAt, 'password_reset'));
+    throw error;
+  }
+}
 
 const ROLES_RUTAS = {
   admin: '/pages/dashboard/admin.html',

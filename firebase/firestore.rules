@@ -186,6 +186,123 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['error']) || request.resource.data.error == null || request.resource.data.error is map);
     }
 
+    function optionalAnalyticsString(field, maxSize) {
+      return !request.resource.data.keys().hasAny([field])
+        || request.resource.data[field] == null
+        || (
+          request.resource.data[field] is string
+          && request.resource.data[field].size() <= maxSize
+        );
+    }
+
+    function optionalAnalyticsNumber(field) {
+      return !request.resource.data.keys().hasAny([field])
+        || request.resource.data[field] == null
+        || request.resource.data[field] is int
+        || request.resource.data[field] is float;
+    }
+
+    function validAnalyticsEventCreate() {
+      return request.resource.data.keys().hasOnly([
+          'schemaVersion',
+          'analyticsVersion',
+          'eventName',
+          'eventType',
+          'category',
+          'feature',
+          'actorUid',
+          'actorRole',
+          'anonymousId',
+          'sessionId',
+          'entityType',
+          'entityId',
+          'pagePath',
+          'pageUrl',
+          'referrer',
+          'userAgent',
+          'language',
+          'timezone',
+          'viewport',
+          'source',
+          'severity',
+          'durationMs',
+          'value',
+          'metadata',
+          'context',
+          'day',
+          'month',
+          'createdAt',
+          'created_at'
+        ])
+        && request.resource.data.keys().hasAll([
+          'schemaVersion',
+          'analyticsVersion',
+          'eventName',
+          'eventType',
+          'category',
+          'feature',
+          'anonymousId',
+          'sessionId',
+          'pagePath',
+          'source',
+          'severity',
+          'metadata',
+          'context',
+          'day',
+          'month',
+          'createdAt'
+        ])
+        && request.resource.data.schemaVersion == 'analytics_event_v1'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.eventName is string
+        && request.resource.data.eventName.size() >= 3
+        && request.resource.data.eventName.size() <= 120
+        && request.resource.data.eventName.matches('^[a-z0-9_.:-]+$')
+        && request.resource.data.analyticsVersion is string
+        && request.resource.data.analyticsVersion.size() <= 100
+        && request.resource.data.eventType is string
+        && request.resource.data.eventType.size() <= 80
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 80
+        && request.resource.data.feature is string
+        && request.resource.data.feature.size() <= 120
+        && request.resource.data.anonymousId is string
+        && request.resource.data.anonymousId.size() <= 180
+        && request.resource.data.sessionId is string
+        && request.resource.data.sessionId.size() <= 220
+        && request.resource.data.pagePath is string
+        && request.resource.data.pagePath.size() <= 240
+        && request.resource.data.source is string
+        && request.resource.data.source.size() <= 80
+        && request.resource.data.severity in ['info', 'success', 'warning', 'high', 'critical', 'error']
+        && request.resource.data.metadata is map
+        && request.resource.data.metadata.keys().size() <= 36
+        && request.resource.data.context is map
+        && request.resource.data.context.keys().size() <= 28
+        && request.resource.data.day is string
+        && request.resource.data.day.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && request.resource.data.month is string
+        && request.resource.data.month.matches('^\\d{4}-\\d{2}$')
+        && optionalAnalyticsString('actorUid', 180)
+        && (
+          !request.resource.data.keys().hasAny(['actorUid'])
+          || request.resource.data.actorUid == ''
+          || (signedIn() && request.resource.data.actorUid == request.auth.uid)
+        )
+        && optionalAnalyticsString('actorRole', 80)
+        && optionalAnalyticsString('entityType', 80)
+        && optionalAnalyticsString('entityId', 180)
+        && optionalAnalyticsString('pageUrl', 500)
+        && optionalAnalyticsString('referrer', 500)
+        && optionalAnalyticsString('userAgent', 500)
+        && optionalAnalyticsString('language', 40)
+        && optionalAnalyticsString('timezone', 80)
+        && optionalAnalyticsString('created_at', 40)
+        && optionalAnalyticsNumber('durationMs')
+        && optionalAnalyticsNumber('value')
+        && (!request.resource.data.keys().hasAny(['viewport']) || request.resource.data.viewport is map);
+    }
+
     function validPublicLeadMetadata() {
       return request.resource.data.metadata is map
           && request.resource.data.metadata.keys().hasOnly([
@@ -1136,6 +1253,15 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow create: if isAdmin() || validAuditLogCreate();
       allow update, delete: if isAdmin();
+    }
+
+    match /analyticsEvents/{eventId} {
+      allow create: if validAnalyticsEventCreate();
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /analyticsDailyRollups/{rollupId} {
+      allow read, write: if isAdmin();
     }
 
     match /crmNotes/{noteId} {

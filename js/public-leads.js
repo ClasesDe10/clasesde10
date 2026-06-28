@@ -5,6 +5,7 @@
 
 import { addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js';
+import { trackFormEvent } from './analytics-client.js?v=20260628-analytics';
 
 function clean(value, max = 3000) {
   return String(value || '').trim().slice(0, max);
@@ -77,6 +78,11 @@ function getUtmMetadata() {
 
 export async function submitLead(lead) {
   if (isLikelySpam(lead)) {
+    trackFormEvent('form.error', 'lead_publico', {
+      reason: 'spam_honeypot',
+      tipo: clean(lead.tipo, 30),
+      source: 'public_leads',
+    });
     return { data: { id: null, ok: true, spam: true }, error: null };
   }
 
@@ -102,12 +108,39 @@ export async function submitLead(lead) {
   };
 
   const validationError = validateLead(payload);
-  if (validationError) return { error: { message: validationError } };
+  if (validationError) {
+    trackFormEvent('form.error', `lead_${payload.tipo || 'publico'}`, {
+      reason: validationError,
+      tipo: payload.tipo,
+      perfil: payload.perfil,
+      materia: payload.metadata.materia || payload.metadata.materias || '',
+      zona: payload.metadata.zona || '',
+      modalidad: payload.metadata.modalidad || '',
+      source: 'public_leads',
+    });
+    return { error: { message: validationError } };
+  }
 
   try {
     const docRef = await addDoc(collection(firebaseDb, 'leadsPublicos'), payload);
+    trackFormEvent('form.submitted', `lead_${payload.tipo}`, {
+      tipo: payload.tipo,
+      perfil: payload.perfil,
+      materia: payload.metadata.materia || payload.metadata.materias || '',
+      zona: payload.metadata.zona || '',
+      modalidad: payload.metadata.modalidad || '',
+      utm_source: payload.metadata.utm_source || '',
+      utm_campaign: payload.metadata.utm_campaign || '',
+      leadId: docRef.id,
+      source: 'public_leads',
+    });
     return { data: { id: docRef.id, ok: true }, error: null };
   } catch (error) {
+    trackFormEvent('form.error', `lead_${payload.tipo}`, {
+      reason: error?.message || 'firestore_write_failed',
+      tipo: payload.tipo,
+      source: 'public_leads',
+    });
     return {
       data: null,
       error: { message: error?.message || 'No se pudo guardar el formulario.' },

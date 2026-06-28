@@ -37,6 +37,8 @@ const LIVE_COLLECTIONS = [
   'automationRules',
   'automationRuleRuns',
   'auditLogs',
+  'analyticsEvents',
+  'analyticsDailyRollups',
   'adminAiQueries',
   'systemJobs',
   'deadLetters',

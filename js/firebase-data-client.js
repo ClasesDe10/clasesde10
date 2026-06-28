@@ -28,6 +28,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
 import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
 import { recordDataAudit } from './audit-client.js?v=20260628-audit';
+import { trackDataMutation } from './analytics-client.js?v=20260628-analytics';
 import { lifecycleStatusForClassStatus } from './calendar-engine.js';
 import { buildIncidentCreatePayload, normalizeIncident } from './incident-engine.js?v=20260628-incidents';
 import { getConfigValue } from './platform-config.js?v=20260628-config';
@@ -582,6 +583,10 @@ class FirebaseCompatQuery {
       await auditDataWrite(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {
         filters: this.filters,
       });
+      trackDataMutation(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {
+        filters: this.filters.length,
+        source: 'compat_insert',
+      });
       return { data: Array.isArray(this.writePayload) ? written : written[0], error: null };
     }
 
@@ -599,6 +604,14 @@ class FirebaseCompatQuery {
       })), {
         filters: this.filters,
       });
+      trackDataMutation(this.table, 'update', rows.map((row, index) => ({
+        id: row.id,
+        before: row,
+        after: updatedRows[index],
+      })), {
+        filters: this.filters.length,
+        source: 'compat_update',
+      });
       return { data: updatedRows, error: null };
     }
 
@@ -606,6 +619,10 @@ class FirebaseCompatQuery {
       await Promise.all(rows.map((row) => deleteDoc(doc(firebaseDb, target, row.id))));
       await auditDataWrite(this.table, 'delete', rows.map((row) => ({ id: row.id, before: row })), {
         filters: this.filters,
+      });
+      trackDataMutation(this.table, 'delete', rows.map((row) => ({ id: row.id, before: row })), {
+        filters: this.filters.length,
+        source: 'compat_delete',
       });
       return { data: rows, error: null };
     }

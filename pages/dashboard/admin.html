@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-finance-erp">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260628-analytics">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -44,6 +44,10 @@
       <button class="sidebar-link" data-section="ia">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 3a1.5 1.5 0 00-1.5 1.5V6h-1.5A2.25 2.25 0 004.5 8.25v1.5H3a1.5 1.5 0 000 3h1.5v1.5a2.25 2.25 0 002.25 2.25h1.5v1.5a1.5 1.5 0 003 0v-1.5h1.5v1.5a1.5 1.5 0 003 0v-1.5h1.5A2.25 2.25 0 0019.5 14.25v-1.5H21a1.5 1.5 0 000-3h-1.5v-1.5A2.25 2.25 0 0017.25 6h-1.5V4.5a1.5 1.5 0 00-3 0V6h-1.5V4.5A1.5 1.5 0 009.75 3zM8 10h.01M16 10h.01M9 14h6"/></svg>
         IA Admin
+      </button>
+      <button class="sidebar-link" data-section="analitica">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 19V5m0 14h16M8 16V9m4 7V7m4 9v-4m4 4V8"/></svg>
+        Analitica
       </button>
       <button class="sidebar-link" data-section="configuracion">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
@@ -194,6 +198,102 @@
       <!-- â•â• SECCIÃ“N: CLASES â•â• -->
       <section id="section-ia" class="dash-section" style="display:none">
         <div id="admin-ai-assistant" data-admin-ai-assistant></div>
+      </section>
+
+      <section id="section-analitica" class="dash-section" style="display:none">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <span class="card-title">Centro de analitica de producto</span>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <span class="badge badge-gray" id="analytics-count">0 eventos</span>
+              <button class="btn btn-outline btn-sm" id="analytics-export">Exportar CSV</button>
+              <button class="btn btn-primary btn-sm" id="analytics-refresh">Actualizar</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">
+              <input type="month" class="form-control" id="analytics-month" aria-label="Mes de analitica">
+              <input type="search" class="form-control" id="analytics-search" aria-label="Buscar eventos de analitica" placeholder="Buscar evento, pagina o feature">
+              <div style="display:flex;align-items:center;color:var(--gray-mid);font-size:.82rem;font-weight:800">
+                Motor: <span id="analytics-version" style="margin-left:6px">cargando</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stats-grid" id="analytics-kpis" style="margin-bottom:16px">
+          <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
+          <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
+          <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
+          <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
+        </div>
+
+        <div id="analytics-insights" style="display:grid;gap:10px;margin-bottom:16px"></div>
+        <div class="finance-erp-grid" id="analytics-funnels" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:16px"></div>
+
+        <div class="finance-erp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Uso de funcionalidades</span></div>
+            <div class="card-body" id="analytics-features"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Funcionalidades con baja adopcion</span></div>
+            <div class="card-body" id="analytics-low-usage"></div>
+          </div>
+        </div>
+
+        <div class="finance-erp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Demanda por materia</span></div>
+            <div class="card-body" id="analytics-demand-subjects"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Demanda por zona</span></div>
+            <div class="card-body" id="analytics-demand-cities"></div>
+          </div>
+        </div>
+
+        <div class="finance-erp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Paginas por conversion</span></div>
+            <div class="table-wrapper">
+              <table class="responsive-card-table">
+                <thead><tr><th>Pagina</th><th>Visitas</th><th>Conversiones</th><th>Tasa</th></tr></thead>
+                <tbody id="tbody-analytics-pages"><tr><td colspan="4" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Errores y friccion</span></div>
+            <div class="table-wrapper">
+              <table class="responsive-card-table">
+                <thead><tr><th>Error</th><th>Eventos</th></tr></thead>
+                <tbody id="tbody-analytics-errors"><tr><td colspan="2" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="finance-erp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div class="card">
+            <div class="card-header"><span class="card-title">Conversion por profesor</span></div>
+            <div class="table-wrapper">
+              <table class="responsive-card-table">
+                <thead><tr><th>Profesor</th><th>Asignaciones</th><th>Clases</th><th>Realizadas</th><th>Cancelaciones</th></tr></thead>
+                <tbody id="tbody-analytics-teachers"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Eventos recientes</span></div>
+            <div class="table-wrapper">
+              <table class="responsive-card-table">
+                <thead><tr><th>Fecha</th><th>Evento</th><th>Rol</th><th>Pagina</th><th>Entidad</th></tr></thead>
+                <tbody id="tbody-analytics-events"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="section-configuracion" class="dash-section" style="display:none">
@@ -1072,6 +1172,7 @@ import db from '../../js/firebase-data-client.js?v=20260628-audit';
 import { leads } from '../../js/adapters/index.js';
 import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260628-rules';
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
+import { initAdminAnalytics } from '../../js/admin-analytics.js?v=20260628-analytics';
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
 import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
@@ -1152,14 +1253,15 @@ document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuari
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
 // â”€â”€ NAVEGACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const secciones = ['dashboard','ia','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
+const secciones = ['dashboard','ia','analitica','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
 const TITULOS = {
-  dashboard:'Dashboard', ia:'IA Admin', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
+  dashboard:'Dashboard', ia:'IA Admin', analitica:'Analitica', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
   solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias', auditoria:'Auditoria',
 };
 let chatInicializado = false;
 let adminAiInicializada = false;
+let adminAnalyticsInicializada = false;
 let adminConfigInicializada = false;
 let adminIncidentsInicializada = false;
 let profesoresCache = new Map();
@@ -1284,6 +1386,7 @@ function irA(seccion) {
   document.getElementById('topbar-title').textContent = TITULOS[seccion] || seccion;
   if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
   else if (seccion === 'ia') ejecutarCargaSeccion(seccion, iniciarAdminAi);
+  else if (seccion === 'analitica') ejecutarCargaSeccion(seccion, iniciarAnalitica);
   else if (seccion === 'configuracion') ejecutarCargaSeccion(seccion, iniciarConfiguracion);
   else if (seccion === 'clases') ejecutarCargaSeccion(seccion, cargarClases);
   else if (seccion === 'calendario') ejecutarCargaSeccion(seccion, iniciarCalendario);
@@ -1344,6 +1447,19 @@ function iniciarAdminAi() {
     actor: usuario,
   });
   adminAiInicializada = true;
+}
+
+async function iniciarAnalitica() {
+  const api = await initAdminAnalytics({
+    section: document.getElementById('section-analitica'),
+    firebaseDb,
+    sanitize,
+    exportarCSV,
+    showToast,
+    debounce,
+  });
+  adminAnalyticsInicializada = true;
+  return api;
 }
 
 function iniciarConfiguracion() {

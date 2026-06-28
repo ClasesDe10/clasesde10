@@ -725,6 +725,54 @@ textarea {
   color: var(--text-dark);
 }
 
+.analytics-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.analytics-mini-bar {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.analytics-mini-bar__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  color: var(--text-dark);
+  font-size: .82rem;
+}
+.analytics-mini-bar__top strong,
+.analytics-mini-bar__top span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.analytics-mini-bar__top span {
+  color: var(--navy);
+  font-weight: 800;
+  text-align: right;
+}
+.analytics-mini-bar__track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15,31,61,.08);
+}
+.analytics-mini-bar__track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold), var(--teal));
+}
+.analytics-mini-bar__meta {
+  color: var(--gray-mid);
+  font-size: .74rem;
+  font-weight: 700;
+}
+
 /* ── CARDS GENÉRICAS ─────────────────────────────────────────── */
 .control-center {
   display: grid;
