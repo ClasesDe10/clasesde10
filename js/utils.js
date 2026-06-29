@@ -617,11 +617,11 @@ export function initSidebar() {
 
 // ─── TOPBAR: NOTIFICACIONES ──────────────────────────────────────
 export function initNotificacionesBadge(usuarioId, db) {
-  const badge = document.querySelector('.topbar-btn .badge');
+  const badge = document.querySelector('.topbar-notification-badge');
   if (!badge) return;
 
   return watchUnreadNotifications(db, usuarioId, (count) => {
-    badge.style.display = count > 0 ? 'block' : 'none';
+    badge.style.display = count > 0 ? 'flex' : 'none';
     badge.textContent = count > 9 ? '9+' : String(count || '');
   });
 }

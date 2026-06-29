@@ -4,6 +4,7 @@ import { emptyAction, renderEmptyState, renderTableEmptyState } from '../js/dash
 
 const familyDashboard = readFileSync(new URL('../pages/dashboard/familia.html', import.meta.url), 'utf8');
 const teacherDashboard = readFileSync(new URL('../pages/dashboard/profesor.html', import.meta.url), 'utf8');
+const studentDashboard = readFileSync(new URL('../pages/dashboard/alumno.html', import.meta.url), 'utf8');
 const dashboardCss = readFileSync(new URL('../css/dashboard.css', import.meta.url), 'utf8');
 
 const sample = renderTableEmptyState(7, {
@@ -73,5 +74,11 @@ assert.match(dashboardCss, /\.empty-actions/);
 assert.match(dashboardCss, /\.empty-state-row td/);
 assert.match(dashboardCss, /\.student-detail-grid/);
 assert.match(dashboardCss, /\.student-workbench-summary/);
+assert.match(dashboardCss, /\.topbar-btn \.topbar-notification-badge[\s\S]*min-width: 18px/);
+assert.match(dashboardCss, /\.topbar-btn \.topbar-notification-badge[\s\S]*align-items: center/);
+assert.match(teacherDashboard, /topbar-notification-badge/);
+assert.match(familyDashboard, /topbar-notification-badge/);
+assert.match(studentDashboard, /id="btn-notificaciones"/);
+assert.match(studentDashboard, /initNotificacionesBadge/);
 
 console.log('Dashboard empty-state UX validation passed.');
