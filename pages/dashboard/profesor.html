@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-teacher-journey">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-ux-empty-states">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -151,7 +151,11 @@
           <div class="card">
             <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
             <div class="card-body" style="padding:0" id="cal-clases-dia">
-              <div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>
+              <div class="empty-state dashboard-empty-state is-compact">
+                <div class="empty-icon" aria-hidden="true">📅</div>
+                <div class="empty-title">Selecciona un día</div>
+                <div class="empty-desc">Verás aquí tus clases y acciones pendientes de ese día.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -502,7 +506,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-registrar-clase">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-registro">Confirmar</button>
+      <button class="btn btn-primary" id="btn-confirmar-registro">Guardar estado</button>
     </div>
   </div>
 </div>
@@ -537,7 +541,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-disponibilidad">Cancelar</button>
-      <button class="btn btn-primary" id="btn-guardar-disponibilidad">Guardar</button>
+      <button class="btn btn-primary" id="btn-guardar-disponibilidad">Guardar franja</button>
     </div>
   </div>
 </div>
@@ -567,6 +571,7 @@ import { buildRelationshipsFromCollections } from '../../js/relationship-engine.
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260629-teacher-journey';
 import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
+import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -822,7 +827,15 @@ async function cargarInicio() {
 
   const contP = document.getElementById('lista-proximas');
   if (!proximas?.length) {
-    contP.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases próximas</div></div>';
+    contP.innerHTML = renderEmptyState({
+      icon: '📅',
+      title: 'Sin clases próximas',
+      description: 'Cuando se cierre un horario con una familia, aparecerá aquí tu próxima clase.',
+      actions: [
+        emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
+        emptyAction('Actualizar disponibilidad', { 'data-section': 'disponibilidad' }, 'ghost'),
+      ],
+    });
   } else {
     contP.innerHTML = proximas.map(c => `
       <div class="clase-item" style="padding:12px 20px">
@@ -840,7 +853,12 @@ async function cargarInicio() {
   // Pendientes de registrar
   const contPend = document.getElementById('lista-pendientes-registrar');
   if (!pendientes?.length) {
-    contPend.innerHTML = '<div style="padding:20px;text-align:center;color:var(--gray-mid);font-size:.875rem">Todo al día ✓</div>';
+    contPend.innerHTML = renderEmptyState({
+      icon: '✓',
+      title: 'Todo al día',
+      description: 'No tienes clases finalizadas pendientes de marcar como realizadas, canceladas o reprogramadas.',
+      compact: true,
+    });
   } else {
     contPend.innerHTML = pendientes.map(c => `
       <div class="clase-item" style="padding:12px 20px">
@@ -867,7 +885,16 @@ async function iniciarCalendario() {
       onDiaClick: (fecha, clases) => {
         document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
         const cont = document.getElementById('cal-clases-dia');
-        if (!clases.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>'; return; }
+        if (!clases.length) {
+          cont.innerHTML = renderEmptyState({
+            icon: '📅',
+            title: 'Sin clases este día',
+            description: 'Usa el chat para cerrar horarios con las familias asignadas.',
+            actions: [emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary')],
+            compact: true,
+          });
+          return;
+        }
         cont.innerHTML = clases.map(c => `
           <div class="clase-item" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
@@ -909,7 +936,18 @@ async function cargarMisClases() {
     ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
     : (data || []);
   const tbody = document.getElementById('tbody-mis-clases');
-  if (!clases.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
+  if (!clases.length) {
+    tbody.innerHTML = renderTableEmptyState(8, {
+      icon: '📅',
+      title: 'No hay clases con estos filtros',
+      description: 'Si tienes una familia asignada, coordinad el horario desde el chat. Si no, mantén perfil y disponibilidad completos para recibir alumnos.',
+      actions: [
+        emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
+        emptyAction('Mi disponibilidad', { 'data-section': 'disponibilidad' }, 'ghost'),
+      ],
+    });
+    return;
+  }
 
   tbody.innerHTML = clases.map(c => `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
@@ -974,7 +1012,18 @@ async function cargarMisAlumnos() {
     .eq('profesor_id', profesorId).eq('activa', true);
 
   const tbody = document.getElementById('tbody-mis-alumnos');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">No tienes alumnos asignados aún.</td></tr>'; return; }
+  if (!data?.length) {
+    tbody.innerHTML = renderTableEmptyState(7, {
+      icon: '👨‍🎓',
+      title: 'Aún no tienes alumnos asignados',
+      description: 'Para recibir alumnos, mantén completo tu perfil, disponibilidad y documentación. El equipo te avisará cuando haya una asignación.',
+      actions: [
+        emptyAction('Completar perfil', { 'data-section': 'perfil' }, 'primary'),
+        emptyAction('Añadir disponibilidad', { 'data-section': 'disponibilidad' }, 'ghost'),
+      ],
+    });
+    return;
+  }
 
   tbody.innerHTML = data.map(a => `<tr>
     <td><strong>${sanitize(a.alumnos?.nombre||'')} ${sanitize(a.alumnos?.apellidos||'')}</strong></td>
@@ -1012,7 +1061,15 @@ async function cargarIngresos() {
   await cargarBizumProfesor();
 
   const tbody = document.getElementById('tbody-ingresos');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin datos de ingresos.</td></tr>'; return; }
+  if (!data?.length) {
+    tbody.innerHTML = renderTableEmptyState(6, {
+      icon: '💶',
+      title: 'Sin ingresos todavía',
+      description: 'Los ingresos se calcularán automáticamente cuando tengas clases realizadas con importe configurado.',
+      actions: [emptyAction('Ver mis clases', { 'data-section': 'clases' }, 'primary')],
+    });
+    return;
+  }
 
   tbody.innerHTML = data.map(r => {
     const d = new Date(r.mes);
@@ -1097,7 +1154,12 @@ async function cargarBizumProfesor() {
   btn.textContent = pendientes.length ? `Solicitar Bizum (${formatEuros(total)})` : 'Solicitar Bizum';
 
   if (!pendientes.length && !sinImporte.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">No hay clases pendientes de cobro por Bizum.</td></tr>';
+    tbody.innerHTML = renderTableEmptyState(6, {
+      icon: '✓',
+      title: 'No hay Bizum pendiente',
+      description: 'Cuando tengas clases realizadas con importe de profesor, podrás solicitar el cobro desde aquí.',
+      actions: [emptyAction('Ver mis clases', { 'data-section': 'clases' }, 'ghost')],
+    });
     return;
   }
 
@@ -1729,7 +1791,14 @@ async function cargarDisponibilidad() {
   const { data } = await db.from('disponibilidad').select('*').eq('profesor_id', profesorId).order('dia_semana');
   const cont = document.getElementById('tabla-disponibilidad');
   if (!data?.length) {
-    cont.innerHTML = '<p style="color:var(--gray-mid);text-align:center">No has indicado disponibilidad aún.</p>'; return;
+    cont.innerHTML = renderEmptyState({
+      icon: '⏱',
+      title: 'Añade tu primera franja',
+      description: 'La disponibilidad ayuda a asignarte familias compatibles y reduce mensajes para cerrar horario.',
+      actions: [emptyAction('Añadir franja', { 'data-action': 'abrir-modal-disponibilidad' }, 'primary')],
+      compact: true,
+    });
+    return;
   }
   cont.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px">' +
     data.map(d => `
@@ -1741,6 +1810,11 @@ async function cargarDisponibilidad() {
 }
 
 document.getElementById('btn-add-disponibilidad').addEventListener('click', () => {
+  document.getElementById('modal-disponibilidad').classList.add('open');
+});
+
+document.addEventListener('click', (event) => {
+  if (!event.target.closest('[data-action="abrir-modal-disponibilidad"]')) return;
   document.getElementById('modal-disponibilidad').classList.add('open');
 });
 

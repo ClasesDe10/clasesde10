@@ -2499,6 +2499,45 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: .4; }
 .empty-title { font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
 .empty-desc  { font-size: .875rem; color: var(--gray-mid); max-width: 280px; margin: 0 auto 20px; }
+.dashboard-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+}
+.dashboard-empty-state.is-compact {
+  padding: 30px 18px;
+}
+.dashboard-empty-state .empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 12px;
+  border-radius: 14px;
+  background: rgba(15,31,61,.06);
+  color: var(--navy);
+  font-size: 1.45rem;
+  opacity: 1;
+}
+.dashboard-empty-state .empty-desc {
+  max-width: 380px;
+}
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.empty-state-row td {
+  background: rgba(15,31,61,.015);
+}
+.table-empty-state {
+  max-width: 430px;
+  margin: 0 auto;
+}
 
 /* ── AVATAR GRUPO ────────────────────────────────────────────── */
 .avatar {
@@ -3091,6 +3130,22 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     padding: 8px 11px;
     font-size: .8rem;
     justify-content: center;
+  }
+  .dashboard-empty-state {
+    padding: 28px 12px;
+  }
+  .dashboard-empty-state.is-compact {
+    padding: 22px 10px;
+  }
+  .dashboard-empty-state .empty-desc {
+    max-width: 300px;
+  }
+  .empty-actions {
+    width: 100%;
+  }
+  .empty-actions .btn {
+    flex: 1 1 150px;
+    white-space: normal;
   }
   .btn-sm {
     min-height: 44px;

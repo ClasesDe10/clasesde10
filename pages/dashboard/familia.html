@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-scheduling">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-ux-empty-states">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -148,7 +148,11 @@
           <div class="card">
             <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
             <div class="card-body" style="padding:0" id="cal-clases-dia">
-              <div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>
+              <div class="empty-state dashboard-empty-state is-compact">
+                <div class="empty-icon" aria-hidden="true">📅</div>
+                <div class="empty-title">Selecciona un día</div>
+                <div class="empty-desc">Verás aquí las clases y próximos pasos de ese día.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -398,7 +402,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-solicitud">Cancelar</button>
-      <button class="btn btn-gold" id="btn-enviar-solicitud">Enviar solicitud</button>
+      <button class="btn btn-gold" id="btn-enviar-solicitud">Enviar solicitud y avisarme</button>
     </div>
   </div>
 </div>
@@ -456,7 +460,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-hijo">Cancelar</button>
-      <button class="btn btn-primary" id="btn-guardar-hijo">Guardar</button>
+      <button class="btn btn-primary" id="btn-guardar-hijo">Guardar y continuar</button>
     </div>
   </div>
 </div>
@@ -500,7 +504,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-pago">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-pago">Enviar justificante</button>
+      <button class="btn btn-primary" id="btn-confirmar-pago">Enviar justificante a revisión</button>
     </div>
   </div>
 </div>
@@ -530,6 +534,7 @@ import { buildRelationshipsFromCollections } from '../../js/relationship-engine.
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-journey';
 import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-journey';
+import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -865,7 +870,15 @@ async function cargarInicio() {
           <div class="clase-materia">${sanitize(c.materia)} · ${sanitize(c.profesor_nombre)}</div>
         </div>
       </div>`).join('')
-      : '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases próximas</div></div>';
+      : renderEmptyState({
+        icon: '📅',
+        title: 'Aún no hay clases próximas',
+        description: 'Cuando acordéis horario con el profesor, aparecerán aquí las siguientes clases.',
+        actions: [
+          emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
+          emptyAction('Ver solicitudes', { 'data-section': 'solicitudes' }, 'ghost'),
+        ],
+      });
 
     // Profesores asignados
     if (profUnicos.length) {
@@ -890,7 +903,12 @@ async function cargarInicio() {
           </div>
         </div>`).join('');
     } else {
-      document.getElementById('lista-profesores-inicio').innerHTML = '<div class="empty-state"><div class="empty-icon">👩‍🏫</div><div class="empty-title">Sin profesor asignado</div><div class="empty-desc">Envía una solicitud y te asignaremos el mejor profesor.</div><button class="btn btn-gold" data-action="abrir-modal-solicitud">Solicitar profesor</button></div>';
+      document.getElementById('lista-profesores-inicio').innerHTML = renderEmptyState({
+        icon: '👩‍🏫',
+        title: 'Sin profesor asignado',
+        description: 'Envía una solicitud y revisaremos el matching para asignarte el profesor más adecuado.',
+        actions: [emptyAction('Solicitar profesor', { 'data-action': 'abrir-modal-solicitud' }, 'gold')],
+      });
     }
     const relationships = renderFamilyRelationshipDigest({
       hijos,
@@ -912,8 +930,18 @@ async function cargarInicio() {
   } else {
     document.getElementById('stat-clases-mes').textContent = 0;
     document.getElementById('stat-profesores').textContent = 0;
-    document.getElementById('lista-proximas-inicio').innerHTML = '<div class="empty-state"><div class="empty-title">Sin clases todavia</div><div class="empty-desc">Primero anade un alumno y solicita profesor.</div></div>';
-    document.getElementById('lista-profesores-inicio').innerHTML = '<div class="empty-state"><div class="empty-title">Sin profesor asignado</div><div class="empty-desc">Cuando registres un alumno, te guiaremos para pedir profesor.</div><button class="btn btn-primary" data-family-journey-action="add_student">Anadir hijo/a</button></div>';
+    document.getElementById('lista-proximas-inicio').innerHTML = renderEmptyState({
+      icon: '📅',
+      title: 'Sin clases todavía',
+      description: 'El primer paso es añadir al alumno. Después te llevaremos directamente a pedir profesor.',
+      actions: [emptyAction('Añadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
+    });
+    document.getElementById('lista-profesores-inicio').innerHTML = renderEmptyState({
+      icon: '👩‍🏫',
+      title: 'Sin profesor asignado',
+      description: 'Cuando registres un alumno, te guiaremos para solicitar profesor sin repetir datos.',
+      actions: [emptyAction('Añadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
+    });
     const relationships = renderFamilyRelationshipDigest();
     renderFamilyJourney({ hijos: [], relationships, solicitudes: [], pagos: [], documentos: [] });
   }
@@ -928,7 +956,16 @@ async function iniciarCalendario() {
       onDiaClick: (fecha, clases) => {
         document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
         const cont = document.getElementById('cal-clases-dia');
-        if (!clases.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>'; return; }
+        if (!clases.length) {
+          cont.innerHTML = renderEmptyState({
+            icon: '📅',
+            title: 'Sin clases este día',
+            description: 'Cuando cerréis un horario en el chat, la clase aparecerá automáticamente en el calendario.',
+            actions: [emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary')],
+            compact: true,
+          });
+          return;
+        }
         cont.innerHTML = clases.map(c => `
           <div class="clase-item" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
@@ -961,7 +998,16 @@ async function cargarClasesCalendario(anio, mes) {
 async function cargarClases() {
   if (!familiaId) return;
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
-  if (!hijos?.length) return;
+  const tbody = document.getElementById('tbody-clases');
+  if (!hijos?.length) {
+    tbody.innerHTML = renderTableEmptyState(9, {
+      icon: '👧',
+      title: 'Primero añade un alumno',
+      description: 'Para crear clases necesitamos saber para quién es la ayuda. Al guardar al alumno te guiaremos para pedir profesor.',
+      actions: [emptyAction('Añadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
+    });
+    return;
+  }
 
   // Rellenar filtro hijo
   const sel = document.getElementById('filtro-cl-alumno');
@@ -982,8 +1028,18 @@ async function cargarClases() {
   const clases = estado === 'confirmada'
     ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
     : (data || []);
-  const tbody = document.getElementById('tbody-clases');
-  if (!clases.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
+  if (!clases.length) {
+    tbody.innerHTML = renderTableEmptyState(9, {
+      icon: '📅',
+      title: 'No hay clases con estos filtros',
+      description: 'Si ya tienes profesor, coordinad el horario desde el chat. Si aún no lo tienes, solicita uno y te avisaremos.',
+      actions: [
+        emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
+        emptyAction('Nueva solicitud', { 'data-action': 'abrir-modal-solicitud' }, 'gold'),
+      ],
+    });
+    return;
+  }
 
   tbody.innerHTML = clases.map(c => {
     const puedeConfirmar = claseTerminada(c, 0)
@@ -992,7 +1048,7 @@ async function cargarClases() {
     const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
     const acciones = puedeConfirmar && !yaConfirmada ? `
       <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Realizada</button>
-      <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="incidencia">Incidencia</button>
+      <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="incidencia">Reportar incidencia</button>
     ` : '—';
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
@@ -1052,11 +1108,13 @@ async function cargarHijos() {
 
   const grid = document.getElementById('grid-hijos');
   if (!data?.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
-      <div class="empty-icon">👧</div>
-      <div class="empty-title">Sin hijos registrados</div>
-      <div class="empty-desc">Añade a tus hijos para gestionar sus clases.</div>
-    </div>`; return;
+    grid.innerHTML = `<div style="grid-column:1/-1">${renderEmptyState({
+      icon: '👧',
+      title: 'Añade el primer alumno',
+      description: 'Solo pedimos los datos necesarios para poder buscar profesor y organizar sus clases.',
+      actions: [emptyAction('Añadir hijo/a', { id: 'empty-add-child', 'data-family-journey-action': 'add_student' }, 'primary')],
+    })}</div>`;
+    return;
   }
 
   grid.innerHTML = data.map(h => `
@@ -1155,7 +1213,11 @@ document.getElementById('grid-hijos').addEventListener('click', async (e) => {
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-action="abrir-modal-solicitud"]')) {
+    cargarSolicitudes();
     document.getElementById('modal-solicitud').classList.add('open');
+  }
+  if (e.target.closest('[data-action="abrir-modal-pago"]')) {
+    document.getElementById('modal-pago').classList.add('open');
   }
 });
 
@@ -1216,7 +1278,19 @@ async function cargarSolicitudes() {
     .eq('familia_id', familiaId).order('created_at',{ascending:false});
 
   const tbody = document.getElementById('tbody-solicitudes');
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin solicitudes enviadas.</td></tr>'; return; }
+  if (!data?.length) {
+    tbody.innerHTML = renderTableEmptyState(7, {
+      icon: '📝',
+      title: 'Todavía no has enviado solicitudes',
+      description: hijos?.length
+        ? 'Elige un alumno, indica materia y horario preferido. Nosotros revisamos el matching y te avisamos.'
+        : 'Primero añade un alumno. Después te guiaremos directamente para solicitar profesor.',
+      actions: hijos?.length
+        ? [emptyAction('Crear solicitud', { 'data-action': 'abrir-modal-solicitud' }, 'gold')]
+        : [emptyAction('Añadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
+    });
+    return;
+  }
 
   tbody.innerHTML = data.map(s => `<tr>
     <td>${formatFechaCorta(s.created_at)}</td>
@@ -1273,7 +1347,18 @@ async function cargarPagos() {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
     return;
   }
-  if (!data?.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin pagos registrados.</td></tr>'; return; }
+  if (!data?.length) {
+    tbody.innerHTML = renderTableEmptyState(7, {
+      icon: '💶',
+      title: 'Aún no hay pagos registrados',
+      description: 'Los pagos aparecerán cuando haya clases realizadas o cuando subas un justificante para revisión.',
+      actions: [
+        emptyAction('Subir justificante', { 'data-action': 'abrir-modal-pago' }, 'primary'),
+        emptyAction('Ver clases', { 'data-section': 'clases' }, 'ghost'),
+      ],
+    });
+    return;
+  }
   tbody.innerHTML = data.map(p => {
     const doc = Array.isArray(p.documentos) ? p.documentos[0] : p.documentos;
     return `<tr>
