@@ -16,6 +16,7 @@ function assertIncludes(text, needle, message) {
 
 const pwa = read('js/pwa.js');
 const sw = read('service-worker.js');
+const dashboardCss = read('css/dashboard.css');
 const packageJson = JSON.parse(read('package.json'));
 
 for (const [needle, message] of [
@@ -50,6 +51,9 @@ const cacheVersion = sw.match(/CACHE_VERSION = 'clasesde10-pwa-v(\d+)'/);
 if (!cacheVersion || Number(cacheVersion[1]) < 34) failures.push('Service worker cache version must be bumped after UX/data model changes.');
 assertIncludes(pwa, 'platform-public-runtime.js', 'PWA must load public platform runtime configuration.');
 assertIncludes(sw, '/js/scale-engine.js', 'PWA must precache the scale engine used by the data schema.');
+assertIncludes(dashboardCss, '.upload-zone {\n  display: flex;', 'Upload zones must be block/flex elements so dashed borders do not split.');
+assertIncludes(dashboardCss, '.upload-zone > .cd10-smart-hint { display: none !important; }', 'Upload zone hints must never render inside the dashed drop area.');
+assertIncludes(pwa, "uploadZone.querySelectorAll('.cd10-smart-hint').forEach((item) => item.remove())", 'PWA must move file hints outside upload zones.');
 assertIncludes(packageJson.scripts['check:quality'], 'test:product-ux', 'check:quality must run product UX validation.');
 assertIncludes(packageJson.scripts['check:syntax'], 'scripts/product-ux-test.mjs', 'check:syntax must parse product UX validation.');
 

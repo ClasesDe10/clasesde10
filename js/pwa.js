@@ -1526,10 +1526,11 @@
     field.setAttribute('aria-describedby', describedBy ? `${describedBy} ${id}` : id);
     const group = field.closest('.form-group, .cf-field, .field, .input-group');
     const uploadZone = field.type === 'file' ? field.closest('.upload-zone') : null;
-    if (group && !group.querySelector('.cd10-smart-hint')) {
-      group.appendChild(node);
-    } else if (uploadZone && !uploadZone.nextElementSibling?.classList?.contains('cd10-smart-hint')) {
+    if (uploadZone) {
+      uploadZone.querySelectorAll('.cd10-smart-hint').forEach((item) => item.remove());
       uploadZone.insertAdjacentElement('afterend', node);
+    } else if (group && !group.querySelector('.cd10-smart-hint')) {
+      group.appendChild(node);
     } else {
       field.insertAdjacentElement('afterend', node);
     }

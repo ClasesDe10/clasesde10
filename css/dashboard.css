@@ -2767,6 +2767,13 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 
 /* ── UPLOAD ZONE ─────────────────────────────────────────────── */
 .upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 170px;
+  box-sizing: border-box;
   border: 2px dashed rgba(0,0,0,0.15);
   border-radius: var(--radius);
   padding: 36px 24px;
@@ -2782,6 +2789,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 .upload-zone-title { font-weight: 600; color: var(--text-dark); margin-bottom: 4px; }
 .upload-zone-sub   { font-size: .8rem; color: var(--gray-mid); }
 .upload-zone input[type=file] { display: none; }
+.upload-zone > .cd10-smart-hint { display: none !important; }
 
 /* ── ALERTAS ─────────────────────────────────────────────────── */
 .alert {
