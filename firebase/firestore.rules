@@ -670,6 +670,73 @@ service cloud.firestore {
         || isStudentParticipant(data);
     }
 
+    function isAvailabilityOwner(data) {
+      return signedIn()
+        && (
+          data.teacherUid == request.auth.uid
+          || data.profesor_id == request.auth.uid
+        );
+    }
+
+    function validAvailabilityFields(data) {
+      return data.keys().hasOnly([
+          'teacherUid',
+          'profesor_id',
+          'dia_semana',
+          'hora_inicio',
+          'hora_fin',
+          'schemaVersion',
+          'canonicalCollection',
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at'
+        ])
+        && data.keys().hasAll([
+          'teacherUid',
+          'profesor_id',
+          'dia_semana',
+          'hora_inicio',
+          'hora_fin'
+        ])
+        && data.teacherUid == request.auth.uid
+        && data.profesor_id == request.auth.uid
+        && data.dia_semana is int
+        && data.dia_semana >= 0
+        && data.dia_semana <= 6
+        && data.hora_inicio is string
+        && data.hora_inicio.matches('^\\d{2}:\\d{2}$')
+        && data.hora_fin is string
+        && data.hora_fin.matches('^\\d{2}:\\d{2}$')
+        && (!data.keys().hasAny(['schemaVersion']) || data.schemaVersion is string)
+        && (!data.keys().hasAny(['canonicalCollection']) || data.canonicalCollection == 'disponibilidad');
+    }
+
+    function validAvailabilityCreate(data) {
+      return validAvailabilityFields(data)
+        && (!data.keys().hasAny(['createdAt']) || data.createdAt == request.time)
+        && (!data.keys().hasAny(['created_at']) || data.created_at is string)
+        && (!data.keys().hasAny(['updatedAt']) || data.updatedAt == request.time)
+        && (!data.keys().hasAny(['updated_at']) || data.updated_at is string);
+    }
+
+    function validAvailabilityUpdate() {
+      return isAvailabilityOwner(resource.data)
+        && validAvailabilityFields(request.resource.data)
+        && request.resource.data.teacherUid == resource.data.teacherUid
+        && request.resource.data.profesor_id == resource.data.profesor_id
+        && (
+          !resource.data.keys().hasAny(['createdAt'])
+          || request.resource.data.createdAt == resource.data.createdAt
+        )
+        && (
+          !resource.data.keys().hasAny(['created_at'])
+          || request.resource.data.created_at == resource.data.created_at
+        )
+        && (!request.resource.data.keys().hasAny(['updatedAt']) || request.resource.data.updatedAt == request.time)
+        && (!request.resource.data.keys().hasAny(['updated_at']) || request.resource.data.updated_at is string);
+    }
+
     function validTeacherPayoutCreate() {
       return hasRole('profesor')
         && request.resource.data.teacherUid == request.auth.uid
@@ -1305,6 +1372,16 @@ service cloud.firestore {
           ])
         );
       allow delete: if isAdmin();
+    }
+
+    match /disponibilidad/{availabilityId} {
+      allow create: if isAdmin()
+        || (hasRole('profesor') && validAvailabilityCreate(request.resource.data));
+      allow read: if isAdmin() || isAvailabilityOwner(resource.data);
+      allow update: if isAdmin()
+        || (hasRole('profesor') && validAvailabilityUpdate());
+      allow delete: if isAdmin()
+        || (hasRole('profesor') && isAvailabilityOwner(resource.data));
     }
 
     match /asignaciones/{assignmentId} {
