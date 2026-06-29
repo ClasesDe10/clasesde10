@@ -8,8 +8,8 @@ async (page) => {
 
   for (const item of paths) {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(`${baseUrl}${item.path}`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForTimeout(500);
+    await page.goto(`${baseUrl}${item.path}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.locator('.contact-form-card').first().waitFor({ state: 'visible', timeout: 15000 });
 
     const text = await page.locator('body').textContent().catch(() => '');
     const createLink = page.locator(`.contact-form-card a[href="pages/registro.html?rol=${item.role}"]`).first();
@@ -26,7 +26,8 @@ async (page) => {
       title: await page.title(),
     };
 
-    await page.goto(`${baseUrl}/pages/registro.html?rol=${item.role}`, { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(`${baseUrl}/pages/registro.html?rol=${item.role}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.locator('#form-registro').waitFor({ state: 'visible', timeout: 15000 });
     itemResult.registerSelectedRole = await page
       .locator('.rol-card.selected input[name="rol"]')
       .evaluate((el) => el.value)
