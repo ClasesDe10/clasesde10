@@ -48,6 +48,12 @@ function percent(value) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0;
 }
 
+function clamp(value, min, max) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, Math.min(max, n));
+}
+
 function dateToIso(value) {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -235,6 +241,39 @@ function teacherRateRules(profile = {}) {
   ].map(normalizeTeacherRateRule).filter((rule) => rule.active);
 }
 
+function subjectPremium(profile = {}, classData = {}) {
+  const subject = lower(firstPresent(classData.subject, classData.materia, profile.subject, profile.materia), 180);
+  const premiumSubjects = [
+    [/piano|guitarra|violin|canto|musica|conservatorio/, 3],
+    [/padel|tenis|deporte|entrenador/, 3],
+    [/bachillerato|universidad|evau|selectividad|ingenier|fisica|quimica/, 2],
+    [/matematic|programacion|informatica|idioma|ingles|frances|aleman/, 1],
+  ];
+  return premiumSubjects.find(([pattern]) => pattern.test(subject))?.[1] || 0;
+}
+
+export function estimateTeacherHourlyRate(profile = {}, classData = {}, config = {}) {
+  const configured = Number(config?.business?.defaultTeacherHourlyRate ?? 18);
+  const base = Number.isFinite(configured) ? configured : 18;
+  const experience = Number(firstPresent(profile.experiencia_anios, profile.experienceYears, profile.yearsExperience, 0)) || 0;
+  const trust = Number(firstPresent(profile.trustScore, profile.confianza, profile.reputationScore, 0)) || 0;
+  const bach = Number(firstPresent(profile.nota_bachillerato, profile.bachilleratoGrade, 0)) || 0;
+  const university = Number(firstPresent(profile.nota_media_universidad, profile.universityAverageGrade, 0)) || 0;
+  const verified = ['verificado', 'verified', 'activo', 'active'].includes(lower(firstPresent(profile.verificationStatus, profile.estado_verificacion, profile.status), 40));
+  const profileCompletion = Number(firstPresent(profile.profileCompletionPercent, profile.profileCompletion, 0)) || 0;
+  const raw = base
+    + clamp(experience, 0, 8) * 0.75
+    + (trust >= 85 ? 2 : trust >= 70 ? 1 : trust > 0 && trust < 45 ? -1 : 0)
+    + (bach >= 9 ? 1 : 0)
+    + (university >= 8.5 ? 1.5 : university >= 7.5 ? 0.75 : 0)
+    + (verified ? 1 : 0)
+    + (profileCompletion >= 90 ? 1 : profileCompletion > 0 && profileCompletion < 65 ? -1 : 0)
+    + subjectPremium(profile, classData);
+  const minRate = Number(config?.business?.minimumTeacherHourlyRate ?? 14);
+  const maxRate = Number(config?.business?.maximumTeacherHourlyRate ?? 35);
+  return money(clamp(raw, Number.isFinite(minRate) ? minRate : 14, Number.isFinite(maxRate) ? maxRate : 35));
+}
+
 function ruleScore(rule, classData = {}) {
   let score = Number(rule.priority || 0);
   const fields = [
@@ -282,9 +321,9 @@ export function resolveTeacherRateForClass(classData = {}, teacherProfile = {}, 
     return { amount: explicit, source: 'class_amount', ruleId: '', score: 0 };
   }
 
-  const hourly = Number(config?.business?.defaultTeacherHourlyRate ?? 18);
-  const amount = money((Number.isFinite(hourly) ? hourly : 18) * durationMinutes / 60);
-  return { amount, source: 'default_teacher_hourly_rate', ruleId: '', score: 0 };
+  const hourly = estimateTeacherHourlyRate(teacherProfile, classData, config);
+  const amount = money(hourly * durationMinutes / 60);
+  return { amount, source: teacherProfile?.id || teacherProfile?.userUid ? 'profile_valuation' : 'default_teacher_hourly_rate', ruleId: '', score: 0 };
 }
 
 export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, options = {}) {
@@ -315,6 +354,41 @@ export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, op
     teacherRateSource: rate.source,
     financeStatus: platformFee < 0 ? 'negative_margin' : marginPct < Number(config?.finance?.lowMarginAlertPct ?? 15) ? 'low_margin' : 'ok',
     financialsUpdatedAt: nowIso,
+  };
+}
+
+export function buildClassPricingQuote(classData = {}, teacherProfile = {}, options = {}) {
+  const config = options.config || {};
+  const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
+  const rate = resolveTeacherRateForClass(classData, teacherProfile, options.rules || [], config);
+  const teacherAmount = money(rate.amount);
+  const explicitFamily = numberOrNull(firstPresent(classData.precio_total, classData.amount, classData.familyAmount));
+  const defaultFamilyHourly = Number(config?.business?.defaultFamilyHourlyRate ?? 24);
+  const defaultFamilyAmount = money((Number.isFinite(defaultFamilyHourly) ? defaultFamilyHourly : 24) * durationMinutes / 60);
+  const commissionPct = Number(config?.business?.defaultCommissionPercent ?? config?.finance?.targetMarginPct ?? 25);
+  const targetMargin = clamp((Number.isFinite(commissionPct) ? commissionPct : 25) / 100, 0, 0.8);
+  const minimumFee = Math.max(0, Number(config?.business?.minimumPlatformFee ?? 0) || 0);
+  const familyFromMargin = targetMargin > 0 && targetMargin < 1
+    ? money(teacherAmount / (1 - targetMargin))
+    : teacherAmount;
+  const familyFromMinimumFee = money(teacherAmount + minimumFee);
+  const familyAmount = explicitFamily !== null
+    ? money(explicitFamily)
+    : money(Math.max(defaultFamilyAmount, familyFromMargin, familyFromMinimumFee));
+  const platformFee = money(familyAmount - teacherAmount);
+  const marginPct = familyAmount > 0 ? percent((platformFee / familyAmount) * 100) : 0;
+  return {
+    precio_total: familyAmount,
+    amount: familyAmount,
+    familyAmount,
+    importe_profesor: teacherAmount,
+    teacherAmount,
+    comision_clasesde10: platformFee,
+    platformFee,
+    marginPct,
+    teacherRateRuleId: rate.ruleId || null,
+    teacherRateSource: rate.source,
+    pricingRule: rate.ruleId || rate.source || 'default_teacher_hourly_rate',
   };
 }
 

@@ -1242,9 +1242,10 @@ import {
 } from '../../js/payment-engine.js';
 import {
   FINANCE_ERP_VERSION,
+  buildClassPricingQuote,
   buildFinanceErpReport,
   buildFinanceCsvRows,
-} from '../../js/finance-erp-engine.js?v=20260628-finance-erp';
+} from '../../js/finance-erp-engine.js?v=20260629-pricing';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado,
@@ -1814,6 +1815,69 @@ function money(value) {
 
 function roundMoney(value) {
   return Math.round((money(value) + Number.EPSILON) * 100) / 100;
+}
+
+function quoteHourlyFromClassQuote(quote = {}, durationMinutes = 60) {
+  const factor = 60 / (Number(durationMinutes) || 60);
+  return {
+    familyHourlyRate: roundMoney(money(quote.familyAmount ?? quote.precio_total) * factor),
+    teacherHourlyRate: roundMoney(money(quote.teacherAmount ?? quote.importe_profesor) * factor),
+  };
+}
+
+function pickQuotePersistenceFields(quote = {}, durationMinutes = 60) {
+  const hourly = quoteHourlyFromClassQuote(quote, durationMinutes);
+  return {
+    precio_total: quote.precio_total,
+    amount: quote.amount,
+    familyAmount: quote.familyAmount,
+    importe_profesor: quote.importe_profesor,
+    teacherAmount: quote.teacherAmount,
+    comision_clasesde10: quote.comision_clasesde10,
+    platformFee: quote.platformFee,
+    marginPct: quote.marginPct,
+    familyHourlyRate: hourly.familyHourlyRate,
+    teacherHourlyRate: hourly.teacherHourlyRate,
+    commissionPercent: Number(getConfigValue(platformConfig, 'business.defaultCommissionPercent', 25)) || 25,
+    teacherRateRuleId: quote.teacherRateRuleId || null,
+    teacherRateSource: quote.teacherRateSource || '',
+    pricingRule: quote.pricingRule || quote.teacherRateRuleId || quote.teacherRateSource || 'default_teacher_hourly_rate',
+  };
+}
+
+function buildAssignmentPricingQuote(solicitud = {}, profesor = {}) {
+  const durationMinutes = Number(getConfigValue(platformConfig, 'finance.defaultClassDurationMinutes', 60)) || 60;
+  const classData = {
+    subject: solicitud?.materia || solicitud?.subject || '',
+    materia: solicitud?.materia || solicitud?.subject || '',
+    level: solicitud?.nivel || solicitud?.curso || solicitud?.nivel_educativo || '',
+    nivel: solicitud?.nivel || solicitud?.curso || solicitud?.nivel_educativo || '',
+    modality: solicitud?.modalidad || solicitud?.modality || '',
+    modalidad: solicitud?.modalidad || solicitud?.modality || '',
+    city: solicitud?.ciudad || solicitud?.city || '',
+    zona: solicitud?.zona || solicitud?.zone || '',
+    studentId: solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid || '',
+    alumno_id: solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid || '',
+    durationMinutes,
+    duracion_minutos: durationMinutes,
+  };
+  const quote = buildClassPricingQuote(classData, profesor || {}, { config: platformConfig });
+  return {
+    ...pickQuotePersistenceFields(quote, durationMinutes),
+    estimatedDurationMinutes: durationMinutes,
+  };
+}
+
+function renderPricingQuoteLine(quote = {}) {
+  const familyHourly = money(quote.familyHourlyRate ?? quote.familyAmount);
+  const teacherHourly = money(quote.teacherHourlyRate ?? quote.teacherAmount);
+  const marginPct = quote.marginPct ?? (familyHourly > 0 ? ((familyHourly - teacherHourly) / familyHourly) * 100 : 0);
+  if (!familyHourly || !teacherHourly) return '<span class="badge badge-warning">Precio pendiente</span>';
+  return `
+    <span class="badge badge-success">Familia ${formatEuros(familyHourly)}/h</span>
+    <span class="badge badge-gray">Profesor ${formatEuros(teacherHourly)}/h</span>
+    <span class="badge ${Number(marginPct) >= 20 ? 'badge-info' : 'badge-warning'}">Margen ${Math.round(Number(marginPct) * 10) / 10}%</span>
+  `;
 }
 
 function parseMoneyInput(id) {
@@ -3328,7 +3392,7 @@ function nombreFamiliaSolicitud(solicitud = {}) {
     || 'Familia';
 }
 
-async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor }) {
+async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, pricingQuote = null }) {
   const familyUid = adminPlainText(solicitud?.familia_id || solicitud?.familyUid || '', 180);
   const teacherUid = adminPlainText(profesor?.id || solicitud?.profesor_asignado_id || solicitud?.assignedTeacherUid || '', 180);
   const studentId = adminPlainText(solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid || '', 180);
@@ -3336,6 +3400,7 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor }) {
   const familyName = nombreFamiliaSolicitud(solicitud);
   const teacherName = nombreProfesor(profesor);
   const studentName = nombreAlumnoSolicitud(solicitud);
+  const quote = pricingQuote || buildAssignmentPricingQuote(solicitud, profesor);
   const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
   const chatRef = firestoreDoc(firebaseDb, 'chats', asignacionId);
   const existing = await getDoc(chatRef);
@@ -3350,6 +3415,7 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor }) {
     studentId: studentId || null,
     alumno_id: studentId || null,
     materia,
+    ...quote,
     familyName,
     teacherName,
     studentName,
@@ -3388,6 +3454,7 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor }) {
 
   await setDoc(firestoreDoc(firebaseDb, 'asignaciones', asignacionId), {
     chatId: asignacionId,
+    ...quote,
     schedulingStatus: 'pendiente_horario',
     estado_programacion: 'pendiente_horario',
     relationshipStage: 'pendiente_horario',
@@ -3419,6 +3486,7 @@ function renderProfesorDetalle(p) {
   const foto = p.foto_url || p.photoUrl || '';
   const fila = (label, value) => `<div><strong>${label}:</strong> ${sanitize(value || '-')}</div>`;
   const trust = p.trustProfile || buildTeacherTrustProfile(p, {});
+  const quote = buildAssignmentPricingQuote(window.solicitudAsignacionActual || {}, p);
   return `
     <div style="display:grid;grid-template-columns:120px 1fr;gap:16px;align-items:start">
       <div style="width:112px;height:112px;border-radius:12px;background:var(--gray-soft);overflow:hidden;display:flex;align-items:center;justify-content:center">
@@ -3435,6 +3503,13 @@ function renderProfesorDetalle(p) {
     </div>
     <div style="margin-top:16px;display:grid;gap:10px;font-size:.9rem;line-height:1.5">
       ${renderTrustPanel(trust)}
+      <div class="alert alert-info" style="margin:0">
+        <span class="alert-icon">€</span>
+        <div class="alert-body">
+          <div class="alert-title">Cotizacion interna para esta asignacion</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${renderPricingQuoteLine(quote)}</div>
+        </div>
+      </div>
       ${renderProfesorAiPanel(p)}
       ${fila('Perfil completado', p.profileCompletionPercent !== undefined ? `${p.profileCompletionPercent}%` : '')}
       ${fila('Confianza', trust ? `${trust.score}/100 (${trust.level || 'sin nivel'})` : '')}
@@ -4223,6 +4298,7 @@ function renderAsignarMatches(matches, error) {
     const risks = (m.risks || []).slice(0, 2).map(sanitize).join(' ');
     const profileIssues = (m.profileIssues || profileQuality?.issueLabels || []).slice(0, 3).map(sanitize).join(', ');
     const notes = [reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
+    const quote = profesor ? buildAssignmentPricingQuote(window.solicitudAsignacionActual || {}, profesor) : null;
     const breakdown = Object.entries(m.scoreBreakdown || {})
       .filter(([, value]) => value && Number.isFinite(Number(value.points)))
       .slice(0, 6)
@@ -4254,6 +4330,7 @@ function renderAsignarMatches(matches, error) {
           ${renderTrustBadge(trust.score, trust.level)}
           ${renderTrustBadges(trust.badges, 3)}
         </div>` : ''}
+        ${quote ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px">${renderPricingQuoteLine(quote)}</div>` : ''}
         <div style="margin-top:6px">${reasons || 'Candidato propuesto por compatibilidad general.'}</div>
         ${risks ? `<div style="margin-top:4px;color:var(--gray-mid)">A revisar: ${risks}</div>` : ''}
         ${profileIssues ? `<div style="margin-top:4px;color:${assignable ? 'var(--gray-mid)' : 'var(--warning)'}">Perfil: ${profileIssues}</div>` : ''}
@@ -4331,6 +4408,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
     showToast('Solicitud incompleta', 'La solicitud no tiene familia asociada. Sin familia no se puede abrir el chat de coordinacion.', 'warning');
     return;
   }
+  const pricingQuote = buildAssignmentPricingQuote(solicitud, profesor);
 
   const notas = document.getElementById('asignar-notas').value.trim();
   const now = new Date().toISOString();
@@ -4365,6 +4443,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       materia: solicitud?.materia || solicitud?.subject || '',
       subject: solicitud?.materia || solicitud?.subject || '',
       nivel: solicitud?.nivel || '',
+      ...pricingQuote,
       activa: true,
       active: true,
       estado: 'activa',
@@ -4393,6 +4472,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
         assignedTeacherUid: profId,
       },
       profesor,
+      pricingQuote,
       notas,
     });
 
@@ -4415,6 +4495,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
         familiaId: familiaId || null,
         materia: solicitud?.materia || solicitud?.subject || '',
         notas,
+        pricing: pricingQuote,
       },
       metadata: {
         source: 'admin_manual',

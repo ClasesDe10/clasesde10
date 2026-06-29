@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import {
   FINANCE_ERP_VERSION,
   buildClassFinancialPatch,
+  buildClassPricingQuote,
   buildFinanceErpReport,
+  estimateTeacherHourlyRate,
   resolveTeacherRateForClass,
 } from '../js/finance-erp-engine.js';
 
@@ -71,6 +73,33 @@ const financialPatch = buildClassFinancialPatch({
 assert.equal(financialPatch.teacherAmount, 28);
 assert.equal(financialPatch.platformFee, 12);
 assert.equal(financialPatch.marginPct, 30);
+
+const valuedHourly = estimateTeacherHourlyRate({
+  id: 'teacher-premium',
+  experiencia_anios: 5,
+  trustScore: 88,
+  nota_bachillerato: 9.1,
+  nota_media_universidad: 8.2,
+  estado_verificacion: 'verificado',
+  profileCompletionPercent: 96,
+}, { subject: 'Matematicas Bachillerato' }, config);
+assert.ok(valuedHourly > config.business.defaultTeacherHourlyRate, 'Teacher profile valuation must adjust default hourly rate.');
+
+const quote = buildClassPricingQuote({
+  subject: 'Matematicas',
+  durationMinutes: 60,
+}, { id: 'teacher-quote', rateRules: [{ subject: 'Matematicas', hourlyRate: 20 }] }, {
+  config: {
+    ...config,
+    business: {
+      ...config.business,
+      defaultCommissionPercent: 25,
+    },
+  },
+});
+assert.equal(quote.teacherAmount, 20);
+assert.ok(quote.familyAmount > quote.teacherAmount, 'Family price must include platform margin over teacher cost.');
+assert.ok(quote.platformFee > 0, 'Pricing quote must calculate platform fee.');
 
 const report = buildFinanceErpReport({
   classes: [

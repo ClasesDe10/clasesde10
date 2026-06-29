@@ -639,6 +639,11 @@ service cloud.firestore {
           data.familyUid == request.auth.uid
           || data.familia_id == request.auth.uid
           || (
+            hasRole('familia')
+            && data.keys().hasAny(['participantUids'])
+            && data.participantUids[request.auth.uid] == true
+          )
+          || (
             data.keys().hasAny(['studentId'])
             && exists(/databases/$(database)/documents/alumnos/$(data.studentId))
             && get(/databases/$(database)/documents/alumnos/$(data.studentId)).data.familyUid == request.auth.uid
@@ -657,6 +662,11 @@ service cloud.firestore {
           data.teacherUid == request.auth.uid
           || data.profesor_id == request.auth.uid
           || (data.keys().hasAny(['teacherUids']) && data.teacherUids[request.auth.uid] == true)
+          || (
+            hasRole('profesor')
+            && data.keys().hasAny(['participantUids'])
+            && data.participantUids[request.auth.uid] == true
+          )
         );
     }
 
@@ -1390,6 +1400,7 @@ service cloud.firestore {
           'familia_nombre',
           'profesor_nombre',
           'alumno_nombre',
+          'participantUids',
           'createdByUid',
           'createdByRole',
           'createdAt',
@@ -1413,6 +1424,9 @@ service cloud.firestore {
         && request.resource.data.familia_id == chatFamilyUid(get(chatPath).data)
         && request.resource.data.studentId == chatStudentId(get(chatPath).data)
         && request.resource.data.alumno_id == chatStudentId(get(chatPath).data)
+        && request.resource.data.participantUids[request.auth.uid] == true
+        && request.resource.data.participantUids[request.resource.data.familyUid] == true
+        && request.resource.data.participantUids[request.resource.data.teacherUid] == true
         && request.resource.data.fecha == get(proposalPath).data.fecha
         && request.resource.data.date == get(proposalPath).data.fecha
         && request.resource.data.hora_inicio == get(proposalPath).data.hora_inicio

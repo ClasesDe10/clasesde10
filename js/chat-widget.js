@@ -18,6 +18,7 @@ import {
   buildAdminClassPayload,
   validateClassTimeRange,
 } from './calendar-engine.js?v=20260628-calendar';
+import { buildClassPricingQuote } from './finance-erp-engine.js?v=20260629-pricing';
 import {
   availabilitySlotLabel,
   summarizeAvailabilitySlots,
@@ -94,6 +95,40 @@ function classIdFromProposal(chatId, proposalId) {
   return `chat_${chatId}_${proposalId}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 900);
 }
 
+function pickClassPriceFields(fields = {}) {
+  return {
+    precio_total: fields.precio_total ?? null,
+    amount: fields.amount ?? null,
+    familyAmount: fields.familyAmount ?? null,
+    importe_profesor: fields.importe_profesor ?? null,
+    teacherAmount: fields.teacherAmount ?? null,
+    comision_clasesde10: fields.comision_clasesde10 ?? null,
+    platformFee: fields.platformFee ?? null,
+    marginPct: fields.marginPct ?? null,
+  };
+}
+
+function proratedPricingFromHourly(chat = {}, durationMinutes = 60) {
+  const familyHourly = Number(chat.familyHourlyRate ?? chat.precio_hora_familia ?? chat.familyRatePerHour);
+  const teacherHourly = Number(chat.teacherHourlyRate ?? chat.importe_hora_profesor ?? chat.teacherRatePerHour);
+  if (!Number.isFinite(familyHourly) || familyHourly <= 0 || !Number.isFinite(teacherHourly) || teacherHourly <= 0) return null;
+  const factor = (Number(durationMinutes) || 60) / 60;
+  const familyAmount = Math.round((familyHourly * factor + Number.EPSILON) * 100) / 100;
+  const teacherAmount = Math.round((teacherHourly * factor + Number.EPSILON) * 100) / 100;
+  const platformFee = Math.round((familyAmount - teacherAmount + Number.EPSILON) * 100) / 100;
+  const marginPct = familyAmount > 0 ? Math.round((platformFee / familyAmount) * 10000) / 100 : null;
+  return {
+    precio_total: familyAmount,
+    amount: familyAmount,
+    familyAmount,
+    importe_profesor: teacherAmount,
+    teacherAmount,
+    comision_clasesde10: platformFee,
+    platformFee,
+    marginPct,
+  };
+}
+
 function participantMap(ids) {
   return [...new Set(ids.map(clean).filter(Boolean))]
     .reduce((acc, id) => ({ ...acc, [id]: true }), {});
@@ -128,7 +163,26 @@ function hydrateChatNames(data = {}, fallback = {}) {
     alumno_id: clean(data.alumno_id || data.studentId || fallback.studentId, 180) || null,
     assignmentId: clean(data.assignmentId || data.asignacion_id || fallback.assignmentId, 180),
     asignacion_id: clean(data.asignacion_id || data.assignmentId || fallback.assignmentId, 180),
+    precio_total: data.precio_total ?? data.amount ?? data.familyAmount ?? fallback.precio_total ?? fallback.amount ?? fallback.familyAmount ?? null,
+    amount: data.amount ?? data.precio_total ?? data.familyAmount ?? fallback.amount ?? fallback.precio_total ?? fallback.familyAmount ?? null,
+    familyAmount: data.familyAmount ?? data.precio_total ?? data.amount ?? fallback.familyAmount ?? fallback.precio_total ?? fallback.amount ?? null,
+    importe_profesor: data.importe_profesor ?? data.teacherAmount ?? fallback.importe_profesor ?? fallback.teacherAmount ?? null,
+    teacherAmount: data.teacherAmount ?? data.importe_profesor ?? fallback.teacherAmount ?? fallback.importe_profesor ?? null,
+    comision_clasesde10: data.comision_clasesde10 ?? data.platformFee ?? fallback.comision_clasesde10 ?? fallback.platformFee ?? null,
+    platformFee: data.platformFee ?? data.comision_clasesde10 ?? fallback.platformFee ?? fallback.comision_clasesde10 ?? null,
+    marginPct: data.marginPct ?? fallback.marginPct ?? null,
+    familyHourlyRate: data.familyHourlyRate ?? data.precio_hora_familia ?? fallback.familyHourlyRate ?? fallback.precio_hora_familia ?? null,
+    teacherHourlyRate: data.teacherHourlyRate ?? data.importe_hora_profesor ?? fallback.teacherHourlyRate ?? fallback.importe_hora_profesor ?? null,
+    commissionPercent: data.commissionPercent ?? data.comision_porcentaje ?? fallback.commissionPercent ?? fallback.comision_porcentaje ?? null,
+    pricingRule: data.pricingRule || fallback.pricingRule || '',
+    teacherRateSource: data.teacherRateSource || fallback.teacherRateSource || '',
   };
+}
+
+function mergeDocsById(rows = []) {
+  const map = new Map();
+  rows.filter(Boolean).forEach((row) => map.set(String(row.id || row.assignmentId || row.asignacion_id), row));
+  return Array.from(map.values());
 }
 
 function defaultChatTitle(chat, role) {
@@ -150,17 +204,22 @@ function chatSubtitle(chat, role, preference = {}) {
   return parts.join(' · ') || 'Asignacion activa';
 }
 
-async function loadAssignments(dbCompat, role, profileId) {
-  let queryBuilder = dbCompat.from('asignaciones')
-    .select('*, alumnos(nombre,apellidos), familias(nombre,apellidos,usuarios(nombre,apellidos,email,telefono)), profesores(nombre,apellidos,email,usuarios(nombre,apellidos,email,telefono))')
-    .eq('activa', true);
+async function loadAssignments(dbCompat, role, profileId, actorIds = []) {
+  const select = '*, alumnos(nombre,apellidos), familias(nombre,apellidos,usuarios(nombre,apellidos,email,telefono)), profesores(nombre,apellidos,email,usuarios(nombre,apellidos,email,telefono))';
+  if (role === 'admin') {
+    const { data, error } = await dbCompat.from('asignaciones').select(select).eq('activa', true);
+    if (error) throw error;
+    return data || [];
+  }
 
-  if (role === 'familia') queryBuilder = queryBuilder.eq('familia_id', profileId);
-  if (role === 'profesor') queryBuilder = queryBuilder.eq('profesor_id', profileId);
-
-  const { data, error } = await queryBuilder;
-  if (error) throw error;
-  return data || [];
+  const ids = [...new Set([profileId, ...actorIds].map((id) => clean(id, 180)).filter(Boolean))];
+  const field = role === 'familia' ? 'familia_id' : 'profesor_id';
+  const results = await Promise.all(ids.map(async (id) => {
+    const { data, error } = await dbCompat.from('asignaciones').select(select).eq('activa', true).eq(field, id);
+    if (error) throw error;
+    return data || [];
+  }));
+  return mergeDocsById(results.flat());
 }
 
 async function ensureChatForAssignment(assignment, usuario, role) {
@@ -200,6 +259,12 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     studentId: studentId || null,
     alumno_id: studentId || null,
     materia: clean(assignment.materia || assignment.subject, 180),
+    ...pickClassPriceFields(assignment),
+    familyHourlyRate: assignment.familyHourlyRate ?? assignment.precio_hora_familia ?? null,
+    teacherHourlyRate: assignment.teacherHourlyRate ?? assignment.importe_hora_profesor ?? null,
+    commissionPercent: assignment.commissionPercent ?? assignment.comision_porcentaje ?? null,
+    pricingRule: assignment.pricingRule || assignment.teacherRateRuleId || assignment.teacherRateSource || '',
+    teacherRateSource: assignment.teacherRateSource || '',
     familyName,
     teacherName,
     studentName,
@@ -208,6 +273,25 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     schedulingStatus: assignment.schedulingStatus || assignment.estado_programacion || 'pendiente_horario',
     updatedAt: serverTimestamp(),
   };
+  if (role !== 'admin') {
+    for (const field of [
+      'precio_total',
+      'amount',
+      'familyAmount',
+      'importe_profesor',
+      'teacherAmount',
+      'comision_clasesde10',
+      'platformFee',
+      'marginPct',
+      'familyHourlyRate',
+      'teacherHourlyRate',
+      'commissionPercent',
+      'pricingRule',
+      'teacherRateSource',
+    ]) {
+      delete base[field];
+    }
+  }
 
   if (!existing.exists()) {
     await setDoc(ref, {
@@ -226,9 +310,9 @@ async function ensureChatForAssignment(assignment, usuario, role) {
   return { id: snap.id, ...hydrateChatNames(snap.data(), base) };
 }
 
-async function loadChats(dbCompat, role, profileId, usuario) {
+async function loadChats(dbCompat, role, profileId, usuario, actorIds = []) {
   if (role === 'admin') {
-    const assignments = await loadAssignments(dbCompat, role, profileId);
+    const assignments = await loadAssignments(dbCompat, role, profileId, actorIds);
     await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role)));
     const snap = await getDocs(query(
       collection(firebaseDb, 'chats'),
@@ -240,7 +324,7 @@ async function loadChats(dbCompat, role, profileId, usuario) {
     return chats;
   }
 
-  const assignments = await loadAssignments(dbCompat, role, profileId);
+  const assignments = await loadAssignments(dbCompat, role, profileId, actorIds);
   const chats = (await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role))))
     .filter(Boolean);
   chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
@@ -300,6 +384,31 @@ async function loadChatAvailability(chat = {}) {
     teacherSlots: uniqueAvailabilityRows([...teacherCanonical, ...teacherLegacy]),
     studentSlots: uniqueAvailabilityRows(studentRows),
   };
+}
+
+async function loadTeacherProfileForPricing(teacherUid = '') {
+  const cleanUid = clean(teacherUid, 180);
+  if (!cleanUid) return {};
+  try {
+    const snap = await getDoc(doc(firebaseDb, 'profesores', cleanUid));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : {};
+  } catch (error) {
+    console.warn('No se pudo cargar tarifa del profesor para cotizar la clase', error);
+    return {};
+  }
+}
+
+async function buildScheduleClassPricing(chat = {}, input = {}) {
+  const hourly = proratedPricingFromHourly(chat, input.durationMinutes || input.duracion_minutos || 60);
+  if (hourly) return hourly;
+  const existing = pickClassPriceFields(chat);
+  const hasExisting = Number(existing.familyAmount ?? existing.precio_total ?? 0) > 0
+    && Number(existing.teacherAmount ?? existing.importe_profesor ?? 0) > 0;
+  if (hasExisting) return existing;
+  const teacherProfile = await loadTeacherProfileForPricing(chat.teacherUid || chat.profesor_id);
+  return pickClassPriceFields(buildClassPricingQuote(input, teacherProfile, {
+    config: globalThis.CD10PlatformConfig || {},
+  }));
 }
 
 function availabilityForRole(role, availability = {}) {
@@ -683,7 +792,7 @@ export async function initChatWidget({
 
   async function refreshChats() {
     container.querySelector('[data-chat-list]').innerHTML = '<div class="chat-empty-state">Cargando chats...</div>';
-    state.chats = await loadChats(db, role, profileId, usuario);
+    state.chats = await loadChats(db, role, profileId, usuario, currentActorIds);
     state.chatPreferencesById = await loadChatPreferences(state.chats, currentUid);
     renderChatList(container, state.chats, state.selectedChat?.id, role, state.chatPreferencesById);
     if (!state.selectedChat && state.chats.length) selectChat(state.chats[0].id);
@@ -901,7 +1010,7 @@ export async function initChatWidget({
     button.disabled = true;
     try {
       const proposal = {
-        assignmentId: state.selectedChat.assignmentId || state.selectedChat.asignacion_id || state.selectedChat.id,
+        assignmentId: state.selectedChat.id,
         familyUid: state.selectedChat.familyUid || state.selectedChat.familia_id,
         teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
         studentId: state.selectedChat.studentId || state.selectedChat.alumno_id || null,
@@ -974,7 +1083,7 @@ export async function initChatWidget({
     const proposalRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposal.id);
     const nowIso = new Date().toISOString();
     const input = {
-      assignmentId: state.selectedChat.assignmentId || state.selectedChat.asignacion_id || state.selectedChat.id,
+      assignmentId: state.selectedChat.id,
       scheduleProposalId: proposal.id,
       profesor_id: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
       teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
@@ -991,7 +1100,20 @@ export async function initChatWidget({
       observaciones: proposal.notas || '',
       calendarUid: classId,
     };
+    const pricing = await buildScheduleClassPricing(state.selectedChat, input);
+    Object.assign(input, pricing);
     const classFields = buildAdminClassPayload(input, {}, { nowIso, calendarUid: classId });
+    const participantUids = { ...(state.selectedChat.participantUids || {}) };
+    [
+      currentUid,
+      classFields.familyUid,
+      classFields.familia_id,
+      classFields.teacherUid,
+      classFields.profesor_id,
+    ].forEach((uid) => {
+      const cleanUid = clean(uid, 180);
+      if (cleanUid) participantUids[cleanUid] = true;
+    });
     const payload = {
       profesor_id: classFields.profesor_id,
       teacherUid: classFields.teacherUid,
@@ -1009,6 +1131,7 @@ export async function initChatWidget({
       endTime: classFields.endTime,
       duracion_minutos: classFields.duracion_minutos,
       durationMinutes: classFields.durationMinutes,
+      ...pickClassPriceFields(classFields),
       estado: classFields.estado,
       status: classFields.status,
       lifecycleStatus: classFields.lifecycleStatus,
@@ -1035,6 +1158,7 @@ export async function initChatWidget({
       familia_nombre: clean(state.selectedChat.familyName, 160),
       profesor_nombre: clean(state.selectedChat.teacherName, 160),
       alumno_nombre: clean(state.selectedChat.studentName, 160),
+      participantUids,
       createdByUid: currentUid,
       createdByRole: role,
       createdAt: serverTimestamp(),

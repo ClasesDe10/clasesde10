@@ -181,10 +181,10 @@
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th><th>Hora</th><th>Alumno</th><th>Materia</th><th>Duración</th><th>Estado</th><th>Mis notas</th><th>Acción</th>
+                  <th>Fecha</th><th>Hora</th><th>Alumno</th><th>Materia</th><th>Duración</th><th>Ingreso</th><th>Estado</th><th>Mis notas</th><th>Acción</th>
                 </tr>
               </thead>
-              <tbody id="tbody-mis-clases"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-mis-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -736,6 +736,75 @@ async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
   }
 }
 
+function profesorClassIds() {
+  return [...new Set([
+    profesorFirestoreId,
+    profesorId,
+    perfil?.id,
+    perfil?.userUid,
+    perfilLegacy?.id,
+    usuario.uid,
+    usuario.firebase_uid,
+    usuario.id,
+  ].filter(Boolean).map(String))];
+}
+
+function mergeById(rows = []) {
+  const map = new Map();
+  rows.filter(Boolean).forEach((row) => map.set(String(row.id || row.calendarUid || `${row.fecha || row.date}-${row.hora_inicio || row.startTime}`), row));
+  return Array.from(map.values());
+}
+
+function normalizeTeacherClassRow(clase = {}) {
+  const alumnoNombre = [clase.alumnos?.nombre, clase.alumnos?.apellidos].filter(Boolean).join(' ').trim()
+    || clase.alumno_nombre
+    || clase.studentName
+    || 'Alumno/a';
+  return {
+    ...clase,
+    teacherUid: clase.teacherUid || clase.profesor_id || '',
+    profesor_id: clase.profesor_id || clase.teacherUid || '',
+    studentId: clase.studentId || clase.alumno_id || '',
+    alumno_id: clase.alumno_id || clase.studentId || '',
+    fecha: clase.fecha || clase.date || '',
+    date: clase.date || clase.fecha || '',
+    hora_inicio: clase.hora_inicio || clase.startTime || '',
+    startTime: clase.startTime || clase.hora_inicio || '',
+    hora_fin: clase.hora_fin || clase.endTime || '',
+    endTime: clase.endTime || clase.hora_fin || '',
+    materia: clase.materia || clase.subject || '',
+    subject: clase.subject || clase.materia || '',
+    duracion_minutos: clase.duracion_minutos || clase.durationMinutes || '',
+    durationMinutes: clase.durationMinutes || clase.duracion_minutos || '',
+    alumno_nombre: alumnoNombre,
+    studentName: alumnoNombre,
+    importe_profesor: clase.importe_profesor ?? clase.teacherAmount ?? null,
+    teacherAmount: clase.teacherAmount ?? clase.importe_profesor ?? null,
+    precio_total: clase.precio_total ?? clase.amount ?? clase.familyAmount ?? null,
+    familyAmount: clase.familyAmount ?? clase.precio_total ?? clase.amount ?? null,
+  };
+}
+
+async function cargarClasesProfesor(options = {}) {
+  const ids = profesorClassIds();
+  const directQueries = ids.flatMap((id) => [
+    cargarFirestoreWhere('clases', 'teacherUid', '==', id),
+    cargarFirestoreWhere('clases', 'profesor_id', '==', id),
+  ]);
+  const [{ data: legacy }, ...direct] = await Promise.all([
+    db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId).limit(options.limit || 220),
+    ...directQueries,
+  ]);
+  let rows = mergeById([...(legacy || []), ...direct.flat()])
+    .map(normalizeTeacherClassRow)
+    .filter((clase) => ids.includes(String(clase.teacherUid || clase.profesor_id || '')));
+  if (options.desde) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') >= options.desde);
+  if (options.hasta) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') <= options.hasta);
+  if (options.estado) rows = rows.filter((clase) => classStatusForBadge(clase) === options.estado || clase.estado === options.estado || clase.status === options.estado);
+  rows.sort((a, b) => String(b.fecha || b.date || '').localeCompare(String(a.fecha || a.date || '')) || String(b.hora_inicio || b.startTime || '').localeCompare(String(a.hora_inicio || a.startTime || '')));
+  return rows;
+}
+
 function renderTeacherRelationshipDigest({ asignaciones = [], clases = [], pagos = [], documentos = [], chats = [] } = {}) {
   const container = document.getElementById('teacher-relationship-digest');
   if (!container) return;
@@ -775,18 +844,16 @@ async function cargarInicio() {
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
 
-  const [{ data: clasesMes }, { data: alumnos }, { data: pendientesRaw }, { data: clasesRelacion }, { data: pagosRelacion }, { data: documentosRelacion }, { data: disponibilidadRelacion }, chatsRelacion] = await Promise.all([
-    db.from('clases').select('duracion_minutos, importe_profesor, estado')
-      .eq('profesor_id', profesorId).gte('fecha', mesInicio),
+  const [clasesProfesor, { data: alumnos }, { data: pagosRelacion }, { data: documentosRelacion }, { data: disponibilidadRelacion }, chatsRelacion] = await Promise.all([
+    cargarClasesProfesor({ limit: 260 }),
     db.from('asignaciones').select('*').eq('profesor_id', profesorId).eq('activa', true),
-    db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId)
-      .lte('fecha', hoy).order('fecha').limit(40),
-    cargarFirestoreWhere('clases', 'teacherUid', '==', profesorId),
     cargarFirestoreWhere('pagos', 'teacherUid', '==', profesorFirestoreId),
     cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
     cargarFirestoreWhere('disponibilidad', 'teacherUid', '==', profesorId),
     cargarChatsUsuarioActual(),
   ]);
+  const clasesMes = clasesProfesor.filter((clase) => String(clase.fecha || clase.date || '') >= mesInicio);
+  const pendientesRaw = clasesProfesor.filter((clase) => String(clase.fecha || clase.date || '') <= hoy);
   const pendientes = (pendientesRaw || [])
     .filter((clase) => isScheduledClassStatus(clase.estado || clase.status) && claseTerminada(clase, 0))
     .slice(0, 5);
@@ -800,7 +867,7 @@ async function cargarInicio() {
   const relationships = buildRelationshipsFromCollections({
     assignments: alumnos || [],
     chats: chatsRelacion || [],
-    classes: clasesRelacion || [],
+    classes: clasesProfesor || [],
     payments: pagosRelacion || [],
     documents: documentosRelacion || [],
     teachers: [{ id: profesorId, ...perfil, userUid: profesorFirestoreId }],
@@ -812,17 +879,17 @@ async function cargarInicio() {
   });
   renderTeacherRelationshipDigest({
     asignaciones: alumnos || [],
-    clases: clasesRelacion || [],
+    clases: clasesProfesor || [],
     pagos: pagosRelacion || [],
     documentos: documentosRelacion || [],
     chats: chatsRelacion || [],
   });
 
   // Próximas clases
-  const { data: proximasRaw } = await db.from('clases').select('*, alumnos(nombre,apellidos)')
-    .eq('profesor_id', profesorId).gte('fecha', hoy).order('fecha').limit(20);
-  const proximas = (proximasRaw || [])
+  const proximas = clasesProfesor
     .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
+    .filter((clase) => String(clase.fecha || clase.date || '') >= hoy)
+    .sort((a, b) => String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || '')) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')))
     .slice(0, 5);
 
   const contP = document.getElementById('lista-proximas');
@@ -844,8 +911,8 @@ async function cargarInicio() {
           <div class="clase-time-min">${formatFechaCorta(c.fecha)}</div>
         </div>
         <div class="clase-info">
-          <div class="clase-nombre">${sanitize(c.alumnos?.nombre)} ${sanitize(c.alumnos?.apellidos||'')}</div>
-          <div class="clase-materia">${sanitize(c.materia)} · ${c.duracion_minutos} min</div>
+          <div class="clase-nombre">${sanitize(c.alumno_nombre || c.studentName || c.alumnos?.nombre || 'Alumno/a')}</div>
+          <div class="clase-materia">${sanitize(c.materia)} · ${c.duracion_minutos || c.durationMinutes || '—'} min</div>
         </div>
       </div>`).join('');
   }
@@ -863,13 +930,13 @@ async function cargarInicio() {
     contPend.innerHTML = pendientes.map(c => `
       <div class="clase-item" style="padding:12px 20px">
         <div class="clase-info">
-          <div class="clase-nombre">${sanitize(c.alumnos?.nombre)} — ${sanitize(c.materia)}</div>
+          <div class="clase-nombre">${sanitize(c.alumno_nombre || c.studentName || c.alumnos?.nombre || 'Alumno/a')} — ${sanitize(c.materia)}</div>
           <div class="clase-materia">${formatFechaCorta(c.fecha)} ${formatHora(c.hora_inicio)}</div>
         </div>
         <button class="btn btn-primary btn-sm"
                 data-action="registrar-clase"
                 data-id="${sanitize(c.id)}"
-                data-alumno="${sanitize((c.alumnos?.nombre||'') + ' ' + (c.alumnos?.apellidos||''))}"
+                data-alumno="${sanitize(c.alumno_nombre || c.studentName || ((c.alumnos?.nombre||'') + ' ' + (c.alumnos?.apellidos||'')))}"
                 data-materia="${sanitize(c.materia)}"
                 data-fecha="${formatFechaCorta(c.fecha)}">Registrar</button>
       </div>`).join('');
@@ -915,9 +982,8 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('clases').select('fecha,estado,status,hora_inicio,materia,alumnos(nombre,apellidos),familyPaymentStatus,estado_pago')
-    .eq('profesor_id', profesorId).gte('fecha',desde).lte('fecha',hasta);
-  cal.setClases((data||[]).map(c => ({ ...c, alumno_nombre: `${c.alumnos?.nombre||''} ${c.alumnos?.apellidos||''}` })));
+  const data = await cargarClasesProfesor({ desde, hasta, limit: 260 });
+  cal.setClases(data);
 }
 
 // ── MIS CLASES ───────────────────────────────────────────────────
@@ -926,18 +992,18 @@ async function cargarMisClases() {
   const estado = document.getElementById('filtro-cl-estado').value;
   const mes    = document.getElementById('filtro-cl-mes').value;
 
-  let q = db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId);
-  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
-  if (mes) q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31');
-  q = q.order('fecha', {ascending:false});
-
-  const { data } = await q;
+  const data = await cargarClasesProfesor({
+    estado: estado && estado !== 'confirmada' ? estado : '',
+    desde: mes ? `${mes}-01` : '',
+    hasta: mes ? `${mes}-31` : '',
+    limit: 260,
+  });
   const clases = estado === 'confirmada'
-    ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
-    : (data || []);
+    ? data.filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : data;
   const tbody = document.getElementById('tbody-mis-clases');
   if (!clases.length) {
-    tbody.innerHTML = renderTableEmptyState(8, {
+    tbody.innerHTML = renderTableEmptyState(9, {
       icon: '📅',
       title: 'No hay clases con estos filtros',
       description: 'Si tienes una familia asignada, coordinad el horario desde el chat. Si no, mantén perfil y disponibilidad completos para recibir alumnos.',
@@ -950,16 +1016,14 @@ async function cargarMisClases() {
   }
 
   tbody.innerHTML = clases.map(c => {
-    const alumnoNombre = [c.alumnos?.nombre, c.alumnos?.apellidos].filter(Boolean).join(' ').trim()
-      || c.alumno_nombre
-      || c.studentName
-      || 'Alumno/a';
+    const alumnoNombre = c.alumno_nombre || c.studentName || 'Alumno/a';
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td>${sanitize(alumnoNombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
+    <td><strong>${importeProfesorClase(c) > 0 ? formatEuros(importeProfesorClase(c)) : '—'}</strong></td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.78rem">${sanitize(c.notas_profesor||'—')}</td>
     <td>
@@ -1128,12 +1192,12 @@ async function cargarBizumProfesor() {
   btn.disabled = true;
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr>';
 
-  const [{ data: clases, error: clasesError }, { data: pagos, error: pagosError }] = await Promise.all([
-    db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId).eq('estado', 'realizada').order('fecha', { ascending: false }),
+  const [clases, { data: pagos, error: pagosError }] = await Promise.all([
+    cargarClasesProfesor({ estado: 'realizada', limit: 260 }),
     db.from('pagos').select('*').eq('profesor_id', profesorFirestoreId).order('created_at', { ascending: false }),
   ]);
 
-  if (clasesError || pagosError) {
+  if (pagosError) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--danger)">No se pudieron cargar los cobros Bizum.</td></tr>';
     return;
   }
@@ -1174,7 +1238,7 @@ async function cargarBizumProfesor() {
 
   const rows = pendientes.map((clase) => `<tr>
     <td>${formatFechaCorta(clase.fecha)}</td>
-    <td>${sanitize(clase.alumnos?.nombre || clase.alumno_nombre || 'Alumno')}</td>
+    <td>${sanitize(clase.alumno_nombre || clase.studentName || clase.alumnos?.nombre || 'Alumno')}</td>
     <td>${sanitize(clase.materia || '-')}</td>
     <td><strong>${formatEuros(importeProfesorClase(clase))}</strong></td>
     <td>${badgeEstado('pendiente')}</td>
@@ -1183,7 +1247,7 @@ async function cargarBizumProfesor() {
 
   const blockedRows = sinImporte.slice(0, 8).map((clase) => `<tr>
     <td>${formatFechaCorta(clase.fecha)}</td>
-    <td>${sanitize(clase.alumnos?.nombre || clase.alumno_nombre || 'Alumno')}</td>
+    <td>${sanitize(clase.alumno_nombre || clase.studentName || clase.alumnos?.nombre || 'Alumno')}</td>
     <td>${sanitize(clase.materia || '-')}</td>
     <td>-</td>
     <td>${badgeEstado('pendiente')}</td>

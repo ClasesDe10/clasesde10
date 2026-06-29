@@ -24,6 +24,8 @@ const [admin, chat, rules, functionsIndex, automationEngine, automationWorker, c
 
 assert(admin.includes('prepararFlujoAsignacion'), 'Admin assignment must prepare chat scheduling flow.');
 assert(admin.includes("schedulingStatus: 'pendiente_horario'"), 'Assignments must start as pending scheduling.');
+assert(admin.includes('buildAssignmentPricingQuote'), 'Admin assignment must attach pricing to matching decisions.');
+assert(admin.includes('renderPricingQuoteLine'), 'Admin matching must display family price, teacher amount and margin.');
 assert(admin.includes('Profesor asignado, chat creado'), 'Admin must confirm chat creation after assignment.');
 assert(!admin.includes('assignment_ready_for_scheduling'), 'Admin must not write duplicate scheduling automation events from the browser.');
 assert(!admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment notifications must be centralized in Functions.');
@@ -37,6 +39,10 @@ assert(chat.includes("collection(firebaseDb, 'chats', state.selectedChat.id, 'pr
 assert(chat.includes('acceptScheduleProposal'), 'Chat widget must support accepting schedule proposals.');
 assert(chat.includes("createdFrom: 'chat_schedule_proposal'"), 'Accepted proposals must create traceable class documents.');
 assert(chat.includes('buildAdminClassPayload'), 'Accepted proposals must reuse the shared class payload engine.');
+assert(chat.includes('buildClassPricingQuote'), 'Accepted proposals must price classes before creating them.');
+assert(chat.includes('proratedPricingFromHourly'), 'Chat scheduling must prorate assignment hourly pricing by class duration.');
+assert(chat.includes('pickClassPriceFields(classFields)'), 'Accepted proposals must persist family, teacher and platform amounts.');
+assert(chat.includes('participantUids'), 'Accepted proposal classes must store participant auth ids for legacy/id-compatible reads.');
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
 assert(chat.includes('data-chat-name-form'), 'Chat widget must let each participant save a private chat display name.');
 assert(chat.includes("doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid)"), 'Chat widget must load per-user chat preferences.');
@@ -65,6 +71,7 @@ assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must
 assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
 assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');
 assert(rules.includes('chatTeacherUid(get(chatPath).data)'), 'Class creation rules must accept canonical or legacy chat teacher ids.');
+assert(rules.includes("request.resource.data.participantUids[request.auth.uid] == true"), 'Class creation rules must require the creator in participantUids.');
 assert(rules.includes('match /preferencias/{userUid}'), 'Firestore rules must protect per-user chat preferences.');
 assert(rules.includes('validChatPreferenceCreate'), 'Firestore rules must validate chat preference creation.');
 assert(rules.includes('availabilityTeacherBelongsToAuth'), 'Availability rules must support teacher profile ids as well as auth uids.');

@@ -22,9 +22,10 @@ export class Calendario {
   setClases(clases) {
     this.clasesPorFecha = {};
     clases.forEach(c => {
-      const fecha = c.fecha;
+      const fecha = c.fecha || c.date;
+      if (!fecha) return;
       if (!this.clasesPorFecha[fecha]) this.clasesPorFecha[fecha] = [];
-      this.clasesPorFecha[fecha].push(c);
+      this.clasesPorFecha[fecha].push({ ...c, fecha, date: c.date || fecha });
     });
     this.render();
   }

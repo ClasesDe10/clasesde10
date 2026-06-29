@@ -180,9 +180,9 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Hora</th><th>Hijo/a</th><th>Profesor</th><th>Materia</th><th>Duración</th><th>Estado</th><th>Confirmación</th><th>Acciones</th></tr>
+                <tr><th>Fecha</th><th>Hora</th><th>Hijo/a</th><th>Profesor</th><th>Materia</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Confirmación</th><th>Acciones</th></tr>
               </thead>
-              <tbody id="tbody-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-clases"><tr><td colspan="10" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -830,6 +830,66 @@ async function cargarFirestoreIn(nombreColeccion, campo, valores = []) {
   return Array.from(map.values());
 }
 
+function mergeById(rows = []) {
+  const map = new Map();
+  rows.filter(Boolean).forEach((row) => map.set(String(row.id || row.calendarUid || `${row.fecha || row.date}-${row.hora_inicio || row.startTime}`), row));
+  return Array.from(map.values());
+}
+
+function normalizeClassRow(clase = {}, hijosPorId = new Map()) {
+  const studentId = clase.studentId || clase.alumno_id || '';
+  const teacherName = clase.profesor_nombre || clase.teacherName || [clase.profesores?.usuarios?.nombre, clase.profesores?.usuarios?.apellidos].filter(Boolean).join(' ');
+  const studentName = clase.alumno_nombre || clase.studentName || [clase.alumnos?.nombre, clase.alumnos?.apellidos].filter(Boolean).join(' ') || hijosPorId.get(studentId) || 'Alumno/a';
+  return {
+    ...clase,
+    studentId,
+    alumno_id: clase.alumno_id || studentId,
+    teacherUid: clase.teacherUid || clase.profesor_id || '',
+    profesor_id: clase.profesor_id || clase.teacherUid || '',
+    fecha: clase.fecha || clase.date || '',
+    date: clase.date || clase.fecha || '',
+    hora_inicio: clase.hora_inicio || clase.startTime || '',
+    startTime: clase.startTime || clase.hora_inicio || '',
+    hora_fin: clase.hora_fin || clase.endTime || '',
+    endTime: clase.endTime || clase.hora_fin || '',
+    materia: clase.materia || clase.subject || '',
+    subject: clase.subject || clase.materia || '',
+    duracion_minutos: clase.duracion_minutos || clase.durationMinutes || '',
+    durationMinutes: clase.durationMinutes || clase.duracion_minutos || '',
+    alumno_nombre: studentName,
+    studentName,
+    profesor_nombre: teacherName || 'Profesor asignado',
+    teacherName: teacherName || 'Profesor asignado',
+    precio_total: clase.precio_total ?? clase.amount ?? clase.familyAmount ?? null,
+    amount: clase.amount ?? clase.precio_total ?? clase.familyAmount ?? null,
+    familyAmount: clase.familyAmount ?? clase.precio_total ?? clase.amount ?? null,
+    importe_profesor: clase.importe_profesor ?? clase.teacherAmount ?? null,
+    teacherAmount: clase.teacherAmount ?? clase.importe_profesor ?? null,
+    comision_clasesde10: clase.comision_clasesde10 ?? clase.platformFee ?? null,
+    platformFee: clase.platformFee ?? clase.comision_clasesde10 ?? null,
+  };
+}
+
+async function cargarClasesPorAlumnos(ids = [], options = {}) {
+  const cleanIds = [...new Set(ids.filter(Boolean))];
+  if (!cleanIds.length) return [];
+  const hijosPorId = options.hijosPorId || new Map();
+  const [legacy, canonical, legacyField] = await Promise.all([
+    db.from('v_clases_completas').select('*').in('alumno_id', cleanIds).limit(options.limit || 220),
+    cargarFirestoreIn('clases', 'studentId', cleanIds),
+    cargarFirestoreIn('clases', 'alumno_id', cleanIds),
+  ]);
+  let rows = mergeById([
+    ...(legacy.data || []),
+    ...canonical,
+    ...legacyField,
+  ]).map((clase) => normalizeClassRow(clase, hijosPorId))
+    .filter((clase) => cleanIds.includes(clase.studentId || clase.alumno_id));
+  if (options.desde) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') >= options.desde);
+  if (options.hasta) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') <= options.hasta);
+  return rows;
+}
+
 function renderFamilyRelationshipDigest({ hijos = [], asignaciones = [], clases = [], pagos = [], solicitudes = [], documentos = [], chats = [], profesores = [] } = {}) {
   const container = document.getElementById('family-relationship-digest');
   if (!container) return [];
@@ -887,18 +947,19 @@ async function cargarInicio() {
 
   if (hijos?.length) {
     const ids = hijos.map(h => h.id);
-    const [{ data: clasesFamiliaRaw }, { data: asig }, { data: clasesRelacion }, { data: pagosRelacion }, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
-      db.from('clases').select('id,assignmentId,asignacion_id,familyUid,familia_id,fecha,date,estado,status,hora_inicio,hora_fin,materia,subject,alumno_id,studentId,profesor_id,teacherUid').in('alumno_id', ids).limit(120),
+    const hijosPorId = new Map(hijos.map((hijo) => [
+      hijo.id,
+      [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
+    ]));
+    const [clasesFamilia, { data: asig }, { data: pagosRelacion }, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
+      cargarClasesPorAlumnos(ids, { hijosPorId, desde: mesInicio, limit: 160 }),
       db.from('asignaciones').select('*').in('alumno_id', ids).eq('activa', true),
-      cargarFirestoreIn('clases', 'studentId', ids),
       cargarFirestoreWhere('pagos', 'familyUid', '==', familiaId),
       cargarFirestoreWhere('solicitudes', 'familyUid', '==', familiaId),
       cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
       cargarChatsUsuarioActual(),
     ]);
-    const clasesFamilia = (clasesFamiliaRaw || []).filter((clase) => ids.includes(clase.studentId || clase.alumno_id));
     const clasesRelacionIntegradas = Array.from(new Map([
-      ...(clasesRelacion || []),
       ...clasesFamilia,
     ].filter(Boolean).map((clase) => [clase.id, clase])).values());
     const clasesMes = clasesFamilia.filter((clase) => String(clase.fecha || clase.date || '') >= mesInicio);
@@ -908,9 +969,7 @@ async function cargarInicio() {
     let profesoresRelacion = [];
 
     // Próximas clases
-    const { data: proximasRaw } = await db.from('v_clases_completas')
-      .select('*').in('alumno_id', ids).limit(120);
-    const proximas = (proximasRaw || [])
+    const proximas = clasesFamilia
       .filter((clase) => String(clase.fecha || clase.date || '') >= hoy && isScheduledClassStatus(clase.estado || clase.status))
       .sort((a, b) => String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || '')) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')))
       .slice(0, 5);
@@ -1027,7 +1086,7 @@ async function iniciarCalendario() {
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||'')}</div>
-              <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}</div>
+              <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}${Number(c.familyAmount ?? c.precio_total ?? 0) > 0 ? ` · ${formatEuros(c.familyAmount ?? c.precio_total)}` : ''}</div>
             </div>
             ${badgeEstado(classStatusForBadge(c))}
           </div>`).join('');
@@ -1040,14 +1099,17 @@ async function iniciarCalendario() {
 
 async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
-  const { data: hijos } = await db.from('alumnos').select('id').eq('familia_id', familiaId);
+  const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
   if (!hijos?.length) return;
   const ids = hijos.map(h => h.id);
+  const hijosPorId = new Map(hijos.map((hijo) => [
+    hijo.id,
+    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
+  ]));
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('v_clases_completas').select('fecha,estado,status,hora_inicio,materia,alumno_nombre,profesor_nombre,familyPaymentStatus,estado_pago')
-    .in('alumno_id', ids).gte('fecha',desde).lte('fecha',hasta);
-  cal.setClases(data||[]);
+  const data = await cargarClasesPorAlumnos(ids, { hijosPorId, desde, hasta, limit: 240 });
+  cal.setClases(data);
 }
 
 // ── CLASES ───────────────────────────────────────────────────────
@@ -1056,7 +1118,7 @@ async function cargarClases() {
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
   const tbody = document.getElementById('tbody-clases');
   if (!hijos?.length) {
-    tbody.innerHTML = renderTableEmptyState(9, {
+    tbody.innerHTML = renderTableEmptyState(10, {
       icon: '👧',
       title: 'Primero añade un alumno',
       description: 'Para crear clases necesitamos saber para quién es la ayuda. Al guardar al alumno te guiaremos para pedir profesor.',
@@ -1079,8 +1141,7 @@ async function cargarClases() {
     [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
   ]));
 
-  const { data } = await db.from('v_clases_completas').select('*').in('alumno_id', ids).limit(180);
-  let filtered = (data || []).filter((clase) => ids.includes(clase.studentId || clase.alumno_id));
+  let filtered = await cargarClasesPorAlumnos(ids, { hijosPorId, limit: 220 });
   if (estado && estado !== 'confirmada') {
     filtered = filtered.filter((clase) => classStatusForBadge(clase) === estado || clase.estado === estado || clase.status === estado);
   }
@@ -1094,7 +1155,7 @@ async function cargarClases() {
     ? filtered.filter((clase) => classStatusForBadge(clase) === 'confirmada')
     : filtered;
   if (!clases.length) {
-    tbody.innerHTML = renderTableEmptyState(9, {
+    tbody.innerHTML = renderTableEmptyState(10, {
       icon: '📅',
       title: 'No hay clases con estos filtros',
       description: 'Si ya tienes profesor, coordinad el horario desde el chat. Si aún no lo tienes, solicita uno y te avisaremos.',
@@ -1124,6 +1185,7 @@ async function cargarClases() {
     <td>${sanitize(profesorNombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
+    <td><strong>${Number(c.familyAmount ?? c.precio_total ?? 0) > 0 ? formatEuros(c.familyAmount ?? c.precio_total) : '—'}</strong></td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td>${labelConfirmacionFamilia(c)}</td>
     <td>${acciones}</td>
@@ -1299,9 +1361,21 @@ function renderSolicitudDisponibilidadHint() {
   if (horario && !horario.value.trim()) horario.value = summary;
 }
 
+function assignmentPriceLine(asignacion = {}) {
+  const familyHourly = Number(asignacion.familyHourlyRate ?? asignacion.precio_hora_familia ?? asignacion.familyAmount ?? asignacion.precio_total ?? 0);
+  const teacherHourly = Number(asignacion.teacherHourlyRate ?? asignacion.importe_hora_profesor ?? asignacion.teacherAmount ?? asignacion.importe_profesor ?? 0);
+  if (!Number.isFinite(familyHourly) || familyHourly <= 0) {
+    return '<span style="color:var(--warning)">Precio pendiente de confirmar</span>';
+  }
+  const teacherDetail = Number.isFinite(teacherHourly) && teacherHourly > 0
+    ? ` <span style="color:var(--gray-mid);font-size:.76rem">(prof. ${formatEuros(teacherHourly)}/h)</span>`
+    : '';
+  return `<strong>${formatEuros(familyHourly)}/h</strong>${teacherDetail}`;
+}
+
 async function cargarHijos() {
   if (!familiaId) return;
-  const { data } = await db.from('alumnos').select('*, asignaciones(materia,profesores(usuarios(nombre,apellidos)))')
+  const { data } = await db.from('alumnos').select('*, asignaciones(materia,precio_total,familyAmount,teacherAmount,importe_profesor,familyHourlyRate,teacherHourlyRate,marginPct,profesores(usuarios(nombre,apellidos)))')
     .eq('familia_id', familiaId).eq('activo', true);
   await cargarDisponibilidadHijos();
 
@@ -1315,9 +1389,29 @@ async function cargarHijos() {
     })}</div>`;
     return;
   }
+  const alumnoIds = data.map((hijo) => hijo.id).filter(Boolean);
+  const [{ data: asignacionesLegacy }, asignacionesCanonicas, asignacionesLegacyField] = await Promise.all([
+    db.from('asignaciones').select('*').in('alumno_id', alumnoIds).eq('activa', true),
+    cargarFirestoreIn('asignaciones', 'studentId', alumnoIds),
+    cargarFirestoreIn('asignaciones', 'alumno_id', alumnoIds),
+  ]);
+  const asignacionesPorAlumno = new Map();
+  mergeById([
+    ...(asignacionesLegacy || []),
+    ...asignacionesCanonicas,
+    ...asignacionesLegacyField,
+  ]).filter((asignacion) => asignacion.active !== false && asignacion.activa !== false)
+    .forEach((asignacion) => {
+      const studentId = asignacion.studentId || asignacion.alumno_id;
+      if (!studentId) return;
+      if (!asignacionesPorAlumno.has(studentId)) asignacionesPorAlumno.set(studentId, []);
+      asignacionesPorAlumno.get(studentId).push(asignacion);
+    });
 
   grid.innerHTML = data.map(h => {
     const slots = disponibilidadForStudent(h.id);
+    const asignaciones = asignacionesPorAlumno.get(h.id) || h.asignaciones || [];
+    const asignacionPrincipal = asignaciones[0] || null;
     return `
     <div class="card student-card">
       <div class="card-body">
@@ -1330,10 +1424,11 @@ async function cargarHijos() {
         </div>
         <div class="student-card-meta">
           <div><span style="color:var(--gray-mid)">Colegio:</span> ${sanitize(h.colegio||'—')}</div>
-          <div><span style="color:var(--gray-mid)">Profesor:</span> ${h.asignaciones?.length
-            ? sanitize(h.asignaciones[0].profesores?.usuarios?.nombre||'') + ' ' + sanitize(h.asignaciones[0].profesores?.usuarios?.apellidos||'')
+          <div><span style="color:var(--gray-mid)">Profesor:</span> ${asignacionPrincipal
+            ? sanitize(asignacionPrincipal.teacherName || asignacionPrincipal.profesor_nombre || asignacionPrincipal.profesores?.usuarios?.nombre || 'Profesor asignado') + ' ' + sanitize(asignacionPrincipal.profesores?.usuarios?.apellidos || '')
             : '<span style="color:var(--warning)">Pendiente asignación</span>'}</div>
-          ${h.asignaciones?.length ? `<div><span style="color:var(--gray-mid)">Materia:</span> ${sanitize(h.asignaciones[0].materia)}</div>` : ''}
+          ${asignacionPrincipal ? `<div><span style="color:var(--gray-mid)">Materia:</span> ${sanitize(asignacionPrincipal.materia || asignacionPrincipal.subject || '—')}</div>` : ''}
+          ${asignacionPrincipal ? `<div><span style="color:var(--gray-mid)">Precio familia:</span> ${assignmentPriceLine(asignacionPrincipal)}</div>` : ''}
           <div class="availability-mini"><span>Disponibilidad:</span> ${renderDisponibilidadMini(slots)}</div>
         </div>
         <div class="student-card-actions">
@@ -1350,7 +1445,7 @@ async function cargarHijos() {
                   data-action="disponibilidad-hijo"
                   data-id="${sanitize(h.id)}"
                   data-nombre="${sanitize(`${h.nombre || ''} ${h.apellidos || ''}`.trim())}">Disponibilidad</button>
-          ${!h.asignaciones?.length ? `<button class="btn btn-gold btn-sm" data-action="solicitar-hijo" data-id="${sanitize(h.id)}">Solicitar profesor</button>` : ''}
+          ${!asignacionPrincipal ? `<button class="btn btn-gold btn-sm" data-action="solicitar-hijo" data-id="${sanitize(h.id)}">Solicitar profesor</button>` : ''}
           ${h.usuario_id
             ? '<span class="badge badge-success">Acceso vinculado</span>'
             : `<button class="btn btn-ghost btn-sm" data-action="invitar-alumno" data-alumno-id="${sanitize(h.id)}" data-alumno-nombre="${sanitize(h.nombre)}">Invitar acceso</button>`}
