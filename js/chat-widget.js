@@ -46,6 +46,9 @@ import {
   watchForegroundPushMessages,
 } from './push-notifications.js';
 
+const CHAT_LAYOUT_STORAGE_KEY = 'cd10.chat.layoutMode';
+const CHAT_LAYOUT_MODES = new Set(['chat', 'balanced', 'classes']);
+
 function clean(value, max = 2000) {
   return String(value || '').trim().slice(0, max);
 }
@@ -462,8 +465,11 @@ function renderAvailabilitySummary(availability = {}, role = '') {
 }
 
 function renderShell(container, role) {
+  const storedLayoutMode = CHAT_LAYOUT_MODES.has(localStorage.getItem(CHAT_LAYOUT_STORAGE_KEY))
+    ? localStorage.getItem(CHAT_LAYOUT_STORAGE_KEY)
+    : 'balanced';
   container.innerHTML = `
-    <div class="chat-layout">
+    <div class="chat-layout chat-layout-${storedLayoutMode}" data-chat-layout data-chat-layout-current="${storedLayoutMode}">
       <aside class="chat-list-panel">
         <div class="chat-panel-header">
           <div>
@@ -612,10 +618,16 @@ function renderThreadHeader(container, chat, role, preference = {}) {
   const header = container.querySelector('[data-chat-header]');
   if (!chat) return;
   const customName = clean(preference.displayNameOverride, 120);
+  const layoutMode = container.querySelector('[data-chat-layout]')?.dataset.chatLayoutCurrent || 'balanced';
   header.innerHTML = `
     <div class="chat-thread-heading">
       <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
       <div class="chat-thread-subtitle">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
+    </div>
+    <div class="chat-view-controls" role="group" aria-label="Ajustar espacio de chat y clases">
+      <button class="chat-view-btn ${layoutMode === 'chat' ? 'active' : ''}" type="button" data-chat-layout-mode="chat" aria-pressed="${layoutMode === 'chat'}" title="Mas espacio para mensajes">Chat</button>
+      <button class="chat-view-btn ${layoutMode === 'balanced' ? 'active' : ''}" type="button" data-chat-layout-mode="balanced" aria-pressed="${layoutMode === 'balanced'}" title="Reparto equilibrado">Mixto</button>
+      <button class="chat-view-btn ${layoutMode === 'classes' ? 'active' : ''}" type="button" data-chat-layout-mode="classes" aria-pressed="${layoutMode === 'classes'}" title="Mas espacio para coordinar clases">Clases</button>
     </div>
     <form class="chat-alias-form" data-chat-name-form hidden>
       <input class="form-control" type="text" maxlength="120" value="${escapeHtml(customName)}" data-chat-name-input aria-label="Nombre guardado para este chat" placeholder="${escapeHtml(defaultChatTitle(chat, role))}">
@@ -861,7 +873,28 @@ export async function initChatWidget({
     });
   }
 
+  function setChatLayoutMode(mode = 'balanced') {
+    const safeMode = CHAT_LAYOUT_MODES.has(mode) ? mode : 'balanced';
+    const layout = container.querySelector('[data-chat-layout]');
+    if (!layout) return;
+    CHAT_LAYOUT_MODES.forEach((entry) => layout.classList.remove(`chat-layout-${entry}`));
+    layout.classList.add(`chat-layout-${safeMode}`);
+    layout.dataset.chatLayoutCurrent = safeMode;
+    localStorage.setItem(CHAT_LAYOUT_STORAGE_KEY, safeMode);
+    container.querySelectorAll('[data-chat-layout-mode]').forEach((button) => {
+      const active = button.dataset.chatLayoutMode === safeMode;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+
   container.addEventListener('click', (event) => {
+    const layoutModeButton = event.target.closest('[data-chat-layout-mode]');
+    if (layoutModeButton) {
+      setChatLayoutMode(layoutModeButton.dataset.chatLayoutMode);
+      return;
+    }
+
     const tab = event.target.closest('[data-chat-tab]');
     if (tab) {
       setPanel(tab.dataset.chatTab);

@@ -45,6 +45,8 @@ assert(chat.includes('pickClassPriceFields(classFields)'), 'Accepted proposals m
 assert(chat.includes('participantUids'), 'Accepted proposal classes must store participant auth ids for legacy/id-compatible reads.');
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
 assert(chat.includes('data-chat-name-form'), 'Chat widget must let each participant save a private chat display name.');
+assert(chat.includes('data-chat-layout-mode'), 'Chat widget must let users resize chat vs class scheduling space.');
+assert(chat.includes('CHAT_LAYOUT_STORAGE_KEY'), 'Chat layout preference must persist per browser.');
 assert(chat.includes("doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid)"), 'Chat widget must load per-user chat preferences.');
 assert(chat.includes("doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid)"), 'Chat widget must persist chat preferences per current user.');
 assert(chat.includes('Esperando respuesta'), 'Own schedule proposals must clearly show they are waiting for the other participant.');
@@ -82,5 +84,7 @@ assert(rules.includes("'class_scheduled_from_chat'"), 'Chat rules must validate 
 assert(css.includes('.chat-schedule-panel'), 'Dashboard CSS must style the schedule panel.');
 assert(css.includes('.schedule-proposal'), 'Dashboard CSS must style schedule proposals.');
 assert(css.includes('.chat-alias-form'), 'Dashboard CSS must style the private chat-name editor.');
+assert(css.includes('.chat-view-controls'), 'Dashboard CSS must style chat/class layout controls.');
+assert(css.includes('.chat-layout-classes'), 'Dashboard CSS must support a class-focused chat layout.');
 
 console.log('Chat scheduling system validation passed.');
