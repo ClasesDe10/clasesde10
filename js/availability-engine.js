@@ -100,6 +100,138 @@ export function summarizeAvailabilitySlots(slots = [], max = 4) {
   return `${labels.join(', ')}${remaining > 0 ? ` y ${remaining} mas` : ''}`;
 }
 
+const INACTIVE_BUSY_STATUSES = new Set([
+  'cancelada',
+  'cancelado',
+  'cancelled',
+  'canceled',
+  'rechazada',
+  'realizada',
+  'completada',
+  'completed',
+  'pagada',
+  'paid',
+  'archivada',
+  'archived',
+]);
+
+export function normalizeDateText(value) {
+  const raw = cleanAvailabilityText(value, 30);
+  const match = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
+export function normalizeBusyStatus(slot = {}) {
+  const raw = cleanAvailabilityText(slot.status || slot.estado || slot.lifecycleStatus || slot.attendanceStatus || 'ocupada', 80).toLowerCase();
+  return raw || 'ocupada';
+}
+
+export function isBusySlotActive(slot = {}) {
+  const status = normalizeBusyStatus(slot);
+  const attendance = cleanAvailabilityText(slot.attendanceStatus || slot.estado_asistencia, 80).toLowerCase();
+  return !INACTIVE_BUSY_STATUSES.has(status) && !INACTIVE_BUSY_STATUSES.has(attendance);
+}
+
+export function normalizeBusySlot(slot = {}) {
+  const date = normalizeDateText(slot.date || slot.fecha);
+  const startTime = normalizeTimeString(slot.startTime || slot.hora_inicio);
+  const endTime = normalizeTimeString(slot.endTime || slot.hora_fin);
+  const resourceType = cleanAvailabilityText(slot.resourceType || slot.scope, 40).toLowerCase();
+  const resourceId = cleanAvailabilityText(slot.resourceId, 180);
+  const teacherUid = cleanAvailabilityText(slot.teacherUid || slot.profesor_id, 180);
+  const studentId = cleanAvailabilityText(slot.studentId || slot.alumno_id, 180);
+  const resourceKey = cleanAvailabilityText(
+    slot.resourceKey || (resourceType && resourceId ? `${resourceType}:${resourceId}` : ''),
+    240,
+  );
+
+  return {
+    ...slot,
+    id: cleanAvailabilityText(slot.id, 180),
+    classId: cleanAvailabilityText(slot.classId || slot.clase_id, 180),
+    assignmentId: cleanAvailabilityText(slot.assignmentId || slot.asignacion_id, 180),
+    resourceType,
+    resourceId,
+    resourceKey,
+    teacherUid,
+    profesor_id: teacherUid || slot.profesor_id,
+    studentId,
+    alumno_id: studentId || slot.alumno_id,
+    date,
+    fecha: date,
+    startTime,
+    hora_inicio: startTime,
+    endTime,
+    hora_fin: endTime,
+    status: normalizeBusyStatus(slot),
+    active: isBusySlotActive(slot),
+    valid: Boolean(date)
+      && /^\d{4}-\d{2}-\d{2}$/.test(date)
+      && startTime
+      && endTime
+      && minutesFromTime(startTime) < minutesFromTime(endTime),
+  };
+}
+
+export function normalizeBusySlots(slots = []) {
+  return (Array.isArray(slots) ? slots : [])
+    .map(normalizeBusySlot)
+    .filter((slot) => slot.valid && slot.active)
+    .sort((a, b) => a.date.localeCompare(b.date) || minutesFromTime(a.startTime) - minutesFromTime(b.startTime));
+}
+
+export function rangesOverlap(startA = '', endA = '', startB = '', endB = '') {
+  const aStart = minutesFromTime(startA);
+  const aEnd = minutesFromTime(endA);
+  const bStart = minutesFromTime(startB);
+  const bEnd = minutesFromTime(endB);
+  if (aStart === null || aEnd === null || bStart === null || bEnd === null) return false;
+  return aStart < bEnd && bStart < aEnd;
+}
+
+export function busySlotMatchesResource(slot = {}, resources = {}) {
+  const normalized = normalizeBusySlot(slot);
+  if (!normalized.valid) return false;
+  const teacherUid = cleanAvailabilityText(resources.teacherUid || resources.profesor_id, 180);
+  const studentId = cleanAvailabilityText(resources.studentId || resources.alumno_id, 180);
+  if (!teacherUid && !studentId) return true;
+  return (teacherUid && (
+    normalized.resourceKey === `teacher:${teacherUid}`
+    || (normalized.resourceType === 'teacher' && normalized.resourceId === teacherUid)
+    || normalized.teacherUid === teacherUid
+  )) || (studentId && (
+    normalized.resourceKey === `student:${studentId}`
+    || (normalized.resourceType === 'student' && normalized.resourceId === studentId)
+    || normalized.studentId === studentId
+  ));
+}
+
+export function findBusySlotConflict(slots = [], fecha = '', start = '', end = '', resources = {}) {
+  const date = normalizeDateText(fecha);
+  if (!date) return null;
+  return normalizeBusySlots(slots)
+    .find((slot) => slot.date === date
+      && busySlotMatchesResource(slot, resources)
+      && rangesOverlap(slot.startTime, slot.endTime, start, end)) || null;
+}
+
+export function busySlotLabel(slot = {}) {
+  const normalized = normalizeBusySlot(slot);
+  if (!normalized.valid) return '';
+  const [year, month, day] = normalized.date.split('-');
+  const dateLabel = year && month && day ? `${day}/${month}/${year}` : normalized.date;
+  const type = normalized.resourceType === 'teacher' ? 'profesor' : normalized.resourceType === 'student' ? 'alumno' : 'agenda';
+  return `${dateLabel} ${normalized.startTime}-${normalized.endTime} (${type})`;
+}
+
+export function summarizeBusySlots(slots = [], max = 4) {
+  const normalized = normalizeBusySlots(slots);
+  if (!normalized.length) return '';
+  const labels = normalized.slice(0, max).map(busySlotLabel).filter(Boolean);
+  const remaining = normalized.length - labels.length;
+  return `${labels.join(', ')}${remaining > 0 ? ` y ${remaining} mas` : ''}`;
+}
+
 export function slotCoversRange(slot = {}, fecha = '', start = '', end = '') {
   const normalized = normalizeAvailabilitySlot(slot);
   if (!normalized.valid) return false;
@@ -144,6 +276,9 @@ export function validateScheduleAvailability({
   horaFin = '',
   teacherSlots = [],
   studentSlots = [],
+  busySlots = [],
+  teacherUid = '',
+  studentId = '',
 } = {}) {
   const normalizedTeacherSlots = normalizeAvailabilitySlots(teacherSlots);
   const normalizedStudentSlots = normalizeAvailabilitySlots(studentSlots);
@@ -157,6 +292,19 @@ export function validateScheduleAvailability({
 
   const teacherSlot = findCoveringAvailabilitySlot(normalizedTeacherSlots, fecha, horaInicio, horaFin);
   const studentSlot = findCoveringAvailabilitySlot(normalizedStudentSlots, fecha, horaInicio, horaFin);
+  const busyConflict = findBusySlotConflict(busySlots, fecha, horaInicio, horaFin, { teacherUid, studentId });
+
+  if (busyConflict) {
+    return {
+      valid: false,
+      reason: 'time_conflict',
+      requiredScope: busyConflict.resourceType || 'busy',
+      teacherSlot,
+      studentSlot,
+      busySlot: busyConflict,
+      message: 'Ese horario ya esta ocupado por una clase confirmada. Elige otra franja disponible.',
+    };
+  }
 
   if (role === 'admin') {
     return {

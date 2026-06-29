@@ -885,6 +885,112 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['updated_at']) || request.resource.data.updated_at is string);
     }
 
+    function busySlotClassPath(data) {
+      return /databases/$(database)/documents/clases/$(data.classId);
+    }
+
+    function validBusySlotFields(data) {
+      return data.keys().hasOnly([
+          'resourceType',
+          'resourceId',
+          'resourceKey',
+          'classId',
+          'assignmentId',
+          'source',
+          'fecha',
+          'date',
+          'hora_inicio',
+          'startTime',
+          'hora_fin',
+          'endTime',
+          'durationMinutes',
+          'duracion_minutos',
+          'status',
+          'estado',
+          'lifecycleStatus',
+          'createdByUid',
+          'createdByRole',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.resourceType in ['teacher', 'student']
+        && data.resourceId is string
+        && data.resourceId.size() > 0
+        && data.resourceId.size() <= 180
+        && data.resourceKey == data.resourceType + ':' + data.resourceId
+        && data.classId is string
+        && data.classId.size() > 0
+        && data.classId.size() <= 180
+        && data.assignmentId is string
+        && data.assignmentId.size() > 0
+        && data.assignmentId.size() <= 180
+        && data.source in ['class', 'class_automation', 'chat_schedule_proposal']
+        && data.fecha is string
+        && data.fecha.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.date == data.fecha
+        && data.hora_inicio is string
+        && data.hora_inicio.matches('^\\d{2}:\\d{2}$')
+        && data.startTime == data.hora_inicio
+        && data.hora_fin is string
+        && data.hora_fin.matches('^\\d{2}:\\d{2}$')
+        && data.endTime == data.hora_fin
+        && data.durationMinutes is number
+        && data.durationMinutes > 0
+        && data.durationMinutes <= 480
+        && data.duracion_minutos == data.durationMinutes
+        && data.status in ['pendiente', 'confirmada', 'programada', 'reprogramada', 'scheduled', 'confirmed', 'pendiente_confirmacion', 'clase_programada']
+        && data.estado == data.status
+        && data.lifecycleStatus in ['clase_programada', 'recordatorio_enviado', 'clase_en_curso', 'reprogramada']
+        && (!data.keys().hasAny(['createdByUid']) || data.createdByUid == request.auth.uid)
+        && (!data.keys().hasAny(['createdByRole']) || data.createdByRole in ['familia', 'profesor', 'admin'])
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function busySlotMatchesClass(data, classData) {
+      return data.assignmentId == classData.assignmentId
+        && data.fecha == classData.fecha
+        && data.date == classData.date
+        && data.hora_inicio == classData.hora_inicio
+        && data.startTime == classData.startTime
+        && data.hora_fin == classData.hora_fin
+        && data.endTime == classData.endTime
+        && data.durationMinutes == classData.durationMinutes
+        && data.duracion_minutos == classData.duracion_minutos
+        && (
+          (
+            data.resourceType == 'teacher'
+            && (data.resourceId == classData.teacherUid || data.resourceId == classData.profesor_id)
+          )
+          || (
+            data.resourceType == 'student'
+            && (data.resourceId == classData.studentId || data.resourceId == classData.alumno_id)
+          )
+        );
+    }
+
+    function canReadBusySlot(data) {
+      return isAdmin()
+        || (
+          signedIn()
+          && data.resourceType == 'teacher'
+        )
+        || (
+          signedIn()
+          && data.keys().hasAny(['classId'])
+          && exists(busySlotClassPath(data))
+          && isParticipant(get(busySlotClassPath(data)).data)
+        );
+    }
+
+    function validBusySlotCreate(data) {
+      return signedIn()
+        && validBusySlotFields(data)
+        && exists(busySlotClassPath(data))
+        && isParticipant(get(busySlotClassPath(data)).data)
+        && busySlotMatchesClass(data, get(busySlotClassPath(data)).data);
+    }
+
     function validTeacherPayoutCreate() {
       return hasRole('profesor')
         && request.resource.data.teacherUid == request.auth.uid
@@ -1620,6 +1726,12 @@ service cloud.firestore {
         || validAvailabilityUpdate();
       allow delete: if isAdmin()
         || isAvailabilityOwner(resource.data);
+    }
+
+    match /busySlots/{busySlotId} {
+      allow create: if isAdmin() || validBusySlotCreate(request.resource.data);
+      allow read: if canReadBusySlot(resource.data);
+      allow update, delete: if isAdmin();
     }
 
     match /asignaciones/{assignmentId} {

@@ -422,6 +422,143 @@ function changedAny(before = {}, after = {}, fields = []) {
   return fields.some((field) => JSON.stringify(before[field] ?? null) !== JSON.stringify(after[field] ?? null));
 }
 
+const ACTIVE_BUSY_CLASS_STATUSES = new Set([
+  'pendiente',
+  'confirmada',
+  'programada',
+  'reprogramada',
+  'scheduled',
+  'confirmed',
+  'pendiente_confirmacion',
+  'clase_programada',
+  'recordatorio_enviado',
+  'clase_en_curso',
+]);
+
+const INACTIVE_BUSY_CLASS_STATUSES = new Set([
+  'cancelada',
+  'cancelado',
+  'cancelled',
+  'canceled',
+  'rechazada',
+  'realizada',
+  'completada',
+  'completed',
+  'pagada',
+  'paid',
+  'archivada',
+  'archived',
+]);
+
+function busyResourceKey(resourceType, resourceId) {
+  const type = clean(resourceType, 40);
+  const id = clean(resourceId, 180);
+  return type && id ? `${type}:${id}` : '';
+}
+
+function busySlotDocId(resourceType, resourceId, classId) {
+  return [resourceType, resourceId, classId]
+    .map((part) => clean(part, 180).replace(/[^a-zA-Z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('_')
+    .slice(0, 900);
+}
+
+function classOccupiesSchedule(data = {}) {
+  const status = lower(data.status || data.estado || data.lifecycleStatus || 'confirmada');
+  const lifecycle = lower(data.lifecycleStatus);
+  const attendance = lower(data.attendanceStatus || data.estado_asistencia);
+  if (INACTIVE_BUSY_CLASS_STATUSES.has(status)
+    || INACTIVE_BUSY_CLASS_STATUSES.has(lifecycle)
+    || INACTIVE_BUSY_CLASS_STATUSES.has(attendance)) {
+    return false;
+  }
+  return ACTIVE_BUSY_CLASS_STATUSES.has(status)
+    || ACTIVE_BUSY_CLASS_STATUSES.has(lifecycle)
+    || !status;
+}
+
+function buildBusySlotPayloadsForClass(classId, data = {}) {
+  const teacherUid = clean(data.teacherUid || data.profesor_id, 180);
+  const studentId = clean(data.studentId || data.alumno_id, 180);
+  const fecha = clean(data.fecha || data.date, 20).slice(0, 10);
+  const horaInicio = clean(data.hora_inicio || data.startTime, 8).slice(0, 5);
+  const horaFin = clean(data.hora_fin || data.endTime, 8).slice(0, 5);
+  if (!classId || !fecha || !horaInicio || !horaFin) return [];
+
+  const timestamp = now();
+  const common = {
+    source: 'class_automation',
+    classId: clean(classId, 180),
+    assignmentId: clean(data.assignmentId || data.asignacion_id, 180),
+    fecha,
+    date: fecha,
+    hora_inicio: horaInicio,
+    startTime: horaInicio,
+    hora_fin: horaFin,
+    endTime: horaFin,
+    durationMinutes: Number(data.durationMinutes || data.duracion_minutos || 60),
+    duracion_minutos: Number(data.duracion_minutos || data.durationMinutes || 60),
+    status: clean(data.status || data.estado || 'confirmada', 80),
+    estado: clean(data.estado || data.status || 'confirmada', 80),
+    lifecycleStatus: clean(data.lifecycleStatus || 'clase_programada', 80),
+    createdByUid: clean(data.createdByUid || 'system', 180),
+    createdByRole: 'system',
+    updatedAt: timestamp,
+  };
+
+  return [
+    teacherUid ? {
+      id: busySlotDocId('teacher', teacherUid, classId),
+      payload: {
+        ...common,
+        resourceType: 'teacher',
+        resourceId: teacherUid,
+        resourceKey: busyResourceKey('teacher', teacherUid),
+      },
+    } : null,
+    studentId ? {
+      id: busySlotDocId('student', studentId, classId),
+      payload: {
+        ...common,
+        resourceType: 'student',
+        resourceId: studentId,
+        resourceKey: busyResourceKey('student', studentId),
+      },
+    } : null,
+  ].filter(Boolean);
+}
+
+async function syncBusySlotsForClass(classId, after = {}, before = {}) {
+  const previousSlots = buildBusySlotPayloadsForClass(classId, before);
+  const nextSlots = classOccupiesSchedule(after) ? buildBusySlotPayloadsForClass(classId, after) : [];
+  const previousIds = new Set(previousSlots.map((slot) => slot.id));
+  const nextIds = new Set(nextSlots.map((slot) => slot.id));
+  const batch = db.batch();
+  let operations = 0;
+
+  previousIds.forEach((id) => {
+    if (!nextIds.has(id)) {
+      batch.delete(db.collection('busySlots').doc(id));
+      operations += 1;
+    }
+  });
+  nextSlots.forEach((slot) => {
+    batch.set(db.collection('busySlots').doc(slot.id), {
+      ...slot.payload,
+      createdAt: now(),
+    }, { merge: true });
+    operations += 1;
+  });
+
+  if (!operations) return { written: 0, deleted: 0 };
+  await batch.commit();
+  return {
+    written: nextSlots.length,
+    deleted: [...previousIds].filter((id) => !nextIds.has(id)).length,
+  };
+}
+
 const SYSTEM_JOB_BATCH_LIMIT = 50;
 const SYSTEM_JOB_LEASE_MS = 10 * 60 * 1000;
 const SYSTEM_JOB_MAX_BACKOFF_MS = 60 * 60 * 1000;
@@ -2614,6 +2751,7 @@ exports.automateClassCreated = onDocumentCreated({
 }, async (event) => {
   const classId = event.params.classId;
   const data = event.data.data();
+  await syncBusySlotsForClass(classId, data);
   const enriched = await enrichClassAutomationData(data);
   await materializeAutomationPlan({
     type: 'class.scheduled',
@@ -2634,6 +2772,26 @@ exports.automateClassUpdated = onDocumentUpdated({
   const beforeStatus = statusOf(before);
   const afterStatus = statusOf(after);
   const scheduleChanged = changedAny(before, after, ['fecha', 'date', 'hora_inicio', 'startTime', 'hora_fin', 'endTime']);
+  const busySlotChanged = changedAny(before, after, [
+    'fecha',
+    'date',
+    'hora_inicio',
+    'startTime',
+    'hora_fin',
+    'endTime',
+    'teacherUid',
+    'profesor_id',
+    'studentId',
+    'alumno_id',
+    'status',
+    'estado',
+    'lifecycleStatus',
+    'attendanceStatus',
+  ]);
+
+  if (busySlotChanged) {
+    await syncBusySlotsForClass(classId, after, before);
+  }
 
   if (scheduleChanged && !['realizada', 'completada', 'cancelada'].includes(afterStatus)) {
     const enriched = await enrichClassAutomationData(after);

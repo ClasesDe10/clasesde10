@@ -24,9 +24,12 @@ import {
 import { buildClassPricingQuote } from './finance-erp-engine.js?v=20260629-pricing';
 import {
   availabilitySlotLabel,
+  busySlotLabel,
+  findBusySlotConflict,
   summarizeAvailabilitySlots,
+  summarizeBusySlots,
   validateScheduleAvailability,
-} from './availability-engine.js?v=20260629-availability';
+} from './availability-engine.js?v=20260629-busy-slots';
 import {
   createAdminNotification,
   loadNotificationSettings,
@@ -99,6 +102,20 @@ function fullName(...parts) {
 
 function classIdFromProposal(chatId, proposalId) {
   return `chat_${chatId}_${proposalId}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 900);
+}
+
+function busyResourceKey(resourceType, resourceId) {
+  const type = clean(resourceType, 40);
+  const id = clean(resourceId, 180);
+  return type && id ? `${type}:${id}` : '';
+}
+
+function busySlotDocId(resourceType, resourceId, classId) {
+  return [resourceType, resourceId, classId]
+    .map((part) => clean(part, 180).replace(/[^a-zA-Z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('_')
+    .slice(0, 900);
 }
 
 function pickClassPriceFields(fields = {}) {
@@ -189,6 +206,37 @@ function mergeDocsById(rows = []) {
   const map = new Map();
   rows.filter(Boolean).forEach((row) => map.set(String(row.id || row.assignmentId || row.asignacion_id), row));
   return Array.from(map.values());
+}
+
+async function loadFirestoreChatsBy(field, value) {
+  const cleanValue = clean(value, 180);
+  if (!cleanValue) return [];
+  const snap = await getDocs(query(
+    collection(firebaseDb, 'chats'),
+    where(field, '==', cleanValue),
+    limit(80),
+  ));
+  return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+async function loadFirestoreChatsForActor(role, actorIds = []) {
+  const ids = [...new Set(Array.from(actorIds || []).map((id) => clean(id, 180)).filter(Boolean))];
+  if (!ids.length) return [];
+  const queries = ids.flatMap((id) => {
+    const entries = [
+      loadFirestoreChatsBy(`participantUids.${id}`, true).catch(() => []),
+    ];
+    if (role === 'familia') {
+      entries.push(loadFirestoreChatsBy('familyUid', id).catch(() => []));
+      entries.push(loadFirestoreChatsBy('familia_id', id).catch(() => []));
+    }
+    if (role === 'profesor') {
+      entries.push(loadFirestoreChatsBy('teacherUid', id).catch(() => []));
+      entries.push(loadFirestoreChatsBy('profesor_id', id).catch(() => []));
+    }
+    return entries;
+  });
+  return mergeDocsById((await Promise.all(queries)).flat());
 }
 
 function defaultChatTitle(chat, role) {
@@ -330,9 +378,12 @@ async function loadChats(dbCompat, role, profileId, usuario, actorIds = []) {
     return chats;
   }
 
+  const actorSet = new Set([usuario?.uid, usuario?.firebase_uid, profileId, ...Array.from(actorIds || [])].map((id) => clean(id, 180)).filter(Boolean));
+  const firestoreChats = await loadFirestoreChatsForActor(role, actorSet).catch(() => []);
   const assignments = await loadAssignments(dbCompat, role, profileId, actorIds);
-  const chats = (await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role))))
+  const assignmentChats = (await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role))))
     .filter(Boolean);
+  const chats = mergeDocsById([...firestoreChats, ...assignmentChats]);
   chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
   return chats;
 }
@@ -360,6 +411,125 @@ function uniqueAvailabilityRows(rows = []) {
   });
 }
 
+function uniqueBusyRows(rows = []) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = row.id || `${row.resourceKey || ''}:${row.classId || row.scheduleProposalId || ''}:${row.fecha || row.date}:${row.hora_inicio || row.startTime}:${row.hora_fin || row.endTime}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const ACTIVE_CLIENT_BUSY_STATUSES = new Set([
+  'pendiente',
+  'confirmada',
+  'programada',
+  'reprogramada',
+  'scheduled',
+  'confirmed',
+  'pendiente_confirmacion',
+  'clase_programada',
+  'recordatorio_enviado',
+  'clase_en_curso',
+]);
+
+const INACTIVE_CLIENT_BUSY_STATUSES = new Set([
+  'cancelada',
+  'cancelado',
+  'cancelled',
+  'canceled',
+  'rechazada',
+  'realizada',
+  'completada',
+  'completed',
+  'pagada',
+  'paid',
+  'archivada',
+  'archived',
+]);
+
+function classBlocksAvailability(row = {}) {
+  const status = clean(row.status || row.estado || row.lifecycleStatus || 'confirmada', 80).toLowerCase();
+  const lifecycle = clean(row.lifecycleStatus, 80).toLowerCase();
+  const attendance = clean(row.attendanceStatus || row.estado_asistencia, 80).toLowerCase();
+  if (INACTIVE_CLIENT_BUSY_STATUSES.has(status)
+    || INACTIVE_CLIENT_BUSY_STATUSES.has(lifecycle)
+    || INACTIVE_CLIENT_BUSY_STATUSES.has(attendance)) {
+    return false;
+  }
+  return ACTIVE_CLIENT_BUSY_STATUSES.has(status)
+    || ACTIVE_CLIENT_BUSY_STATUSES.has(lifecycle)
+    || !status;
+}
+
+function busySlotsFromClassRows(rows = []) {
+  return rows
+    .filter(classBlocksAvailability)
+    .flatMap((row) => buildBusySlotPayloadsForClass(row.id || row.classId, row, {
+      assignmentId: row.assignmentId || row.asignacion_id,
+    }).map((slot) => ({ id: slot.id, ...slot.payload })));
+}
+
+async function loadClassRowsBy(field, value) {
+  const cleanValue = clean(value, 180);
+  if (!cleanValue) return [];
+  const snap = await getDocs(query(
+    collection(firebaseDb, 'clases'),
+    where(field, '==', cleanValue),
+    limit(80),
+  ));
+  return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+async function loadVisibleClassBusySlots(chat = {}, currentUid = '') {
+  const teacherUid = clean(chat.teacherUid || chat.profesor_id, 180);
+  const familyUid = clean(chat.familyUid || chat.familia_id, 180);
+  const studentId = clean(chat.studentId || chat.alumno_id, 180);
+  const queries = [];
+  if (teacherUid && teacherUid === currentUid) queries.push(loadClassRowsBy('teacherUid', teacherUid).catch(() => []));
+  if (teacherUid && teacherUid === currentUid) queries.push(loadClassRowsBy('profesor_id', teacherUid).catch(() => []));
+  if (familyUid && familyUid === currentUid) queries.push(loadClassRowsBy('familyUid', familyUid).catch(() => []));
+  if (familyUid && familyUid === currentUid) queries.push(loadClassRowsBy('familia_id', familyUid).catch(() => []));
+  if (studentId) queries.push(loadClassRowsBy('studentId', studentId).catch(() => []));
+  if (studentId) queries.push(loadClassRowsBy('alumno_id', studentId).catch(() => []));
+  if (!queries.length) return [];
+  const rows = mergeDocsById((await Promise.all(queries)).flat());
+  return busySlotsFromClassRows(rows);
+}
+
+function repairBusySlotsFromVisibleClasses(slots = [], currentUid = '', role = '') {
+  const activeSlots = uniqueBusyRows(slots).filter((slot) => slot.source === 'class' || slot.source === 'class_automation');
+  if (!activeSlots.length || !currentUid) return;
+  activeSlots.forEach((slot) => {
+    const id = clean(slot.id, 180);
+    if (!id || !slot.classId) return;
+    setDoc(doc(firebaseDb, 'busySlots', id), {
+      resourceType: slot.resourceType,
+      resourceId: slot.resourceId,
+      resourceKey: slot.resourceKey,
+      classId: slot.classId,
+      assignmentId: slot.assignmentId,
+      source: 'class',
+      fecha: slot.fecha,
+      date: slot.date || slot.fecha,
+      hora_inicio: slot.hora_inicio,
+      startTime: slot.startTime || slot.hora_inicio,
+      hora_fin: slot.hora_fin,
+      endTime: slot.endTime || slot.hora_fin,
+      durationMinutes: Number(slot.durationMinutes || slot.duracion_minutos || 60),
+      duracion_minutos: Number(slot.duracion_minutos || slot.durationMinutes || 60),
+      status: slot.status || slot.estado || 'confirmada',
+      estado: slot.estado || slot.status || 'confirmada',
+      lifecycleStatus: slot.lifecycleStatus || 'clase_programada',
+      createdByUid: currentUid,
+      createdByRole: role || 'admin',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }).catch(() => {});
+  });
+}
+
 async function loadAvailabilityBy(field, value) {
   const cleanValue = clean(value, 180);
   if (!cleanValue) return [];
@@ -371,25 +541,104 @@ async function loadAvailabilityBy(field, value) {
   return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
 }
 
-async function loadChatAvailability(chat = {}) {
+async function loadBusySlotsByResource(resourceType, resourceId) {
+  const resourceKey = busyResourceKey(resourceType, resourceId);
+  if (!resourceKey) return [];
+  const snap = await getDocs(query(
+    collection(firebaseDb, 'busySlots'),
+    where('resourceKey', '==', resourceKey),
+    where('resourceType', '==', clean(resourceType, 40)),
+    limit(120),
+  ));
+  return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+async function loadChatAvailability(chat = {}, currentUid = '', role = '') {
   const teacherUid = clean(chat.teacherUid || chat.profesor_id, 180);
   const familyUid = clean(chat.familyUid || chat.familia_id, 180);
   const studentId = clean(chat.studentId || chat.alumno_id, 180);
-  const [teacherCanonical, teacherLegacy, studentCanonical, studentLegacy, familyStudentCanonical, familyStudentLegacy] = await Promise.all([
+  const [
+    teacherCanonical,
+    teacherLegacy,
+    studentCanonical,
+    studentLegacy,
+    familyStudentCanonical,
+    familyStudentLegacy,
+    teacherBusy,
+    studentBusy,
+    visibleClassBusy,
+  ] = await Promise.all([
     loadAvailabilityBy('teacherUid', teacherUid).catch(() => []),
     loadAvailabilityBy('profesor_id', teacherUid).catch(() => []),
     loadAvailabilityBy('studentId', studentId).catch(() => []),
     loadAvailabilityBy('alumno_id', studentId).catch(() => []),
     loadAvailabilityBy('familyUid', familyUid).catch(() => []),
     loadAvailabilityBy('familia_id', familyUid).catch(() => []),
+    loadBusySlotsByResource('teacher', teacherUid).catch(() => []),
+    loadBusySlotsByResource('student', studentId).catch(() => []),
+    loadVisibleClassBusySlots(chat, currentUid).catch(() => []),
   ]);
   const studentRows = [...studentCanonical, ...studentLegacy, ...familyStudentCanonical, ...familyStudentLegacy]
     .filter((slot) => clean(slot.studentId || slot.alumno_id, 180) === studentId);
+  const busySlots = uniqueBusyRows([...teacherBusy, ...studentBusy, ...visibleClassBusy]);
+  repairBusySlotsFromVisibleClasses(visibleClassBusy, currentUid, role);
   return {
     loading: false,
     teacherSlots: uniqueAvailabilityRows([...teacherCanonical, ...teacherLegacy]),
     studentSlots: uniqueAvailabilityRows(studentRows),
+    busySlots,
   };
+}
+
+function busySlotsFromAcceptedProposals(proposals = [], chat = {}, ignoredProposalId = '') {
+  const teacherUid = clean(chat.teacherUid || chat.profesor_id, 180);
+  const studentId = clean(chat.studentId || chat.alumno_id, 180);
+  const assignmentId = clean(chat.id || chat.assignmentId || chat.asignacion_id, 180);
+  return (Array.isArray(proposals) ? proposals : [])
+    .filter((proposal) => proposal && proposal.id !== ignoredProposalId && proposal.status === 'aceptada')
+    .flatMap((proposal) => {
+      const base = {
+        source: 'chat_schedule_proposal',
+        classId: clean(proposal.classId, 180),
+        scheduleProposalId: proposal.id,
+        assignmentId,
+        fecha: proposal.fecha,
+        date: proposal.fecha,
+        hora_inicio: proposal.hora_inicio,
+        startTime: proposal.hora_inicio,
+        hora_fin: proposal.hora_fin,
+        endTime: proposal.hora_fin,
+        status: 'confirmada',
+        estado: 'confirmada',
+      };
+      return [
+        teacherUid ? {
+          ...base,
+          id: `accepted_teacher_${proposal.id}`,
+          resourceType: 'teacher',
+          resourceId: teacherUid,
+          resourceKey: busyResourceKey('teacher', teacherUid),
+          teacherUid,
+          profesor_id: teacherUid,
+        } : null,
+        studentId ? {
+          ...base,
+          id: `accepted_student_${proposal.id}`,
+          resourceType: 'student',
+          resourceId: studentId,
+          resourceKey: busyResourceKey('student', studentId),
+          studentId,
+          alumno_id: studentId,
+        } : null,
+      ].filter(Boolean);
+    });
+}
+
+function busySlotsForChatValidation(availability = {}, proposals = [], chat = {}, ignoredProposalId = '') {
+  return uniqueBusyRows([
+    ...(availability.busySlots || []),
+    ...busySlotsFromAcceptedProposals(proposals, chat, ignoredProposalId),
+  ]);
 }
 
 async function loadTeacherProfileForPricing(teacherUid = '') {
@@ -415,6 +664,58 @@ async function buildScheduleClassPricing(chat = {}, input = {}) {
   return pickClassPriceFields(buildClassPricingQuote(input, teacherProfile, {
     config: globalThis.CD10PlatformConfig || {},
   }));
+}
+
+function buildBusySlotPayloadsForClass(classId, classFields = {}, context = {}) {
+  const teacherUid = clean(classFields.teacherUid || classFields.profesor_id, 180);
+  const studentId = clean(classFields.studentId || classFields.alumno_id, 180);
+  const common = {
+    source: 'class',
+    classId,
+    assignmentId: clean(classFields.assignmentId || classFields.asignacion_id || context.assignmentId, 180),
+    fecha: clean(classFields.fecha || classFields.date, 20).slice(0, 10),
+    date: clean(classFields.date || classFields.fecha, 20).slice(0, 10),
+    hora_inicio: clean(classFields.hora_inicio || classFields.startTime, 8),
+    startTime: clean(classFields.startTime || classFields.hora_inicio, 8),
+    hora_fin: clean(classFields.hora_fin || classFields.endTime, 8),
+    endTime: clean(classFields.endTime || classFields.hora_fin, 8),
+    durationMinutes: Number(classFields.durationMinutes || classFields.duracion_minutos || 60),
+    duracion_minutos: Number(classFields.duracion_minutos || classFields.durationMinutes || 60),
+    status: clean(classFields.status || classFields.estado || 'confirmada', 80),
+    estado: clean(classFields.estado || classFields.status || 'confirmada', 80),
+    lifecycleStatus: clean(classFields.lifecycleStatus || 'clase_programada', 80),
+    createdByUid: clean(context.createdByUid, 180),
+    createdByRole: clean(context.createdByRole, 40),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  return [
+    teacherUid ? {
+      id: busySlotDocId('teacher', teacherUid, classId),
+      payload: {
+        ...common,
+        resourceType: 'teacher',
+        resourceId: teacherUid,
+        resourceKey: busyResourceKey('teacher', teacherUid),
+      },
+    } : null,
+    studentId ? {
+      id: busySlotDocId('student', studentId, classId),
+      payload: {
+        ...common,
+        resourceType: 'student',
+        resourceId: studentId,
+        resourceKey: busyResourceKey('student', studentId),
+      },
+    } : null,
+  ].filter(Boolean);
+}
+
+async function persistBusySlotsForClass(classId, classFields = {}, context = {}) {
+  const slots = buildBusySlotPayloadsForClass(classId, classFields, context);
+  if (!slots.length) return [];
+  await Promise.all(slots.map((slot) => setDoc(doc(firebaseDb, 'busySlots', slot.id), slot.payload)));
+  return slots.map((slot) => ({ id: slot.id, ...slot.payload }));
 }
 
 function availabilityForRole(role, availability = {}) {
@@ -450,12 +751,13 @@ function renderAvailabilitySummary(availability = {}, role = '') {
 
   const teacherSummary = summarizeAvailabilitySlots(availability.teacherSlots || []);
   const studentSummary = summarizeAvailabilitySlots(availability.studentSlots || []);
+  const busySummary = summarizeBusySlots(availability.busySlots || [], 3);
   const roleContext = availabilityForRole(role, availability);
   const targetMissing = role !== 'admin' && !roleContext.targetSlots.length;
   const statusClass = targetMissing ? 'warning' : 'success';
   const statusText = targetMissing
     ? `Falta disponibilidad del ${roleContext.targetLabel}; no se puede proponer horario todavia.`
-    : `Las propuestas deben estar dentro de las franjas del ${roleContext.targetLabel}.`;
+    : `Las propuestas deben estar dentro de las franjas del ${roleContext.targetLabel} y fuera de horas ya ocupadas.`;
 
   return `
     <div class="schedule-availability-summary ${statusClass}">
@@ -463,6 +765,7 @@ function renderAvailabilitySummary(availability = {}, role = '') {
       <div class="schedule-availability-grid">
         <div><span>Profesor</span><strong>${escapeHtml(teacherSummary || 'Sin franjas marcadas')}</strong></div>
         <div><span>Alumno</span><strong>${escapeHtml(studentSummary || 'Sin franjas marcadas')}</strong></div>
+        <div class="schedule-availability-busy"><span>Ocupado</span><strong>${escapeHtml(busySummary || 'Sin clases confirmadas en conflicto')}</strong></div>
       </div>
     </div>`;
 }
@@ -865,7 +1168,7 @@ export async function initChatWidget({
     state.availabilityByChat[chat.id] = { loading: true, teacherSlots: [], studentSlots: [] };
     renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id]);
 
-    loadChatAvailability(chat).then((availability) => {
+    loadChatAvailability(chat, currentUid, role).then((availability) => {
       if (state.selectedChat?.id !== chat.id) return;
       state.availabilityByChat[chat.id] = availability;
       renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentActorIds, availability);
@@ -1071,6 +1374,7 @@ export async function initChatWidget({
       showToast('Disponibilidad cargando', 'Espera unos segundos a que se carguen las franjas antes de proponer.', 'warning');
       return;
     }
+    const busySlots = busySlotsForChatValidation(availability, state.scheduleProposals || [], state.selectedChat);
     const availabilityValidation = validateScheduleAvailability({
       role,
       fecha,
@@ -1078,9 +1382,16 @@ export async function initChatWidget({
       horaFin,
       teacherSlots: availability.teacherSlots || [],
       studentSlots: availability.studentSlots || [],
+      busySlots,
+      teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+      studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
     });
     if (!availabilityValidation.valid) {
-      showToast('Fuera de disponibilidad', availabilityValidation.message || 'El horario no encaja con las franjas marcadas.', 'warning');
+      showToast(
+        availabilityValidation.reason === 'time_conflict' ? 'Horario ocupado' : 'Fuera de disponibilidad',
+        availabilityValidation.message || 'El horario no encaja con las franjas marcadas.',
+        'warning',
+      );
       return;
     }
     const button = scheduleForm.querySelector('button[type="submit"]');
@@ -1108,6 +1419,8 @@ export async function initChatWidget({
           teacherSlotLabel: availabilityValidation.teacherSlot ? availabilitySlotLabel(availabilityValidation.teacherSlot) : '',
           studentSlotId: availabilityValidation.studentSlot?.id || '',
           studentSlotLabel: availabilityValidation.studentSlot ? availabilitySlotLabel(availabilityValidation.studentSlot) : '',
+          busySlotId: availabilityValidation.busySlot?.id || '',
+          busySlotLabel: availabilityValidation.busySlot ? busySlotLabel(availabilityValidation.busySlot) : '',
         },
         proposedByUid: currentUid,
         proposedByRole: role,
@@ -1159,6 +1472,38 @@ export async function initChatWidget({
     const classId = classIdFromProposal(state.selectedChat.id, proposal.id);
     const proposalRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposal.id);
     const nowIso = new Date().toISOString();
+    const latestAvailability = await loadChatAvailability(state.selectedChat, currentUid, role)
+      .catch(() => state.availabilityByChat[state.selectedChat.id] || { teacherSlots: [], studentSlots: [], busySlots: [] });
+    const busySlots = busySlotsForChatValidation(latestAvailability, state.scheduleProposals || [], state.selectedChat, proposal.id);
+    const conflict = findBusySlotConflict(
+      busySlots,
+      proposal.fecha,
+      proposal.hora_inicio,
+      proposal.hora_fin,
+      {
+        teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+        studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
+      },
+    );
+    const availabilityValidation = validateScheduleAvailability({
+      role,
+      fecha: proposal.fecha,
+      horaInicio: proposal.hora_inicio,
+      horaFin: proposal.hora_fin,
+      teacherSlots: latestAvailability.teacherSlots || [],
+      studentSlots: latestAvailability.studentSlots || [],
+      busySlots,
+      teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+      studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
+    });
+    if (!availabilityValidation.valid) {
+      const details = conflict ? ` Ocupado: ${busySlotLabel(conflict)}.` : '';
+      throw new Error(`${availabilityValidation.message || 'Ese horario ya no esta disponible.'}${details}`);
+    }
+    state.availabilityByChat[state.selectedChat.id] = {
+      ...latestAvailability,
+      busySlots,
+    };
     const input = {
       assignmentId: state.selectedChat.id,
       scheduleProposalId: proposal.id,
@@ -1243,6 +1588,14 @@ export async function initChatWidget({
     };
     const classRef = doc(firebaseDb, 'clases', classId);
     await setDoc(classRef, payload);
+    const createdBusySlots = await persistBusySlotsForClass(classId, payload, {
+      assignmentId: state.selectedChat.id,
+      createdByUid: currentUid,
+      createdByRole: role,
+    }).catch((error) => {
+      console.warn('No se pudieron materializar las franjas ocupadas desde el cliente', error);
+      return [];
+    });
     await updateDoc(proposalRef, {
       status: 'aceptada',
       classId,
@@ -1260,6 +1613,15 @@ export async function initChatWidget({
       relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    state.availabilityByChat[state.selectedChat.id] = {
+      ...(state.availabilityByChat[state.selectedChat.id] || {}),
+      loading: false,
+      busySlots: uniqueBusyRows([
+        ...(state.availabilityByChat[state.selectedChat.id]?.busySlots || []),
+        ...createdBusySlots,
+        ...busySlotsFromAcceptedProposals([{ ...proposal, id: proposal.id, status: 'aceptada', classId }], state.selectedChat),
+      ]),
+    };
     await addSystemChatMessage(state.selectedChat, `Horario aceptado y clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);
     showToast('Clase creada', 'La clase ya aparece en el calendario de familia y profesor.', 'success');
   }
