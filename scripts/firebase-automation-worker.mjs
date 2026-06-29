@@ -1313,6 +1313,22 @@ async function dispatchSystemJob(db, job, stats) {
     return { notified: userUid, created };
   }
 
+  if (type === 'relationship.ensure_chat') {
+    const assignmentId = clean(payload.assignmentId || payload.asignacion_id, 180);
+    if (!assignmentId) throw new Error('relationship.ensure_chat requires assignmentId.');
+    const result = await ensureChatForAssignmentWorker(db, assignmentId, payload.reason || 'system_job');
+    if (result.created || result.introSent) stats.assignmentChatsEnsured += 1;
+    return result;
+  }
+
+  if (type === 'payment.request_for_class') {
+    const classId = clean(payload.classId || payload.clase_id, 180);
+    if (!classId) throw new Error('payment.request_for_class requires classId.');
+    const result = await createPaymentRequestForClassWorker(db, classId, payload.reason || 'system_job');
+    if (result.created) stats.paymentRequestsCreated += 1;
+    return result;
+  }
+
   if (type === 'metrics.snapshot') {
     const snapshot = await writeScaleMetricSnapshot(db, payload.source || 'system_job');
     stats.metricSnapshotsCreated += 1;
@@ -1510,6 +1526,16 @@ function classStatus(data) {
   return normalizeClassStatus(data.estado || data.status || '');
 }
 
+function classFamilyAmount(data = {}) {
+  const amount = Number(data.precio_total ?? data.familyAmount ?? data.amount ?? data.total ?? 0);
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+}
+
+function classHasPaidStatus(data = {}) {
+  const status = normalizePaymentStatus(data.paymentStatus || data.familyPaymentStatus || data.estado_pago || data.estado_pago_familia);
+  return PAID_PAYMENT_STATUSES.includes(status);
+}
+
 function classEndAt(data) {
   const date = clean(data.fecha || data.date, 20);
   if (!date) return null;
@@ -1557,6 +1583,149 @@ async function resolveProfileUserUid(db, collectionName, profileId, fallback = '
   if (!snap?.exists) return clean(fallback || id, 180);
   const data = snap.data();
   return clean(data.userUid || data.firebase_uid || data.usuario_id || fallback || id, 180);
+}
+
+function fullName(...parts) {
+  return parts.map((part) => clean(part, 120)).filter(Boolean).join(' ').trim();
+}
+
+function participantMap(values = []) {
+  return values
+    .map((value) => clean(value, 180))
+    .filter(Boolean)
+    .reduce((acc, uid) => ({ ...acc, [uid]: true }), {});
+}
+
+async function profileRecord(db, collectionName, profileId) {
+  const id = clean(profileId, 180);
+  if (!id) return { id: '', exists: false, data: {} };
+  const snap = await db.collection(collectionName).doc(id).get().catch(() => null);
+  return {
+    id,
+    exists: Boolean(snap?.exists),
+    data: snap?.exists ? snap.data() : {},
+  };
+}
+
+async function userRecord(db, uid) {
+  const id = clean(uid, 180);
+  if (!id) return { id: '', exists: false, data: {} };
+  const snap = await db.collection('users').doc(id).get().catch(() => null);
+  return {
+    id,
+    exists: Boolean(snap?.exists),
+    data: snap?.exists ? snap.data() : {},
+  };
+}
+
+async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automation') {
+  const id = clean(assignmentId, 180);
+  if (!id) return { created: false, reason: 'missing_assignment_id' };
+  const assignmentSnap = await db.collection('asignaciones').doc(id).get();
+  if (!assignmentSnap.exists) return { created: false, reason: 'assignment_not_found', assignmentId: id };
+
+  const assignment = { id, ...assignmentSnap.data() };
+  const teacherProfileId = clean(assignment.teacherUid || assignment.profesor_id, 180);
+  const familyProfileId = clean(assignment.familyUid || assignment.familia_id, 180);
+  const studentId = clean(assignment.studentId || assignment.alumno_id, 180);
+
+  const [teacherProfile, familyProfile, studentProfile] = await Promise.all([
+    profileRecord(db, 'profesores', teacherProfileId),
+    profileRecord(db, 'familias', familyProfileId),
+    profileRecord(db, 'alumnos', studentId),
+  ]);
+  const teacherUserUid = clean(assignment.teacherUserUid || teacherProfile.data.userUid || teacherProfile.data.firebase_uid || teacherProfile.data.usuario_id || teacherProfileId, 180);
+  const familyUserUid = clean(assignment.familyUserUid || familyProfile.data.userUid || familyProfile.data.firebase_uid || familyProfile.data.usuario_id || familyProfileId, 180);
+  const [teacherUser, familyUser] = await Promise.all([
+    userRecord(db, teacherUserUid),
+    userRecord(db, familyUserUid),
+  ]);
+
+  const teacherName = fullName(
+    teacherProfile.data.nombre || teacherUser.data.nombre,
+    teacherProfile.data.apellidos || teacherUser.data.apellidos,
+  ) || teacherProfile.data.email || teacherUser.data.email || 'Profesor';
+  const familyName = fullName(
+    familyProfile.data.nombre || familyUser.data.nombre,
+    familyProfile.data.apellidos || familyUser.data.apellidos,
+  ) || familyProfile.data.email || familyUser.data.email || 'Familia';
+  const studentName = fullName(studentProfile.data.nombre, studentProfile.data.apellidos);
+  const subject = clean(assignment.materia || assignment.subject, 180);
+  const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const chatRef = db.collection('chats').doc(id);
+  const chatSnap = await chatRef.get();
+  const chatData = chatSnap.exists ? chatSnap.data() : {};
+  const introAlreadySent = Boolean(chatSnap.exists && chatData.assignmentIntroSentAt);
+
+  await writeDoc(db.collection('chats'), id, {
+    assignmentId: id,
+    asignacion_id: id,
+    familyUid: familyProfileId,
+    familia_id: familyProfileId,
+    familyUserUid,
+    teacherUid: teacherProfileId,
+    profesor_id: teacherProfileId,
+    teacherUserUid,
+    studentId: studentId || null,
+    alumno_id: studentId || null,
+    materia: subject,
+    subject,
+    familyName,
+    teacherName,
+    studentName,
+    participantUids: participantMap([familyProfileId, teacherProfileId, familyUserUid, teacherUserUid]),
+    active: true,
+    schedulingStatus: chatData.schedulingStatus || assignment.schedulingStatus || assignment.estado_programacion || 'pendiente_horario',
+    relationshipStage: chatData.relationshipStage || 'pendiente_horario',
+    relationshipStatus: 'active',
+    source: chatData.source || 'assignment_automation',
+    lastRelationshipEvent: chatData.lastRelationshipEvent || 'assignment_chat_ready',
+    relationshipUpdatedAt: now(),
+    createdAt: chatSnap.exists ? (chatData.createdAt || now()) : now(),
+    updatedAt: now(),
+    ...(introAlreadySent ? {} : {
+      lastMessage: introBody,
+      lastMessageAt: now(),
+      assignmentIntroSentAt: now(),
+    }),
+  });
+
+  if (!introAlreadySent && !dryRun) {
+    const introRef = chatRef.collection('mensajes').doc('system_assignment_intro');
+    const introSnap = await introRef.get().catch(() => null);
+    if (!introSnap?.exists) {
+      await introRef.create({
+        senderUid: 'system',
+        senderRole: 'system',
+        senderName: 'ClasesDe10',
+        body: introBody,
+        systemEventType: 'assignment_intro',
+        createdAt: now(),
+        readBy: {},
+      }).catch((error) => {
+        if (error.code !== 6 && error.code !== 'already-exists') throw error;
+      });
+    }
+  }
+
+  await writeDoc(db.collection('asignaciones'), id, {
+    chatId: id,
+    schedulingStatus: 'pendiente_horario',
+    estado_programacion: 'pendiente_horario',
+    relationshipStage: 'pendiente_horario',
+    teacherUserUid,
+    familyUserUid,
+    updatedAt: now(),
+  });
+
+  return {
+    created: !chatSnap.exists,
+    introSent: !introAlreadySent,
+    assignmentId: id,
+    teacherUserUid,
+    familyUserUid,
+    reason,
+  };
 }
 
 async function enrichWorkerClassData(db, data = {}) {
@@ -2071,6 +2240,92 @@ async function processPaymentReminders(db, stats) {
   }
 }
 
+async function createPaymentRequestForClassWorker(db, classId, reason = 'automation') {
+  const id = clean(classId, 180);
+  if (!id) return { created: false, reason: 'missing_class_id' };
+  const classSnap = await db.collection('clases').doc(id).get();
+  if (!classSnap.exists) return { created: false, reason: 'class_not_found', classId: id };
+  const classData = { id, ...classSnap.data() };
+
+  if (classHasPaidStatus(classData)) {
+    return { created: false, reason: 'class_already_paid', classId: id };
+  }
+
+  const existingByClass = await db.collection('pagos').where('classIds', 'array-contains', id).limit(1).get().catch(() => null);
+  if (existingByClass && !existingByClass.empty) {
+    return { created: false, reason: 'payment_already_exists', classId: id, paymentId: existingByClass.docs[0].id };
+  }
+
+  const paymentId = `class_${id}_family_payment`.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 900);
+  const existingPayment = await db.collection('pagos').doc(paymentId).get().catch(() => null);
+  if (existingPayment?.exists) {
+    return { created: false, reason: 'payment_already_exists', classId: id, paymentId };
+  }
+
+  const amount = classFamilyAmount(classData);
+  const recipients = await resolveClassRecipients(db, classData);
+  const familyUid = clean(classData.familyUid || classData.familia_id || recipients.familyUid, 180);
+  const teacherUid = clean(classData.teacherUid || classData.profesor_id || recipients.teacherUid, 180);
+  if (!familyUid || amount <= 0) {
+    await writeDoc(db.collection('automationEvents'), `payment_request_skipped_${id}`, {
+      type: 'payment_request_skipped',
+      classId: id,
+      reason: !familyUid ? 'missing_family' : 'missing_amount',
+      source: 'payment.request_for_class',
+      worker: 'github-actions',
+      dryRun,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    return { created: false, reason: !familyUid ? 'missing_family' : 'missing_amount', classId: id };
+  }
+
+  const dueDays = runtimeNumber('payments.defaultPaymentDueDays', 7, 0, 60);
+  const dueAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000));
+  await writeDoc(db.collection('pagos'), paymentId, {
+    paymentType: 'family_payment',
+    tipo: 'family_payment',
+    classIds: [id],
+    clase_id: id,
+    familyUid,
+    familia_id: familyUid,
+    teacherUid,
+    profesor_id: teacherUid,
+    studentId: clean(classData.studentId || classData.alumno_id, 180),
+    alumno_id: clean(classData.studentId || classData.alumno_id, 180),
+    materia: clean(classData.materia || classData.subject, 180),
+    amount,
+    monto: amount,
+    estado: 'pendiente',
+    status: 'pendiente',
+    familyPaymentStatus: 'pendiente',
+    estado_pago_familia: 'pendiente',
+    gateway: 'bizum',
+    provider: 'bizum',
+    source: 'class_completed_automation',
+    reason,
+    dueAt,
+    fecha_vencimiento: dueAt,
+    reconciliationStatus: 'pending_payment',
+    createdAt: now(),
+    updatedAt: now(),
+    created_at: isoNow(),
+    updated_at: isoNow(),
+  }, { merge: false });
+
+  await writeDoc(db.collection('clases'), id, {
+    paymentId,
+    familyPaymentId: paymentId,
+    paymentStatus: 'pendiente',
+    familyPaymentStatus: 'pendiente',
+    estado_pago: 'pendiente',
+    estado_pago_familia: 'pendiente',
+    updatedAt: now(),
+  });
+
+  return { created: true, paymentId, classId: id, amount };
+}
+
 async function processPlatformAutomationSweep(db, stats) {
   const [classes, payments, requests, documents, incidents, teachers, families, students, deadLetters, opsAlerts] = await Promise.all([
     listCollection(db, 'clases', limit),
@@ -2513,6 +2768,8 @@ async function main() {
     systemJobsSeen: 0,
     systemJobsProcessed: 0,
     systemJobsFailed: 0,
+    assignmentChatsEnsured: 0,
+    paymentRequestsCreated: 0,
     metricSnapshotsCreated: 0,
     analyticsEventsEvaluated: 0,
     analyticsRollupsCreated: 0,

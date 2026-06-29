@@ -12,12 +12,13 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const [admin, chat, rules, functionsIndex, automationEngine, css] = await Promise.all([
+const [admin, chat, rules, functionsIndex, automationEngine, automationWorker, css] = await Promise.all([
   read('pages/dashboard/admin.html'),
   read('js/chat-widget.js'),
   read('firebase/firestore.rules'),
   read('functions/index.js'),
   read('functions/platform-automation-engine.js'),
+  read('scripts/firebase-automation-worker.mjs'),
   read('css/dashboard.css'),
 ]);
 
@@ -43,6 +44,10 @@ assert(functionsIndex.includes("'relationship.ensure_chat'"), 'Functions must su
 assert(functionsIndex.includes("document: 'chats/{chatId}/programaciones/{proposalId}'"), 'Functions must react to chat schedule proposals.');
 assert(automationEngine.includes('schedule.proposed.core'), 'Automation rules must cover schedule proposals.');
 assert(automationEngine.includes('assignment.created.core'), 'Automation rules must cover assignment creation.');
+assert(automationWorker.includes('ensureChatForAssignmentWorker'), 'Worker must be able to repair assignment chats without deployed Functions.');
+assert(automationWorker.includes("'relationship.ensure_chat'"), 'Worker must dispatch relationship.ensure_chat system jobs.');
+assert(automationWorker.includes('createPaymentRequestForClassWorker'), 'Worker must be able to create payment requests from completed classes.');
+assert(automationWorker.includes("'payment.request_for_class'"), 'Worker must dispatch payment.request_for_class system jobs.');
 
 assert(rules.includes('match /programaciones/{proposalId}'), 'Firestore rules must protect chat schedule proposals.');
 assert(rules.includes('validClassScheduleProposalCreate'), 'Firestore rules must validate proposal creation.');
