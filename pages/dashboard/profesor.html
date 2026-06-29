@@ -216,33 +216,33 @@
       <section id="section-ingresos" class="dash-section" style="display:none">
         <div class="stats-grid" style="margin-bottom:20px">
           <div class="stat-card">
+            <div class="stat-card-value" id="ing-por-cobrar">—</div>
+            <div class="stat-card-label">Por cobrar</div>
+          </div>
+          <div class="stat-card">
             <div class="stat-card-value" id="ing-mes-actual">—</div>
             <div class="stat-card-label">Este mes</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card-value" id="ing-mes-anterior">—</div>
-            <div class="stat-card-label">Mes anterior</div>
-          </div>
-          <div class="stat-card">
             <div class="stat-card-value" id="ing-total">—</div>
-            <div class="stat-card-label">Total acumulado</div>
+            <div class="stat-card-label">Total</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card-value" id="ing-comision">—</div>
-            <div class="stat-card-label">Comisión ClasesDe10 (mes)</div>
+            <div class="stat-card-value" id="ing-pago-quincenal">Domingo</div>
+            <div class="stat-card-label">Pago cada 2 semanas</div>
           </div>
         </div>
         <div class="card" style="margin-bottom:20px">
           <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-            <span class="card-title">Cobro por Bizum</span>
-            <button class="btn btn-primary btn-sm" id="btn-solicitar-bizum" disabled>Solicitar Bizum</button>
+            <span class="card-title">Bizum excepcional</span>
+            <button class="btn btn-primary btn-sm" id="btn-solicitar-bizum" disabled>Solicitar Bizum excepcional</button>
           </div>
           <div class="card-body">
             <div class="alert alert-info" style="margin-bottom:16px">
               <span class="alert-icon">i</span>
               <div class="alert-body">
-                <div class="alert-title">Solicitudes de cobro</div>
-                Puedes solicitar Bizum para clases realizadas con importe de profesor configurado. El admin lo revisa y, cuando se haga el Bizum, quedara marcado como pagado.
+                <div class="alert-title">Cobro normal quincenal</div>
+                Los profesores cobran cada dos semanas los domingos. Usa esta opcion solo si necesitas pedir un Bizum fuera de ese ciclo; el admin recibira la solicitud y la marcara como pagada cuando se tramite.
               </div>
             </div>
             <div class="table-wrapper">
@@ -260,7 +260,7 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Mes</th><th>Clases</th><th>Horas</th><th>Facturado</th><th>Comisión</th><th>Tu ingreso</th></tr>
+                <tr><th>Mes</th><th>Clases</th><th>Horas</th><th>Tu ingreso</th><th>Pagado</th><th>Por cobrar</th></tr>
               </thead>
               <tbody id="tbody-ingresos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
@@ -1187,29 +1187,27 @@ async function cargarMisAlumnos() {
 // ── INGRESOS ─────────────────────────────────────────────────────
 async function cargarIngresos() {
   if (!profesorId) return;
-  const { data } = await db.from('v_resumen_profesor_mes')
-    .select('*').eq('profesor_id', profesorId).order('mes', {ascending:false});
-
+  const clases = await cargarClasesProfesor({ limit: 1000 });
   const hoyDate = new Date();
   const mesActual = `${hoyDate.getFullYear()}-${String(hoyDate.getMonth()+1).padStart(2,'0')}`;
-  const mesAnterior = hoyDate.getMonth() === 0
-    ? `${hoyDate.getFullYear()-1}-12`
-    : `${hoyDate.getFullYear()}-${String(hoyDate.getMonth()).padStart(2,'0')}`;
+  const clasesConIngreso = (clases || []).filter(esClaseConIngresoProfesor);
+  const resumenPorMes = agruparIngresosProfesor(clasesConIngreso);
+  const filas = Object.values(resumenPorMes).sort((a, b) => b.mes.localeCompare(a.mes));
+  const total = clasesConIngreso.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
+  const porCobrar = clasesConIngreso.reduce((sum, clase) => (
+    esCobroProfesorPagado(clase) ? sum : sum + importeProfesorClase(clase)
+  ), 0);
+  const dMesActual = resumenPorMes[mesActual];
 
-  const dMesActual   = (data||[]).find(r => r.mes?.startsWith(mesActual));
-  const dMesAnterior = (data||[]).find(r => r.mes?.startsWith(mesAnterior));
-  const total = (data||[]).reduce((s,r) => s + (r.total_profesor||0), 0);
-  const comMes = dMesActual?.total_comision || 0;
-
-  document.getElementById('ing-mes-actual').textContent   = formatEuros(dMesActual?.total_profesor||0);
-  document.getElementById('ing-mes-anterior').textContent = formatEuros(dMesAnterior?.total_profesor||0);
-  document.getElementById('ing-total').textContent        = formatEuros(total);
-  document.getElementById('ing-comision').textContent     = formatEuros(comMes);
+  document.getElementById('ing-por-cobrar').textContent = formatEuros(porCobrar);
+  document.getElementById('ing-mes-actual').textContent = formatEuros(dMesActual?.total_profesor || 0);
+  document.getElementById('ing-total').textContent = formatEuros(total);
+  document.getElementById('ing-pago-quincenal').textContent = 'Domingo';
 
   await cargarBizumProfesor();
 
   const tbody = document.getElementById('tbody-ingresos');
-  if (!data?.length) {
+  if (!filas.length) {
     tbody.innerHTML = renderTableEmptyState(6, {
       icon: '💶',
       title: 'Sin ingresos todavía',
@@ -1219,17 +1217,67 @@ async function cargarIngresos() {
     return;
   }
 
-  tbody.innerHTML = data.map(r => {
-    const d = new Date(r.mes);
+  tbody.innerHTML = filas.map(r => {
+    const d = new Date(`${r.mes}-01T00:00:00`);
     return `<tr>
       <td><strong>${nombreMes(d.getMonth())} ${d.getFullYear()}</strong></td>
       <td>${r.total_clases}</td>
       <td>${Math.floor((r.total_minutos||0)/60)}h ${(r.total_minutos||0)%60}m</td>
-      <td>${formatEuros(r.total_facturado)}</td>
-      <td style="color:var(--danger)">${formatEuros(r.total_comision)}</td>
       <td><strong style="color:var(--success)">${formatEuros(r.total_profesor)}</strong></td>
+      <td>${formatEuros(r.total_pagado)}</td>
+      <td><strong>${formatEuros(r.total_pendiente)}</strong></td>
     </tr>`;
   }).join('');
+}
+
+function esClaseConIngresoProfesor(clase) {
+  const importe = importeProfesorClase(clase);
+  if (importe <= 0) return false;
+  const estado = String(clase?.estado || clase?.status || '').toLowerCase();
+  const asistencia = String(clase?.attendanceStatus || clase?.estado_asistencia || '').toLowerCase();
+  return ['realizada', 'pagada', 'paid', 'completada', 'completed'].includes(estado)
+    || ['realizada', 'confirmada_por_ambas_partes', 'confirmed_by_both'].includes(asistencia);
+}
+
+function esCobroProfesorPagado(clase) {
+  return ['pagado', 'paid', 'validado', 'liquidado'].includes(estadoCobroProfesor(clase));
+}
+
+function mesClaseProfesor(clase) {
+  const raw = clase?.mes || clase?.month || clase?.fecha || clase?.date || clase?.startAtIso || clase?.startsAt;
+  const value = String(raw || '');
+  if (/^\d{4}-\d{2}/.test(value)) return value.slice(0, 7);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+}
+
+function duracionClaseProfesor(clase) {
+  return Number(clase?.duracion_minutos || clase?.durationMinutes || clase?.duration || 60) || 60;
+}
+
+function agruparIngresosProfesor(clases) {
+  return (clases || []).reduce((acc, clase) => {
+    const mes = mesClaseProfesor(clase);
+    if (!mes) return acc;
+    if (!acc[mes]) {
+      acc[mes] = {
+        mes,
+        total_clases: 0,
+        total_minutos: 0,
+        total_profesor: 0,
+        total_pagado: 0,
+        total_pendiente: 0,
+      };
+    }
+    const importe = importeProfesorClase(clase);
+    acc[mes].total_clases += 1;
+    acc[mes].total_minutos += duracionClaseProfesor(clase);
+    acc[mes].total_profesor += importe;
+    if (esCobroProfesorPagado(clase)) acc[mes].total_pagado += importe;
+    else acc[mes].total_pendiente += importe;
+    return acc;
+  }, {});
 }
 
 // ── PERFIL ───────────────────────────────────────────────────────
@@ -1299,13 +1347,13 @@ async function cargarBizumProfesor() {
   clasesBizumPendientes = pendientes;
   const total = pendientes.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
   btn.disabled = pendientes.length === 0;
-  btn.textContent = pendientes.length ? `Solicitar Bizum (${formatEuros(total)})` : 'Solicitar Bizum';
+  btn.textContent = pendientes.length ? `Solicitar Bizum excepcional (${formatEuros(total)})` : 'Solicitar Bizum excepcional';
 
   if (!pendientes.length && !sinImporte.length) {
     tbody.innerHTML = renderTableEmptyState(6, {
       icon: '✓',
-      title: 'No hay Bizum pendiente',
-      description: 'Cuando tengas clases realizadas con importe de profesor, podrás solicitar el cobro desde aquí.',
+      title: 'Sin Bizum excepcional pendiente',
+      description: 'El cobro normal se gestiona cada dos semanas los domingos. Aqui solo veras clases si necesitas pedir un Bizum fuera de ese ciclo.',
       actions: [emptyAction('Ver mis clases', { 'data-section': 'clases' }, 'ghost')],
     });
     return;
@@ -1317,7 +1365,7 @@ async function cargarBizumProfesor() {
     <td>${sanitize(clase.materia || '-')}</td>
     <td><strong>${formatEuros(importeProfesorClase(clase))}</strong></td>
     <td>${badgeEstado('pendiente')}</td>
-    <td>Listo para solicitar</td>
+    <td>Listo para solicitud excepcional</td>
   </tr>`);
 
   const blockedRows = sinImporte.slice(0, 8).map((clase) => `<tr>
@@ -1346,7 +1394,7 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
 
   const total = clasesBizumPendientes.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
   const classIds = clasesBizumPendientes.map((clase) => String(clase.id));
-  const confirmed = window.confirm(`Solicitar Bizum por ${formatEuros(total)} para ${classIds.length} clase(s)?`);
+  const confirmed = window.confirm(`Solicitar Bizum excepcional por ${formatEuros(total)} para ${classIds.length} clase(s)?`);
   if (!confirmed) return;
 
   const { error } = await db.from('pagos').insert(buildTeacherPayoutPayload(profesorFirestoreId, {
@@ -1354,8 +1402,8 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
     requestedByUid: usuario.uid || usuario.id,
     monto: total,
     gateway: 'manual',
-    concepto: `Bizum profesor - ${classIds.length} clase(s)`,
-    notas_profesor: `Solicitud automatica de cobro por Bizum de ${classIds.length} clase(s).`,
+    concepto: `Bizum excepcional profesor - ${classIds.length} clase(s)`,
+    notas_profesor: `Solicitud automatica de cobro excepcional por Bizum de ${classIds.length} clase(s). El cobro ordinario del profesor es quincenal los domingos.`,
     telefono_bizum: perfil?.telefono || usuario.telefono || '',
     classIds,
   }));
@@ -1365,7 +1413,7 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
     return;
   }
 
-  showToast('Solicitud enviada', 'El admin revisara el Bizum y marcara las clases como pagadas.', 'success');
+  showToast('Solicitud enviada', 'El admin recibira la solicitud excepcional y marcara las clases como pagadas cuando la tramite.', 'success');
   await cargarBizumProfesor();
 });
 

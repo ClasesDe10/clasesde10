@@ -36,6 +36,11 @@ const [
 
 assert(professorDashboard.includes('btn-solicitar-bizum'), 'Professor dashboard must expose the Bizum request button.');
 assert(professorDashboard.includes('tbody-bizum-pendientes'), 'Professor dashboard must list Bizum-eligible classes.');
+assert(professorDashboard.includes('ing-por-cobrar'), 'Professor income cards must show outstanding teacher payouts.');
+assert(professorDashboard.includes('Pago cada 2 semanas'), 'Professor income cards must explain the biweekly payout cadence.');
+assert(professorDashboard.includes('Solicitar Bizum excepcional'), 'Bizum requests must be presented as exceptional payouts.');
+assert(!professorDashboard.includes('ing-comision'), 'Professor dashboard must not expose internal commission cards.');
+assert(!professorDashboard.includes('<th>Comisión</th>'), 'Professor income detail must not expose commission columns.');
 assert(
   professorDashboard.indexOf('section-ingresos') < professorDashboard.indexOf('btn-solicitar-bizum'),
   'Bizum request UI must live in the professor income section.',
