@@ -89,11 +89,11 @@ assert.deepEqual(eventTypes, ['document.expired', 'document.expiring_soon', 'doc
 
 const compliance = buildDocumentCompliance({ uid: 'teacher_1', role: 'profesor' }, [
   { ...upload, ...verifiedPatch, id: 'doc_dni' },
-  { ...upload, id: 'doc_title', tipo: 'titulo', documentType: 'titulo', estado: 'pendiente', status: 'pendiente' },
+  { ...upload, id: 'doc_grades', tipo: 'notas_curso_anterior', documentType: 'notas_curso_anterior', estado: 'pendiente', status: 'pendiente' },
 ], now);
 assert.equal(compliance.role, 'profesor');
-assert.equal(compliance.missingRequired.length, 0);
-assert.deepEqual(compliance.pendingRequired, ['titulo']);
+assert.deepEqual(compliance.missingRequired, ['notas_universidad']);
+assert.deepEqual(compliance.pendingRequired, ['notas_curso_anterior']);
 assert.equal(compliance.readyForVerification, false);
 
 const report = buildDocumentCenterReport([verifiedDoc, expiredStoredDoc], [{ uid: 'teacher_1', role: 'profesor' }], now);

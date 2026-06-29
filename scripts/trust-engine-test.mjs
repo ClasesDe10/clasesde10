@@ -52,7 +52,7 @@ const context = {
   now,
   documents: [
     { ownerUid: 'teacher_1', tipo: 'dni', estado: 'validado' },
-    { ownerUid: 'teacher_1', tipo: 'titulo', estado: 'validado' },
+    { ownerUid: 'teacher_1', tipo: 'notas_universidad', estado: 'validado' },
     { ownerUid: 'teacher_weak', tipo: 'dni', estado: 'pendiente' },
     { ownerUid: 'family_1', tipo: 'dni', estado: 'validado' },
   ],

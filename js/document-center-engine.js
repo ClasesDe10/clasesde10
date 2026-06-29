@@ -56,11 +56,33 @@ export const DOCUMENT_TYPE_DEFINITIONS = Object.freeze({
     label: 'Titulo academico',
     category: 'academica',
     roles: ['profesor'],
-    requiredFor: ['profesor'],
+    requiredFor: [],
     defaultValidityDays: null,
     sensitive: true,
     trustWeight: 12,
     publicSignal: 'Formacion validada',
+    autoVerifiable: false,
+  },
+  notas_curso_anterior: {
+    label: 'Notas finales del curso anterior',
+    category: 'academica',
+    roles: ['profesor'],
+    requiredFor: ['profesor'],
+    defaultValidityDays: null,
+    sensitive: true,
+    trustWeight: 10,
+    publicSignal: 'Notas academicas validadas',
+    autoVerifiable: false,
+  },
+  notas_universidad: {
+    label: 'Expediente o notas universitarias',
+    category: 'academica',
+    roles: ['profesor'],
+    requiredFor: ['profesor'],
+    defaultValidityDays: null,
+    sensitive: true,
+    trustWeight: 10,
+    publicSignal: 'Expediente academico validado',
     autoVerifiable: false,
   },
   certificado: {
@@ -271,6 +293,8 @@ function typeKey(value) {
     .replace(/[^a-z0-9_ -]+/g, '')
     .replace(/[\s-]+/g, '_');
   if (['pasaporte', 'nie', 'nif'].includes(raw)) return 'dni';
+  if (['notas', 'boletin', 'boletin_notas', 'notas_finales', 'notas_curso', 'notas_curso_anterior', 'curso_anterior', 'nota_bachillerato', 'bachillerato'].includes(raw)) return 'notas_curso_anterior';
+  if (['expediente', 'expediente_academico', 'expediente_universitario', 'notas_universidad', 'nota_universidad', 'universidad', 'notas_formacion_superior', 'formacion_superior'].includes(raw)) return 'notas_universidad';
   if (['certificacion', 'licencia'].includes(raw)) return 'certificado';
   if (['cv'].includes(raw)) return 'curriculum';
   if (['pago'].includes(raw)) return 'justificante_pago';

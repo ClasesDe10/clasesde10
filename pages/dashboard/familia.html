@@ -614,13 +614,13 @@
 import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260628-documents';
+import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs';
 import {
   evaluateFamilyProfileProfessional,
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260628-reputation-v2';
+} from '../../js/profile-engine.js?v=20260629-teacher-docs';
 import {
   buildClassIncidentPayload,
   buildFamilyConfirmationPayload,
@@ -781,15 +781,25 @@ function labelConfirmacionFamilia(clase) {
   return '<span class="badge badge-gray">Pendiente</span>';
 }
 
-function irA(sec) {
+function irA(sec, options = {}) {
+  if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
   document.getElementById(`section-${sec}`).style.display = '';
   document.querySelectorAll('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.section === sec));
   document.getElementById('topbar-title').textContent = TITULOS[sec] || sec;
+  if (!options.fromHash && window.location.hash !== `#${sec}`) history.replaceState(null, '', `#${sec}`);
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarClases,
                     alumnos: cargarHijos, solicitudes: cargarSolicitudes, pagos: cargarPagos, chat: cargarChat, perfil: cargarPerfil };
   loaders[sec]?.();
 }
+
+function sectionFromHash(defaultSection = 'inicio') {
+  const sec = decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+  return TITULOS[sec] && document.getElementById(`section-${sec}`) ? sec : defaultSection;
+}
+
+window.addEventListener('hashchange', () => irA(sectionFromHash(), { fromHash: true }));
+
 document.addEventListener('click', (e) => {
   const sectionTrigger = e.target.closest('[data-section]');
   if (!sectionTrigger) return;
@@ -2342,8 +2352,8 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
 });
 
 // ── INIT ─────────────────────────────────────────────────────────
-cargarInicio();
+irA(sectionFromHash(), { fromHash: true });
 </script>
-<script src="/js/pwa.js?v=20260629-upload-zone-fix" defer></script>
+<script src="/js/pwa.js?v=20260629-teacher-docs" defer></script>
 </body>
 </html>

@@ -7,7 +7,7 @@ import {
   documentRowsForCsv,
   documentTypeDefinition,
   normalizeDocumentRecord,
-} from './document-center-engine.js?v=20260628-documents';
+} from './document-center-engine.js?v=20260629-teacher-docs';
 import {
   collection,
   doc as firestoreDoc,

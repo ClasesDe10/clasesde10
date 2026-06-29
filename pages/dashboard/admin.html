@@ -1218,7 +1218,7 @@ import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
-} from '../../js/trust-engine.js?v=20260628-reputation-v2';
+} from '../../js/trust-engine.js?v=20260629-teacher-docs';
 import {
   SCHEDULED_CLASS_STATUSES,
   buildAdminClassPayload,
@@ -1424,7 +1424,8 @@ function ensureAdminCrmUi() {
 
 ensureAdminCrmUi();
 
-function irA(seccion) {
+function irA(seccion, options = {}) {
+  if (!secciones.includes(seccion) || !document.getElementById(`section-${seccion}`)) seccion = 'dashboard';
   secciones.forEach(s => {
     document.getElementById(`section-${s}`).style.display = s === seccion ? '' : 'none';
   });
@@ -1432,6 +1433,7 @@ function irA(seccion) {
     l.classList.toggle('active', l.dataset.section === seccion);
   });
   document.getElementById('topbar-title').textContent = TITULOS[seccion] || seccion;
+  if (!options.fromHash && window.location.hash !== `#${seccion}`) history.replaceState(null, '', `#${seccion}`);
   if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
   else if (seccion === 'operaciones') ejecutarCargaSeccion(seccion, iniciarOperaciones);
   else if (seccion === 'ia') ejecutarCargaSeccion(seccion, iniciarAdminAi);
@@ -1452,6 +1454,13 @@ function irA(seccion) {
   else if (seccion === 'incidencias') ejecutarCargaSeccion(seccion, iniciarIncidencias);
   else if (seccion === 'auditoria') ejecutarCargaSeccion(seccion, cargarAuditoria);
 }
+
+function sectionFromHash(defaultSection = 'dashboard') {
+  const seccion = decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+  return secciones.includes(seccion) && document.getElementById(`section-${seccion}`) ? seccion : defaultSection;
+}
+
+window.addEventListener('hashchange', () => irA(sectionFromHash(), { fromHash: true }));
 
 document.addEventListener('click', (e) => {
   const sectionTrigger = e.target.closest('[data-section]');
@@ -4927,13 +4936,13 @@ document.getElementById('btn-guardar-inc').addEventListener('click', async () =>
 
 // ── INIT ─────────────────────────────────────────────────────────
 iniciarOperaciones({ background: true }).catch((error) => console.warn('No se pudo preparar la bandeja operativa', error));
-cargarDashboard();
+irA(sectionFromHash(), { fromHash: true });
 
 window.closeModal = (id) => {
   document.getElementById(id).classList.remove('open');
   document.body.style.overflow = '';
 };
 </script>
-<script src="/js/pwa.js?v=20260629-upload-zone-fix" defer></script>
+<script src="/js/pwa.js?v=20260629-teacher-docs" defer></script>
 </body>
 </html>

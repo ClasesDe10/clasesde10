@@ -145,8 +145,8 @@ function stageCopy(stage, context = {}) {
     },
     documents_needed: {
       title: 'Sube la documentacion necesaria',
-      body: 'La confianza empieza antes de la primera clase. Sube documentos o certificados para que el equipo pueda validar tu perfil.',
-      primary: buildAction('upload_documents', 'Subir documentos', 'DNI, titulacion, certificados o justificantes relevantes.', 'documentos'),
+      body: 'La confianza empieza antes de la primera clase. Sube tu DNI y tus notas principales para que el equipo pueda validar tu perfil sin pedirte datos innecesarios.',
+      primary: buildAction('upload_documents', 'Subir documentos', 'DNI, notas del curso anterior, expediente o curriculum opcional.', 'documentos'),
     },
     verification_pending: {
       title: 'Perfil listo para revision',

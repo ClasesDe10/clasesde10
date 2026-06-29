@@ -27,6 +27,9 @@ assert.ok(professorDashboard.includes('accept="image/jpeg,image/png,image/webp"'
 assert.ok(professorDashboard.includes('padel, guitarra, piano'), 'Teacher subjects must mention non-academic activities');
 assert.ok(professorDashboard.includes('Conservatorio / escuela de musica'), 'Teacher profile must support music training');
 assert.ok(professorDashboard.includes('Entrenador / monitor deportivo'), 'Teacher profile must support sports training');
+assert.ok(professorDashboard.includes('Notas finales del curso anterior'), 'Teacher documents must request previous course grades');
+assert.ok(professorDashboard.includes('Expediente o notas universitarias'), 'Teacher documents must request university/main training grades');
+assert.ok(professorDashboard.includes('Curriculum opcional'), 'Teacher documents must keep CV optional');
 
 for (const removed of [
   'p-tarifa',
@@ -35,6 +38,9 @@ for (const removed of [
   'tarifa_hora',
   'hourlyRate',
   'IBAN',
+  '<option value="titulo">',
+  '<option value="certificado">',
+  '<option value="identidad">',
 ]) {
   assert.ok(!professorDashboard.includes(removed), `Removed field still present in professor dashboard: ${removed}`);
   assert.ok(!publicTeacherPage.includes(removed), `Removed field still present in public teacher page: ${removed}`);

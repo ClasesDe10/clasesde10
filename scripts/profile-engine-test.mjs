@@ -39,7 +39,7 @@ const teacher = evaluateTeacherProfileProfessional({
   acepta_bizum: true,
 }, [
   { tipo: 'dni', estado: 'validado' },
-  { tipo: 'titulo', estado: 'pendiente' },
+  { tipo: 'notas_universidad', estado: 'pendiente' },
 ]);
 
 assert.equal(teacher.complete, true);

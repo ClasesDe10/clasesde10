@@ -139,8 +139,8 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
   const postalCode = validatePostalCode(firstValue(profile, ['codigo_postal', 'postalCode']));
   const identityDoc = hasDocument(docs, ['dni', 'identidad', 'pasaporte']);
   const identityVerified = hasDocument(docs, ['dni', 'identidad', 'pasaporte'], VERIFIED_DOCUMENT_STATUSES);
-  const academicDoc = hasDocument(docs, ['titulo', 'certificado', 'certificacion', 'academic']);
-  const academicVerified = hasDocument(docs, ['titulo', 'certificado', 'certificacion', 'academic'], VERIFIED_DOCUMENT_STATUSES);
+  const academicDoc = hasDocument(docs, ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificacion', 'academic']);
+  const academicVerified = hasDocument(docs, ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificacion', 'academic'], VERIFIED_DOCUMENT_STATUSES);
   const cvDoc = hasDocument(docs, ['curriculum', 'cv']);
   const pendingDocs = (docs || []).filter((doc) => PENDING_DOCUMENT_STATUSES.has(documentStatus(doc))).length;
   const hasAvailability = hasText(firstValue(profile, ['disponibilidad_resumen', 'availabilitySummary']), 10)
@@ -163,7 +163,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     { key: 'idiomas', label: 'Idiomas de atencion', weight: 3, required: false, complete: languages.length > 0 },
     { key: 'certificaciones', label: 'Certificaciones adicionales', weight: 3, required: false, complete: certifications.length > 0 || academicDoc },
     { key: 'dni', label: 'Documento de identidad subido', weight: 3, required: false, complete: identityDoc },
-    { key: 'titulo_doc', label: 'Titulo o certificado subido', weight: 2, required: false, complete: academicDoc },
+    { key: 'expediente_doc', label: 'Notas o expediente academico subido', weight: 2, required: false, complete: academicDoc },
     { key: 'cv_doc', label: 'Curriculum o resumen ampliado subido', weight: 1, required: false, complete: cvDoc },
   ];
 
@@ -216,7 +216,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     },
     indicators: [
       trustIndicator('Identidad documentada', identityDoc, identityVerified ? 'Validada por admin' : identityDoc ? 'Pendiente de validacion' : 'Sin documento'),
-      trustIndicator('Formacion documentada', academicDoc, academicVerified ? 'Validada por admin' : academicDoc ? 'Pendiente de validacion' : 'Sin titulo/certificado'),
+      trustIndicator('Expediente academico', academicDoc, academicVerified ? 'Validado por admin' : academicDoc ? 'Pendiente de validacion' : 'Sin notas/expediente'),
       trustIndicator('Foto y contacto', hasText(firstValue(profile, ['foto_url', 'photoUrl']), 20) && phone.valid),
       trustIndicator('Perfil completo para matching', summary.complete),
       trustIndicator('Especializacion visible', specialties.length > 0 || certifications.length > 0),

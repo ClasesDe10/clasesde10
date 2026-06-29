@@ -417,16 +417,22 @@
         <div class="card" style="margin-bottom:20px">
           <div class="card-header"><span class="card-title">Subir documento</span></div>
           <div class="card-body">
+            <div class="alert alert-info" style="margin-bottom:16px">
+              <span class="alert-icon">i</span>
+              <div class="alert-body">
+                <div class="alert-title">Solo pedimos documentos utiles para validar tu perfil</div>
+                Sube tu DNI, las notas finales del curso anterior y el expediente o notas universitarias/formacion principal. El curriculum es opcional, pero ayuda si resume bien tu experiencia.
+              </div>
+            </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
               <div class="form-group">
                 <label class="form-label">Tipo de documento</label>
                 <select class="form-control" id="doc-tipo">
-                  <option value="dni">DNI / Pasaporte</option>
-                  <option value="titulo">Título académico</option>
-                  <option value="certificado">Certificado / licencia profesional</option>
-                  <option value="curriculum">Currículum</option>
-                  <option value="identidad">Otra verificación de identidad</option>
-                  <option value="otro">Otro</option>
+                  <option value="dni">DNI / NIE / Pasaporte</option>
+                  <option value="notas_curso_anterior">Notas finales del curso anterior</option>
+                  <option value="notas_universidad">Expediente o notas universitarias</option>
+                  <option value="curriculum">Curriculum opcional</option>
+                  <option value="otro">Otro documento solicitado por ClasesDe10</option>
                 </select>
               </div>
             </div>
@@ -550,7 +556,7 @@
 import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260628-documents';
+import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs';
 import {
   evaluateTeacherProfileProfessional,
   isValidGrade,
@@ -558,7 +564,7 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260628-reputation-v2';
+} from '../../js/profile-engine.js?v=20260629-teacher-docs';
 import {
   buildTeacherAttendancePayload,
   classEnded,
@@ -569,7 +575,7 @@ import { buildTeacherPayoutPayload } from '../../js/payment-engine.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-notification-actions';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
-import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260629-teacher-journey';
+import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260629-teacher-docs';
 import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
@@ -645,16 +651,26 @@ function claseTerminada(clase, margenMinutos = 0) {
   return classEnded(clase, margenMinutos);
 }
 
-function irA(sec) {
+function irA(sec, options = {}) {
+  if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
   document.getElementById(`section-${sec}`).style.display = '';
   document.querySelectorAll('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.section === sec));
   document.getElementById('topbar-title').textContent = TITULOS[sec] || sec;
+  if (!options.fromHash && window.location.hash !== `#${sec}`) history.replaceState(null, '', `#${sec}`);
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarMisClases,
                     alumnos: cargarMisAlumnos, ingresos: cargarIngresos, chat: cargarChat,
                     perfil: cargarPerfil, documentos: cargarDocumentos, disponibilidad: cargarDisponibilidad };
   loaders[sec]?.();
 }
+
+function sectionFromHash(defaultSection = 'inicio') {
+  const sec = decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
+  return TITULOS[sec] && document.getElementById(`section-${sec}`) ? sec : defaultSection;
+}
+
+window.addEventListener('hashchange', () => irA(sectionFromHash(), { fromHash: true }));
+
 document.addEventListener('click', (e) => {
   const sectionTrigger = e.target.closest('[data-section]');
   if (!sectionTrigger) return;
@@ -1917,8 +1933,8 @@ window.eliminarDisponibilidad = async (id) => {
 };
 
 // ── INIT ─────────────────────────────────────────────────────────
-cargarInicio();
+irA(sectionFromHash(), { fromHash: true });
 </script>
-<script src="/js/pwa.js?v=20260629-upload-zone-fix" defer></script>
+<script src="/js/pwa.js?v=20260629-teacher-docs" defer></script>
 </body>
 </html>

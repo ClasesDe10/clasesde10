@@ -165,8 +165,8 @@ const documentVerifiedPlan = buildAutomationPlan({
     id: 'doc_verified_1',
     ownerUid: 'teacher_user_1',
     role: 'profesor',
-    nombre: 'Titulo universitario',
-    tipo: 'titulo',
+    nombre: 'Expediente universitario',
+    tipo: 'notas_universidad',
   },
 });
 assertHas(documentVerifiedPlan.notifications, (item) => item.userUid === 'teacher_user_1' && item.type === 'document_verified', 'verified documents must notify owner');

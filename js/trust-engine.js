@@ -316,7 +316,7 @@ function signal(key, label, state, detail = '', publicVisible = true) {
 
 function docsSummary(docs = []) {
   const identityDocs = docs.filter((doc) => ['dni', 'identidad', 'pasaporte', 'tutor'].includes(documentType(doc)));
-  const academicDocs = docs.filter((doc) => ['titulo', 'certificado', 'certificacion', 'academic', 'cv', 'curriculum'].includes(documentType(doc)));
+  const academicDocs = docs.filter((doc) => ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificacion', 'academic'].includes(documentType(doc)));
   const cvDocs = docs.filter((doc) => ['cv', 'curriculum'].includes(documentType(doc)));
   const verifiedDocs = docs.filter((doc) => VERIFIED_STATUSES.has(documentStatus(doc)));
   const pendingDocs = docs.filter((doc) => PENDING_STATUSES.has(documentStatus(doc)));
@@ -753,7 +753,7 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
   const badges = [
     flags.adminVerified ? badge('admin_verified', 'Verificado por ClasesDe10', 'success', 'Perfil revisado por administracion', 'estado verificado') : null,
     docs.identityVerified ? badge('identity_verified', 'Identidad validada', 'success', 'Documento de identidad validado', 'documento identidad validado') : null,
-    docs.academicVerified ? badge('academic_verified', 'Formacion validada', 'success', 'Titulo/certificado validado', 'documento academico validado') : null,
+    docs.academicVerified ? badge('academic_verified', 'Formacion validada', 'success', 'Notas o expediente academico validado', 'documento academico validado') : null,
     completion >= 95 ? badge('profile_complete', 'Perfil completo', 'success', 'Perfil con datos suficientes para decidir rapido', 'perfil >= 95%') : null,
     metrics.averageResponseHours !== null && metrics.averageResponseHours !== undefined && metrics.averageResponseHours <= 4 && metrics.responseSamples >= 2 ? badge('fast_response', 'Responde rapido', 'success', `${round(metrics.averageResponseHours, 1)}h de media`, 'respuesta media <= 4h') : null,
     (metrics.acceptanceRate ?? 0) >= 0.8 && metrics.offeredRequests >= 3 ? badge('high_acceptance', 'Alta aceptacion', 'success', `${round((metrics.acceptanceRate ?? 0) * 100)}% de solicitudes aceptadas`, 'aceptacion >= 80% con muestra') : null,
@@ -772,8 +772,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
     flags.pendingReview ? 'Pendiente de verificacion administrativa.' : '',
     !docs.identityUploaded ? 'Falta documento de identidad.' : '',
     docs.identityUploaded && !docs.identityVerified ? 'Identidad subida pendiente de validacion.' : '',
-    !docs.academicUploaded ? 'Falta documentacion academica o profesional.' : '',
-    docs.academicUploaded && !docs.academicVerified ? 'Formacion subida pendiente de validacion.' : '',
+    !docs.academicUploaded ? 'Falta notas o expediente academico.' : '',
+    docs.academicUploaded && !docs.academicVerified ? 'Notas o expediente pendiente de validacion.' : '',
     completion < 85 ? 'Perfil incompleto para generar confianza publica.' : '',
     metrics.evaluatedClasses < 3 ? 'Historico operativo insuficiente: se aplica puntuacion neutra.' : '',
     metrics.openIncidents > 0 ? `${metrics.openIncidents} incidencia(s) abierta(s).` : '',
@@ -800,7 +800,7 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
       signal('level', 'Nivel de reputacion', 'info', level.publicLabel),
       signal('admin_verified', 'Verificacion administrativa', flags.adminVerified ? 'positive' : 'warning', flags.adminVerified ? 'Validado' : 'Pendiente'),
       signal('identity', 'Identidad', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Validada' : docs.identityUploaded ? 'Pendiente' : 'No subida'),
-      signal('academic', 'Formacion', docs.academicVerified ? 'positive' : docs.academicUploaded ? 'warning' : 'neutral', docs.academicVerified ? 'Validada' : docs.academicUploaded ? 'Pendiente' : 'No subida'),
+      signal('academic', 'Expediente academico', docs.academicVerified ? 'positive' : docs.academicUploaded ? 'warning' : 'neutral', docs.academicVerified ? 'Validado' : docs.academicUploaded ? 'Pendiente' : 'No subido'),
       signal('history', 'Historial de clases', metrics.completedClasses > 0 ? 'positive' : 'neutral', `${metrics.completedClasses} clase(s), ${metrics.completedHours}h`),
       signal('response', 'Tiempo medio de respuesta', metrics.averageResponseHours !== null && metrics.averageResponseHours !== undefined ? 'positive' : 'neutral', metrics.averageResponseHours !== null && metrics.averageResponseHours !== undefined ? `${round(metrics.averageResponseHours, 1)}h` : 'Sin historico'),
       signal('punctuality', 'Puntualidad', metrics.punctualitySamples ? 'positive' : 'neutral', metrics.punctualitySamples ? `${round((metrics.punctualityRate ?? 0) * 100)}%` : 'Sin muestra suficiente'),
