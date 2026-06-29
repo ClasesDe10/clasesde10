@@ -191,6 +191,15 @@
         ]
       },
       {
+        "source": "/docs/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/js/auth-provider.js",
         "headers": [
           {
