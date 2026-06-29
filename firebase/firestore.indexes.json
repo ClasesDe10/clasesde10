@@ -56,6 +56,14 @@
       "collectionGroup": "clases",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "teacherUid", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clases",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "familyUid", "order": "ASCENDING" },
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "fecha", "order": "DESCENDING" }

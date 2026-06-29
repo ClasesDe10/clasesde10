@@ -235,6 +235,10 @@ function checkIndexes() {
       { fieldPath: 'teacherUid', order: 'ASCENDING' },
       { fieldPath: 'startAtIso', order: 'ASCENDING' },
     ]],
+    ['clases', [
+      { fieldPath: 'teacherUid', order: 'ASCENDING' },
+      { fieldPath: 'fecha', order: 'DESCENDING' },
+    ]],
     ['pagos', [
       { fieldPath: 'month', order: 'ASCENDING' },
       { fieldPath: 'status', order: 'ASCENDING' },
