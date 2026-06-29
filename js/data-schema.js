@@ -72,7 +72,7 @@ export const CANONICAL_FIELDS = Object.freeze({
     'address', 'city', 'postalCode', 'zone', 'subjects', 'levels', 'specialties',
     'languages', 'certifications', 'experienceYears', 'studyLevel', 'exactStudy',
     'studyCenter', 'bachilleratoGrade', 'universityAverageGrade', 'availabilitySummary',
-    'hasBizum', 'profileComplete', 'profileCompletionPercent', 'verificationStatus',
+    'hasBizum', 'hasCar', 'profileComplete', 'profileCompletionPercent', 'verificationStatus',
     'status', 'active', 'createdAt', 'updatedAt',
   ],
   familias: ['userUid', 'email', 'nombre', 'apellidos', 'displayName', 'telefono', 'address', 'city', 'postalCode', 'zone', 'status', 'active', 'createdAt', 'updatedAt'],
@@ -134,6 +134,7 @@ const COLLECTION_FIELD_ALIASES = Object.freeze({
     languages: ['idiomas'],
     certifications: ['certificaciones'],
     hasBizum: ['acepta_bizum'],
+    hasCar: ['tiene_coche', 'carAvailable', 'vehiculo_propio'],
     profileComplete: ['perfil_completo'],
   },
   familias: {

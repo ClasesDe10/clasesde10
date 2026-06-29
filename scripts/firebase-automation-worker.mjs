@@ -1212,6 +1212,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
         teacherEmail: candidate.teacherEmail || '',
         score: candidate.score,
         scoreBreakdown: candidate.scoreBreakdown || {},
+        locationEstimate: candidate.locationEstimate || candidate.scoreBreakdown?.location?.locationEstimate || null,
         profileScore: candidate.profileScore || 0,
         assignable: candidate.assignable === true,
         matchingVersion: candidate.matchingVersion || MATCHING_VERSION,

@@ -1214,7 +1214,7 @@ import {
   updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260628-reputation-v2';
+import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260629-travel-matching';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -3507,6 +3507,7 @@ function renderProfesorDetalle(p) {
         ${fila('Telefono', p.usuarios?.telefono || p.telefono)}
         ${fila('Direccion', p.direccion || p.address)}
         ${fila('Zona', [p.zona || p.zone, p.ciudad || p.city, p.codigo_postal || p.postalCode].filter(Boolean).join(', '))}
+        ${fila('Coche', (p.tiene_coche === true || p.hasCar === true || p.carAvailable === true) ? 'Si' : (p.tiene_coche === false || p.hasCar === false || p.carAvailable === false) ? 'No' : 'No indicado')}
         ${fila('Experiencia', Number.isFinite(Number(p.experiencia_anios ?? p.experienceYears)) ? `${Number(p.experiencia_anios ?? p.experienceYears)} anios` : '')}
       </div>
     </div>
@@ -4306,7 +4307,11 @@ function renderAsignarMatches(matches, error) {
     const reasons = (m.reasons || []).slice(0, 2).map(sanitize).join(' ');
     const risks = (m.risks || []).slice(0, 2).map(sanitize).join(' ');
     const profileIssues = (m.profileIssues || profileQuality?.issueLabels || []).slice(0, 3).map(sanitize).join(', ');
-    const notes = [reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
+    const travelEstimate = m.locationEstimate || m.scoreBreakdown?.location?.locationEstimate || null;
+    const travelText = travelEstimate?.available
+      ? `${travelEstimate.drivingKm} km / ${travelEstimate.drivingMinutes} min en coche (${travelEstimate.confidence || 'estimado'})`
+      : '';
+    const notes = [travelText && `Desplazamiento: ${travelText}`, reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
     const quote = profesor ? buildAssignmentPricingQuote(window.solicitudAsignacionActual || {}, profesor) : null;
     const breakdown = Object.entries(m.scoreBreakdown || {})
       .filter(([, value]) => value && Number.isFinite(Number(value.points)))
@@ -4316,7 +4321,7 @@ function renderAsignarMatches(matches, error) {
           subject: 'Materia',
           level: 'Nivel',
           modality: 'Modalidad',
-          location: 'Zona',
+          location: 'Ubicacion',
           availability: 'Horario',
           experience: 'Experiencia',
           reputation: 'Fiabilidad',
@@ -4335,6 +4340,10 @@ function renderAsignarMatches(matches, error) {
           <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
         ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
+        ${travelText ? `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">
+          <span class="badge badge-gray">Coche: ${sanitize(travelEstimate.hasCar === true ? 'si' : travelEstimate.hasCar === false ? 'no' : 'no indicado')}</span>
+          <span class="badge badge-gray">${sanitize(travelText)}</span>
+        </div>` : ''}
         ${trust ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px">
           ${renderTrustBadge(trust.score, trust.level)}
           ${renderTrustBadges(trust.badges, 3)}

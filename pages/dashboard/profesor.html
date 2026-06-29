@@ -373,6 +373,17 @@
                     <input class="form-control" type="number" id="p-experiencia" min="0" max="60" step="1">
                   </div>
                   <div class="form-group">
+                    <label class="form-label">Coche para desplazamientos</label>
+                    <select class="form-control" id="p-coche">
+                      <option value="">Seleccionar...</option>
+                      <option value="si">Si, tengo coche</option>
+                      <option value="no">No tengo coche</option>
+                    </select>
+                    <div class="form-hint">Se usa solo para valorar clases presenciales y tiempos de desplazamiento.</div>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
                     <label class="form-label" style="display:flex;gap:10px;align-items:center;margin-top:30px;text-transform:none;letter-spacing:0;font-size:.9rem">
                       <input type="checkbox" id="p-bizum" style="width:18px;height:18px;accent-color:var(--navy)">
                       Tengo Bizum para recibir pagos
@@ -564,7 +575,7 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260629-teacher-docs';
+} from '../../js/profile-engine.js?v=20260629-travel-matching';
 import {
   buildTeacherAttendancePayload,
   classEnded,
@@ -1476,6 +1487,11 @@ async function cargarPerfil() {
   document.getElementById('p-experiencia').value = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
   document.getElementById('p-disponibilidad').value = perfil.disponibilidad_resumen || perfil.availabilitySummary || '';
   document.getElementById('p-bizum').checked     = perfil.acepta_bizum === true || perfil.hasBizum === true;
+  document.getElementById('p-coche').value       = (perfil.tiene_coche === true || perfil.hasCar === true || perfil.carAvailable === true || perfil.vehiculo_propio === true)
+    ? 'si'
+    : (perfil.tiene_coche === false || perfil.hasCar === false || perfil.carAvailable === false || perfil.vehiculo_propio === false)
+      ? 'no'
+      : '';
 
   renderMaterias();
   renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual({
@@ -1583,6 +1599,9 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const experiencia = Number(document.getElementById('p-experiencia').value || 0);
   const disponibilidad = document.getElementById('p-disponibilidad').value.trim();
   const aceptaBizum = document.getElementById('p-bizum').checked;
+  const cocheValue = document.getElementById('p-coche').value;
+  const movilidadDeclarada = cocheValue === 'si' || cocheValue === 'no';
+  const tieneCoche = cocheValue === 'si';
   const phoneCheck = validatePhone(telefono);
   const postalCheck = validatePostalCode(codigoPostal);
   const notasValidas = isValidGrade(notaBachillerato) && isValidGrade(notaUniversidad);
@@ -1591,9 +1610,9 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
 
   if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid || !zona ||
       !tipoFormacion || !estudioExacto || !centroEstudios || !notasValidas ||
-      !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum ||
+      !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum || !movilidadDeclarada ||
       !Number.isFinite(experiencia) || experiencia < 0 || experiencia > 60) {
-    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, CP de 5 digitos, zona, estudios, centro, notas, materias/actividades, niveles, disponibilidad, Bizum y presentacion.', 'warning');
+    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, CP de 5 digitos, zona, estudios, centro, notas, materias/actividades, niveles, disponibilidad, movilidad, Bizum y presentacion.', 'warning');
     return;
   }
 
@@ -1640,6 +1659,9 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     certifications: certificaciones,
     acepta_bizum: aceptaBizum,
     hasBizum: aceptaBizum,
+    tiene_coche: tieneCoche,
+    hasCar: tieneCoche,
+    carAvailable: tieneCoche,
   }, documentosPerfilCache);
   const profesorPayload = {
     userUid: profesorFirestoreId,
@@ -1686,6 +1708,9 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     certifications: certificaciones,
     acepta_bizum: aceptaBizum,
     hasBizum: aceptaBizum,
+    tiene_coche: tieneCoche,
+    hasCar: tieneCoche,
+    carAvailable: tieneCoche,
     perfil_completo: evaluation.complete,
     profileComplete: evaluation.complete,
     profileCompletionPercent: evaluation.percent,
@@ -1770,6 +1795,9 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       certifications:    certificaciones,
       acepta_bizum:      aceptaBizum,
       hasBizum:          aceptaBizum,
+      tiene_coche:       tieneCoche,
+      hasCar:            tieneCoche,
+      carAvailable:      tieneCoche,
       perfil_completo:   evaluation.complete,
       profileComplete:   evaluation.complete,
       profileCompletionPercent: evaluation.percent,

@@ -37,6 +37,7 @@ const teacher = evaluateTeacherProfileProfessional({
   idiomas: ['Espanol', 'Ingles'],
   certificaciones: ['C1'],
   acepta_bizum: true,
+  tiene_coche: true,
 }, [
   { tipo: 'dni', estado: 'validado' },
   { tipo: 'notas_universidad', estado: 'pendiente' },

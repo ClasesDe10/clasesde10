@@ -17,6 +17,7 @@ for (const id of [
   'p-idiomas',
   'p-certificaciones',
   'p-bizum',
+  'p-coche',
   'perfil-calidad-panel',
 ]) {
   assert.ok(professorDashboard.includes(`id="${id}"`), `Missing teacher profile field ${id}`);
@@ -30,6 +31,9 @@ assert.ok(professorDashboard.includes('Entrenador / monitor deportivo'), 'Teache
 assert.ok(professorDashboard.includes('Notas finales del curso anterior'), 'Teacher documents must request previous course grades');
 assert.ok(professorDashboard.includes('Expediente o notas universitarias'), 'Teacher documents must request university/main training grades');
 assert.ok(professorDashboard.includes('Curriculum opcional'), 'Teacher documents must keep CV optional');
+assert.ok(professorDashboard.includes('Coche para desplazamientos'), 'Teacher profile must ask for car availability');
+assert.ok(aiEngine.includes('estimateTravelForMatch'), 'Matching engine must estimate travel distance/time');
+assert.ok(aiEngine.includes('locationEstimate'), 'Matching results must expose location estimate');
 
 for (const removed of [
   'p-tarifa',
@@ -52,6 +56,8 @@ for (const field of [
   'nota_bachillerato',
   'nota_media_universidad',
   'acepta_bizum',
+  'tiene_coche',
+  'hasCar',
   'profileCompletionPercent',
   'profileIssues',
   'trustScore',
@@ -65,6 +71,7 @@ for (const field of [
 assert.ok(adminDashboard.includes("fila('Nota Bachillerato'"), 'Admin detail must show Bachillerato grade');
 assert.ok(adminDashboard.includes("fila('Nota formacion superior'"), 'Admin detail must show higher education grade');
 assert.ok(adminDashboard.includes("fila('Bizum'"), 'Admin detail must show Bizum confirmation');
+assert.ok(adminDashboard.includes("fila('Coche'"), 'Admin detail must show car availability');
 assert.ok(!adminDashboard.includes("fila('Tarifa'"), 'Admin detail must not show teacher-provided tariff');
 
 console.log(JSON.stringify({

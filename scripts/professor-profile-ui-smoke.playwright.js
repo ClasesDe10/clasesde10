@@ -59,6 +59,7 @@ async (page) => {
   await page.locator('#p-foto-file').setInputFiles('assets/img/logo-192.png');
   await page.waitForFunction(() => Boolean(document.querySelector('#p-foto-preview img')), null, { timeout: 30000 });
   await page.locator('#p-nivel').selectOption({ label: 'Grado universitario' });
+  await page.locator('#p-coche').selectOption('si');
   await page.locator('#p-bizum').check();
   for (const item of ['Matematicas', 'Padel']) {
     await page.locator('#nueva-materia').fill(item);
@@ -80,7 +81,7 @@ async (page) => {
   const t = result.teacher || {};
   if (result.user?.telefono !== '611222333') throw new Error('Professor user phone was not saved.');
   if (!String(t.foto_url || '').startsWith('data:image/jpeg')) throw new Error('Professor file photo was not saved.');
-  if (t.exactStudy !== 'Grado en Matematicas' || t.acepta_bizum !== true || t.perfil_completo !== true) throw new Error('Professor core profile was not saved.');
+  if (t.exactStudy !== 'Grado en Matematicas' || t.acepta_bizum !== true || t.hasCar !== true || t.perfil_completo !== true) throw new Error('Professor core profile was not saved.');
   if (!Array.isArray(t.materias) || !t.materias.includes('Padel')) throw new Error('Professor activities were not saved.');
   if (!Array.isArray(t.specialties) || !t.specialties.includes('EVAU')) throw new Error('Professor specialties were not saved.');
   if (!Array.isArray(t.languages) || !t.languages.includes('Ingles')) throw new Error('Professor languages were not saved.');

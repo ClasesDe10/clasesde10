@@ -46,6 +46,8 @@ const completeTeacher = {
   nota_bachillerato: 8.7,
   nota_media_universidad: 8.1,
   disponibilidad_resumen: 'Tardes entre semana',
+  hasCar: true,
+  tiene_coche: true,
   rating: 4.8,
   acceptanceRate: 0.9,
   responseTimeHours: 2,
@@ -124,6 +126,30 @@ const presencialRanking = rankTeachersForRequest(presencialRequest, [remoteTeach
 assert.equal(presencialRanking[0].teacherUid, 'teacher_local');
 assert.ok(presencialRanking[0].scoreBreakdown.location.points > presencialRanking[1].scoreBreakdown.location.points);
 assert.ok(presencialRanking[0].scoreBreakdown.availability.points > presencialRanking[1].scoreBreakdown.availability.points);
+assert.ok(presencialRanking[0].locationEstimate.drivingMinutes > 0);
+assert.ok(presencialRanking[0].reasons.some((reason) => reason.includes('Desplazamiento estimado')));
+
+const noCarTeacher = {
+  ...completeTeacher,
+  id: 'teacher_no_car',
+  teacherUid: 'teacher_no_car',
+  modalidad: 'presencial',
+  codigo_postal: '28045',
+  zona: 'Arganzuela',
+  hasCar: false,
+  tiene_coche: false,
+};
+const carTeacher = {
+  ...noCarTeacher,
+  id: 'teacher_with_car',
+  teacherUid: 'teacher_with_car',
+  hasCar: true,
+  tiene_coche: true,
+};
+const travelRanking = rankTeachersForRequest(presencialRequest, [noCarTeacher, carTeacher], { limit: 2, includeZeroScore: true });
+assert.equal(travelRanking[0].teacherUid, 'teacher_with_car');
+assert.ok(travelRanking[0].scoreBreakdown.location.points > travelRanking[1].scoreBreakdown.location.points);
+assert.ok(travelRanking[1].risks.some((risk) => risk.toLowerCase().includes('coche')));
 
 const reliableTeacher = {
   ...completeTeacher,

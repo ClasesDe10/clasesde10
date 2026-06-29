@@ -160,12 +160,143 @@ function rate01(value) {
   return number > 1 ? clamp(number, 0, 100) / 100 : clamp(number, 0, 1);
 }
 
+function booleanOrNull(...values) {
+  for (const value of values) {
+    if (value === true || value === false) return value;
+    const text = normalizeText(value);
+    if (!text) continue;
+    if (['si', 'yes', 'true', '1', 'coche', 'vehiculo', 'vehiculo_propio'].includes(text)) return true;
+    if (['no', 'false', '0', 'sin_coche', 'transporte_publico'].includes(text)) return false;
+  }
+  return null;
+}
+
 function yearsFromText(value) {
   const text = normalizeText(value);
   const explicit = text.match(/(\d+(?:[.,]\d+)?)\s*(?:anos|año|anios|years)/);
   if (explicit) return Number(explicit[1].replace(',', '.'));
   const any = text.match(/\b(\d{1,2})\b/);
   return any ? Number(any[1]) : 0;
+}
+
+function coordinatePair(entity = {}) {
+  const source = entity.location || entity.coordinates || entity.geo || {};
+  const lat = firstNumber(
+    entity.lat,
+    entity.latitude,
+    entity.locationLat,
+    entity.geoLat,
+    source.lat,
+    source.latitude,
+  );
+  const lng = firstNumber(
+    entity.lng,
+    entity.lon,
+    entity.long,
+    entity.longitude,
+    entity.locationLng,
+    entity.geoLng,
+    source.lng,
+    source.lon,
+    source.long,
+    source.longitude,
+  );
+  if (lat === null || lng === null) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function distanceKmBetween(a, b) {
+  const radiusKm = 6371;
+  const toRad = (value) => (value * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return round(2 * radiusKm * Math.asin(Math.sqrt(h)), 1);
+}
+
+function postalDistanceEstimateKm(requestPostal, teacherPostal) {
+  const req = clean(requestPostal);
+  const teacher = clean(teacherPostal);
+  if (!/^\d{5}$/.test(req) || !/^\d{5}$/.test(teacher)) return null;
+  if (req === teacher) return 1.2;
+  if (req.slice(0, 3) === teacher.slice(0, 3)) {
+    return round(Math.min(7.5, 1.8 + Math.abs(Number(req.slice(3)) - Number(teacher.slice(3))) * 0.38), 1);
+  }
+  if (req.slice(0, 2) === teacher.slice(0, 2)) {
+    return round(Math.min(22, 7 + Math.abs(Number(req.slice(2)) - Number(teacher.slice(2))) * 0.18), 1);
+  }
+  return round(35 + Math.abs(Number(req.slice(0, 2)) - Number(teacher.slice(0, 2))) * 18, 1);
+}
+
+function sameStreetConfidence(requestAddress, teacherAddress) {
+  const reqTokens = tokenize(requestAddress).filter((token) => !['calle', 'avenida', 'avda', 'plaza', 'paseo', 'numero', 'piso'].includes(token));
+  const teacherTokens = tokenize(teacherAddress).filter((token) => !['calle', 'avenida', 'avda', 'plaza', 'paseo', 'numero', 'piso'].includes(token));
+  if (!reqTokens.length || !teacherTokens.length) return false;
+  return overlapCount(new Set(reqTokens), new Set(teacherTokens)) >= Math.min(2, reqTokens.length);
+}
+
+export function estimateTravelForMatch(requestProfile = {}, teacherProfile = {}) {
+  const requestCoords = coordinatePair(requestProfile);
+  const teacherCoords = coordinatePair(teacherProfile);
+  const requestPostal = clean(requestProfile.postalCode);
+  const teacherPostal = clean(teacherProfile.postalCode);
+  const requestZone = normalizeText([requestProfile.zone, requestProfile.city].filter(Boolean).join(' '));
+  const teacherZone = normalizeText([teacherProfile.zone, teacherProfile.city].filter(Boolean).join(' '));
+  const requestAddress = clean(requestProfile.address, 240);
+  const teacherAddress = clean(teacherProfile.address, 240);
+  const hasCar = teacherProfile.hasCar;
+  let straightKm = null;
+  let confidence = 'none';
+
+  if (requestCoords && teacherCoords) {
+    straightKm = distanceKmBetween(requestCoords, teacherCoords);
+    confidence = 'coordinates';
+  } else {
+    const postalKm = postalDistanceEstimateKm(requestPostal, teacherPostal);
+    if (postalKm !== null) {
+      straightKm = postalKm;
+      confidence = 'postal_code';
+    } else if (requestAddress && teacherAddress && sameStreetConfidence(requestAddress, teacherAddress)) {
+      straightKm = 1.1;
+      confidence = 'street_text';
+    } else if (requestZone && teacherZone && (teacherZone.includes(requestZone) || requestZone.includes(teacherZone))) {
+      straightKm = 3.2;
+      confidence = 'zone_text';
+    } else if (requestZone && teacherZone && overlapCount(new Set(tokenize(requestZone)), new Set(tokenize(teacherZone))) > 0) {
+      straightKm = 6.5;
+      confidence = 'zone_partial';
+    }
+  }
+
+  if (straightKm === null) {
+    return {
+      available: false,
+      confidence,
+      hasCar,
+      needsCar: true,
+      detail: 'Sin datos suficientes para estimar km/tiempo.',
+    };
+  }
+
+  const drivingKm = round(Math.max(0.8, straightKm * 1.35), 1);
+  const speedKmh = drivingKm <= 8 ? 18 : drivingKm <= 20 ? 25 : 35;
+  const parkingMinutes = drivingKm <= 3 ? 4 : drivingKm <= 12 ? 6 : 8;
+  const drivingMinutes = Math.max(5, Math.round((drivingKm / speedKmh) * 60 + parkingMinutes));
+  const needsCar = drivingKm > 5;
+  return {
+    available: true,
+    confidence,
+    hasCar,
+    needsCar,
+    straightKm,
+    drivingKm,
+    drivingMinutes,
+    detail: `${drivingKm} km aprox. en coche, ${drivingMinutes} min aprox.`,
+  };
 }
 
 export function getTeacherName(teacher) {
@@ -303,6 +434,7 @@ export function getTeacherProfile(teacher = {}) {
     availabilitySlots: Array.isArray(teacher.availabilitySlots || teacher.disponibilidadSlots)
       ? (teacher.availabilitySlots || teacher.disponibilidadSlots)
       : normalizeAvailabilitySlots(teacher.disponibilidad_detalle),
+    hasCar: booleanOrNull(teacher.hasCar, teacher.tiene_coche, teacher.carAvailable, teacher.vehiculo_propio, teacher.coche),
     bio: clean(teacher.bio || teacher.presentacion || teacher.experiencia || teacher.experienceSummary, 1500),
     hasBizum: teacher.acepta_bizum === true || teacher.hasBizum === true,
     status: lower(teacher.estado_verificacion || teacher.verificationStatus || teacher.status || teacher.estado),
@@ -339,6 +471,9 @@ export function getRequestProfile(request = {}) {
     zone: clean(request.zona || request.zone || metadata.zona || family.zona || family.city || family.ciudad, 180),
     city: clean(request.ciudad || metadata.ciudad || family.ciudad || family.city, 120),
     postalCode: clean(request.codigo_postal || request.postalCode || metadata.codigo_postal || family.codigo_postal || family.postalCode, 20),
+    address: clean(request.direccion || request.address || metadata.direccion || metadata.address || student.direccion || student.address || family.direccion || family.address, 240),
+    lat: firstNumber(request.lat, request.latitude, metadata.lat, metadata.latitude, student.lat, student.latitude, family.lat, family.latitude),
+    lng: firstNumber(request.lng, request.lon, request.longitude, metadata.lng, metadata.lon, metadata.longitude, student.lng, student.lon, student.longitude, family.lng, family.lon, family.longitude),
     schedule: clean(request.preferencia_horario || request.disponibilidad || request.schedule || metadata.disponibilidad || metadata.frecuencia || metadata.inicio, 300),
     studentName: clean(student.nombre || request.alumno_nombre || metadata.alumno, 160),
     familyName: clean([family.nombre, family.apellidos].filter(Boolean).join(' ') || request.familia_nombre, 160),
@@ -362,6 +497,8 @@ export function evaluateTeacherProfile(teacher = {}) {
   if (!profile.postalCode) issues.push({ field: 'codigo_postal', label: 'Completar codigo postal', weight: 4 });
   if (!profile.zone) issues.push({ field: 'zona', label: 'Completar zona donde da clase', weight: 8 });
   else strengths.push('Zona definida');
+  if (profile.hasCar === null) issues.push({ field: 'movilidad', label: 'Indicar si tiene coche', weight: 3 });
+  else strengths.push(profile.hasCar ? 'Tiene coche para desplazarse' : 'Movilidad sin coche declarada');
   if (!profile.subjects.length) issues.push({ field: 'materias', label: 'Anadir materias', weight: 14 });
   else strengths.push(`${profile.subjects.length} materia(s)`);
   if (!profile.levels.length) issues.push({ field: 'niveles', label: 'Anadir niveles educativos', weight: 12 });
@@ -389,7 +526,7 @@ export function evaluateTeacherProfile(teacher = {}) {
 
   const penalty = issues.reduce((sum, issue) => sum + issue.weight, 0);
   const score = Math.max(0, Math.min(100, 100 - penalty));
-  const blockingIssues = issues.filter((issue) => !['verificacion'].includes(issue.field));
+  const blockingIssues = issues.filter((issue) => !['verificacion', 'movilidad'].includes(issue.field));
   const readiness = profile.active && score >= 85 && ['verificado', 'verified', 'activo', 'active'].includes(profile.status)
     ? 'asignable'
     : score >= 65
@@ -408,10 +545,10 @@ export function evaluateTeacherProfile(teacher = {}) {
   };
 }
 
-function component(name, ratio, detail, reasons = [], risks = []) {
+function component(name, ratio, detail, reasons = [], risks = [], extra = {}) {
   const max = MATCHING_WEIGHTS[name];
   const points = round(max * clamp(ratio, 0, 1));
-  return { name, points, max, detail, reasons, risks };
+  return { name, points, max, detail, reasons, risks, ...extra };
 }
 
 function scoreSubject(requestProfile, teacherProfile) {
@@ -457,6 +594,30 @@ function scoreLocation(requestProfile, teacherProfile) {
   const teacherZone = normalizeText([teacherProfile.zone, teacherProfile.city, teacherProfile.address].filter(Boolean).join(' '));
   const reqPostal = normalizeText(requestProfile.postalCode);
   const teacherPostal = normalizeText(teacherProfile.postalCode);
+  const estimate = estimateTravelForMatch(requestProfile, teacherProfile);
+  if (estimate.available) {
+    let ratio = 0.18;
+    if (estimate.drivingKm <= 2.5) ratio = 1;
+    else if (estimate.drivingKm <= 5) ratio = 0.9;
+    else if (estimate.drivingKm <= 8) ratio = 0.76;
+    else if (estimate.drivingKm <= 12) ratio = 0.58;
+    else if (estimate.drivingKm <= 18) ratio = 0.38;
+
+    const reasons = [`Desplazamiento estimado: ${estimate.detail}.`];
+    const risks = [];
+    if (estimate.confidence !== 'coordinates') risks.push('Distancia estimada sin coordenadas exactas; confirmar direccion antes de asignar.');
+    if (estimate.hasCar === false && estimate.drivingKm > 5) {
+      ratio = Math.min(ratio, estimate.drivingKm > 10 ? 0.25 : 0.42);
+      risks.push('El profesor no ha marcado coche para un desplazamiento presencial largo.');
+    } else if (estimate.hasCar === null && estimate.drivingKm > 8) {
+      ratio = Math.min(ratio, 0.62);
+      risks.push('El profesor no ha indicado si tiene coche.');
+    } else if (estimate.hasCar === true && estimate.needsCar) {
+      reasons.push('Tiene coche declarado para desplazamientos.');
+    }
+    return component('location', ratio, estimate.detail, reasons, risks, { locationEstimate: estimate });
+  }
+
   if (!reqZone && !reqPostal) return component('location', 0.45, 'Zona de familia no indicada', [], ['Falta zona/codigo postal de la familia']);
   if (!teacherZone && !teacherPostal) return component('location', 0.25, 'Zona del profesor no indicada', [], ['Falta zona/codigo postal del profesor']);
   if (reqPostal && teacherPostal && reqPostal === teacherPostal) return component('location', 1, 'Mismo codigo postal', ['Codigo postal compatible.']);
@@ -629,6 +790,7 @@ export function scoreTeacherForRequest(request, teacher) {
     points: part.points,
     max: part.max,
     detail: part.detail,
+    ...(part.locationEstimate ? { locationEstimate: part.locationEstimate } : {}),
   }]));
 
   const reasons = unique(components.flatMap((part) => part.reasons));
@@ -662,6 +824,7 @@ export function scoreTeacherForRequest(request, teacher) {
     teacherEmail: teacherProfile.email,
     score: normalized,
     scoreBreakdown: breakdown,
+    locationEstimate: breakdown.location?.locationEstimate || null,
     reasons: unique(reasons).slice(0, 8),
     risks: unique(risks).slice(0, 8),
     profileScore: teacherQuality.score,
@@ -706,7 +869,8 @@ export function buildMatchingAiPrompt(requestProfile, baseCandidates = []) {
     const breakdown = Object.entries(candidate.scoreBreakdown || {})
       .map(([key, value]) => `${key}:${value.points}/${value.max}`)
       .join(', ');
-    return `P${index + 1}: id="${candidate.teacherUid}" nombre="${candidate.teacherName}" scoreBase=${candidate.score} breakdown="${breakdown}" razones="${(candidate.reasons || []).join('; ')}" riesgos="${(candidate.risks || []).join('; ')}"`;
+    const travel = candidate.locationEstimate?.detail || candidate.scoreBreakdown?.location?.locationEstimate?.detail || candidate.scoreBreakdown?.location?.detail || 'sin estimacion';
+    return `P${index + 1}: id="${candidate.teacherUid}" nombre="${candidate.teacherName}" scoreBase=${candidate.score} desplazamiento="${travel}" breakdown="${breakdown}" razones="${(candidate.reasons || []).join('; ')}" riesgos="${(candidate.risks || []).join('; ')}"`;
   }).join('\n');
 
   return [
@@ -715,7 +879,7 @@ export function buildMatchingAiPrompt(requestProfile, baseCandidates = []) {
     'Tu papel es reordenar candidatos ya prefiltrados y explicar riesgos pedagogicos u operativos.',
     'El score final esta acotado por el sistema; tu score es solo una senal auxiliar.',
     '',
-    `SOLICITUD: materia="${profile.subject}" nivel="${profile.level}" modalidad="${profile.modality}" zona="${profile.zone}" cp="${profile.postalCode}" horario="${profile.schedule}" alumno="${profile.studentName}"`,
+    `SOLICITUD: materia="${profile.subject}" nivel="${profile.level}" modalidad="${profile.modality}" zona="${profile.zone}" cp="${profile.postalCode}" direccion="${profile.address}" horario="${profile.schedule}" alumno="${profile.studentName}"`,
     'CANDIDATOS:',
     teacherBlock,
     '',

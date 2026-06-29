@@ -26,6 +26,7 @@ const teacher = normalizeEntityForWrite('profesores', {
   experiencia_anios: '4',
   disponibilidad_resumen: 'Tardes',
   acepta_bizum: true,
+  tiene_coche: true,
   profileCompletionPercent: 92,
   estado_verificacion: 'pendiente',
 });
@@ -36,6 +37,7 @@ assert.equal(teacher.displayName, 'Ana Garcia');
 assert.deepEqual(teacher.subjects, ['Matematicas', 'Fisica']);
 assert.equal(teacher.experienceYears, 4);
 assert.equal(teacher.hasBizum, true);
+assert.equal(teacher.hasCar, true);
 assert.equal(teacher.verificationStatus, 'pendiente');
 assert.equal(teacher.estado_verificacion, 'pendiente');
 assert.equal(teacher.schemaVersion, DATA_SCHEMA_VERSION);

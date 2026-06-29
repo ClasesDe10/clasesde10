@@ -80,6 +80,12 @@ function firstValue(profile, fields) {
   return '';
 }
 
+function booleanKnown(value) {
+  if (value === true || value === false) return true;
+  const text = cleanText(value, 40).toLowerCase();
+  return ['si', 'no', 'true', 'false', '1', '0'].includes(text);
+}
+
 function documentStatus(doc) {
   return normalizeDocumentRecord(doc).status;
 }
@@ -143,6 +149,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
   const academicVerified = hasDocument(docs, ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificacion', 'academic'], VERIFIED_DOCUMENT_STATUSES);
   const cvDoc = hasDocument(docs, ['curriculum', 'cv']);
   const pendingDocs = (docs || []).filter((doc) => PENDING_DOCUMENT_STATUSES.has(documentStatus(doc))).length;
+  const carKnown = booleanKnown(firstValue(profile, ['tiene_coche', 'hasCar', 'carAvailable', 'vehiculo_propio']));
   const hasAvailability = hasText(firstValue(profile, ['disponibilidad_resumen', 'availabilitySummary']), 10)
     || Array.isArray(profile.disponibilidad) && profile.disponibilidad.length > 0;
 
@@ -159,6 +166,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     { key: 'niveles', label: 'Niveles compatibles', weight: 7, required: true, complete: levels.length > 0 },
     { key: 'disponibilidad', label: 'Disponibilidad real', weight: 7, required: true, complete: hasAvailability },
     { key: 'bizum', label: 'Bizum confirmado', weight: 4, required: true, complete: profile.acepta_bizum === true || profile.hasBizum === true },
+    { key: 'movilidad', label: 'Movilidad presencial declarada', weight: 3, required: false, complete: carKnown },
     { key: 'especialidades', label: 'Especialidades concretas', weight: 4, required: false, complete: specialties.length > 0 },
     { key: 'idiomas', label: 'Idiomas de atencion', weight: 3, required: false, complete: languages.length > 0 },
     { key: 'certificaciones', label: 'Certificaciones adicionales', weight: 3, required: false, complete: certifications.length > 0 || academicDoc },
@@ -209,6 +217,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
       specialties,
       languages,
       certifications,
+      hasCar: firstValue(profile, ['tiene_coche', 'hasCar', 'carAvailable', 'vehiculo_propio']) === true,
       phone: phone.value,
       postalCode: postalCode.value,
       bachilleratoGrade: parseGrade(firstValue(profile, ['nota_bachillerato', 'bachilleratoGrade'])),
@@ -218,6 +227,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
       trustIndicator('Identidad documentada', identityDoc, identityVerified ? 'Validada por admin' : identityDoc ? 'Pendiente de validacion' : 'Sin documento'),
       trustIndicator('Expediente academico', academicDoc, academicVerified ? 'Validado por admin' : academicDoc ? 'Pendiente de validacion' : 'Sin notas/expediente'),
       trustIndicator('Foto y contacto', hasText(firstValue(profile, ['foto_url', 'photoUrl']), 20) && phone.valid),
+      trustIndicator('Movilidad declarada', carKnown, carKnown ? 'Coche/transporte indicado' : 'Sin declarar'),
       trustIndicator('Perfil completo para matching', summary.complete),
       trustIndicator('Especializacion visible', specialties.length > 0 || certifications.length > 0),
       trustIndicator('Historial operativo', Number(trustProfile.metrics.completedClasses || 0) > 0, `${trustProfile.metrics.completedClasses || 0} clase(s)`),
