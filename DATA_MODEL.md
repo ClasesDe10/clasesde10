@@ -69,6 +69,7 @@ Aliases are collection-scoped. A payment must not inherit class fields such as `
 - `js/firebase-auth.js`: normalizes profiles created during signup and Google login.
 - `scripts/firebase-automation-worker.mjs`: normalizes root documents created by automation.
 - `scripts/data-schema-test.mjs`: protects the contract in CI/local quality checks.
+- `scripts/firestore-data-model-audit.mjs`: audits existing Firestore documents and can apply additive normalization with `--apply`.
 
 ## Migration Path
 
