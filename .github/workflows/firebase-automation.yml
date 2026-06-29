@@ -7,8 +7,13 @@ on:
         description: "Run without writing to Firestore"
         required: false
         default: "false"
+      mode:
+        description: "critical runs low-quota operational automations; full also refreshes trust, analytics and health snapshots"
+        required: false
+        default: "critical"
   schedule:
     - cron: "*/10 * * * *"
+    - cron: "17 3 * * *"
 
 concurrency:
   group: firebase-automation-worker
@@ -41,14 +46,31 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-2.0-flash
-          SYSTEM_JOB_LIMIT: 50
+          ALLOW_QUOTA_EXHAUSTED: "true"
+          SYSTEM_JOB_LIMIT: 15
+          AUTOMATION_LIMIT: 15
+          TRUST_CONTEXT_LIMIT: 400
+          MATCHING_TEACHER_SCAN_LIMIT: 400
+          MATCHING_USER_SCAN_LIMIT: 800
+          MATCHING_ASSIGNMENT_SCAN_LIMIT: 1000
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -z "$FIREBASE_SERVICE_ACCOUNT_BASE64" ]; then
             echo "::warning::Firebase automation skipped: configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64 as a repository secret."
             exit 0
           fi
+          MODE="${{ github.event.inputs.mode }}"
+          if [ -z "$MODE" ]; then
+            MODE="critical"
+          fi
+          if [ "${{ github.event.schedule }}" = "17 3 * * *" ]; then
+            MODE="full"
+          fi
+          EXTRA_ARGS="--critical --limit=15"
+          if [ "$MODE" = "full" ]; then
+            EXTRA_ARGS="--limit=35"
+          fi
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            npm run automation:matching -- --dry-run
+            npm run automation:matching -- $EXTRA_ARGS --dry-run
           else
-            npm run automation:matching
+            npm run automation:matching -- $EXTRA_ARGS
           fi

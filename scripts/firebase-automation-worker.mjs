@@ -90,6 +90,8 @@ const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run');
 const selfTest = args.has('--self-test');
 const trustOnly = args.has('--trust-only');
+const criticalOnly = args.has('--critical') || lower(process.env.AUTOMATION_MODE) === 'critical';
+const allowQuotaExhaustedExit = lower(process.env.ALLOW_QUOTA_EXHAUSTED) === 'true';
 const limitArg = process.argv.find((arg) => arg.startsWith('--limit='));
 const limit = Number(limitArg?.split('=')[1] || process.env.AUTOMATION_LIMIT || 50);
 const trustContextLimit = Math.max(1, Number(process.env.TRUST_CONTEXT_LIMIT || 2000));
@@ -2849,6 +2851,7 @@ async function main() {
   const stats = {
     dryRun,
     trustOnly,
+    criticalOnly,
     leadsSeen: 0,
     leadsFlaggedForReview: 0,
     familyLeadsProcessed: 0,
@@ -2927,10 +2930,8 @@ async function main() {
     return;
   }
 
-  await processPlatformAutomationSweep(db, stats);
   await processQueuedSystemJobs(db, stats);
   await processPublicLeads(db, stats);
-  await processTrustReputation(db, stats);
   await processPendingRequests(db, stats);
   await processAssignedRequests(db, stats);
   await processClassLifecycle(db, stats);
@@ -2942,6 +2943,14 @@ async function main() {
   await reconcileVerifiedPayments(db, stats);
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
+
+  if (criticalOnly) {
+    console.log(JSON.stringify(stats, null, 2));
+    return;
+  }
+
+  await processPlatformAutomationSweep(db, stats);
+  await processTrustReputation(db, stats);
   await writeAnalyticsRollup(db, stats);
   const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');
   stats.metricSnapshotsCreated += 1;
@@ -2958,6 +2967,17 @@ main().catch((error) => {
       'Firebase credentials unavailable. Set FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64, ' +
       'or configure GOOGLE_APPLICATION_CREDENTIALS for local dry-runs.',
     );
+  }
+  if (allowQuotaExhaustedExit && /RESOURCE_EXHAUSTED|Quota exceeded/i.test(stack)) {
+    console.warn('Firestore quota exhausted; automation will retry on the next GitHub Actions schedule.');
+    console.log(JSON.stringify({
+      status: 'quota_exhausted',
+      retry: 'next_schedule',
+      criticalOnly,
+      limit,
+      timestamp: isoNow(),
+    }, null, 2));
+    process.exit(0);
   }
   console.error(stack);
   process.exit(1);
