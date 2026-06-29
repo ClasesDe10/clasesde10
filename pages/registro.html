@@ -121,6 +121,27 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   color: var(--navy);
   margin-bottom: 10px;
 }
+.auth-next-steps {
+  display: grid;
+  gap: 8px;
+  margin: -4px 0 18px;
+  padding: 14px;
+  border: 1px solid rgba(15,31,61,.10);
+  border-radius: var(--radius-sm);
+  background: rgba(15,31,61,.035);
+}
+.auth-next-steps strong {
+  color: var(--navy);
+  font-size: .86rem;
+}
+.auth-next-steps ol {
+  display: grid;
+  gap: 5px;
+  padding-left: 18px;
+  color: var(--gray-mid);
+  font-size: .78rem;
+  line-height: 1.45;
+}
 .sr-only {
   position: absolute;
   width: 1px;
@@ -167,6 +188,10 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     gap: 10px;
   }
   .rol-card {
+    padding: 12px;
+  }
+  .auth-next-steps {
+    margin-top: 0;
     padding: 12px;
   }
   .form-control {
@@ -221,6 +246,8 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
         <div class="rol-card-sub">Quiero dar clases particulares</div>
       </label>
     </div>
+
+    <div class="auth-next-steps" id="auth-next-steps" aria-live="polite"></div>
 
     <div id="google-register-block">
       <button type="button" class="google-auth-btn" id="btn-google-registro">
@@ -308,6 +335,7 @@ const cardFamilia    = document.getElementById('card-familia');
 const cardProfesor   = document.getElementById('card-profesor');
 const profesorExtra  = document.getElementById('profesor-extra');
 const googleBlock    = document.getElementById('google-register-block');
+const authNextSteps  = document.getElementById('auth-next-steps');
 const pwdBar         = document.getElementById('pwd-bar');
 const formRegistro   = document.getElementById('form-registro');
 const emailInput     = document.getElementById('email');
@@ -317,6 +345,32 @@ let rolSeleccionado  = 'familia';
 const params = new URLSearchParams(window.location.search);
 const alumnoToken = params.get('token') || '';
 const profesorRequiredIds = [];
+const nextStepsByRole = {
+  familia: {
+    title: 'Despues de crear la cuenta',
+    steps: [
+      'Anades el alumno para el que buscas profesor.',
+      'Envias una solicitud corta con materia, nivel y horario.',
+      'Te avisamos cuando haya profesor, chat y primera clase.',
+    ],
+  },
+  profesor: {
+    title: 'Despues de crear la cuenta',
+    steps: [
+      'Completas tu perfil profesional con foto, estudios, zona y disponibilidad.',
+      'El equipo valida tus datos antes de asignarte alumnos.',
+      'Recibiras solicitudes y coordinaras clases desde chat y calendario.',
+    ],
+  },
+  alumno: {
+    title: 'Despues de crear el acceso',
+    steps: [
+      'Entraras con la invitacion de tu familia.',
+      'Veras tus clases, profesor y mensajes permitidos.',
+      'La familia mantiene el control de pagos y solicitudes.',
+    ],
+  },
+};
 
 if (params.get('rol') === 'profesor') rolSeleccionado = 'profesor';
 if (params.get('rol') === 'familia') rolSeleccionado = 'familia';
@@ -337,6 +391,14 @@ function showError(msg) {
 }
 function hideError() { errorBanner.style.display = 'none'; }
 
+function renderNextSteps() {
+  const config = nextStepsByRole[rolSeleccionado] || nextStepsByRole.familia;
+  authNextSteps.innerHTML = `
+    <strong>${sanitize(config.title)}</strong>
+    <ol>${config.steps.map((step) => `<li>${sanitize(step)}</li>`).join('')}</ol>
+  `;
+}
+
 function setRol(rol) {
   rolSeleccionado = rol;
   cardFamilia.classList.toggle('selected', rol === 'familia');
@@ -346,6 +408,7 @@ function setRol(rol) {
     const el = document.getElementById(id);
     if (el) el.required = rol === 'profesor';
   });
+  renderNextSteps();
 }
 
 // Selección de rol

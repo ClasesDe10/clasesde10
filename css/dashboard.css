@@ -220,11 +220,168 @@
   background: #fff;
 }
 
+.family-journey-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 380px);
+  gap: 18px;
+  align-items: stretch;
+  margin-bottom: 20px;
+  padding: 18px;
+  border: 1px solid rgba(15, 31, 61, .10);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ffffff 0%, #fffaf0 100%);
+  box-shadow: var(--shadow-sm);
+}
+
+.family-journey-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.family-journey-eyebrow {
+  color: var(--gold-text);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.family-journey-card h2 {
+  margin: 4px 0 6px;
+  color: var(--navy);
+  font-size: clamp(1.2rem, 2vw, 1.65rem);
+  line-height: 1.15;
+}
+
+.family-journey-card p {
+  max-width: 760px;
+  color: var(--text-body);
+  font-size: .94rem;
+  line-height: 1.55;
+}
+
+.family-journey-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.family-journey-actions .btn {
+  min-height: 42px;
+}
+
+.family-journey-reassurance {
+  margin-top: 12px;
+  color: var(--gray-mid);
+  font-size: .8rem;
+}
+
+.family-journey-side {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid rgba(15, 31, 61, .08);
+  border-radius: 10px;
+  background: rgba(255,255,255,.78);
+}
+
+.family-journey-progress-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  color: var(--gray-mid);
+  font-size: .78rem;
+  font-weight: 800;
+}
+
+.family-journey-progress-head strong {
+  color: var(--navy);
+  font-size: 1rem;
+}
+
+.family-journey-progress {
+  height: 8px;
+  margin: 8px 0 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15,31,61,.10);
+}
+
+.family-journey-progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gold), var(--teal));
+}
+
+.family-journey-steps {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+}
+
+.family-journey-step {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  color: var(--gray-mid);
+  font-size: .8rem;
+}
+
+.family-journey-step:not(.is-done)[data-family-journey-action] {
+  cursor: pointer;
+}
+
+.family-journey-step:not(.is-done)[data-family-journey-action]:hover span:last-child {
+  color: var(--navy);
+  text-decoration: underline;
+}
+
+.family-journey-step-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(111,105,95,.28);
+  border-radius: 999px;
+  color: transparent;
+  font-size: .55rem;
+  font-weight: 900;
+}
+
+.family-journey-step.is-done {
+  color: var(--text-dark);
+}
+
+.family-journey-step.is-done .family-journey-step-dot {
+  border-color: rgba(22,163,74,.22);
+  background: rgba(22,163,74,.12);
+  color: var(--success);
+}
+
 @media (max-width: 760px) {
   .relationship-digest-head,
   .relationship-row,
   .relationship-row-side {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .family-journey-card {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .family-journey-actions {
+    flex-direction: column;
+  }
+
+  .family-journey-actions .btn {
+    width: 100%;
+    justify-content: center;
   }
 
   .relationship-summary {

@@ -96,6 +96,8 @@
 
       <!-- ══ INICIO ══ -->
       <section id="section-inicio" class="dash-section">
+        <div id="family-journey-panel"></div>
+
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-card-header"><div class="stat-card-icon navy">👨‍👩‍👧</div></div>
@@ -360,7 +362,9 @@
     <div class="modal-body">
       <div class="alert alert-info" style="margin-bottom:16px">
         <span class="alert-icon">ℹ</span>
-        <div class="alert-body">Recibirás respuesta en menos de 24 horas.</div>
+        <div class="alert-body">
+          Envia la solicitud una sola vez. Despues revisaremos el matching, asignaremos profesor y abriremos chat para cerrar horario y calendario.
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Hijo/a <span class="required">*</span></label>
@@ -408,6 +412,12 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="hijo-id">
+      <div class="alert alert-info" style="margin-bottom:16px">
+        <span class="alert-icon">ℹ</span>
+        <div class="alert-body">
+          Primero registramos al alumno. Al guardar, te guiaremos directamente para pedir profesor.
+        </div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Nombre <span class="required">*</span></label>
@@ -518,6 +528,8 @@ import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-relations';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
+import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-journey';
+import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-journey';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -682,6 +694,47 @@ document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
   setTimeout(() => document.querySelector('[data-chat-tab="notificaciones"]')?.click(), 100);
 });
 
+function abrirModalNuevoHijo() {
+  irA('alumnos');
+  setTimeout(() => document.getElementById('btn-nuevo-hijo')?.click(), 120);
+}
+
+function abrirModalNuevaSolicitud() {
+  irA('solicitudes');
+  setTimeout(() => document.getElementById('btn-nueva-solicitud')?.click(), 140);
+}
+
+function handleFamilyJourneyAction(action) {
+  const normalized = String(action || '').trim();
+  if (!normalized) return;
+  const routes = {
+    add_student: abrirModalNuevoHijo,
+    request_teacher: abrirModalNuevaSolicitud,
+    open_requests: () => irA('solicitudes'),
+    open_chat: () => irA('chat'),
+    open_calendar: () => irA('calendario'),
+    open_classes: () => irA('clases'),
+    open_payments: () => irA('pagos'),
+    complete_profile: () => irA('perfil'),
+  };
+  (routes[normalized] || (() => irA('inicio')))();
+}
+
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-family-journey-action]');
+  if (!trigger) return;
+  e.preventDefault();
+  handleFamilyJourneyAction(trigger.dataset.familyJourneyAction);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const trigger = e.target.closest?.('[data-family-journey-action]');
+  if (!trigger) return;
+  e.preventDefault();
+  handleFamilyJourneyAction(trigger.dataset.familyJourneyAction);
+});
+
 // ── INICIO ───────────────────────────────────────────────────────
 async function cargarChatsUsuarioActual() {
   const uid = usuario.uid || usuario.firebase_uid || usuario.id;
@@ -725,7 +778,7 @@ async function cargarFirestoreIn(nombreColeccion, campo, valores = []) {
 
 function renderFamilyRelationshipDigest({ hijos = [], asignaciones = [], clases = [], pagos = [], solicitudes = [], documentos = [], chats = [], profesores = [] } = {}) {
   const container = document.getElementById('family-relationship-digest');
-  if (!container) return;
+  if (!container) return [];
   const relationships = buildRelationshipsFromCollections({
     requests: solicitudes,
     assignments: asignaciones,
@@ -745,6 +798,24 @@ function renderFamilyRelationshipDigest({ hijos = [], asignaciones = [], clases 
     navAttribute: 'data-section',
     max: 4,
   });
+  return relationships;
+}
+
+function renderFamilyJourney({ hijos = [], relationships = [], solicitudes = [], pagos = [], documentos = [] } = {}) {
+  const container = document.getElementById('family-journey-panel');
+  if (!container) return;
+  alumnosFamiliaPerfilCache = hijos || [];
+  documentosFamiliaPerfilCache = (documentos || []).filter((doc) => !['justificante_pago', 'pago'].includes(String(doc.tipo || '').toLowerCase()));
+  const profileEvaluation = evaluarPerfilFamiliaActual();
+  const state = buildFamilyJourneyState({
+    family: familiaData,
+    profileEvaluation,
+    students: hijos || [],
+    relationships: relationships || [],
+    requests: solicitudes || [],
+    payments: pagos || [],
+  });
+  container.innerHTML = renderFamilyJourneyPanel(state);
 }
 
 async function cargarInicio() {
@@ -821,7 +892,7 @@ async function cargarInicio() {
     } else {
       document.getElementById('lista-profesores-inicio').innerHTML = '<div class="empty-state"><div class="empty-icon">👩‍🏫</div><div class="empty-title">Sin profesor asignado</div><div class="empty-desc">Envía una solicitud y te asignaremos el mejor profesor.</div><button class="btn btn-gold" data-action="abrir-modal-solicitud">Solicitar profesor</button></div>';
     }
-    renderFamilyRelationshipDigest({
+    const relationships = renderFamilyRelationshipDigest({
       hijos,
       asignaciones: asig || [],
       clases: clasesRelacion || [],
@@ -831,10 +902,20 @@ async function cargarInicio() {
       chats: chatsRelacion || [],
       profesores: profesoresRelacion,
     });
+    renderFamilyJourney({
+      hijos,
+      relationships,
+      solicitudes: solicitudesRelacion || [],
+      pagos: pagosRelacion || [],
+      documentos: documentosRelacion || [],
+    });
   } else {
     document.getElementById('stat-clases-mes').textContent = 0;
     document.getElementById('stat-profesores').textContent = 0;
-    renderFamilyRelationshipDigest();
+    document.getElementById('lista-proximas-inicio').innerHTML = '<div class="empty-state"><div class="empty-title">Sin clases todavia</div><div class="empty-desc">Primero anade un alumno y solicita profesor.</div></div>';
+    document.getElementById('lista-profesores-inicio').innerHTML = '<div class="empty-state"><div class="empty-title">Sin profesor asignado</div><div class="empty-desc">Cuando registres un alumno, te guiaremos para pedir profesor.</div><button class="btn btn-primary" data-family-journey-action="add_student">Anadir hijo/a</button></div>';
+    const relationships = renderFamilyRelationshipDigest();
+    renderFamilyJourney({ hijos: [], relationships, solicitudes: [], pagos: [], documentos: [] });
   }
 }
 
@@ -1090,6 +1171,7 @@ document.getElementById('btn-nuevo-hijo').addEventListener('click', () => {
 
 document.getElementById('btn-guardar-hijo').addEventListener('click', async () => {
   const id       = document.getElementById('hijo-id').value;
+  const isNew    = !id;
   const nombre   = document.getElementById('h-nombre').value.trim();
   const apellidos = document.getElementById('h-apellidos').value.trim();
   if (!nombre || !apellidos) { showToast('Atención','Nombre y apellidos son obligatorios.','warning'); return; }
@@ -1103,14 +1185,22 @@ document.getElementById('btn-guardar-hijo').addEventListener('click', async () =
     familia_id:      familiaId,
   };
 
-  const { error } = id
-    ? await db.from('alumnos').update(payload).eq('id', id)
-    : await db.from('alumnos').insert(payload);
+  const { data: saved, error } = id
+    ? await db.from('alumnos').update(payload).eq('id', id).select('id').single()
+    : await db.from('alumnos').insert(payload).select('id').single();
 
   if (error) { showToast('Error', error.message, 'error'); return; }
   document.getElementById('modal-hijo').classList.remove('open');
-  showToast('Guardado', id ? 'Datos actualizados.' : 'Hijo/a añadido/a.', 'success');
-  cargarHijos();
+  await cargarHijos();
+  await cargarInicio();
+  if (isNew) {
+    await cargarSolicitudes();
+    if (saved?.id) document.getElementById('sol-alumno').value = saved.id;
+    document.getElementById('modal-solicitud').classList.add('open');
+    showToast('Hijo/a añadido/a', 'Ahora indica materia y horario para pedir profesor.', 'success');
+  } else {
+    showToast('Guardado', 'Datos actualizados.', 'success');
+  }
 });
 
 // ── SOLICITUDES ──────────────────────────────────────────────────
@@ -1163,8 +1253,12 @@ document.getElementById('btn-enviar-solicitud').addEventListener('click', async 
   if (error) { showToast('Error', error.message, 'error'); return; }
   trackSolicitudProfesor(materia);
   document.getElementById('modal-solicitud').classList.remove('open');
-  showToast('Solicitud enviada', 'Te contactaremos en menos de 24 horas.', 'success');
-  cargarSolicitudes();
+  document.getElementById('sol-materia').value = '';
+  document.getElementById('sol-horario').value = '';
+  document.getElementById('sol-observaciones').value = '';
+  showToast('Solicitud enviada', 'Siguiente paso: revisaremos el matching y te avisaremos cuando haya profesor, chat y horario.', 'success');
+  await cargarSolicitudes();
+  irA('inicio');
 });
 
 // ── PAGOS ────────────────────────────────────────────────────────

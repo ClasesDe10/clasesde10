@@ -128,6 +128,11 @@ async function runCase({ role, collection, script }) {
 
 const cases = [
   {
+    role: 'familia-journey',
+    collection: 'familias',
+    script: 'scripts/family-journey-ui-smoke.playwright.js',
+  },
+  {
     role: 'familia',
     collection: 'familias',
     script: 'scripts/family-profile-ui-smoke.playwright.js',
