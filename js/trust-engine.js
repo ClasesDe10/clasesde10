@@ -8,6 +8,10 @@
  */
 
 import { normalizeDocumentRecord } from './document-center-engine.js';
+import {
+  classFamilyPaymentState,
+  isClassFamilyPaid,
+} from './payment-engine.js';
 
 export const TRUST_VERSION = 'trust_reputation_v2';
 
@@ -165,6 +169,43 @@ function paymentStatus(item = {}) {
     item.estado_pago_familia,
     item.reconciliationStatus,
   ));
+}
+
+function paymentScheduleKeysFor(item = {}) {
+  const assignmentId = cleanTrustText(first(item.assignmentId, item.asignacion_id, item.id), 180);
+  const teacherUid = cleanTrustText(first(item.teacherUid, item.profesor_id), 180);
+  const studentId = cleanTrustText(first(item.studentId, item.alumno_id), 180);
+  return [
+    assignmentId ? `assignment:${assignmentId}` : '',
+    teacherUid && studentId ? `teacher-student:${teacherUid}:${studentId}` : '',
+    teacherUid ? `teacher:${teacherUid}` : '',
+  ].filter(Boolean);
+}
+
+function paymentScheduleIndex(context = {}) {
+  const index = new Map();
+  for (const schedule of context.paymentSchedules || []) {
+    index.set(cleanTrustText(schedule.id, 180), schedule);
+    paymentScheduleKeysFor(schedule).forEach((key) => index.set(key, schedule));
+  }
+  return index;
+}
+
+function paymentScheduleForClass(item = {}, index = new Map()) {
+  for (const key of paymentScheduleKeysFor(item)) {
+    const found = index.get(key);
+    if (found) return found;
+  }
+  return null;
+}
+
+function classHasFamilyAmount(item = {}) {
+  const amount = numberOrNull(first(item.familyAmount, item.precio_total, item.amount, item.total));
+  return amount !== null && amount > 0;
+}
+
+function classHasLinkedFamilyPayment(item = {}) {
+  return hasText(first(item.familyPaymentId, item.paymentId, item.pago_id, item.paymentUid), 3);
 }
 
 function documentStatus(item = {}) {
@@ -480,8 +521,22 @@ function familyOperationalMetrics(profile, context, now) {
   const requests = (context.requests || []).filter((item) => itemMatchesAnyId(item, ids, ['familyUid', 'familia_id', 'userUid', 'usuario_id']));
   const assignments = (context.assignments || []).filter((item) => itemMatchesAnyId(item, ids, ['familyUid', 'familia_id', 'userUid']));
   const incidents = incidentsFor(profile, context, 'family');
+  const schedules = paymentScheduleIndex(context);
   const paid = payments.filter((item) => PAID_PAYMENT_STATUSES.has(paymentStatus(item)));
   const pendingPayments = payments.filter((item) => PENDING_PAYMENT_STATUSES.has(paymentStatus(item)));
+  const classPaymentSignals = completed
+    .filter((item) => classHasFamilyAmount(item))
+    .map((item) => {
+      const state = classFamilyPaymentState(item, paymentScheduleForClass(item, schedules), {
+        classEndAt: classEnd(item),
+        nowMs: now.getTime(),
+      });
+      return { item, state };
+    });
+  const unlinkedClassPaymentSignals = classPaymentSignals.filter(({ item }) => !classHasLinkedFamilyPayment(item));
+  const paidClassPayments = unlinkedClassPaymentSignals.filter(({ item, state }) => state.state === 'paid' || isClassFamilyPaid(item));
+  const pendingClassPayments = unlinkedClassPaymentSignals.filter(({ state }) => state.state === 'pending' || state.state === 'overdue');
+  const overdueClassPayments = unlinkedClassPaymentSignals.filter(({ state }) => state.state === 'overdue');
   const activeStudents = students.filter((item) => item.active !== false && item.activo !== false);
   const lastActivityAt = latestDate([
     profile.lastLoginAt,
@@ -494,7 +549,9 @@ function familyOperationalMetrics(profile, context, now) {
     ...payments.map((item) => first(item.createdAt, item.updatedAt, item.paidAt)),
   ]);
   const firstActivityAt = earliestDate([profile.createdAt, profile.created_at, ...requests.map((item) => first(item.createdAt, item.created_at)), ...classes.map(classStart)]);
-  const paymentReliability = payments.length ? paid.length / payments.length : null;
+  const effectivePaymentTotal = payments.length + pendingClassPayments.length + paidClassPayments.length;
+  const effectivePaidPayments = paid.length + paidClassPayments.length;
+  const paymentReliability = effectivePaymentTotal ? effectivePaidPayments / effectivePaymentTotal : null;
   const completionRate = safeRatio(completed.length, evaluated.length);
   const cancellationRate = safeRatio(cancelled.length + noShow.length, evaluated.length);
   return {
@@ -513,10 +570,11 @@ function familyOperationalMetrics(profile, context, now) {
     adjustedCompletionRate: bayesianRate(completed.length, evaluated.length, 0.75, 12),
     adjustedCancellationRate: bayesianRate(cancelled.length + noShow.length, evaluated.length, 0.08, 12),
     completedHours: round(completed.reduce((sum, item) => sum + classDurationHours(item), 0), 1),
-    paidPayments: paid.length,
-    pendingPayments: pendingPayments.length,
+    paidPayments: effectivePaidPayments,
+    pendingPayments: pendingPayments.length + pendingClassPayments.length,
+    overdueClassPayments: overdueClassPayments.length,
     paymentReliability,
-    adjustedPaymentReliability: bayesianRate(paid.length, payments.length, 0.72, 10),
+    adjustedPaymentReliability: bayesianRate(effectivePaidPayments, effectivePaymentTotal, 0.72, 10),
     openIncidents: incidents.open.length,
     totalIncidents: incidents.incidents.length,
     criticalIncidents: incidents.critical.length,
@@ -612,6 +670,7 @@ function familyRiskFlags(metrics, docs, flags) {
     !flags.adminVerified ? 'admin_verification_missing' : '',
     !docs.identityUploaded ? 'guardian_identity_missing' : '',
     metrics.activeStudents < 1 ? 'no_active_students' : '',
+    metrics.overdueClassPayments > 0 ? 'overdue_class_payments' : '',
     metrics.pendingPayments > 0 ? 'pending_payments' : '',
     metrics.openIncidents > 0 ? 'open_incidents' : '',
     (metrics.cancellationRate ?? 0) > 0.2 && metrics.evaluatedClasses >= 5 ? 'high_cancellation_rate' : '',
@@ -838,7 +897,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     scoreComponent('profile', 'Perfil familiar', completion * 0.17 + (hasContact ? 2 : 0) + (hasAddress ? 1 : 0), 20, `${round(completion)}% completado`),
     scoreComponent('identity', 'Contacto e identidad', (hasContact ? 5 : 0) + (hasAddress ? 4 : 0) + (docs.identityVerified ? 5 : docs.identityUploaded ? 2 : 0) + (flags.adminVerified ? 2 : 0), 16, `${docs.verifiedCount} documento(s) validados`),
     scoreComponent('students', 'Alumnos y solicitudes', Math.min(8, metrics.activeStudents * 6) + Math.min(4, metrics.requests.length * 1.2), 12, `${metrics.activeStudents} alumno(s), ${metrics.requests.length} solicitud(es)`),
-    scoreComponent('payment', 'Fiabilidad de pagos', paymentReliability * 22 - Math.min(7, metrics.pendingPayments * 2), 22, `${metrics.paidPayments} pago(s) validados`),
+    scoreComponent('payment', 'Fiabilidad de pagos', paymentReliability * 22 - Math.min(7, metrics.pendingPayments * 2) - Math.min(8, (metrics.overdueClassPayments || 0) * 4), 22, `${metrics.paidPayments} pago(s) validados`),
     scoreComponent('class_history', 'Compromiso con clases', classReliability * 16 - Math.min(5, metrics.openIncidents * 2), 16, `${metrics.completedClasses} clase(s) realizadas`),
     scoreComponent('activity', 'Actividad y antiguedad', recentActivityRatio(metrics.inactiveDays) * 6 + Math.min(4, (metrics.tenureDays || 0) / 45), 10, metrics.inactiveDays === null || metrics.inactiveDays === undefined ? 'Actividad no registrada' : `Activo hace ${metrics.inactiveDays} dia(s)`),
     scoreComponent('safety', 'Incidencias y calidad', 4 - Math.min(4, metrics.criticalIncidents * 2 + metrics.claims), 4, `${metrics.openIncidents} incidencia(s) abiertas`, 'admin'),
@@ -846,6 +905,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
 
   let score = Math.round(components.reduce((sum, item) => sum + item.points, 0));
   if (flags.blocked) score = Math.min(score, 30);
+  if (metrics.overdueClassPayments > 0) score = Math.min(score, 78);
   if (metrics.pendingPayments > 0) score = Math.min(score, 86);
   if (metrics.openIncidents > 0) score = Math.min(score, 84);
   score = clamp(score, 0, 100);
@@ -857,7 +917,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     docs.identityVerified ? badge('identity_verified', 'Tutor validado', 'success', 'Documento del tutor validado', 'identidad tutor validada') : null,
     completion >= 90 ? badge('profile_complete', 'Perfil completo', 'success', 'Datos suficientes para asignaciones precisas', 'perfil >= 90%') : null,
     metrics.activeStudents > 0 ? badge('students_ready', 'Alumno registrado', 'info', `${metrics.activeStudents} alumno(s) activo(s)`, 'alumno activo') : null,
-    (metrics.paymentReliability ?? 0) >= 0.9 && metrics.payments.length >= 2 ? badge('payment_reliable', 'Pagos fiables', 'success', 'Historial de pagos positivo', 'pagos >= 90%') : null,
+    (metrics.paymentReliability ?? 0) >= 0.9 && metrics.payments.length >= 2 ? badge('payment_reliable', 'Justificantes al dia', 'success', 'Historial de justificantes positivo', 'justificantes >= 90%') : null,
     (metrics.cancellationRate ?? 0) <= 0.1 && metrics.evaluatedClasses >= 3 ? badge('low_cancellation', 'Buena asistencia', 'success', 'Baja cancelacion', 'cancelacion <= 10%') : null,
     metrics.openIncidents === 0 && metrics.completedClasses >= 3 ? badge('clean_record', 'Sin incidencias abiertas', 'success', 'No hay incidencias abiertas registradas', '0 incidencias abiertas', false, 'admin') : null,
   ].filter(Boolean);
@@ -867,7 +927,8 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     !hasAddress ? 'Falta direccion o codigo postal para matching presencial.' : '',
     !metrics.activeStudents ? 'Sin alumnos activos.' : '',
     !docs.identityUploaded ? 'Documento de tutor no subido.' : '',
-    metrics.pendingPayments > 0 ? `${metrics.pendingPayments} pago(s) pendiente(s).` : '',
+    metrics.overdueClassPayments > 0 ? `${metrics.overdueClassPayments} clase(s) con justificante vencido.` : '',
+    metrics.pendingPayments > 0 ? `${metrics.pendingPayments} justificante(s) pendiente(s).` : '',
     metrics.openIncidents > 0 ? `${metrics.openIncidents} incidencia(s) abierta(s).` : '',
     completion < 80 ? 'Perfil familiar incompleto.' : '',
   ].filter(Boolean);
@@ -892,7 +953,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
       signal('contact', 'Contacto operativo', hasContact ? 'positive' : 'warning', hasContact ? 'Completo' : 'Pendiente'),
       signal('identity', 'Identidad tutor', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Validada' : docs.identityUploaded ? 'Pendiente' : 'No subida'),
       signal('students', 'Alumno registrado', metrics.activeStudents > 0 ? 'positive' : 'warning', `${metrics.activeStudents} activo(s)`),
-      signal('payments', 'Pagos', metrics.pendingPayments ? 'warning' : 'positive', metrics.pendingPayments ? `${metrics.pendingPayments} pendiente(s)` : 'Sin pagos pendientes'),
+      signal('payments', 'Justificantes', metrics.overdueClassPayments ? 'warning' : metrics.pendingPayments ? 'warning' : 'positive', metrics.overdueClassPayments ? `${metrics.overdueClassPayments} vencido(s)` : metrics.pendingPayments ? `${metrics.pendingPayments} pendiente(s)` : 'Sin justificantes pendientes'),
       signal('classes', 'Historial de clases', metrics.completedClasses > 0 ? 'positive' : 'neutral', `${metrics.completedClasses} clase(s)`),
     ],
     metrics: {
@@ -909,6 +970,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
       completedHours: metrics.completedHours,
       paidPayments: metrics.paidPayments,
       pendingPayments: metrics.pendingPayments,
+      overdueClassPayments: metrics.overdueClassPayments,
       paymentReliability: metrics.paymentReliability,
       adjustedPaymentReliability: metrics.adjustedPaymentReliability,
       openIncidents: metrics.openIncidents,
@@ -937,9 +999,10 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     adminStats: {
       sampleConfidence: confidence(metrics.evaluatedClasses, 12, 0.25),
       reputationCanBeManipulatedByProfileOnly: false,
-      sourceCollections: ['familias', 'documentos', 'alumnos', 'clases', 'pagos', 'solicitudes', 'asignaciones', 'incidencias'],
+      sourceCollections: ['familias', 'documentos', 'alumnos', 'clases', 'pagos', 'paymentSchedules', 'solicitudes', 'asignaciones', 'incidencias'],
       riskFlags,
       pendingPayments: metrics.pendingPayments,
+      overdueClassPayments: metrics.overdueClassPayments,
       openIncidents: metrics.openIncidents,
       pendingDocuments: docs.pendingCount,
     },

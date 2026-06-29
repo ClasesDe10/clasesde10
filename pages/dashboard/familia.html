@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-family-finance-privacy">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-weekly-payments">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -512,6 +512,53 @@
   </div>
 </div>
 
+<!-- MODAL: PLAN SEMANAL DE JUSTIFICANTES -->
+<div class="modal-overlay" id="modal-plan-pago">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-plan-pago-titulo">Plan semanal de justificantes</span>
+      <button class="modal-close">x</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="plan-pago-assignment-id">
+      <input type="hidden" id="plan-pago-teacher-id">
+      <input type="hidden" id="plan-pago-student-id">
+      <div class="alert alert-info" style="margin-bottom:16px">
+        <span class="alert-icon">i</span>
+        <div class="alert-body">
+          Marca el dia y hora semanal en que enviaras el justificante de esta relacion. Si pasan 24 horas desde ese momento sin validarse, el sistema lo tratara como vencido y avisara automaticamente.
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Dia semanal</label>
+          <select class="form-control" id="plan-pago-dia">
+            <option value="1">Lunes</option>
+            <option value="2">Martes</option>
+            <option value="3">Miercoles</option>
+            <option value="4">Jueves</option>
+            <option value="5">Viernes</option>
+            <option value="6">Sabado</option>
+            <option value="7">Domingo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hora aproximada</label>
+          <input class="form-control" type="time" id="plan-pago-hora" value="20:00">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nota interna opcional</label>
+        <textarea class="form-control" id="plan-pago-notas" rows="2" placeholder="Ej: cerramos la semana los viernes despues de la ultima clase"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-plan-pago">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar-plan-pago">Guardar plan semanal</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: SUBIR JUSTIFICANTE PAGO -->
 <div class="modal-overlay" id="modal-pago">
   <div class="modal">
@@ -574,7 +621,14 @@ import {
   classStatusForBadge,
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260629-attendance-direct';
-import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
+import {
+  buildFamilyPaymentPayload,
+  buildWeeklyPaymentSchedulePayload,
+  classFamilyPaymentState,
+  paymentScheduleDocumentId,
+  paymentScheduleLabel,
+  paymentStatusForBadge,
+} from '../../js/payment-engine.js?v=20260629-weekly-payments';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-busy-slots';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
@@ -631,6 +685,7 @@ let chatInicializado = false;
 let documentosFamiliaPerfilCache = [];
 let alumnosFamiliaPerfilCache = [];
 let disponibilidadHijosCache = new Map();
+let paymentSchedulesCache = new Map();
 
 function ownerUid() {
   return usuario.uid || usuario.firebase_uid || usuario.id;
@@ -1065,9 +1120,16 @@ async function cargarInicio() {
 // ── CALENDARIO ───────────────────────────────────────────────────
 let cal;
 async function iniciarCalendario() {
+  await cargarPaymentSchedulesFamilia();
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
+      classDotClass: (clase) => familyPaymentStateForClass(clase).dotClass,
+      legendItems: [
+        { className: 'dot-gold', label: 'Sin justificar' },
+        { className: 'dot-teal', label: 'Validada' },
+        { className: 'dot-red', label: 'Vencida +24h' },
+      ],
       onDiaClick: (fecha, clases) => {
         document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
         const cont = document.getElementById('cal-clases-dia');
@@ -1081,15 +1143,30 @@ async function iniciarCalendario() {
           });
           return;
         }
-        cont.innerHTML = clases.map(c => `
-          <div class="clase-item" style="padding:10px 16px">
+        cont.innerHTML = clases.map(c => {
+          const payment = familyPaymentStateForClass(c);
+          const puedeConfirmar = claseTerminada(c, 0)
+            && !['cancelada', 'reprogramada'].includes(c.estado)
+            && (isScheduledClassStatus(c.estado || c.status) || c.estado === 'realizada');
+          const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
+          const actions = puedeConfirmar && !yaConfirmada ? `
+            <div class="calendar-class-actions">
+              <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Dada</button>
+              <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="no_realizada">No dada</button>
+            </div>
+          ` : '';
+          return `
+          <div class="clase-item calendar-class-item payment-${payment.state}" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||'')}</div>
               <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}</div>
+              <div class="calendar-payment-state">${renderPaymentStateBadge(c)}</div>
+              ${actions}
             </div>
             ${badgeEstado(classStatusForBadge(c))}
-          </div>`).join('');
+          </div>`;
+        }).join('');
       },
       onMesChange: cargarClasesCalendario,
     });
@@ -1099,6 +1176,7 @@ async function iniciarCalendario() {
 
 async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
+  await cargarPaymentSchedulesFamilia();
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
   if (!hijos?.length) return;
   const ids = hijos.map(h => h.id);
@@ -1175,8 +1253,8 @@ async function cargarClases() {
       && (isScheduledClassStatus(c.estado || c.status) || c.estado === 'realizada');
     const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
     const acciones = puedeConfirmar && !yaConfirmada ? `
-      <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Realizada</button>
-      <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="incidencia">Reportar incidencia</button>
+      <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Dada</button>
+      <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="no_realizada">No dada</button>
     ` : '—';
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
@@ -1198,10 +1276,22 @@ async function cargarClases() {
 document.getElementById('tbody-clases')?.addEventListener('click', async (event) => {
   const btn = event.target.closest('[data-action="confirmar-clase-familia"]');
   if (!btn) return;
+  await confirmarClaseFamiliaDesdeBoton(btn);
+});
 
+document.getElementById('cal-clases-dia')?.addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-action="confirmar-clase-familia"]');
+  if (!btn) return;
+  await confirmarClaseFamiliaDesdeBoton(btn);
+});
+
+async function confirmarClaseFamiliaDesdeBoton(btn) {
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
   const status = btn.dataset.status;
-  const notas = status === 'incidencia'
-    ? window.prompt('Cuéntanos brevemente qué pasó con la clase:') || ''
+  const notas = ['incidencia', 'no_realizada'].includes(status)
+    ? window.prompt(status === 'no_realizada' ? 'Cuéntanos por qué no se dio la clase:' : 'Cuéntanos brevemente qué pasó con la clase:') || ''
     : '';
 
   const claseRef = firestoreDoc(firebaseDb, 'clases', btn.dataset.id);
@@ -1211,12 +1301,14 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
   try {
     await updateDoc(claseRef, payload);
   } catch (error) {
+    btn.disabled = false;
+    btn.textContent = originalText;
     showToast('Error', error.message || 'No se pudo confirmar la clase.', 'error');
     return;
   }
 
-  if (status === 'incidencia') {
-    const incidencia = buildClassIncidentPayload(btn.dataset.id, claseActual || {}, 'family_confirmation', notas, usuario.uid || usuario.id);
+  if (['incidencia', 'no_realizada'].includes(status)) {
+    const incidencia = buildClassIncidentPayload(btn.dataset.id, claseActual || {}, 'family_confirmation', notas || 'Clase marcada como no dada por la familia.', usuario.uid || usuario.id);
     const { error: incError } = await db.from('incidencias').insert({
       ...incidencia,
       createdByUid: usuario.uid || usuario.id,
@@ -1225,10 +1317,17 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
     if (incError) console.warn('No se pudo crear incidencia de clase', incError);
   }
 
-  showToast('Clase actualizada', status === 'realizada' ? 'Confirmacion guardada.' : 'Incidencia enviada.', 'success');
-  cargarClases();
-  if (cal) cargarClasesCalendario(cal.anio, cal.mes);
-});
+  showToast('Clase actualizada', status === 'realizada' ? 'Confirmacion guardada.' : 'Aviso enviado.', 'success');
+  await cargarClases();
+  if (cal) {
+    const selectedDay = cal.diaSeleccionado;
+    await cargarClasesCalendario(cal.anio, cal.mes);
+    if (selectedDay) {
+      cal.diaSeleccionado = selectedDay;
+      cal.onDiaClick(selectedDay, cal.clasesPorFecha[selectedDay] || []);
+    }
+  }
+}
 
 // ── MIS HIJOS ────────────────────────────────────────────────────
 function disponibilidadStudentId(slot = {}) {
@@ -1271,6 +1370,95 @@ function renderDisponibilidadMini(slots = []) {
   const summary = summarizeAvailabilitySlots(slots, 3);
   if (!summary) return '<span class="availability-mini-empty">Sin franjas marcadas</span>';
   return `<span class="availability-mini-summary">${sanitize(summary)}</span>`;
+}
+
+function paymentRelationIds(source = {}) {
+  return {
+    assignmentId: source.assignmentId || source.asignacion_id || source.id || '',
+    teacherUid: source.teacherUid || source.profesor_id || source.teacherId || '',
+    studentId: source.studentId || source.alumno_id || source.studentUid || '',
+  };
+}
+
+function paymentScheduleCacheKeys(source = {}) {
+  const ids = paymentRelationIds(source);
+  return [
+    ids.assignmentId ? `assignment:${ids.assignmentId}` : '',
+    ids.teacherUid && ids.studentId ? `teacher-student:${ids.teacherUid}:${ids.studentId}` : '',
+    ids.teacherUid ? `teacher:${ids.teacherUid}` : '',
+  ].filter(Boolean);
+}
+
+function indexPaymentSchedule(schedule = {}) {
+  paymentSchedulesCache.set(schedule.id, schedule);
+  paymentScheduleCacheKeys(schedule).forEach((key) => paymentSchedulesCache.set(key, schedule));
+}
+
+function paymentScheduleFor(source = {}) {
+  for (const key of paymentScheduleCacheKeys(source)) {
+    const found = paymentSchedulesCache.get(key);
+    if (found) return found;
+  }
+  return null;
+}
+
+async function cargarPaymentSchedulesFamilia() {
+  paymentSchedulesCache = new Map();
+  const owner = ownerUid();
+  if (!owner) return paymentSchedulesCache;
+  const byId = new Map();
+  for (const [field, value] of [['ownerUid', owner], ['familyUid', familiaId]]) {
+    if (!value) continue;
+    try {
+      const snap = await getDocs(firestoreQuery(
+        firestoreCollection(firebaseDb, 'paymentSchedules'),
+        where(field, '==', value),
+      ));
+      snap.docs.forEach((item) => byId.set(item.id, { id: item.id, ...item.data() }));
+    } catch (error) {
+      console.warn('No se pudieron cargar planes semanales de justificantes', error);
+    }
+  }
+  byId.forEach((schedule) => indexPaymentSchedule(schedule));
+  return paymentSchedulesCache;
+}
+
+function familyPaymentStateForClass(clase = {}) {
+  return classFamilyPaymentState(clase, paymentScheduleFor(clase));
+}
+
+function formatPaymentDueAt(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function renderPaymentStateBadge(clase = {}) {
+  const state = familyPaymentStateForClass(clase);
+  const dueText = state.dueAt
+    ? ` · Limite ${formatPaymentDueAt(state.dueAt)}`
+    : ' · Define un plan semanal';
+  return `<span class="badge badge-${state.tone === 'danger' ? 'danger' : state.tone === 'success' ? 'success' : 'warning'}">${sanitize(state.badge)}</span><span class="payment-due-hint">${sanitize(dueText)}</span>`;
+}
+
+function renderPaymentScheduleMini(source = {}) {
+  const schedule = paymentScheduleFor(source);
+  if (!schedule) return '<span class="availability-mini-empty">Sin plan semanal</span>';
+  return `<span class="availability-mini-summary">${sanitize(paymentScheduleLabel(schedule))}</span>`;
+}
+
+function abrirPlanPago(asignacion = {}, alumno = {}) {
+  const ids = paymentRelationIds({ ...asignacion, studentId: asignacion.studentId || asignacion.alumno_id || alumno.id });
+  const schedule = paymentScheduleFor({ ...ids, id: ids.assignmentId }) || {};
+  document.getElementById('plan-pago-assignment-id').value = ids.assignmentId;
+  document.getElementById('plan-pago-teacher-id').value = ids.teacherUid;
+  document.getElementById('plan-pago-student-id').value = ids.studentId;
+  document.getElementById('plan-pago-dia').value = String(schedule.dayOfWeek || schedule.paymentDay || schedule.dia_semana_pago || 5);
+  document.getElementById('plan-pago-hora').value = schedule.time || schedule.paymentTime || schedule.hora_pago || '20:00';
+  document.getElementById('plan-pago-notas').value = schedule.notes || schedule.notas || '';
+  document.getElementById('modal-plan-pago-titulo').textContent = `Plan semanal de ${alumno.nombre || 'alumno/a'}`;
+  document.getElementById('modal-plan-pago').classList.add('open');
 }
 
 async function cargarDisponibilidadHijos() {
@@ -1362,9 +1550,10 @@ function renderSolicitudDisponibilidadHint() {
 
 async function cargarHijos() {
   if (!familiaId) return;
-  const { data } = await db.from('alumnos').select('*, asignaciones(materia,subject,profesores(usuarios(nombre,apellidos)))')
+  const { data } = await db.from('alumnos').select('*, asignaciones(materia,subject,profesor_id,teacherUid,studentId,alumno_id,profesores(usuarios(nombre,apellidos)))')
     .eq('familia_id', familiaId).eq('activo', true);
   await cargarDisponibilidadHijos();
+  await cargarPaymentSchedulesFamilia();
 
   const grid = document.getElementById('grid-hijos');
   if (!data?.length) {
@@ -1416,6 +1605,7 @@ async function cargarHijos() {
             : '<span style="color:var(--warning)">Pendiente asignación</span>'}</div>
           ${asignacionPrincipal ? `<div><span style="color:var(--gray-mid)">Materia:</span> ${sanitize(asignacionPrincipal.materia || asignacionPrincipal.subject || '—')}</div>` : ''}
           <div class="availability-mini"><span>Disponibilidad:</span> ${renderDisponibilidadMini(slots)}</div>
+          ${asignacionPrincipal ? `<div class="availability-mini"><span>Plan semanal:</span> ${renderPaymentScheduleMini({ ...asignacionPrincipal, studentId: asignacionPrincipal.studentId || asignacionPrincipal.alumno_id || h.id })}</div>` : ''}
         </div>
         <div class="student-card-actions">
           <button class="btn btn-outline btn-sm"
@@ -1432,6 +1622,12 @@ async function cargarHijos() {
                   data-id="${sanitize(h.id)}"
                   data-nombre="${sanitize(`${h.nombre || ''} ${h.apellidos || ''}`.trim())}">Disponibilidad</button>
           ${!asignacionPrincipal ? `<button class="btn btn-gold btn-sm" data-action="solicitar-hijo" data-id="${sanitize(h.id)}">Solicitar profesor</button>` : ''}
+          ${asignacionPrincipal ? `<button class="btn btn-outline btn-sm"
+                  data-action="plan-pago"
+                  data-assignment-id="${sanitize(asignacionPrincipal.id || '')}"
+                  data-teacher-id="${sanitize(asignacionPrincipal.teacherUid || asignacionPrincipal.profesor_id || '')}"
+                  data-student-id="${sanitize(asignacionPrincipal.studentId || asignacionPrincipal.alumno_id || h.id)}"
+                  data-student-name="${sanitize(h.nombre || 'alumno/a')}">Plan semanal</button>` : ''}
           ${h.usuario_id
             ? '<span class="badge badge-success">Acceso vinculado</span>'
             : `<button class="btn btn-ghost btn-sm" data-action="invitar-alumno" data-alumno-id="${sanitize(h.id)}" data-alumno-nombre="${sanitize(h.nombre)}">Invitar acceso</button>`}
@@ -1464,6 +1660,7 @@ document.getElementById('grid-hijos').addEventListener('click', async (e) => {
   const editBtn = e.target.closest('[data-action="editar-hijo"]');
   const solicitarBtn = e.target.closest('[data-action="solicitar-hijo"]');
   const disponibilidadBtn = e.target.closest('[data-action="disponibilidad-hijo"]');
+  const planPagoBtn = e.target.closest('[data-action="plan-pago"]');
 
   if (editBtn) {
     window.editarHijo(
@@ -1485,6 +1682,19 @@ document.getElementById('grid-hijos').addEventListener('click', async (e) => {
 
   if (disponibilidadBtn) {
     abrirDisponibilidadHijo(disponibilidadBtn.dataset.id, disponibilidadBtn.dataset.nombre);
+    return;
+  }
+
+  if (planPagoBtn) {
+    abrirPlanPago({
+      id: planPagoBtn.dataset.assignmentId,
+      assignmentId: planPagoBtn.dataset.assignmentId,
+      teacherUid: planPagoBtn.dataset.teacherId,
+      studentId: planPagoBtn.dataset.studentId,
+    }, {
+      id: planPagoBtn.dataset.studentId,
+      nombre: planPagoBtn.dataset.studentName,
+    });
     return;
   }
 
@@ -1513,6 +1723,60 @@ document.addEventListener('click', (e) => {
   }
   if (e.target.closest('[data-action="abrir-modal-pago"]')) {
     document.getElementById('modal-pago').classList.add('open');
+  }
+});
+
+document.getElementById('btn-guardar-plan-pago')?.addEventListener('click', async () => {
+  const assignmentId = document.getElementById('plan-pago-assignment-id').value;
+  const teacherUid = document.getElementById('plan-pago-teacher-id').value;
+  const studentId = document.getElementById('plan-pago-student-id').value;
+  const dayOfWeek = Number(document.getElementById('plan-pago-dia').value);
+  const time = document.getElementById('plan-pago-hora').value || '20:00';
+  if (!teacherUid || !studentId) {
+    showToast('Falta relacion', 'No se encontro profesor o alumno para este plan semanal.', 'error');
+    return;
+  }
+  const payload = buildWeeklyPaymentSchedulePayload({
+    ownerUid: ownerUid(),
+    familyUid: familiaId,
+    familia_id: familiaId,
+    teacherUid,
+    profesor_id: teacherUid,
+    studentId,
+    alumno_id: studentId,
+    assignmentId,
+    asignacion_id: assignmentId,
+    dayOfWeek,
+    time,
+    notes: document.getElementById('plan-pago-notas').value,
+  });
+  const id = paymentScheduleDocumentId(payload);
+  try {
+    const ref = firestoreDoc(firebaseDb, 'paymentSchedules', id);
+    const existing = await getDoc(ref).catch(() => null);
+    const timestamps = existing?.exists()
+      ? {
+          updatedAt: serverTimestamp(),
+          updated_at: new Date().toISOString(),
+        }
+      : {
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+    await setDoc(ref, {
+      ...payload,
+      id,
+      ...timestamps,
+    }, { merge: true });
+    indexPaymentSchedule({ ...payload, id });
+    document.getElementById('modal-plan-pago').classList.remove('open');
+    showToast('Plan guardado', `Usaremos ${paymentScheduleLabel(payload)} como limite semanal.`, 'success');
+    await cargarHijos();
+    if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo guardar el plan semanal.', 'error');
   }
 });
 

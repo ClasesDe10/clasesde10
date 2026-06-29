@@ -46,9 +46,11 @@ import {
   isPaymentOverdue,
   isPaymentVerified,
   isTeacherPayout,
+  classFamilyPaymentState,
   matchPaymentToClasses,
   normalizePaymentStatus,
   paymentAmount,
+  weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
 import {
   FINANCE_ERP_VERSION,
@@ -593,6 +595,7 @@ async function loadTrustContext(db) {
     assignments,
     incidents,
     students,
+    paymentSchedules,
   ] = await Promise.all([
     listCollection(db, 'clases'),
     listCollection(db, 'pagos'),
@@ -602,6 +605,7 @@ async function loadTrustContext(db) {
     listCollection(db, 'asignaciones'),
     listCollection(db, 'incidencias'),
     listCollection(db, 'alumnos'),
+    listCollection(db, 'paymentSchedules'),
   ]);
 
   return {
@@ -615,6 +619,7 @@ async function loadTrustContext(db) {
     incidents,
     students,
     alumnos: students,
+    paymentSchedules,
   };
 }
 
@@ -1541,6 +1546,34 @@ function classHasPaidStatus(data = {}) {
   return PAID_PAYMENT_STATUSES.includes(status);
 }
 
+function paymentScheduleKeysFor(data = {}) {
+  const assignmentId = clean(data.assignmentId || data.asignacion_id || data.id, 180);
+  const teacherUid = clean(data.teacherUid || data.profesor_id, 180);
+  const studentId = clean(data.studentId || data.alumno_id, 180);
+  return [
+    assignmentId ? `assignment:${assignmentId}` : '',
+    teacherUid && studentId ? `teacher-student:${teacherUid}:${studentId}` : '',
+    teacherUid ? `teacher:${teacherUid}` : '',
+  ].filter(Boolean);
+}
+
+function buildPaymentScheduleIndex(schedules = []) {
+  const index = new Map();
+  for (const schedule of schedules) {
+    index.set(schedule.id, schedule);
+    paymentScheduleKeysFor(schedule).forEach((key) => index.set(key, schedule));
+  }
+  return index;
+}
+
+function paymentScheduleForClass(data = {}, scheduleIndex = new Map()) {
+  for (const key of paymentScheduleKeysFor(data)) {
+    const schedule = scheduleIndex.get(key);
+    if (schedule) return schedule;
+  }
+  return null;
+}
+
 function classEndAt(data) {
   const date = clean(data.fecha || data.date, 20);
   if (!date) return null;
@@ -2183,6 +2216,8 @@ function classHasPrice(data) {
 
 async function processPaymentReminders(db, stats) {
   const paymentsSnap = await db.collection('pagos').limit(limit).get();
+  const paymentSchedules = await listCollection(db, 'paymentSchedules', limit);
+  const scheduleIndex = buildPaymentScheduleIndex(paymentSchedules);
   for (const doc of paymentsSnap.docs) {
     const data = doc.data();
     const status = paymentStatus(data);
@@ -2209,39 +2244,63 @@ async function processPaymentReminders(db, stats) {
     }
   }
 
-  if (!isEndOfWeekWindow()) return;
-
   const classesSnap = await db.collection('clases').limit(limit).get();
   for (const doc of classesSnap.docs) {
-    const data = doc.data();
+    const data = { id: doc.id, ...doc.data() };
     if (!['realizada', 'completada'].includes(classStatus(data))) continue;
     if (!classHasPrice(data)) continue;
     if (['pagado', 'paid', 'validado'].includes(paymentStatus(data))) continue;
 
     const { familyUid } = await resolveClassRecipients(db, data);
     const label = classLabel(data);
+    const schedule = paymentScheduleForClass(data, scheduleIndex);
+    const paymentState = classFamilyPaymentState(data, schedule, {
+      classEndAt: classEndAt(data),
+      nowMs: Date.now(),
+    });
+    const dueAt = paymentState.dueAt ? new Date(paymentState.dueAt) : null;
+    if (!paymentState.overdue && (!dueAt || dueAt.getTime() > Date.now())) {
+      if (!isEndOfWeekWindow()) continue;
+    }
+    if (paymentState.overdue) {
+      await writeDoc(db.collection('clases'), doc.id, {
+        paymentStatus: 'vencido',
+        familyPaymentStatus: 'vencido',
+        estado_pago: 'vencido',
+        estado_pago_familia: 'vencido',
+        familyPaymentDueAt: paymentState.dueAt || null,
+        paymentDueAt: paymentState.dueAt || null,
+        familyPaymentOverdueAt: now(),
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+    }
     const payload = {
-      type: 'weekly_payment_due',
+      type: paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due',
       classId: doc.id,
+      dueAt: paymentState.dueAt || '',
       url: '/pages/login.html',
     };
     let created = 0;
     created += await notifyUserOnce(
       db,
       familyUid,
-      'Pago semanal pendiente',
-      `Revisa el pago de la clase ${label}. Los pagos se revisan al cierre de la semana.`,
+      paymentState.overdue ? 'Justificante vencido' : 'Justificante pendiente',
+      paymentState.overdue
+        ? `Ha pasado el margen de 24h para enviar el justificante de la clase ${label}.`
+        : `Ya puedes enviar el justificante de la clase ${label}.`,
       payload,
-      `weekly_payment_due_${doc.id}_family`,
+      `${paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due'}_${doc.id}_family`,
     ) ? 1 : 0;
     created += await notifyAdminsOnce(
       db,
-      'Pago semanal pendiente',
-      `Revisar cobro de la clase ${label}.`,
+      paymentState.overdue ? 'Justificante vencido' : 'Justificante pendiente',
+      paymentState.overdue ? `Revisar vencimiento de la clase ${label}.` : `Revisar justificante de la clase ${label}.`,
       payload,
-      `weekly_payment_due_${doc.id}_admin`,
+      `${paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due'}_${doc.id}_admin`,
     );
     stats.weeklyPaymentRemindersCreated += created;
+    if (paymentState.overdue) stats.paymentsMarkedOverdue += 1;
   }
 }
 
@@ -2285,8 +2344,12 @@ async function createPaymentRequestForClassWorker(db, classId, reason = 'automat
     return { created: false, reason: !familyUid ? 'missing_family' : 'missing_amount', classId: id };
   }
 
+  const schedules = await listCollection(db, 'paymentSchedules', limit);
+  const schedule = paymentScheduleForClass(classData, buildPaymentScheduleIndex(schedules));
+  const scheduledDueAt = weeklyPaymentDueAtForClass(classData, schedule, { classEndAt: classEndAt(classData) });
   const dueDays = runtimeNumber('payments.defaultPaymentDueDays', 7, 0, 60);
-  const dueAt = admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000));
+  const dueAtDate = scheduledDueAt ? new Date(scheduledDueAt) : new Date(Date.now() + dueDays * 24 * 60 * 60 * 1000);
+  const dueAt = admin.firestore.Timestamp.fromDate(dueAtDate);
   await writeDoc(db.collection('pagos'), paymentId, {
     paymentType: 'family_payment',
     tipo: 'family_payment',

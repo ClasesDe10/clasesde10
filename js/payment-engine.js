@@ -45,6 +45,15 @@ export const PAYMENT_STATUSES = Object.freeze([
 
 export const PAID_PAYMENT_STATUSES = Object.freeze(['validado', 'pagado', 'paid', 'succeeded']);
 export const OPEN_PAYMENT_STATUSES = Object.freeze(['pendiente', 'solicitado', 'procesando', 'requiere_accion']);
+export const WEEKLY_PAYMENT_DAY_LABELS = Object.freeze({
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miercoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sabado',
+  7: 'Domingo',
+});
 
 export function cleanPaymentText(value, max = 500) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -115,6 +124,144 @@ export function paymentDueAtFromDate(baseDate = new Date(), days = 7) {
   date.setDate(date.getDate() + days);
   date.setHours(23, 59, 59, 999);
   return date.toISOString();
+}
+
+function normalizePaymentScheduleDay(value) {
+  const number = Number(value);
+  if (Number.isFinite(number) && number >= 1 && number <= 7) return Math.round(number);
+  return 5;
+}
+
+function normalizePaymentScheduleTime(value) {
+  const raw = cleanPaymentText(value || '20:00', 8);
+  return /^\d{2}:\d{2}$/.test(raw) ? raw : '20:00';
+}
+
+function mondayBasedDay(date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+function scheduleDateFromClassDate(baseDate, schedule = {}) {
+  const classDate = new Date(baseDate);
+  if (Number.isNaN(classDate.getTime())) return null;
+  const dayOfWeek = normalizePaymentScheduleDay(schedule.dayOfWeek ?? schedule.paymentDay ?? schedule.dia_semana_pago);
+  const time = normalizePaymentScheduleTime(schedule.time ?? schedule.paymentTime ?? schedule.hora_pago);
+  const [hours, minutes] = time.split(':').map(Number);
+  const due = new Date(classDate);
+  due.setHours(hours, minutes, 0, 0);
+  let diff = dayOfWeek - mondayBasedDay(due);
+  if (diff < 0) diff += 7;
+  due.setDate(due.getDate() + diff);
+  if (due.getTime() <= classDate.getTime()) due.setDate(due.getDate() + 7);
+  return due;
+}
+
+export function paymentScheduleDocumentId(input = {}) {
+  return [
+    'weekly',
+    input.ownerUid || input.familyUserUid || input.familyUid || input.familia_id || 'family',
+    input.teacherUid || input.profesor_id || 'teacher',
+    input.studentId || input.alumno_id || input.assignmentId || input.asignacion_id || 'relation',
+  ].map((value) => cleanPaymentText(value, 120).toLowerCase().replace(/[^a-z0-9_-]+/g, '_')).join('__').slice(0, 900);
+}
+
+export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
+  const nowIso = options.nowIso || new Date().toISOString();
+  const dayOfWeek = normalizePaymentScheduleDay(input.dayOfWeek ?? input.paymentDay ?? input.dia_semana_pago);
+  const time = normalizePaymentScheduleTime(input.time ?? input.paymentTime ?? input.hora_pago);
+  const graceHours = Number(input.graceHours ?? input.grace_hours ?? options.defaultGraceHours ?? 24);
+  const safeGraceHours = Number.isFinite(graceHours) ? Math.max(1, Math.min(168, graceHours)) : 24;
+  return {
+    id: input.id || paymentScheduleDocumentId(input),
+    type: 'weekly_family_teacher_payment',
+    status: 'active',
+    active: input.active !== false,
+    ownerUid: input.ownerUid || input.familyUserUid || input.userUid || '',
+    familyUid: input.familyUid || input.familia_id || '',
+    familia_id: input.familia_id || input.familyUid || '',
+    teacherUid: input.teacherUid || input.profesor_id || '',
+    profesor_id: input.profesor_id || input.teacherUid || '',
+    studentId: input.studentId || input.alumno_id || '',
+    alumno_id: input.alumno_id || input.studentId || '',
+    assignmentId: input.assignmentId || input.asignacion_id || '',
+    asignacion_id: input.asignacion_id || input.assignmentId || '',
+    dayOfWeek,
+    paymentDay: dayOfWeek,
+    dia_semana_pago: dayOfWeek,
+    time,
+    paymentTime: time,
+    hora_pago: time,
+    graceHours: safeGraceHours,
+    grace_hours: safeGraceHours,
+    label: cleanPaymentText(input.label || `${WEEKLY_PAYMENT_DAY_LABELS[dayOfWeek]} ${time}`, 120),
+    notes: cleanPaymentText(input.notes || input.notas, 500),
+    source: input.source || 'family_dashboard',
+    updatedAtIso: nowIso,
+  };
+}
+
+export function paymentScheduleLabel(schedule = {}) {
+  if (!schedule || schedule.active === false) return 'Sin plan semanal';
+  const day = normalizePaymentScheduleDay(schedule.dayOfWeek ?? schedule.paymentDay ?? schedule.dia_semana_pago);
+  const time = normalizePaymentScheduleTime(schedule.time ?? schedule.paymentTime ?? schedule.hora_pago);
+  return `${WEEKLY_PAYMENT_DAY_LABELS[day]} ${time}`;
+}
+
+export function weeklyPaymentDueAtForClass(classData = {}, schedule = null, options = {}) {
+  const explicit = classData.paymentDueAt || classData.familyPaymentDueAt || classData.dueAt || classData.due_at;
+  if (explicit) {
+    const parsed = new Date(explicit);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  if (!schedule || schedule.active === false) return '';
+  const classEnd = options.classEndAt || classData.endAt || classData.endsAt
+    || (classData.fecha || classData.date
+      ? `${classData.fecha || classData.date}T${cleanPaymentText(classData.hora_fin || classData.endTime || classData.hora_inicio || classData.startTime || '23:59', 5)}:00`
+      : '');
+  const due = scheduleDateFromClassDate(classEnd, schedule);
+  return due ? due.toISOString() : '';
+}
+
+export function isClassFamilyPaid(classData = {}) {
+  const status = normalizePaymentStatus(
+    classData.familyPaymentStatus
+    || classData.estado_pago_familia
+    || classData.paymentStatus
+    || classData.estado_pago
+    || classData.status_pago_familia,
+  );
+  return PAID_PAYMENT_STATUSES.includes(status);
+}
+
+export function classFamilyPaymentState(classData = {}, schedule = null, options = {}) {
+  if (isClassFamilyPaid(classData)) {
+    return {
+      state: 'paid',
+      label: 'Justificante validado',
+      badge: 'Pagada',
+      dotClass: 'dot-teal',
+      tone: 'success',
+      dueAt: classData.familyPaymentValidatedAt || classData.paidAt || '',
+      overdue: false,
+    };
+  }
+  const dueAt = weeklyPaymentDueAtForClass(classData, schedule, options);
+  const graceHours = Number(schedule?.graceHours ?? schedule?.grace_hours ?? options.defaultGraceHours ?? 24);
+  const safeGraceMs = (Number.isFinite(graceHours) ? Math.max(1, graceHours) : 24) * 3600000;
+  const dueMs = dueAt ? new Date(dueAt).getTime() : NaN;
+  const nowMs = Number(options.nowMs ?? Date.now());
+  const overdue = Number.isFinite(dueMs) && dueMs + safeGraceMs < nowMs;
+  return {
+    state: overdue ? 'overdue' : 'pending',
+    label: overdue ? 'Justificante vencido' : 'Justificante pendiente',
+    badge: overdue ? 'Vencida' : 'Pendiente',
+    dotClass: overdue ? 'dot-red' : 'dot-gold',
+    tone: overdue ? 'danger' : 'warning',
+    dueAt,
+    overdue,
+    graceHours: Number.isFinite(graceHours) ? Math.max(1, graceHours) : 24,
+  };
 }
 
 export function paymentReference(payment = {}) {

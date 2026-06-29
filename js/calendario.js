@@ -7,10 +7,19 @@ import { nombreMes, nombreDia, formatHora } from './utils.js';
 import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js';
 
 export class Calendario {
-  constructor({ contenedor, onDiaClick, onMesChange }) {
+  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, legendItems }) {
     this.contenedor  = contenedor;
     this.onDiaClick  = onDiaClick || (() => {});
     this.onMesChange = onMesChange || (() => {});
+    this.classDotClass = classDotClass || ((classData) => this.coloresPorEstado(classStatusForBadge(classData)));
+    this.legendItems = Array.isArray(legendItems) && legendItems.length
+      ? legendItems
+      : [
+          { className: 'dot-gold', label: 'Pendiente/Reprogramada' },
+          { className: 'dot-navy', label: 'Confirmada' },
+          { className: 'dot-teal', label: 'Realizada' },
+          { className: 'dot-red', label: 'Cancelada' },
+        ];
 
     const hoy = new Date();
     this.anio = hoy.getFullYear();
@@ -95,7 +104,7 @@ export class Calendario {
       const esSel = fecha === this.diaSeleccionado;
 
       const dots = clases.slice(0,4).map(c =>
-        `<div class="day-dot ${this.coloresPorEstado(classStatusForBadge(c))}"></div>`
+        `<div class="day-dot ${this.classDotClass(c)}"></div>`
       ).join('');
 
       diasHTML += `
@@ -122,10 +131,7 @@ export class Calendario {
           <div class="calendar-days">${diasHTML}</div>
         </div>
         <div class="calendar-legend" style="padding:0 16px 14px;display:flex;gap:14px;font-size:.72rem;color:#8a8478">
-          <span><span class="day-dot dot-gold" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Pendiente/Reprogramada</span>
-          <span><span class="day-dot dot-navy" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Confirmada</span>
-          <span><span class="day-dot dot-teal" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Realizada</span>
-          <span><span class="day-dot dot-red" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>Cancelada</span>
+          ${this.legendItems.map((item) => `<span><span class="day-dot ${item.className}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>${item.label}</span>`).join('')}
         </div>
       </div>`;
 

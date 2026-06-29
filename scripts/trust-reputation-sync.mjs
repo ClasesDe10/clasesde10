@@ -124,6 +124,7 @@ const [
   assignments,
   incidents,
   students,
+  paymentSchedules,
 ] = await Promise.all([
   listCollection(token, 'profesores'),
   listCollection(token, 'familias'),
@@ -136,6 +137,7 @@ const [
   listCollection(token, 'asignaciones'),
   listCollection(token, 'incidencias'),
   listCollection(token, 'alumnos'),
+  listCollection(token, 'paymentSchedules'),
 ]);
 
 const usersById = new Map(users.map((item) => [item.id, item]));
@@ -150,6 +152,7 @@ const trustContext = {
   incidents,
   students,
   alumnos: students,
+  paymentSchedules,
 };
 
 const planned = [];

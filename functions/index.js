@@ -947,6 +947,198 @@ function paymentIsOverdue(data = {}) {
   return Boolean(due && due.getTime() < Date.now());
 }
 
+function normalizeWeeklyPaymentDay(value) {
+  const number = Number(value);
+  if (Number.isFinite(number) && number >= 1 && number <= 7) return Math.round(number);
+  return 5;
+}
+
+function normalizeWeeklyPaymentTime(value) {
+  const raw = clean(value || '20:00', 8);
+  return /^\d{2}:\d{2}$/.test(raw) ? raw : '20:00';
+}
+
+function mondayBasedDay(date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+function weeklyPaymentScheduleDate(baseDate, schedule = {}) {
+  if (!baseDate || Number.isNaN(baseDate.getTime())) return null;
+  const due = new Date(baseDate);
+  const dayOfWeek = normalizeWeeklyPaymentDay(schedule.dayOfWeek ?? schedule.paymentDay ?? schedule.dia_semana_pago);
+  const [hours, minutes] = normalizeWeeklyPaymentTime(schedule.time ?? schedule.paymentTime ?? schedule.hora_pago).split(':').map(Number);
+  due.setHours(hours, minutes, 0, 0);
+  let diff = dayOfWeek - mondayBasedDay(due);
+  if (diff < 0) diff += 7;
+  due.setDate(due.getDate() + diff);
+  if (due.getTime() <= baseDate.getTime()) due.setDate(due.getDate() + 7);
+  return due;
+}
+
+function classFamilyPaymentPaid(data = {}) {
+  const status = normalizePaymentStatus(
+    data.familyPaymentStatus
+    || data.estado_pago_familia
+    || data.paymentStatus
+    || data.estado_pago
+    || data.status_pago_familia,
+  );
+  return ['validado', 'pagado', 'paid', 'succeeded'].includes(status);
+}
+
+function weeklyPaymentDueDateForClass(data = {}, schedule = null) {
+  const explicit = paymentDueDate(data);
+  if (explicit) return explicit;
+  if (!schedule || schedule.active === false) return null;
+  return weeklyPaymentScheduleDate(classEndDate(data), schedule);
+}
+
+function weeklyPaymentStateForClass(data = {}, schedule = null) {
+  if (classFamilyPaymentPaid(data)) return { state: 'paid', dueAt: null, overdueAt: null };
+  const dueAt = weeklyPaymentDueDateForClass(data, schedule);
+  if (!dueAt) return { state: 'missing_due_at', dueAt: null, overdueAt: null };
+  const graceHours = Math.max(1, Math.min(168, Number(schedule?.graceHours ?? schedule?.grace_hours ?? 24) || 24));
+  const overdueAt = new Date(dueAt.getTime() + graceHours * 60 * 60 * 1000);
+  if (Date.now() >= overdueAt.getTime()) return { state: 'overdue', dueAt, overdueAt };
+  if (Date.now() >= dueAt.getTime()) return { state: 'pending_due', dueAt, overdueAt };
+  return { state: 'future', dueAt, overdueAt };
+}
+
+function paymentScheduleKeysFor(data = {}) {
+  const keys = [];
+  const assignmentId = clean(data.assignmentId || data.asignacion_id, 180);
+  const teacherUid = clean(data.teacherUid || data.profesor_id, 180);
+  const familyUid = clean(data.familyUid || data.familia_id, 180);
+  const studentId = clean(data.studentId || data.alumno_id, 180);
+  if (assignmentId) keys.push(`assignment:${assignmentId}`);
+  if (teacherUid && studentId) keys.push(`teacher_student:${teacherUid}:${studentId}`);
+  if (teacherUid && familyUid) keys.push(`teacher_family:${teacherUid}:${familyUid}`);
+  if (teacherUid) keys.push(`teacher:${teacherUid}`);
+  return keys;
+}
+
+async function loadPaymentScheduleIndex() {
+  const index = new Map();
+  const snap = await db.collection('paymentSchedules').where('status', '==', 'active').limit(1000).get().catch((error) => {
+    logger.warn('Could not load paymentSchedules for weekly payment automation.', error);
+    return null;
+  });
+  if (!snap) return index;
+  snap.docs.forEach((doc) => {
+    const schedule = { id: doc.id, ...doc.data() };
+    paymentScheduleKeysFor(schedule).forEach((key) => {
+      if (!index.has(key)) index.set(key, schedule);
+    });
+  });
+  return index;
+}
+
+function paymentScheduleForClass(data = {}, scheduleIndex = new Map()) {
+  for (const key of paymentScheduleKeysFor(data)) {
+    const schedule = scheduleIndex.get(key);
+    if (schedule) return schedule;
+  }
+  return null;
+}
+
+async function notifyAdminsOnce(title, body, payload = {}, key = '', extra = {}) {
+  const admins = await getAdminUsers();
+  await Promise.all(admins.map((user) => writeNotificationOnce(
+    user.id,
+    title,
+    body,
+    payload,
+    `${key}_${user.id}`,
+    { ...extra, role: user.role || 'admin' },
+  )));
+}
+
+async function processWeeklyClassPaymentReminders(stats) {
+  const scheduleIndex = await loadPaymentScheduleIndex();
+  const docs = await loadDocsByStatuses(
+    'clases',
+    ['status', 'estado'],
+    ['programada', 'confirmada', 'pendiente_confirmacion', 'scheduled', 'confirmed', 'realizada', 'completed'],
+    50,
+  );
+
+  for (const doc of docs) {
+    const data = { id: doc.id, ...doc.data() };
+    stats.weeklyClassPaymentsChecked += 1;
+    if (classFamilyPaymentPaid(data)) continue;
+
+    const schedule = paymentScheduleForClass(data, scheduleIndex);
+    const state = weeklyPaymentStateForClass(data, schedule);
+    if (!['pending_due', 'overdue'].includes(state.state)) continue;
+
+    const type = state.state === 'overdue' ? 'payment_overdue' : 'weekly_payment_due';
+    const dueIso = state.dueAt.toISOString();
+    const overdueIso = state.overdueAt.toISOString();
+    if (state.state === 'overdue') {
+      await doc.ref.set({
+        familyPaymentStatus: 'vencido',
+        estado_pago_familia: 'vencido',
+        paymentStatus: 'vencido',
+        estado_pago: 'vencido',
+        familyPaymentDueAt: dueIso,
+        paymentDueAt: dueIso,
+        familyPaymentOverdueAt: overdueIso,
+        updatedAt: now(),
+        updated_at: new Date().toISOString(),
+      }, { merge: true });
+      stats.weeklyPaymentsMarkedOverdue += 1;
+    }
+
+    const familyUserUid = clean(schedule?.ownerUid || data.ownerUid || data.familyUserUid || data.familia_user_uid, 180);
+    const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || 'tu alumno/a', 120);
+    const subject = clean(data.subject || data.materia || 'clase', 120);
+    const title = state.state === 'overdue' ? 'Justificante vencido' : 'Justificante pendiente';
+    const body = state.state === 'overdue'
+      ? `Ha pasado el margen de 24 h para justificar la ${subject} de ${studentName}.`
+      : `Recuerda justificar la ${subject} de ${studentName}.`;
+    const payload = {
+      type,
+      classId: doc.id,
+      clase_id: doc.id,
+      dueAt: dueIso,
+      overdueAt: overdueIso,
+      url: '/pages/dashboard/familia.html',
+    };
+
+    if (familyUserUid) {
+      const created = await writeNotificationOnce(
+        familyUserUid,
+        title,
+        body,
+        payload,
+        `${type}_${doc.id}_family`,
+        {
+          role: 'familia',
+          priority: state.state === 'overdue' ? 'critical' : 'high',
+          type,
+          actionUrl: '/pages/dashboard/familia.html',
+          fromRole: 'automation',
+        },
+      );
+      if (created) stats.weeklyPaymentEvents += 1;
+    }
+
+    await notifyAdminsOnce(
+      title,
+      `${body} Revisa la clase desde el panel de administracion.`,
+      { ...payload, url: '/pages/dashboard/admin.html' },
+      `${type}_${doc.id}_admin`,
+      {
+        priority: state.state === 'overdue' ? 'critical' : 'high',
+        type,
+        actionUrl: '/pages/dashboard/admin.html',
+        fromRole: 'automation',
+      },
+    );
+  }
+}
+
 function documentExpiryDate(data = {}) {
   return dateFromUnknown(data.expiresAt || data.fecha_caducidad || data.expirationDate || data.validUntil);
 }
@@ -2935,6 +3127,9 @@ exports.runPlatformAutomationSweep = onSchedule({
     classEvents: 0,
     paymentsChecked: 0,
     paymentEvents: 0,
+    weeklyClassPaymentsChecked: 0,
+    weeklyPaymentEvents: 0,
+    weeklyPaymentsMarkedOverdue: 0,
     requestsChecked: 0,
     requestEvents: 0,
     documentsChecked: 0,
@@ -2979,6 +3174,8 @@ exports.runPlatformAutomationSweep = onSchedule({
     });
     stats.paymentEvents += 1;
   }
+
+  await processWeeklyClassPaymentReminders(stats);
 
   const requestDocs = await loadDocsByStatuses('solicitudes', ['status', 'estado'], ['nueva', 'pendiente', 'pending'], 30);
   for (const doc of requestDocs) {

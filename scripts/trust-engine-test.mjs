@@ -113,6 +113,51 @@ assert.ok(familyTrust.score >= 80, `Expected reliable family trust, got ${family
 assert.equal(familyTrust.metrics.activeStudents, 1);
 assert.equal(familyTrust.metrics.pendingPayments, 0);
 
+const overdueFamilyTrust = buildFamilyTrustProfile({
+  id: 'family_overdue',
+  familyUid: 'family_overdue',
+  userUid: 'family_overdue',
+  email: 'overdue@example.com',
+  telefono: '600333555',
+  direccion: 'Calle Prueba 1',
+  codigo_postal: '28010',
+  profileCompletionPercent: 92,
+  status: 'verificado',
+  active: true,
+}, {
+  now,
+  documents: [{ ownerUid: 'family_overdue', tipo: 'dni', estado: 'validado' }],
+  students: [{ id: 'student_overdue', familyUid: 'family_overdue', active: true }],
+  classes: [{
+    id: 'class_overdue',
+    familyUid: 'family_overdue',
+    teacherUid: 'teacher_1',
+    studentId: 'student_overdue',
+    status: 'realizada',
+    fecha: '2026-06-20',
+    hora_fin: '18:00',
+    familyAmount: 30,
+    familyPaymentStatus: 'pendiente',
+  }],
+  paymentSchedules: [{
+    id: 'schedule_overdue',
+    ownerUid: 'family_overdue',
+    familyUid: 'family_overdue',
+    teacherUid: 'teacher_1',
+    studentId: 'student_overdue',
+    dayOfWeek: 5,
+    time: '20:00',
+    graceHours: 24,
+    active: true,
+  }],
+  payments: [],
+  requests: [],
+  assignments: [],
+  incidents: [],
+});
+assert.equal(overdueFamilyTrust.metrics.overdueClassPayments, 1);
+assert.ok(overdueFamilyTrust.score < familyTrust.score, 'Overdue class payments must reduce family trust until recovered.');
+
 const patch = buildTrustSnapshotPatch(teacherTrust);
 assert.equal(patch.trustScore, teacherTrust.score);
 assert.equal(patch.trustVersion, TRUST_VERSION);

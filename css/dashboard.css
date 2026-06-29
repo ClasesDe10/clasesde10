@@ -2610,6 +2610,39 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 .clase-materia { font-size: .78rem; color: var(--gray-mid); }
 .clase-estado { margin-left: auto; flex-shrink: 0; }
 
+.calendar-class-item {
+  border-left: 4px solid transparent;
+}
+.calendar-class-item.payment-pending {
+  border-left-color: var(--gold);
+  background: rgba(232, 160, 48, .06);
+}
+.calendar-class-item.payment-paid {
+  border-left-color: var(--success);
+  background: rgba(22, 163, 74, .06);
+}
+.calendar-class-item.payment-overdue {
+  border-left-color: var(--danger);
+  background: rgba(220, 38, 38, .06);
+}
+.calendar-payment-state {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: .74rem;
+}
+.payment-due-hint {
+  color: var(--gray-mid);
+}
+.calendar-class-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
 /* ── MODAL ───────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 1000;

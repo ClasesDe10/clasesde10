@@ -1096,6 +1096,86 @@ service cloud.firestore {
         ]);
     }
 
+    function validPaymentScheduleFields(data) {
+      return signedIn()
+        && data.keys().hasOnly([
+          'id',
+          'type',
+          'status',
+          'active',
+          'ownerUid',
+          'familyUid',
+          'familia_id',
+          'teacherUid',
+          'profesor_id',
+          'studentId',
+          'alumno_id',
+          'assignmentId',
+          'asignacion_id',
+          'dayOfWeek',
+          'paymentDay',
+          'dia_semana_pago',
+          'time',
+          'paymentTime',
+          'hora_pago',
+          'graceHours',
+          'grace_hours',
+          'label',
+          'notes',
+          'source',
+          'updatedAtIso',
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at'
+        ])
+        && data.type == 'weekly_family_teacher_payment'
+        && data.status == 'active'
+        && data.active is bool
+        && data.ownerUid == request.auth.uid
+        && data.familyUid is string
+        && data.familia_id == data.familyUid
+        && data.teacherUid is string
+        && data.profesor_id == data.teacherUid
+        && data.studentId is string
+        && data.alumno_id == data.studentId
+        && data.dayOfWeek is number
+        && data.dayOfWeek >= 1
+        && data.dayOfWeek <= 7
+        && data.paymentDay == data.dayOfWeek
+        && data.dia_semana_pago == data.dayOfWeek
+        && data.time is string
+        && data.time.matches('^\\d{2}:\\d{2}$')
+        && data.paymentTime == data.time
+        && data.hora_pago == data.time
+        && data.graceHours is number
+        && data.graceHours >= 1
+        && data.graceHours <= 168
+        && data.grace_hours == data.graceHours
+        && data.label is string
+        && data.label.size() <= 120
+        && data.notes is string
+        && data.notes.size() <= 500
+        && data.source == 'family_dashboard';
+    }
+
+    function validPaymentScheduleCreate() {
+      return hasRole('familia')
+        && validPaymentScheduleFields(request.resource.data)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validPaymentScheduleUpdate() {
+      return hasRole('familia')
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.created_at == resource.data.created_at
+        && validPaymentScheduleFields(request.resource.data)
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function isChatParticipant(data) {
       return signedIn()
         && (
@@ -1867,6 +1947,25 @@ service cloud.firestore {
       allow create: if validFamilyPaymentCreate() || validTeacherPayoutCreate();
       allow read: if isAdmin() || isFamilyParticipant(resource.data) || isTeacherParticipant(resource.data);
       allow update, delete: if isAdmin();
+    }
+
+    match /paymentSchedules/{scheduleId} {
+      allow create: if isAdmin() || validPaymentScheduleCreate();
+      allow read: if isAdmin()
+        || (
+          signedIn()
+          && (
+            resource.data.ownerUid == request.auth.uid
+            || resource.data.familyUid == request.auth.uid
+            || resource.data.teacherUid == request.auth.uid
+          )
+        );
+      allow update: if isAdmin() || validPaymentScheduleUpdate();
+      allow delete: if isAdmin()
+        || (
+          signedIn()
+          && resource.data.ownerUid == request.auth.uid
+        );
     }
 
     match /documentos/{documentId} {

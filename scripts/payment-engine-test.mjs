@@ -1,6 +1,8 @@
 import {
   buildClassPaymentPatch,
   buildFamilyPaymentPayload,
+  buildWeeklyPaymentSchedulePayload,
+  classFamilyPaymentState,
   buildGatewayPaymentUpdate,
   buildPaymentValidationPayload,
   buildTeacherPayoutPayload,
@@ -9,7 +11,9 @@ import {
   matchPaymentToClasses,
   normalizePaymentStatus,
   paymentFingerprint,
+  paymentScheduleLabel,
   paymentStatusForBadge,
+  weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
 
 function assert(condition, message) {
@@ -64,5 +68,42 @@ assert(classPatch.familyPaymentStatus === 'validado' && classPatch.familyPayment
 
 assert(isPaymentOverdue({ estado: 'pendiente', dueAt: '2026-06-20T23:59:59.999Z' }, new Date('2026-06-28').getTime()), 'Pending past due payments must be overdue.');
 assert(paymentStatusForBadge({ estado: 'pendiente', dueAt: '2026-06-20T23:59:59.999Z' }) === 'vencido', 'Overdue payments must render as vencido.');
+
+const weeklySchedule = buildWeeklyPaymentSchedulePayload({
+  ownerUid: 'family_user_1',
+  familyUid: 'family_1',
+  teacherUid: 'teacher_1',
+  studentId: 'student_1',
+  dayOfWeek: 5,
+  time: '20:00',
+});
+assert(paymentScheduleLabel(weeklySchedule) === 'Viernes 20:00', 'Weekly payment schedule must render a clear label.');
+const scheduledDueAt = weeklyPaymentDueAtForClass(
+  { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
+  weeklySchedule,
+);
+const scheduledDueAtDate = new Date(scheduledDueAt);
+assert(
+  scheduledDueAtDate.getFullYear() === 2026
+    && scheduledDueAtDate.getMonth() === 5
+    && scheduledDueAtDate.getDate() === 26
+    && scheduledDueAtDate.getHours() === 20
+    && scheduledDueAtDate.getMinutes() === 0,
+  `Expected Friday 20:00 local due date, got ${scheduledDueAt}`,
+);
+assert(classFamilyPaymentState(
+  { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
+  weeklySchedule,
+  { nowMs: new Date('2026-06-27T19:00:00').getTime() },
+).state === 'pending', 'Unpaid classes must stay pending before the 24h grace expires.');
+assert(classFamilyPaymentState(
+  { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
+  weeklySchedule,
+  { nowMs: new Date('2026-06-27T21:01:00').getTime() },
+).state === 'overdue', 'Unpaid classes must become overdue after the weekly due date plus 24h.');
+assert(classFamilyPaymentState(
+  { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'validado' },
+  weeklySchedule,
+).state === 'paid', 'Validated classes must render as paid.');
 
 console.log('Payment engine validation passed.');
