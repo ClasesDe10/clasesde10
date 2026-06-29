@@ -255,6 +255,111 @@
             </div>
           </div>
         </div>
+        <details class="income-lab" id="income-lab" open>
+          <summary>
+            <div>
+              <span class="income-lab-eyebrow">Analisis de ingresos</span>
+              <strong>Explorar ganancias</strong>
+              <p>Filtra por mes, alumno o materia y simula como cambiaria tu ingreso con mas clases semanales.</p>
+            </div>
+            <span class="income-lab-toggle">Abrir / cerrar</span>
+          </summary>
+          <div class="income-lab-body">
+            <div class="income-lab-toolbar">
+              <label>
+                Mes
+                <select class="form-control" id="ing-filter-month">
+                  <option value="all">Todos los meses</option>
+                </select>
+              </label>
+              <label>
+                Alumno
+                <select class="form-control" id="ing-filter-student">
+                  <option value="all">Todos los alumnos</option>
+                </select>
+              </label>
+            </div>
+            <div class="income-lab-kpis" id="ing-kpis-detalle"></div>
+            <div class="income-lab-grid">
+              <section class="income-panel income-panel-wide">
+                <div class="income-panel-head">
+                  <div>
+                    <h3>Evolucion mensual</h3>
+                    <p id="ing-chart-caption">Ultimos meses con clases realizadas.</p>
+                  </div>
+                </div>
+                <div class="income-bar-chart" id="ing-chart-meses"></div>
+              </section>
+              <section class="income-panel">
+                <div class="income-panel-head">
+                  <div>
+                    <h3>Top alumnos</h3>
+                    <p>Quien aporta mas ingreso y regularidad.</p>
+                  </div>
+                </div>
+                <div class="income-rank-list" id="ing-chart-alumnos"></div>
+              </section>
+              <section class="income-panel">
+                <div class="income-panel-head">
+                  <div>
+                    <h3>Simulador</h3>
+                    <p>Prueba cuantas clases extra por semana quieres objetivo.</p>
+                  </div>
+                </div>
+                <label class="income-simulator-control" for="ing-simulator-classes">
+                  <span>Clases extra por semana</span>
+                  <strong id="ing-simulator-classes-label">2</strong>
+                </label>
+                <input class="income-simulator-range" id="ing-simulator-classes" type="range" min="0" max="10" step="1" value="2">
+                <div class="income-simulator-result" id="ing-simulator-result"></div>
+              </section>
+            </div>
+            <div class="income-lab-tables">
+              <section class="income-panel">
+                <div class="income-panel-head">
+                  <div>
+                    <h3>Por alumno</h3>
+                    <p>Ingreso, clases y pendiente de cobro.</p>
+                  </div>
+                </div>
+                <div class="table-wrapper">
+                  <table>
+                    <thead><tr><th>Alumno</th><th>Ingreso</th><th>Clases</th><th>Horas</th><th>Por cobrar</th></tr></thead>
+                    <tbody id="tbody-ing-alumnos"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
+              <section class="income-panel">
+                <div class="income-panel-head">
+                  <div>
+                    <h3>Por materia</h3>
+                    <p>Que actividades te estan funcionando mejor.</p>
+                  </div>
+                </div>
+                <div class="table-wrapper">
+                  <table>
+                    <thead><tr><th>Materia</th><th>Ingreso</th><th>Clases</th><th>Media</th></tr></thead>
+                    <tbody id="tbody-ing-materias"><tr><td colspan="4" style="text-align:center;padding:24px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+            <section class="income-panel">
+              <div class="income-panel-head">
+                <div>
+                  <h3>Ultimas clases que suman</h3>
+                  <p>Registro rapido de las clases que ya cuentan como ingreso.</p>
+                </div>
+              </div>
+              <div class="table-wrapper">
+                <table>
+                  <thead><tr><th>Fecha</th><th>Alumno</th><th>Materia</th><th>Ingreso</th><th>Cobro</th></tr></thead>
+                  <tbody id="tbody-ing-recientes"><tr><td colspan="5" style="text-align:center;padding:24px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </details>
         <div class="card">
           <div class="card-header"><span class="card-title">Detalle de ingresos por mes</span></div>
           <div class="table-wrapper">
@@ -676,6 +781,7 @@ const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Mis clases
                   documentos:'Documentos', disponibilidad:'Disponibilidad' };
 let chatInicializado = false;
 let clasesBizumPendientes = [];
+let incomeInsightsModel = null;
 
 function claseTerminada(clase, margenMinutos = 0) {
   return classEnded(clase, margenMinutos);
@@ -1203,6 +1309,8 @@ async function cargarIngresos() {
   document.getElementById('ing-mes-actual').textContent = formatEuros(dMesActual?.total_profesor || 0);
   document.getElementById('ing-total').textContent = formatEuros(total);
   document.getElementById('ing-pago-quincenal').textContent = 'Domingo';
+  incomeInsightsModel = buildIncomeInsightsModel(clasesConIngreso);
+  renderIncomeInsights(incomeInsightsModel);
 
   await cargarBizumProfesor();
 
@@ -1278,6 +1386,287 @@ function agruparIngresosProfesor(clases) {
     else acc[mes].total_pendiente += importe;
     return acc;
   }, {});
+}
+
+function incomeMonthLabel(monthKey) {
+  const date = new Date(`${monthKey}-01T00:00:00`);
+  if (Number.isNaN(date.getTime())) return monthKey || 'Sin mes';
+  return `${nombreMes(date.getMonth())} ${date.getFullYear()}`;
+}
+
+function incomeStudentName(clase) {
+  return String(
+    clase?.alumno_nombre
+    || clase?.studentName
+    || [clase?.alumnos?.nombre, clase?.alumnos?.apellidos].filter(Boolean).join(' ')
+    || 'Alumno/a'
+  ).trim();
+}
+
+function incomeStudentKey(clase) {
+  return String(clase?.studentId || clase?.alumno_id || incomeStudentName(clase)).trim().toLowerCase();
+}
+
+function incomeSubjectName(clase) {
+  return String(clase?.materia || clase?.subject || 'Sin materia').trim() || 'Sin materia';
+}
+
+function normalizeIncomeItem(clase) {
+  const month = mesClaseProfesor(clase);
+  const dateRaw = String(clase?.fecha || clase?.date || clase?.startAtIso || clase?.startsAt || '');
+  return {
+    id: String(clase?.id || `${dateRaw}-${incomeStudentKey(clase)}-${incomeSubjectName(clase)}`),
+    month,
+    date: dateRaw,
+    studentKey: incomeStudentKey(clase),
+    studentName: incomeStudentName(clase),
+    subject: incomeSubjectName(clase),
+    amount: importeProfesorClase(clase),
+    minutes: duracionClaseProfesor(clase),
+    paid: esCobroProfesorPagado(clase),
+  };
+}
+
+function groupIncomeItems(items, keyFn, labelFn) {
+  const map = new Map();
+  (items || []).forEach((item) => {
+    const key = keyFn(item);
+    if (!key) return;
+    if (!map.has(key)) {
+      map.set(key, {
+        key,
+        label: labelFn(item),
+        total: 0,
+        paid: 0,
+        pending: 0,
+        count: 0,
+        minutes: 0,
+        latestDate: '',
+      });
+    }
+    const row = map.get(key);
+    row.total += item.amount;
+    row.paid += item.paid ? item.amount : 0;
+    row.pending += item.paid ? 0 : item.amount;
+    row.count += 1;
+    row.minutes += item.minutes;
+    if (String(item.date) > String(row.latestDate)) row.latestDate = item.date;
+  });
+  return Array.from(map.values()).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+}
+
+function buildIncomeInsightsModel(clases) {
+  const items = (clases || []).map(normalizeIncomeItem).filter((item) => item.month && item.amount > 0);
+  const months = groupIncomeItems(items, (item) => item.month, (item) => incomeMonthLabel(item.month))
+    .sort((a, b) => b.key.localeCompare(a.key));
+  const students = groupIncomeItems(items, (item) => item.studentKey, (item) => item.studentName);
+  const subjects = groupIncomeItems(items, (item) => item.subject.toLowerCase(), (item) => item.subject);
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const minutes = items.reduce((sum, item) => sum + item.minutes, 0);
+  return { items, months, students, subjects, total, minutes };
+}
+
+function currentIncomeFilters(model) {
+  const monthSelect = document.getElementById('ing-filter-month');
+  const studentSelect = document.getElementById('ing-filter-student');
+  const month = monthSelect?.value || 'all';
+  const student = studentSelect?.value || 'all';
+  return {
+    month: model.months.some((row) => row.key === month) ? month : 'all',
+    student: model.students.some((row) => row.key === student) ? student : 'all',
+  };
+}
+
+function renderIncomeSelectOptions(model, filters) {
+  const monthSelect = document.getElementById('ing-filter-month');
+  const studentSelect = document.getElementById('ing-filter-student');
+  if (monthSelect) {
+    monthSelect.innerHTML = [
+      '<option value="all">Todos los meses</option>',
+      ...model.months.map((row) => `<option value="${sanitize(row.key)}">${sanitize(row.label)}</option>`),
+    ].join('');
+    monthSelect.value = filters.month;
+    monthSelect.onchange = () => renderIncomeInsights(incomeInsightsModel);
+  }
+  if (studentSelect) {
+    studentSelect.innerHTML = [
+      '<option value="all">Todos los alumnos</option>',
+      ...model.students.map((row) => `<option value="${sanitize(row.key)}">${sanitize(row.label)}</option>`),
+    ].join('');
+    studentSelect.value = filters.student;
+    studentSelect.onchange = () => renderIncomeInsights(incomeInsightsModel);
+  }
+}
+
+function filteredIncomeItems(model, filters) {
+  return (model.items || []).filter((item) => (
+    (filters.month === 'all' || item.month === filters.month)
+    && (filters.student === 'all' || item.studentKey === filters.student)
+  ));
+}
+
+function incomeHoursLabel(minutes) {
+  const hours = Math.floor((Number(minutes) || 0) / 60);
+  const mins = (Number(minutes) || 0) % 60;
+  return mins ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function renderIncomeKpis(items, model, filters) {
+  const box = document.getElementById('ing-kpis-detalle');
+  if (!box) return;
+  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const pending = items.reduce((sum, item) => sum + (item.paid ? 0 : item.amount), 0);
+  const average = items.length ? total / items.length : 0;
+  const bestStudent = groupIncomeItems(items, (item) => item.studentKey, (item) => item.studentName)[0];
+  const activeLabel = [
+    filters.month === 'all' ? 'todos los meses' : incomeMonthLabel(filters.month),
+    filters.student === 'all' ? 'todos los alumnos' : (bestStudent?.label || 'alumno seleccionado'),
+  ].join(' / ');
+  box.innerHTML = [
+    incomeMiniKpi('Ingreso filtrado', formatEuros(total), activeLabel),
+    incomeMiniKpi('Por cobrar', formatEuros(pending), pending ? 'pendiente de liquidar' : 'todo al dia'),
+    incomeMiniKpi('Clases', String(items.length), `${incomeHoursLabel(items.reduce((sum, item) => sum + item.minutes, 0))} impartidas`),
+    incomeMiniKpi('Media por clase', formatEuros(average), bestStudent ? `mejor alumno: ${bestStudent.label}` : `${model.items.length} clases historicas`),
+  ].join('');
+}
+
+function incomeMiniKpi(label, value, meta) {
+  return `<div class="income-mini-kpi">
+    <span>${sanitize(label)}</span>
+    <strong>${sanitize(value)}</strong>
+    <em>${sanitize(meta)}</em>
+  </div>`;
+}
+
+function renderIncomeMonthChart(model, filters) {
+  const box = document.getElementById('ing-chart-meses');
+  const caption = document.getElementById('ing-chart-caption');
+  if (!box) return;
+  const source = filteredIncomeItems(model, { month: 'all', student: filters.student });
+  const rows = groupIncomeItems(source, (item) => item.month, (item) => incomeMonthLabel(item.month))
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .slice(-6);
+  if (caption) {
+    caption.textContent = filters.student === 'all'
+      ? 'Ultimos meses con clases realizadas.'
+      : 'Evolucion del alumno seleccionado.';
+  }
+  if (!rows.length) {
+    box.innerHTML = '<div class="income-empty">Aun no hay meses con ingreso para este filtro.</div>';
+    return;
+  }
+  const max = Math.max(...rows.map((row) => row.total), 1);
+  box.innerHTML = rows.map((row) => {
+    const height = Math.max(8, Math.round((row.total / max) * 100));
+    return `<div class="income-bar-col">
+      <div class="income-bar-fill" style="height:${height}%"></div>
+      <div class="income-bar-label">${sanitize(row.label.split(' ')[0].slice(0, 3))}</div>
+      <div class="income-bar-value">${sanitize(formatEuros(row.total))}</div>
+      <div class="income-bar-sub">${sanitize(String(row.count))} clases</div>
+    </div>`;
+  }).join('');
+}
+
+function renderIncomeRank(containerId, rows, emptyText) {
+  const box = document.getElementById(containerId);
+  if (!box) return;
+  const visibleRows = rows.slice(0, 6);
+  if (!visibleRows.length) {
+    box.innerHTML = `<div class="income-empty">${sanitize(emptyText)}</div>`;
+    return;
+  }
+  const max = Math.max(...visibleRows.map((row) => row.total), 1);
+  box.innerHTML = visibleRows.map((row) => {
+    const width = Math.max(6, Math.round((row.total / max) * 100));
+    return `<div class="income-rank-row">
+      <div class="income-rank-head">
+        <strong>${sanitize(row.label)}</strong>
+        <span>${sanitize(formatEuros(row.total))}</span>
+      </div>
+      <div class="income-rank-track"><span style="width:${width}%"></span></div>
+      <div class="income-rank-meta">${sanitize(String(row.count))} clases - ${sanitize(incomeHoursLabel(row.minutes))}</div>
+    </div>`;
+  }).join('');
+}
+
+function incomeItemDateLabel(item) {
+  return item.date ? formatFechaCorta(item.date) : incomeMonthLabel(item.month);
+}
+
+function renderIncomeTables(items) {
+  const students = groupIncomeItems(items, (item) => item.studentKey, (item) => item.studentName);
+  const subjects = groupIncomeItems(items, (item) => item.subject.toLowerCase(), (item) => item.subject);
+  const tbodyStudents = document.getElementById('tbody-ing-alumnos');
+  const tbodySubjects = document.getElementById('tbody-ing-materias');
+  const tbodyRecent = document.getElementById('tbody-ing-recientes');
+  if (tbodyStudents) {
+    tbodyStudents.innerHTML = students.length ? students.map((row) => `<tr>
+      <td><strong>${sanitize(row.label)}</strong></td>
+      <td>${sanitize(formatEuros(row.total))}</td>
+      <td>${sanitize(String(row.count))}</td>
+      <td>${sanitize(incomeHoursLabel(row.minutes))}</td>
+      <td><strong>${sanitize(formatEuros(row.pending))}</strong></td>
+    </tr>`).join('') : renderTableEmptyState(5, {
+      icon: 'EUR',
+      title: 'Sin alumnos en este filtro',
+      description: 'Cambia el mes o vuelve a todos los alumnos para comparar ingresos.',
+    });
+  }
+  if (tbodySubjects) {
+    tbodySubjects.innerHTML = subjects.length ? subjects.map((row) => `<tr>
+      <td><strong>${sanitize(row.label)}</strong></td>
+      <td>${sanitize(formatEuros(row.total))}</td>
+      <td>${sanitize(String(row.count))}</td>
+      <td>${sanitize(formatEuros(row.count ? row.total / row.count : 0))}</td>
+    </tr>`).join('') : renderTableEmptyState(4, {
+      icon: 'EUR',
+      title: 'Sin materias en este filtro',
+      description: 'Aqui apareceran las materias con clases realizadas.',
+    });
+  }
+  if (tbodyRecent) {
+    const recent = [...items].sort((a, b) => String(b.date).localeCompare(String(a.date))).slice(0, 8);
+    tbodyRecent.innerHTML = recent.length ? recent.map((item) => `<tr>
+      <td>${sanitize(incomeItemDateLabel(item))}</td>
+      <td>${sanitize(item.studentName)}</td>
+      <td>${sanitize(item.subject)}</td>
+      <td><strong>${sanitize(formatEuros(item.amount))}</strong></td>
+      <td>${item.paid ? badgeEstado('pagado') : badgeEstado('pendiente')}</td>
+    </tr>`).join('') : renderTableEmptyState(5, {
+      icon: 'EUR',
+      title: 'Sin clases recientes',
+      description: 'Cuando una clase realizada tenga importe, aparecera aqui.',
+    });
+  }
+}
+
+function renderIncomeSimulator(items, model) {
+  const slider = document.getElementById('ing-simulator-classes');
+  const label = document.getElementById('ing-simulator-classes-label');
+  const result = document.getElementById('ing-simulator-result');
+  if (!slider || !label || !result) return;
+  const averageSource = items.length ? items : (model.items || []);
+  const average = averageSource.length
+    ? averageSource.reduce((sum, item) => sum + item.amount, 0) / averageSource.length
+    : 0;
+  const extraClasses = Number(slider.value || 0);
+  const extraMonth = average * extraClasses * 4;
+  label.textContent = String(extraClasses);
+  result.innerHTML = `<strong>${sanitize(`+${formatEuros(extraMonth)} / mes`)}</strong>
+    <span>Con tu media actual de ${sanitize(formatEuros(average))} por clase. ${extraClasses ? `Son unas ${extraClasses * 4} clases extra al mes.` : 'Mueve el control para probar escenarios.'}</span>`;
+  slider.oninput = () => renderIncomeSimulator(items, model);
+}
+
+function renderIncomeInsights(model) {
+  if (!model) return;
+  const filters = currentIncomeFilters(model);
+  renderIncomeSelectOptions(model, filters);
+  const items = filteredIncomeItems(model, filters);
+  renderIncomeKpis(items, model, filters);
+  renderIncomeMonthChart(model, filters);
+  renderIncomeRank('ing-chart-alumnos', groupIncomeItems(items, (item) => item.studentKey, (item) => item.studentName), 'Aun no hay alumnos con ingresos para este filtro.');
+  renderIncomeTables(items);
+  renderIncomeSimulator(items, model);
 }
 
 // ── PERFIL ───────────────────────────────────────────────────────

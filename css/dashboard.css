@@ -1306,6 +1306,257 @@ textarea {
   font-weight: 500;
 }
 
+.income-lab {
+  margin-bottom: 20px;
+  border: 1px solid rgba(15,31,61,.08);
+  border-radius: var(--radius);
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.income-lab > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 22px;
+  cursor: pointer;
+  list-style: none;
+}
+.income-lab > summary::-webkit-details-marker { display: none; }
+.income-lab > summary strong {
+  display: block;
+  color: var(--navy);
+  font-family: 'Playfair Display', serif;
+  font-size: 1.15rem;
+}
+.income-lab > summary p {
+  margin: 4px 0 0;
+  color: var(--gray-mid);
+  font-size: .88rem;
+}
+.income-lab-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--gold-text);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.income-lab-toggle {
+  border: 1px solid rgba(15,31,61,.12);
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--navy);
+  font-size: .78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.income-lab-body {
+  display: grid;
+  gap: 16px;
+  padding: 0 22px 22px;
+}
+.income-lab-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.income-lab-toolbar label {
+  display: grid;
+  gap: 6px;
+  min-width: min(220px, 100%);
+  color: var(--gray-mid);
+  font-size: .78rem;
+  font-weight: 800;
+}
+.income-lab-kpis,
+.income-lab-grid,
+.income-lab-tables {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.income-lab-kpis {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.income-mini-kpi,
+.income-panel {
+  min-width: 0;
+  border: 1px solid rgba(15,31,61,.08);
+  border-radius: var(--radius-sm);
+  background: #fbfaf7;
+}
+.income-mini-kpi {
+  padding: 13px;
+}
+.income-mini-kpi span {
+  display: block;
+  color: var(--gray-mid);
+  font-size: .72rem;
+  font-weight: 800;
+}
+.income-mini-kpi strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--navy);
+  font-size: 1.18rem;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.income-mini-kpi em {
+  display: block;
+  margin-top: 5px;
+  color: var(--gray-mid);
+  font-size: .72rem;
+  font-style: normal;
+}
+.income-lab-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, .8fr) minmax(260px, .75fr);
+}
+.income-lab-tables {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.income-panel {
+  padding: 16px;
+}
+.income-panel-wide {
+  min-height: 285px;
+}
+.income-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+.income-panel h3 {
+  margin: 0;
+  color: var(--navy);
+  font-size: .98rem;
+}
+.income-panel p {
+  margin: 4px 0 0;
+  color: var(--gray-mid);
+  font-size: .78rem;
+}
+.income-bar-chart {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: end;
+  gap: 10px;
+  min-height: 220px;
+}
+.income-bar-col {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  align-items: end;
+  height: 220px;
+  min-width: 0;
+  text-align: center;
+}
+.income-bar-fill {
+  width: 100%;
+  min-height: 8px;
+  border-radius: 9px 9px 3px 3px;
+  background: linear-gradient(180deg, var(--gold), var(--teal));
+  box-shadow: inset 0 -10px 18px rgba(15,31,61,.12);
+}
+.income-bar-label,
+.income-bar-sub,
+.income-rank-meta {
+  color: var(--gray-mid);
+  font-size: .7rem;
+}
+.income-bar-label {
+  margin-top: 8px;
+  font-weight: 800;
+}
+.income-bar-value {
+  color: var(--text-dark);
+  font-size: .72rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+.income-rank-list {
+  display: grid;
+  gap: 12px;
+}
+.income-rank-row {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.income-rank-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.income-rank-head strong,
+.income-rank-head span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.income-rank-head span {
+  color: var(--navy);
+  font-weight: 800;
+  text-align: right;
+}
+.income-rank-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(15,31,61,.08);
+}
+.income-rank-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--gold));
+}
+.income-simulator-control {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--gray-mid);
+  font-size: .8rem;
+  font-weight: 800;
+}
+.income-simulator-control strong {
+  color: var(--navy);
+}
+.income-simulator-range {
+  width: 100%;
+  accent-color: var(--gold);
+}
+.income-simulator-result {
+  margin-top: 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(22,163,74,.08);
+  border: 1px solid rgba(22,163,74,.18);
+  padding: 13px;
+  color: var(--text-body);
+}
+.income-simulator-result strong {
+  display: block;
+  color: var(--success);
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+.income-empty {
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+  padding: 22px;
+  text-align: center;
+  color: var(--gray-mid);
+  font-size: .86rem;
+}
+
 .finance-erp-grid,
 .finance-breakdown-grid,
 .finance-cash-grid {
@@ -3172,6 +3423,35 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .finance-erp-grid,
   .finance-breakdown-grid {
     grid-template-columns: 1fr !important;
+  }
+  .income-lab > summary {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+  .income-lab-toggle {
+    width: 100%;
+    text-align: center;
+  }
+  .income-lab-body {
+    padding: 0 16px 16px;
+  }
+  .income-lab-kpis,
+  .income-lab-grid,
+  .income-lab-tables {
+    grid-template-columns: 1fr;
+  }
+  .income-lab-toolbar label {
+    width: 100%;
+  }
+  .income-bar-chart {
+    gap: 6px;
+    min-height: 170px;
+  }
+  .income-bar-col {
+    height: 170px;
+  }
+  .income-bar-value {
+    display: none;
   }
   .stats-grid { grid-template-columns: 1fr; }
   .form-row, .form-row-3 { grid-template-columns: 1fr; }

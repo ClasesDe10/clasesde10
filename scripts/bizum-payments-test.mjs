@@ -39,6 +39,13 @@ assert(professorDashboard.includes('tbody-bizum-pendientes'), 'Professor dashboa
 assert(professorDashboard.includes('ing-por-cobrar'), 'Professor income cards must show outstanding teacher payouts.');
 assert(professorDashboard.includes('Pago cada 2 semanas'), 'Professor income cards must explain the biweekly payout cadence.');
 assert(professorDashboard.includes('Solicitar Bizum excepcional'), 'Bizum requests must be presented as exceptional payouts.');
+assert(professorDashboard.includes('income-lab'), 'Professor income section must include the expandable income lab.');
+assert(professorDashboard.includes('ing-chart-meses'), 'Professor income lab must include monthly charts.');
+assert(professorDashboard.includes('ing-filter-student'), 'Professor income lab must filter by student.');
+assert(professorDashboard.includes('tbody-ing-alumnos'), 'Professor income lab must break earnings down by student.');
+assert(professorDashboard.includes('tbody-ing-materias'), 'Professor income lab must break earnings down by subject.');
+assert(professorDashboard.includes('ing-simulator-classes'), 'Professor income lab must include an earnings simulator.');
+assert(professorDashboard.includes('buildIncomeInsightsModel'), 'Professor income lab must build a normalized income model.');
 assert(!professorDashboard.includes('ing-comision'), 'Professor dashboard must not expose internal commission cards.');
 assert(!professorDashboard.includes('<th>Comisión</th>'), 'Professor income detail must not expose commission columns.');
 assert(
