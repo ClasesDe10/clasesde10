@@ -188,17 +188,17 @@ function stageCopy(stage, context = {}) {
     },
     confirm_class: {
       title: 'Confirma la clase terminada',
-      body: 'Hay una clase pendiente de confirmacion. Marcarla como realizada ayuda a cerrar pagos, reputacion y seguimiento sin trabajo manual.',
+      body: 'Hay una clase pendiente de confirmacion. Marcarla como realizada ayuda a cerrar el seguimiento sin trabajo manual.',
       primary: buildAction('open_classes', 'Confirmar clase', 'Abre la tabla de clases.', 'clases'),
     },
     payment_due: {
-      title: 'Revisa el pago pendiente',
-      body: 'Hay un pago pendiente o vencido. Sube justificante o revisa el estado para que el expediente quede cerrado.',
-      primary: buildAction('open_payments', 'Ver pagos', 'Abre pagos y justificantes.', 'pagos'),
+      title: 'Revisa el justificante pendiente',
+      body: 'Hay un justificante pendiente o vencido. Sube el comprobante o revisa su estado para que el expediente quede cerrado.',
+      primary: buildAction('open_payments', 'Ver justificantes', 'Abre justificantes y estado.', 'pagos'),
     },
     active: {
       title: 'Todo esta encaminado',
-      body: 'Tu relacion esta activa. Desde aqui puedes continuar por chat, consultar calendario, revisar pagos o actualizar datos cuando cambie algo.',
+      body: 'Tu relacion esta activa. Desde aqui puedes continuar por chat, consultar calendario o actualizar datos cuando cambie algo.',
       primary: buildAction('open_chat', 'Abrir chat', 'Continua con el profesor asignado.', 'chat'),
     },
   };
@@ -241,7 +241,7 @@ export function buildFamilyJourneyState(input = {}) {
   if (!profileReady) secondaryActions.push(buildAction('complete_profile', 'Completar perfil', 'Mejora la asignacion y la comunicacion.', 'perfil', 'secondary'));
   if (assigned && stage !== 'chat_needed') secondaryActions.push(buildAction('open_chat', 'Chat', 'Mensajes y notificaciones.', 'chat', 'secondary'));
   if (scheduleReady && stage !== 'class_scheduled') secondaryActions.push(buildAction('open_calendar', 'Calendario', 'Proximas clases.', 'calendario', 'secondary'));
-  if (paymentRisk && stage !== 'payment_due') secondaryActions.push(buildAction('open_payments', 'Pagos', 'Importes y justificantes.', 'pagos', 'secondary'));
+  if (paymentRisk && stage !== 'payment_due') secondaryActions.push(buildAction('open_payments', 'Justificantes', 'Justificantes y estado.', 'pagos', 'secondary'));
 
   const checklist = [
     checklistItem('account', 'Cuenta creada', true),
@@ -251,7 +251,7 @@ export function buildFamilyJourneyState(input = {}) {
     checklistItem('assignment', 'Profesor asignado', assigned, 'open_requests'),
     checklistItem('chat', 'Chat abierto', chatReady, 'open_chat'),
     checklistItem('schedule', 'Primera clase programada', scheduleReady || classReady, 'open_calendar'),
-    checklistItem('closure', 'Clase confirmada y pagos al dia', completedClass && !paymentRisk && !confirmationPending, paymentRisk ? 'open_payments' : 'open_classes'),
+    checklistItem('closure', 'Clase confirmada y seguimiento al dia', completedClass && !paymentRisk && !confirmationPending, paymentRisk ? 'open_payments' : 'open_classes'),
   ];
   const completed = checklist.filter((item) => item.done).length;
   const progress = Math.round((completed / checklist.length) * 100);

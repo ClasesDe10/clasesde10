@@ -31,7 +31,7 @@ for (const [name, html] of [
   assert.match(html, /dashboard-empty-state\.js\?v=20260629-ux-empty-states/, `${name} dashboard must import contextual empty-state helpers.`);
   assert.match(html, /renderTableEmptyState\(/, `${name} dashboard must use table empty states.`);
   assert.match(html, /renderEmptyState\(/, `${name} dashboard must use panel empty states.`);
-  assert.match(html, /dashboard\.css\?v=20260629-chat-layout/, `${name} dashboard must bust CSS cache.`);
+  assert.match(html, /dashboard\.css\?v=20260629-family-finance-privacy/, `${name} dashboard must bust CSS cache.`);
 }
 
 assert.match(familyDashboard, /Enviar solicitud y avisarme/);
@@ -41,12 +41,19 @@ assert.match(familyDashboard, /data-action="abrir-modal-pago"/);
 assert.match(familyDashboard, /modal-disponibilidad-hijo/);
 assert.match(familyDashboard, /data-action="disponibilidad-hijo"/);
 assert.match(familyDashboard, /Reportar incidencia/);
+assert.match(familyDashboard, /Justificantes pendientes/);
+assert.match(familyDashboard, /Aún no hay justificantes registrados/);
+assert.doesNotMatch(familyDashboard, /Precio familia/);
+assert.doesNotMatch(familyDashboard, /<th>Precio<\/th>/);
+assert.doesNotMatch(familyDashboard, /formatEuros\(c\.familyAmount/);
+assert.doesNotMatch(familyDashboard, /formatEuros\(p\.monto\)/);
 assert.doesNotMatch(familyDashboard, /Sin solicitudes enviadas\./);
 assert.doesNotMatch(familyDashboard, /Sin clases\./);
 
 assert.match(teacherDashboard, /Guardar estado/);
 assert.match(teacherDashboard, /Guardar franja/);
 assert.match(teacherDashboard, /data-action="abrir-modal-disponibilidad"/);
+assert.match(teacherDashboard, /formatEuros\(importeProfesorClase\(c\)\)/);
 assert.match(teacherDashboard, /Aún no tienes alumnos asignados/);
 assert.doesNotMatch(teacherDashboard, /No tienes alumnos asignados aún\./);
 assert.doesNotMatch(teacherDashboard, /Sin datos de ingresos\./);

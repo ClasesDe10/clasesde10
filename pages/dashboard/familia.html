@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel Familia — ClasesDe10</title>
-<meta name="description" content="Panel privado de familia de ClasesDe10 para gestionar alumnos, clases, profesores y pagos.">
+<meta name="description" content="Panel privado de familia de ClasesDe10 para gestionar alumnos, clases, profesores y justificantes.">
 <link rel="canonical" href="https://clasesde10.com/pages/dashboard/familia.html">
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-busy-slots">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-family-finance-privacy">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -58,7 +58,7 @@
       </button>
       <button class="sidebar-link" data-section="pagos">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
-        Pagos
+        Justificantes
       </button>
       <button class="sidebar-link" data-section="chat">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
@@ -110,9 +110,9 @@
             <div class="stat-card-label">Clases este mes</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card-header"><div class="stat-card-icon gold">💶</div></div>
+            <div class="stat-card-header"><div class="stat-card-icon gold">📎</div></div>
             <div class="stat-card-value" id="stat-pagos-pendientes">—</div>
-            <div class="stat-card-label">Pagos pendientes</div>
+            <div class="stat-card-label">Justificantes pendientes</div>
           </div>
           <div class="stat-card">
             <div class="stat-card-header"><div class="stat-card-icon navy">👩‍🏫</div></div>
@@ -180,9 +180,9 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Hora</th><th>Hijo/a</th><th>Profesor</th><th>Materia</th><th>Duración</th><th>Precio</th><th>Estado</th><th>Confirmación</th><th>Acciones</th></tr>
+                <tr><th>Fecha</th><th>Hora</th><th>Hijo/a</th><th>Profesor</th><th>Materia</th><th>Duración</th><th>Estado</th><th>Confirmación</th><th>Acciones</th></tr>
               </thead>
-              <tbody id="tbody-clases"><tr><td colspan="10" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -213,7 +213,7 @@
         </div>
       </section>
 
-      <!-- ══ PAGOS ══ -->
+      <!-- ══ JUSTIFICANTES ══ -->
       <section id="section-pagos" class="dash-section" style="display:none">
         <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
           <button class="btn btn-primary" id="btn-nuevo-pago">+ Subir justificante</button>
@@ -221,17 +221,17 @@
         <div class="alert alert-info" style="margin-bottom:20px">
           <span class="alert-icon">ℹ</span>
           <div class="alert-body">
-            <div class="alert-title">Método de pago</div>
-            Realizamos los cobros por <strong>Bizum</strong> o <strong>Transferencia bancaria</strong>. Sube aquí el justificante de pago para que lo validemos.
+            <div class="alert-title">Justificantes</div>
+            Cuando el equipo te indique que hay un justificante pendiente, súbelo aquí para que podamos validarlo.
           </div>
         </div>
         <div class="card">
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Concepto</th><th>Importe</th><th>Método</th><th>Referencia</th><th>Estado</th><th>Justificante</th></tr>
+                <tr><th>Fecha</th><th>Concepto</th><th>Método</th><th>Referencia</th><th>Estado</th><th>Justificante</th></tr>
               </thead>
-              <tbody id="tbody-pagos"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-pagos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -577,17 +577,17 @@ import {
 import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-busy-slots';
-import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
-import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
-import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-journey';
-import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-journey';
+import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
+import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-family-finance-privacy';
+import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-finance-privacy';
+import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-finance-privacy';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import { availabilitySlotLabel, summarizeAvailabilitySlots } from '../../js/availability-engine.js?v=20260629-busy-slots';
 import { collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
-  formatEuros, badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
+  badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js';
 
@@ -626,7 +626,7 @@ const familiaId = familiaLegacy?.id || familiaData?.id || familiaFirestoreId;
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
-                  alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Pagos', chat:'Chat', perfil:'Mi perfil' };
+                  alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Justificantes', chat:'Chat', perfil:'Mi perfil' };
 let chatInicializado = false;
 let documentosFamiliaPerfilCache = [];
 let alumnosFamiliaPerfilCache = [];
@@ -671,7 +671,7 @@ function renderQualityPanel(targetId, evaluation) {
           <div><strong>${sanitize(trustStats.activeStudents ?? 0)}</strong><span>alumnos</span></div>
           <div><strong>${sanitize(trustStats.completedClasses ?? 0)}</strong><span>clases</span></div>
           <div><strong>${sanitize(trustStats.completedHours ?? 0)}h</strong><span>realizadas</span></div>
-          <div><strong>${fmtPercent(trustStats.paymentReliability)}</strong><span>pagos ok</span></div>
+          <div><strong>${fmtPercent(trustStats.paymentReliability)}</strong><span>cierres ok</span></div>
           <div><strong>${fmtPercent(trustStats.cancellationRate)}</strong><span>cancelacion</span></div>
         </div>
         ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Datos necesarios para asignaciones mas precisas</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
@@ -906,7 +906,7 @@ function renderFamilyRelationshipDigest({ hijos = [], asignaciones = [], clases 
   });
   container.innerHTML = renderRelationshipDigest(relationships, 'familia', {
     title: 'Siguiente paso',
-    subtitle: 'Aqui ves que falta en cada relacion: chat, horario, clase, confirmacion o pago.',
+    subtitle: 'Aqui ves que falta en cada relacion: chat, horario, clase, confirmacion o justificante.',
     emptyTitle: 'Sin relaciones activas',
     emptyDesc: 'Cuando solicites profesor o tengas una asignacion, apareceran aqui los pasos siguientes.',
     navAttribute: 'data-section',
@@ -1086,7 +1086,7 @@ async function iniciarCalendario() {
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||'')}</div>
-              <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}${Number(c.familyAmount ?? c.precio_total ?? 0) > 0 ? ` · ${formatEuros(c.familyAmount ?? c.precio_total)}` : ''}</div>
+              <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}</div>
             </div>
             ${badgeEstado(classStatusForBadge(c))}
           </div>`).join('');
@@ -1118,7 +1118,7 @@ async function cargarClases() {
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
   const tbody = document.getElementById('tbody-clases');
   if (!hijos?.length) {
-    tbody.innerHTML = renderTableEmptyState(10, {
+    tbody.innerHTML = renderTableEmptyState(9, {
       icon: '👧',
       title: 'Primero añade un alumno',
       description: 'Para crear clases necesitamos saber para quién es la ayuda. Al guardar al alumno te guiaremos para pedir profesor.',
@@ -1155,7 +1155,7 @@ async function cargarClases() {
     ? filtered.filter((clase) => classStatusForBadge(clase) === 'confirmada')
     : filtered;
   if (!clases.length) {
-    tbody.innerHTML = renderTableEmptyState(10, {
+    tbody.innerHTML = renderTableEmptyState(9, {
       icon: '📅',
       title: 'No hay clases con estos filtros',
       description: 'Si ya tienes profesor, coordinad el horario desde el chat. Si aún no lo tienes, solicita uno y te avisaremos.',
@@ -1185,7 +1185,6 @@ async function cargarClases() {
     <td>${sanitize(profesorNombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
-    <td><strong>${Number(c.familyAmount ?? c.precio_total ?? 0) > 0 ? formatEuros(c.familyAmount ?? c.precio_total) : '—'}</strong></td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
     <td>${labelConfirmacionFamilia(c)}</td>
     <td>${acciones}</td>
@@ -1361,21 +1360,9 @@ function renderSolicitudDisponibilidadHint() {
   if (horario && !horario.value.trim()) horario.value = summary;
 }
 
-function assignmentPriceLine(asignacion = {}) {
-  const familyHourly = Number(asignacion.familyHourlyRate ?? asignacion.precio_hora_familia ?? asignacion.familyAmount ?? asignacion.precio_total ?? 0);
-  const teacherHourly = Number(asignacion.teacherHourlyRate ?? asignacion.importe_hora_profesor ?? asignacion.teacherAmount ?? asignacion.importe_profesor ?? 0);
-  if (!Number.isFinite(familyHourly) || familyHourly <= 0) {
-    return '<span style="color:var(--warning)">Precio pendiente de confirmar</span>';
-  }
-  const teacherDetail = Number.isFinite(teacherHourly) && teacherHourly > 0
-    ? ` <span style="color:var(--gray-mid);font-size:.76rem">(prof. ${formatEuros(teacherHourly)}/h)</span>`
-    : '';
-  return `<strong>${formatEuros(familyHourly)}/h</strong>${teacherDetail}`;
-}
-
 async function cargarHijos() {
   if (!familiaId) return;
-  const { data } = await db.from('alumnos').select('*, asignaciones(materia,precio_total,familyAmount,teacherAmount,importe_profesor,familyHourlyRate,teacherHourlyRate,marginPct,profesores(usuarios(nombre,apellidos)))')
+  const { data } = await db.from('alumnos').select('*, asignaciones(materia,subject,profesores(usuarios(nombre,apellidos)))')
     .eq('familia_id', familiaId).eq('activo', true);
   await cargarDisponibilidadHijos();
 
@@ -1428,7 +1415,6 @@ async function cargarHijos() {
             ? sanitize(asignacionPrincipal.teacherName || asignacionPrincipal.profesor_nombre || asignacionPrincipal.profesores?.usuarios?.nombre || 'Profesor asignado') + ' ' + sanitize(asignacionPrincipal.profesores?.usuarios?.apellidos || '')
             : '<span style="color:var(--warning)">Pendiente asignación</span>'}</div>
           ${asignacionPrincipal ? `<div><span style="color:var(--gray-mid)">Materia:</span> ${sanitize(asignacionPrincipal.materia || asignacionPrincipal.subject || '—')}</div>` : ''}
-          ${asignacionPrincipal ? `<div><span style="color:var(--gray-mid)">Precio familia:</span> ${assignmentPriceLine(asignacionPrincipal)}</div>` : ''}
           <div class="availability-mini"><span>Disponibilidad:</span> ${renderDisponibilidadMini(slots)}</div>
         </div>
         <div class="student-card-actions">
@@ -1724,14 +1710,14 @@ async function cargarPagos() {
     .order('created_at',{ascending:false});
   const tbody = document.getElementById('tbody-pagos');
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
     return;
   }
   if (!data?.length) {
-    tbody.innerHTML = renderTableEmptyState(7, {
+    tbody.innerHTML = renderTableEmptyState(6, {
       icon: '💶',
-      title: 'Aún no hay pagos registrados',
-      description: 'Los pagos aparecerán cuando haya clases realizadas o cuando subas un justificante para revisión.',
+      title: 'Aún no hay justificantes registrados',
+      description: 'Cuando el equipo te pida un justificante, podrás subirlo aquí y revisar su estado.',
       actions: [
         emptyAction('Subir justificante', { 'data-action': 'abrir-modal-pago' }, 'primary'),
         emptyAction('Ver clases', { 'data-section': 'clases' }, 'ghost'),
@@ -1744,7 +1730,6 @@ async function cargarPagos() {
     return `<tr>
     <td>${formatFechaCorta(p.created_at)}</td>
     <td>${sanitize(p.notas_familia||'—')}</td>
-    <td><strong>${formatEuros(p.monto)}</strong></td>
     <td>${sanitize(p.metodo)}</td>
     <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
     <td>${badgeEstado(paymentStatusForBadge(p))}</td>
@@ -2087,6 +2072,6 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
 // ── INIT ─────────────────────────────────────────────────────────
 cargarInicio();
 </script>
-<script src="/js/pwa.js" defer></script>
+<script src="/js/pwa.js?v=20260629-family-finance-privacy" defer></script>
 </body>
 </html>

@@ -1074,7 +1074,7 @@
         { id: 'familia:request', label: 'Solicitar profesor', hint: 'Materia, nivel y horario preferido', category: 'Familia', section: 'solicitudes', selector: '#btn-nueva-solicitud, #btn-nueva-solicitud-top, [data-family-journey-action="request_teacher"]', priority: 6, keywords: 'profesor matching materia solicitud' },
         { id: 'familia:chat', label: 'Abrir chat y notificaciones', hint: 'Mensajes, horarios y avisos', category: 'Comunicacion', section: 'chat', priority: 8, keywords: 'mensaje notificacion profesor horario' },
         { id: 'familia:calendar', label: 'Ver calendario de clases', hint: 'Fechas, asistencia y confirmaciones', category: 'Clases', section: 'calendario', priority: 11, keywords: 'clase fecha hora confirmar' },
-        { id: 'familia:payments', label: 'Revisar pagos', hint: 'Justificantes y pagos pendientes', category: 'Pagos', section: 'pagos', priority: 12, keywords: 'bizum justificante transferencia pendiente' },
+        { id: 'familia:payments', label: 'Ver justificantes', hint: 'Estado de justificantes pendientes', category: 'Justificantes', section: 'pagos', priority: 12, keywords: 'justificante comprobante pendiente' },
         { id: 'familia:profile', label: 'Completar perfil familiar', hint: 'Datos para asignaciones mas precisas', category: 'Confianza', section: 'perfil', priority: 15, keywords: 'direccion telefono zona perfil' },
       ],
       profesor: [

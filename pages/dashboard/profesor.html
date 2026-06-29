@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-busy-slots">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-family-finance-privacy">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -861,7 +861,7 @@ async function cargarInicio() {
   const realizadas = (clasesMes||[]).filter(c => c.estado === 'realizada');
   document.getElementById('stat-clases-mes').textContent = (clasesMes||[]).length;
   document.getElementById('stat-alumnos').textContent = (alumnos||[]).length;
-  document.getElementById('stat-ingresos-mes').textContent = formatEuros(realizadas.reduce((s,c) => s + (c.importe_profesor||0), 0));
+  document.getElementById('stat-ingresos-mes').textContent = formatEuros(realizadas.reduce((s,c) => s + importeProfesorClase(c), 0));
   const horas = realizadas.reduce((s,c) => s + (c.duracion_minutos||0), 0);
   document.getElementById('stat-horas-mes').textContent = `${Math.floor(horas/60)}h ${horas%60}m`;
   const relationships = buildRelationshipsFromCollections({
@@ -904,7 +904,9 @@ async function cargarInicio() {
       ],
     });
   } else {
-    contP.innerHTML = proximas.map(c => `
+    contP.innerHTML = proximas.map(c => {
+      const importe = importeProfesorClase(c);
+      return `
       <div class="clase-item" style="padding:12px 20px">
         <div class="clase-time">
           <div class="clase-time-hora">${formatHora(c.hora_inicio)}</div>
@@ -912,9 +914,10 @@ async function cargarInicio() {
         </div>
         <div class="clase-info">
           <div class="clase-nombre">${sanitize(c.alumno_nombre || c.studentName || c.alumnos?.nombre || 'Alumno/a')}</div>
-          <div class="clase-materia">${sanitize(c.materia)} · ${c.duracion_minutos || c.durationMinutes || '—'} min</div>
+          <div class="clase-materia">${sanitize(c.materia)} · ${c.duracion_minutos || c.durationMinutes || '—'} min${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   }
 
   // Pendientes de registrar
@@ -962,15 +965,18 @@ async function iniciarCalendario() {
           });
           return;
         }
-        cont.innerHTML = clases.map(c => `
+        cont.innerHTML = clases.map(c => {
+          const importe = importeProfesorClase(c);
+          return `
           <div class="clase-item" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia||'')}</div>
-              <div class="clase-materia">${sanitize(c.materia||'')}</div>
+              <div class="clase-materia">${sanitize(c.materia||'')}${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
             </div>
             ${badgeEstado(classStatusForBadge(c))}
-          </div>`).join('');
+          </div>`;
+        }).join('');
       },
       onMesChange: cargarClasesCalendario,
     });
@@ -1913,6 +1919,6 @@ window.eliminarDisponibilidad = async (id) => {
 // ── INIT ─────────────────────────────────────────────────────────
 cargarInicio();
 </script>
-<script src="/js/pwa.js" defer></script>
+<script src="/js/pwa.js?v=20260629-family-finance-privacy" defer></script>
 </body>
 </html>

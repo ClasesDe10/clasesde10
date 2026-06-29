@@ -43,11 +43,12 @@ function formatDate(value) {
   return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
 }
 
-function renderModulePills(relationship) {
+function renderModulePills(relationship, role = 'admin') {
+  const paymentLabel = role === 'familia' ? 'Justificantes' : 'Pagos';
   const modules = [
     ['Chat', relationship.modules?.chat],
     ['Calendario', relationship.modules?.calendar],
-    ['Pagos', relationship.modules?.payments],
+    [paymentLabel, relationship.modules?.payments],
     ['Docs', relationship.modules?.documents],
     ['Incidencias', relationship.modules?.incidents],
     ['IA', relationship.modules?.ai],
@@ -75,7 +76,7 @@ function renderRelationshipRow(relationship, role, options = {}) {
         <span class="badge badge-${stageTone}">${escapeHtml(relationshipStageLabel(relationship.stage))}</span>
       </div>
       <div class="relationship-subtitle">${escapeHtml(relationship.subtitle || relationship.subject || '')}</div>
-      <div class="relationship-modules">${renderModulePills(relationship)}</div>
+      <div class="relationship-modules">${renderModulePills(relationship, role)}</div>
     </div>
     <div class="relationship-row-side">
       <div class="relationship-health ${healthTone}">
@@ -95,7 +96,9 @@ export function renderRelationshipDigest(relationships = [], role = 'admin', opt
   const rows = Array.isArray(relationships) ? relationships : [];
   const summary = summarizeRelationships(rows);
   const title = options.title || 'Expedientes operativos';
-  const subtitle = options.subtitle || 'Solicitud, matching, chat, calendario, pagos e incidencias conectados.';
+  const subtitle = options.subtitle || (role === 'familia'
+    ? 'Solicitud, matching, chat, calendario, justificantes e incidencias conectados.'
+    : 'Solicitud, matching, chat, calendario, pagos e incidencias conectados.');
   const emptyTitle = options.emptyTitle || 'Sin expedientes activos';
   const emptyDesc = options.emptyDesc || 'Cuando haya solicitudes o asignaciones, aqui aparecera el siguiente paso.';
   const max = Number(options.max || (role === 'admin' ? 6 : 4));
@@ -113,7 +116,7 @@ export function renderRelationshipDigest(relationships = [], role = 'admin', opt
         <div><strong>${escapeHtml(String(summary.total))}</strong><span>expedientes</span></div>
         <div><strong>${escapeHtml(String(summary.blocked.length))}</strong><span>bloqueos</span></div>
         <div><strong>${escapeHtml(String(summary.pendingSchedule.length))}</strong><span>horarios</span></div>
-        <div><strong>${escapeHtml(String(summary.paymentRisk.length))}</strong><span>pagos</span></div>
+        <div><strong>${escapeHtml(String(summary.paymentRisk.length))}</strong><span>${role === 'familia' ? 'justificantes' : 'pagos'}</span></div>
       </div>
     </div>
     ${visibleRows.length ? `<div class="relationship-list">
