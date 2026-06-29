@@ -199,14 +199,18 @@
 
       <!-- ══ MIS ALUMNOS ══ -->
       <section id="section-alumnos" class="dash-section" style="display:none">
+        <div class="student-workbench-summary" id="alumnos-profesor-summary"></div>
         <div class="card">
-          <div class="card-header"><span class="card-title">Mis alumnos asignados</span></div>
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <span class="card-title">Mis alumnos asignados</span>
+            <span class="student-privacy-note">Solo alumnos asignados por ClasesDe10</span>
+          </div>
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Alumno</th><th>Materia</th><th>Nivel</th><th>Colegio</th><th>Familia</th><th>Teléfono familia</th><th>Clases mes</th></tr>
+                <tr><th>Alumno</th><th>Curso y colegio</th><th>Zona</th><th>Notas / objetivo</th><th>Clases mes</th><th>Accion</th></tr>
               </thead>
-              <tbody id="tbody-mis-alumnos"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-mis-alumnos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -616,6 +620,23 @@
   </div>
 </div>
 
+<!-- MODAL: FICHA DEL ALUMNO -->
+<div class="modal-overlay" id="modal-alumno-detalle">
+  <div class="modal" style="max-width:860px">
+    <div class="modal-header">
+      <span class="modal-title">Ficha del alumno</span>
+      <button class="modal-close">✕</button>
+    </div>
+    <div class="modal-body" id="alumno-detalle-body">
+      <div style="padding:24px;color:var(--gray-mid)">Cargando ficha...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-alumno-detalle">Cerrar</button>
+      <button class="btn btn-primary" data-section="chat" data-close-modal="modal-alumno-detalle">Abrir chat</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: REGISTRAR CLASE REALIZADA -->
 <div class="modal-overlay" id="modal-registrar-clase">
   <div class="modal">
@@ -782,6 +803,7 @@ const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Mis clases
 let chatInicializado = false;
 let clasesBizumPendientes = [];
 let incomeInsightsModel = null;
+let alumnosProfesorCache = new Map();
 
 function claseTerminada(clase, margenMinutos = 0) {
   return classEnded(clase, margenMinutos);
@@ -1261,13 +1283,23 @@ document.getElementById('btn-confirmar-registro').addEventListener('click', asyn
 // ── MIS ALUMNOS ──────────────────────────────────────────────────
 async function cargarMisAlumnos() {
   if (!profesorId) return;
-  const { data } = await db.from('asignaciones')
-    .select('materia, alumnos(nombre,apellidos,nivel_educativo,curso,colegio,familias(usuarios(nombre,apellidos,telefono)))')
-    .eq('profesor_id', profesorId).eq('activa', true);
-
+  const [data, firestoreRows, clasesMes] = await Promise.all([
+    cargarAsignacionesLegacyProfesor(),
+    cargarAsignacionesFirestoreProfesor(),
+    cargarClasesMesProfesor(),
+  ]);
+  const alumnos = mergeAssignedStudentRows([
+    ...(data || []).map(normalizeLegacyAssignedStudent),
+    ...(firestoreRows || []),
+  ]).map((item) => ({
+    ...item,
+    clasesMes: countMonthlyClassesForStudent(clasesMes, item),
+  }));
+  alumnosProfesorCache = new Map(alumnos.map((item) => [item.cacheId, item]));
+  renderTeacherStudentsSummary(alumnos);
   const tbody = document.getElementById('tbody-mis-alumnos');
-  if (!data?.length) {
-    tbody.innerHTML = renderTableEmptyState(7, {
+  if (!alumnos.length) {
+    tbody.innerHTML = renderTableEmptyState(6, {
       icon: '👨‍🎓',
       title: 'Aún no tienes alumnos asignados',
       description: 'Para recibir alumnos, mantén completo tu perfil, disponibilidad y documentación. El equipo te avisará cuando haya una asignación.',
@@ -1279,16 +1311,294 @@ async function cargarMisAlumnos() {
     return;
   }
 
-  tbody.innerHTML = data.map(a => `<tr>
-    <td><strong>${sanitize(a.alumnos?.nombre||'')} ${sanitize(a.alumnos?.apellidos||'')}</strong></td>
-    <td>${sanitize(a.materia)}</td>
-    <td>${sanitize(a.alumnos?.nivel_educativo||'—')} ${sanitize(a.alumnos?.curso||'')}</td>
-    <td>${sanitize(a.alumnos?.colegio||'—')}</td>
-    <td>${sanitize(a.alumnos?.familias?.usuarios?.nombre||'')} ${sanitize(a.alumnos?.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(a.alumnos?.familias?.usuarios?.telefono||'—')}</td>
-    <td>—</td>
+  tbody.innerHTML = alumnos.map((alumno) => `<tr>
+    <td>
+      <div class="student-cell-main">
+        <strong>${sanitize(alumno.nombreCompleto || 'Alumno/a')}</strong>
+        <span>${sanitize(alumno.materia || 'Materia sin indicar')}</span>
+      </div>
+    </td>
+    <td>
+      <div class="student-cell-main">
+        <strong>${sanitize(compactText([alumno.nivel, alumno.curso], ' / ') || 'Curso pendiente')}</strong>
+        <span>${sanitize(alumno.colegio || 'Colegio no indicado')}</span>
+      </div>
+    </td>
+    <td>
+      <div class="student-cell-main">
+        <strong>${sanitize(compactText([alumno.zona, alumno.ciudad], ', ') || 'Zona pendiente')}</strong>
+        <span>${sanitize(alumno.codigoPostal || alumno.direccion || 'Direccion no indicada')}</span>
+      </div>
+    </td>
+    <td><div class="student-note-snippet">${sanitize(shortStudentNote(alumno))}</div></td>
+    <td><strong>${sanitize(String(alumno.clasesMes || 0))}</strong></td>
+    <td><button class="btn btn-ghost btn-sm" data-action="ver-alumno-profesor" data-student-cache-id="${sanitize(alumno.cacheId)}">Ver ficha</button></td>
   </tr>`).join('');
 }
+
+async function cargarAsignacionesLegacyProfesor() {
+  const richSelect = 'id,materia,notas_admin,created_at,activa,alumnos(id,nombre,apellidos,nivel_educativo,curso,colegio,fecha_nacimiento,familias(id,direccion,ciudad,codigo_postal,zona,notas_perfil,usuarios(nombre,apellidos,email,telefono)))';
+  const fallbackSelect = 'materia,alumnos(nombre,apellidos,nivel_educativo,curso,colegio,familias(usuarios(nombre,apellidos,telefono)))';
+  const { data, error } = await db.from('asignaciones')
+    .select(richSelect)
+    .eq('profesor_id', profesorId)
+    .eq('activa', true);
+  if (!error) return data || [];
+  console.warn('Asignaciones legacy enriquecidas no disponibles, usando consulta minima', error);
+  const fallback = await db.from('asignaciones')
+    .select(fallbackSelect)
+    .eq('profesor_id', profesorId)
+    .eq('activa', true);
+  return fallback.data || [];
+}
+
+async function cargarAsignacionesFirestoreProfesor() {
+  const ids = profesorClassIds();
+  const rows = mergeById((await Promise.all(ids.flatMap((id) => [
+    cargarFirestoreWhere('asignaciones', 'teacherUid', '==', id),
+    cargarFirestoreWhere('asignaciones', 'profesor_id', '==', id),
+  ]))).flat()).filter((item) => item.active !== false && item.activa !== false && !['cancelada', 'archivada', 'inactiva'].includes(String(item.status || item.estado || '').toLowerCase()));
+  const enriched = await Promise.all(rows.map(enrichFirestoreAssignedStudent));
+  return enriched.filter(Boolean);
+}
+
+async function enrichFirestoreAssignedStudent(assignment = {}) {
+  const studentId = assignment.studentId || assignment.alumno_id || assignment.studentUid || '';
+  const familyUid = assignment.familyUid || assignment.familia_id || assignment.parentUid || '';
+  const [studentSnap, familySnap, userSnap] = await Promise.all([
+    studentId ? getDoc(firestoreDoc(firebaseDb, 'alumnos', String(studentId))).catch(() => null) : null,
+    familyUid ? getDoc(firestoreDoc(firebaseDb, 'familias', String(familyUid))).catch(() => null) : null,
+    familyUid ? getDoc(firestoreDoc(firebaseDb, 'users', String(familyUid))).catch(() => null) : null,
+  ]);
+  const student = studentSnap?.exists?.() ? { id: studentSnap.id, ...studentSnap.data() } : {};
+  const family = familySnap?.exists?.() ? { id: familySnap.id, ...familySnap.data() } : {};
+  const user = userSnap?.exists?.() ? { id: userSnap.id, ...userSnap.data() } : {};
+  return normalizeAssignedStudent({
+    assignmentId: assignment.id || assignment.assignmentId || '',
+    studentId,
+    familyUid,
+    materia: assignment.materia || assignment.subject || '',
+    nivel: assignment.nivel || assignment.level || student.level || student.nivel_educativo || '',
+    notasAsignacion: assignment.notas_admin || assignment.notes || assignment.notas || '',
+    assignedAt: assignment.fecha_asignacion || assignment.assignedAt || assignment.createdAt || '',
+    student,
+    family,
+    familyUser: user,
+    source: 'firestore',
+  });
+}
+
+function normalizeLegacyAssignedStudent(row = {}) {
+  const alumno = row.alumnos || {};
+  const familia = alumno.familias || {};
+  return normalizeAssignedStudent({
+    assignmentId: row.id || '',
+    studentId: alumno.id || row.alumno_id || '',
+    familyUid: familia.id || '',
+    materia: row.materia || '',
+    notasAsignacion: row.notas_admin || row.notas || '',
+    assignedAt: row.created_at || row.fecha_asignacion || '',
+    student: alumno,
+    family: familia,
+    familyUser: familia.usuarios || {},
+    source: 'legacy',
+  });
+}
+
+function normalizeAssignedStudent({ assignmentId = '', studentId = '', familyUid = '', materia = '', nivel = '', notasAsignacion = '', assignedAt = '', student = {}, family = {}, familyUser = {}, source = '' } = {}) {
+  const nombre = firstText(student.nombre, student.name);
+  const apellidos = firstText(student.apellidos, student.surname, student.lastName);
+  const nombreCompleto = compactText([nombre, apellidos], ' ') || firstText(student.displayName, student.studentName, 'Alumno/a');
+  const familyName = compactText([
+    firstText(familyUser.nombre, family.nombre, family.name),
+    firstText(familyUser.apellidos, family.apellidos, family.lastName),
+  ], ' ') || firstText(family.displayName, family.familyName, 'Familia');
+  const keyBase = firstText(studentId, `${nombreCompleto}:${materia}`);
+  return {
+    cacheId: `${source || 'row'}:${firstText(assignmentId, keyBase)}`,
+    assignmentId,
+    studentId,
+    familyUid,
+    nombre,
+    apellidos,
+    nombreCompleto,
+    materia: firstText(materia, student.subject, student.materia),
+    nivel: firstText(nivel, student.nivel_educativo, student.level, student.nivel),
+    curso: firstText(student.curso, student.course),
+    colegio: firstText(student.colegio, student.school),
+    fechaNacimiento: firstText(student.fecha_nacimiento, student.birthDate, student.birth_date),
+    notasAlumno: firstText(student.notas_academicas, student.academicNotes, student.observaciones, student.notes),
+    direccion: firstText(family.direccion, family.address),
+    ciudad: firstText(family.ciudad, family.city),
+    codigoPostal: firstText(family.codigo_postal, family.postalCode),
+    zona: firstText(family.zona, family.zone),
+    notasFamilia: firstText(family.notas_perfil, family.profileNotes, family.observaciones, family.notes),
+    notasAsignacion,
+    familiaNombre: familyName,
+    familiaTelefono: firstText(familyUser.telefono, family.telefono, family.phone),
+    familiaEmail: firstText(familyUser.email, family.email),
+    assignedAt,
+    source,
+  };
+}
+
+function mergeAssignedStudentRows(rows = []) {
+  const map = new Map();
+  rows.filter(Boolean).forEach((row) => {
+    const key = `${firstText(row.studentId, row.nombreCompleto).toLowerCase()}::${firstText(row.materia).toLowerCase()}`;
+    const prev = map.get(key);
+    map.set(key, prev ? mergeStudentInfo(prev, row) : row);
+  });
+  return Array.from(map.values()).sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto));
+}
+
+function mergeStudentInfo(a, b) {
+  const merged = { ...a };
+  Object.entries(b).forEach(([key, value]) => {
+    if ((merged[key] === undefined || merged[key] === null || merged[key] === '') && value !== undefined && value !== null && value !== '') {
+      merged[key] = value;
+    }
+  });
+  return merged;
+}
+
+async function cargarClasesMesProfesor() {
+  const now = new Date();
+  const desde = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-01`;
+  const hasta = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2, '0')}-31`;
+  return cargarClasesProfesor({ desde, hasta, limit: 400 });
+}
+
+function countMonthlyClassesForStudent(clases = [], alumno = {}) {
+  const targetId = String(alumno.studentId || '').toLowerCase();
+  const targetName = normalizePlain(alumno.nombreCompleto);
+  return (clases || []).filter((clase) => {
+    const classStudentId = String(clase.studentId || clase.alumno_id || '').toLowerCase();
+    if (targetId && classStudentId && targetId === classStudentId) return true;
+    return normalizePlain(clase.alumno_nombre || clase.studentName) === targetName;
+  }).length;
+}
+
+function renderTeacherStudentsSummary(alumnos = []) {
+  const box = document.getElementById('alumnos-profesor-summary');
+  if (!box) return;
+  const zonas = new Set(alumnos.map((item) => firstText(item.zona, item.ciudad)).filter(Boolean));
+  const colegios = new Set(alumnos.map((item) => item.colegio).filter(Boolean));
+  const clasesMes = alumnos.reduce((sum, item) => sum + Number(item.clasesMes || 0), 0);
+  box.innerHTML = [
+    studentSummaryCard('Alumnos activos', String(alumnos.length)),
+    studentSummaryCard('Clases este mes', String(clasesMes)),
+    studentSummaryCard('Zonas', String(zonas.size)),
+    studentSummaryCard('Colegios', String(colegios.size)),
+  ].join('');
+}
+
+function studentSummaryCard(label, value) {
+  return `<div class="student-summary-card"><span>${sanitize(label)}</span><strong>${sanitize(value)}</strong></div>`;
+}
+
+function shortStudentNote(alumno = {}) {
+  return firstText(alumno.notasAsignacion, alumno.notasAlumno, alumno.notasFamilia, 'Sin notas relevantes registradas.');
+}
+
+function firstText(...values) {
+  return values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
+}
+
+function compactText(values = [], separator = ', ') {
+  return values.map((value) => String(value ?? '').trim()).filter(Boolean).join(separator);
+}
+
+function normalizePlain(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+}
+
+function displayStudentValue(value, fallback = 'No indicado') {
+  return firstText(value) || fallback;
+}
+
+function formatStudentDate(value) {
+  if (!value) return '';
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString().slice(0, 10);
+  if (Number.isFinite(value?.seconds)) return new Date(value.seconds * 1000).toISOString().slice(0, 10);
+  const raw = String(value || '').trim();
+  if (!raw || raw === '[object Object]') return '';
+  return raw.slice(0, 10);
+}
+
+function studentDetailRow(label, value, fallback = 'No indicado') {
+  return `<div class="student-detail-row"><span>${sanitize(label)}</span><strong>${sanitize(displayStudentValue(value, fallback))}</strong></div>`;
+}
+
+function studentDetailPanel(title, rows) {
+  return `<section class="student-detail-panel">
+    <h4>${sanitize(title)}</h4>
+    ${rows.join('')}
+  </section>`;
+}
+
+function renderStudentDetail(alumno = {}) {
+  const ubicacion = compactText([alumno.direccion, alumno.zona, alumno.ciudad, alumno.codigoPostal], ', ');
+  const assignedAt = formatStudentDate(alumno.assignedAt);
+  return `
+    <div class="student-detail-hero">
+      <div class="student-detail-avatar">${sanitize(getIniciales(alumno.nombre, alumno.apellidos))}</div>
+      <div>
+        <h3>${sanitize(alumno.nombreCompleto || 'Alumno/a')}</h3>
+        <p>${sanitize(compactText([alumno.materia, alumno.nivel, alumno.curso], ' / ') || 'Asignacion activa')}</p>
+      </div>
+    </div>
+    <div class="student-detail-grid">
+      ${studentDetailPanel('Datos academicos', [
+        studentDetailRow('Nombre', alumno.nombreCompleto),
+        studentDetailRow('Nivel', alumno.nivel),
+        studentDetailRow('Curso', alumno.curso),
+        studentDetailRow('Colegio', alumno.colegio),
+        studentDetailRow('Nacimiento', formatStudentDate(alumno.fechaNacimiento)),
+      ])}
+      ${studentDetailPanel('Ubicacion', [
+        studentDetailRow('Direccion', alumno.direccion),
+        studentDetailRow('Zona', alumno.zona),
+        studentDetailRow('Ciudad', alumno.ciudad),
+        studentDetailRow('Codigo postal', alumno.codigoPostal),
+      ])}
+      ${studentDetailPanel('Familia', [
+        studentDetailRow('Contacto', alumno.familiaNombre),
+        studentDetailRow('Telefono', alumno.familiaTelefono),
+        studentDetailRow('Email', alumno.familiaEmail),
+        studentDetailRow('Direccion completa', ubicacion),
+      ])}
+      ${studentDetailPanel('Asignacion', [
+        studentDetailRow('Materia', alumno.materia),
+        studentDetailRow('Clases este mes', String(alumno.clasesMes || 0)),
+        studentDetailRow('Asignado desde', assignedAt),
+        studentDetailRow('Origen datos', alumno.source === 'firestore' ? 'Firebase' : 'Legacy'),
+      ])}
+      <section class="student-detail-panel student-detail-notes">
+        <h4>Notas utiles para preparar clase</h4>
+        ${studentDetailRow('Objetivo / admin', alumno.notasAsignacion, 'Sin notas de asignacion')}
+        ${studentDetailRow('Alumno', alumno.notasAlumno, 'Sin notas academicas registradas')}
+        ${studentDetailRow('Familia', alumno.notasFamilia, 'Sin observaciones de familia')}
+      </section>
+    </div>
+  `;
+}
+
+function abrirFichaAlumnoProfesor(cacheId) {
+  const alumno = alumnosProfesorCache.get(cacheId);
+  if (!alumno) {
+    showToast('Ficha no disponible', 'Recarga la lista de alumnos e intentalo de nuevo.', 'warning');
+    return;
+  }
+  document.getElementById('alumno-detalle-body').innerHTML = renderStudentDetail(alumno);
+  document.getElementById('modal-alumno-detalle').classList.add('open');
+}
+
+document.addEventListener('click', (event) => {
+  const btn = event.target.closest('[data-action="ver-alumno-profesor"]');
+  if (!btn) return;
+  abrirFichaAlumnoProfesor(btn.dataset.studentCacheId);
+});
 
 // ── INGRESOS ─────────────────────────────────────────────────────
 async function cargarIngresos() {

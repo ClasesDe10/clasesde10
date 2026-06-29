@@ -56,6 +56,12 @@ assert.doesNotMatch(familyDashboard, /Sin clases\./);
 
 assert.match(teacherDashboard, /Guardar estado/);
 assert.match(teacherDashboard, /Guardar franja/);
+assert.match(teacherDashboard, /modal-alumno-detalle/);
+assert.match(teacherDashboard, /data-action="ver-alumno-profesor"/);
+assert.match(teacherDashboard, /student-workbench-summary/);
+assert.match(teacherDashboard, /Datos academicos/);
+assert.match(teacherDashboard, /Ubicacion/);
+assert.match(teacherDashboard, /Notas utiles para preparar clase/);
 assert.match(teacherDashboard, /data-action="abrir-modal-disponibilidad"/);
 assert.match(teacherDashboard, /formatEuros\(importeProfesorClase\(c\)\)/);
 assert.match(teacherDashboard, /Aún no tienes alumnos asignados/);
@@ -65,5 +71,7 @@ assert.doesNotMatch(teacherDashboard, /Sin datos de ingresos\./);
 assert.match(dashboardCss, /\.dashboard-empty-state/);
 assert.match(dashboardCss, /\.empty-actions/);
 assert.match(dashboardCss, /\.empty-state-row td/);
+assert.match(dashboardCss, /\.student-detail-grid/);
+assert.match(dashboardCss, /\.student-workbench-summary/);
 
 console.log('Dashboard empty-state UX validation passed.');
