@@ -1650,6 +1650,12 @@ function renderIncomeSimulator(items, model) {
     ? averageSource.reduce((sum, item) => sum + item.amount, 0) / averageSource.length
     : 0;
   const extraClasses = Number(slider.value || 0);
+  if (!averageSource.length || average <= 0) {
+    label.textContent = String(extraClasses);
+    result.innerHTML = '<strong>Listo para simular</strong><span>Cuando tengas clases realizadas con importe, este control calculara cuanto ganarias al sumar mas clases por semana.</span>';
+    slider.oninput = () => renderIncomeSimulator(items, model);
+    return;
+  }
   const extraMonth = average * extraClasses * 4;
   label.textContent = String(extraClasses);
   result.innerHTML = `<strong>${sanitize(`+${formatEuros(extraMonth)} / mes`)}</strong>
