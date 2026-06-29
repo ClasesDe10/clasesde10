@@ -809,7 +809,7 @@ function renderShell(container, role) {
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
             <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos</button>
-            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar leidas</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar revisadas</button>
           </div>
         </div>
         <form class="admin-notification-form" data-admin-notification-form style="${role === 'admin' ? '' : 'display:none'}">
@@ -975,6 +975,79 @@ function isNotificationUnread(notification) {
   return !notification.readAt && notification.leida !== true;
 }
 
+function notificationPriorityLabel(priority) {
+  const normalized = clean(priority, 40).toLowerCase();
+  if (normalized === 'critical' || normalized === 'critica') return 'critica';
+  if (normalized === 'high' || normalized === 'alta') return 'alta';
+  if (normalized === 'medium' || normalized === 'media') return 'media';
+  return '';
+}
+
+function notificationDisplayKey(notification) {
+  const date = normalizeDate(notification.createdAt).slice(0, 16);
+  return [
+    notification.type || '',
+    notificationTitle(notification),
+    notificationBody(notification),
+    date,
+  ].map((value) => clean(value, 220)).join('|');
+}
+
+function notificationDisplayItems(notifications = []) {
+  const byKey = new Map();
+  notifications.forEach((notification) => {
+    const key = notificationDisplayKey(notification);
+    const current = byKey.get(key);
+    if (!current) {
+      byKey.set(key, { ...notification, duplicateCount: 1 });
+      return;
+    }
+    const keepNext = isNotificationUnread(notification) && !isNotificationUnread(current);
+    byKey.set(key, {
+      ...(keepNext ? notification : current),
+      duplicateCount: (current.duplicateCount || 1) + 1,
+    });
+  });
+  return [...byKey.values()];
+}
+
+function dashboardSectionForNotification(notification, role = '') {
+  const type = clean(notification.type, 80);
+  const payload = notification.payload || {};
+  if (payload.chatId || ['chat_message', 'schedule_proposed', 'schedule_accepted', 'schedule_rejected'].includes(type)) {
+    return { section: 'chat', panel: 'chats', chatId: clean(payload.chatId, 180), label: 'Abrir chat' };
+  }
+  if (payload.classId || type.startsWith('class_')) {
+    return { section: type === 'class_reminder' || type === 'class_schedule_change' ? 'calendario' : 'clases', label: 'Revisar clase' };
+  }
+  if (payload.paymentId || type.includes('payment') || type.includes('payout')) {
+    return { section: role === 'profesor' ? 'ingresos' : 'pagos', label: role === 'profesor' ? 'Ver ingresos' : 'Ver pagos' };
+  }
+  if (payload.documentId || type.startsWith('document_') || type === 'verification_pending') {
+    return { section: 'documentos', label: 'Ver documentos' };
+  }
+  if (payload.requestId || type.startsWith('request_') || type === 'assignment_created') {
+    return { section: role === 'profesor' ? 'alumnos' : 'solicitudes', label: role === 'profesor' ? 'Ver alumnos' : 'Ver solicitud' };
+  }
+  if (payload.incidentId || type.includes('incident')) {
+    return { section: role === 'admin' ? 'incidencias' : 'chat', panel: role === 'admin' ? '' : 'notificaciones', label: role === 'admin' ? 'Ver incidencia' : 'Ver aviso' };
+  }
+  if (type === 'teacher_verified' || type === 'profile_updated' || payload.profileId || payload.teacherId) {
+    return { section: role === 'admin' ? 'profesores' : 'perfil', label: role === 'admin' ? 'Ver perfil' : 'Mi perfil' };
+  }
+  return null;
+}
+
+function notificationExternalAction(notification) {
+  const url = notificationActionUrl(notification);
+  if (!url || /\/pages\/login(?:\.html)?$/i.test(url)) return null;
+  return { url, label: 'Abrir enlace' };
+}
+
+function notificationAction(notification, role = '') {
+  return dashboardSectionForNotification(notification, role) || notificationExternalAction(notification);
+}
+
 function renderNotifications(container, notifications) {
   const list = container.querySelector('[data-notifications-list]');
   const count = notifications.filter(isNotificationUnread).length;
@@ -990,21 +1063,28 @@ function renderNotifications(container, notifications) {
     return;
   }
 
-  list.innerHTML = notifications.map((notification) => {
+  list.innerHTML = notificationDisplayItems(notifications).map((notification) => {
     const unread = isNotificationUnread(notification);
     const priority = notificationPriorityClass(notification);
+    const priorityLabel = notificationPriorityLabel(priority);
     const label = notificationCategoryLabel(notification.type);
+    const action = notificationAction(notification, container.dataset.chatRole || '');
+    const meta = [
+      formatDateTime(notification.createdAt),
+      unread ? 'Pendiente' : 'Revisada',
+      notification.duplicateCount > 1 ? `${notification.duplicateCount} avisos iguales agrupados` : '',
+    ].filter(Boolean).join(' · ');
     return `
       <article class="notification-item ${unread ? 'unread' : ''} priority-${escapeHtml(priority)}" data-notification-id="${escapeHtml(notification.id)}">
         <div>
-          <div class="notification-kicker">${escapeHtml(label)}${priority !== 'normal' ? ` · ${escapeHtml(priority)}` : ''}</div>
+          <div class="notification-kicker">${escapeHtml(label)}${priorityLabel ? ` · ${escapeHtml(priorityLabel)}` : ''}${unread ? ' · nueva' : ''}</div>
           <div class="notification-title">${escapeHtml(notificationTitle(notification))}</div>
           <div class="notification-body">${escapeHtml(notificationBody(notification))}</div>
-          <div class="notification-meta">${escapeHtml(formatDateTime(notification.createdAt))}</div>
+          <div class="notification-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="notification-actions">
-          <button class="btn btn-ghost btn-sm" type="button" data-open-notification>Abrir</button>
-          ${unread ? '<button class="btn btn-ghost btn-sm" type="button" data-mark-notification>Leida</button>' : '<span class="badge badge-gray">Leida</span>'}
+          ${action ? `<button class="btn btn-primary btn-sm" type="button" data-open-notification>${escapeHtml(action.label)}</button>` : ''}
+          ${unread ? '<button class="btn btn-ghost btn-sm" type="button" data-mark-notification>Marcar revisada</button>' : ''}
         </div>
       </article>`;
   }).join('');
@@ -1060,6 +1140,7 @@ export async function initChatWidget({
 }) {
   if (!container) return;
   renderShell(container, role);
+  container.dataset.chatRole = role;
 
   const state = {
     chats: [],
@@ -1220,6 +1301,45 @@ export async function initChatWidget({
     });
   }
 
+  function navigateDashboardSection(section) {
+    const target = clean(section, 80);
+    if (!target) return false;
+    const trigger = [...document.querySelectorAll('.sidebar-link[data-section]')]
+      .find((item) => item.dataset.section === target);
+    if (trigger) {
+      trigger.click();
+      return true;
+    }
+    const sectionNode = document.getElementById(`section-${target}`);
+    if (!sectionNode) return false;
+    document.querySelectorAll('.dash-section').forEach((node) => { node.style.display = 'none'; });
+    sectionNode.style.display = '';
+    return true;
+  }
+
+  function openNotificationAction(notification) {
+    const action = notificationAction(notification, role);
+    if (!action) {
+      showToast('Aviso sin destino', 'Este aviso queda como registro informativo.', 'info');
+      return false;
+    }
+    if (action.section) {
+      const navigated = navigateDashboardSection(action.section);
+      if (action.section === 'chat') {
+        setTimeout(() => {
+          setPanel(action.panel || 'chats');
+          if (action.chatId) selectChat(action.chatId);
+        }, 80);
+      }
+      return navigated;
+    }
+    if (action.url) {
+      window.location.href = action.url;
+      return true;
+    }
+    return false;
+  }
+
   function setChatLayoutMode(mode = 'balanced') {
     const safeMode = CHAT_LAYOUT_MODES.has(mode) ? mode : 'balanced';
     const layout = container.querySelector('[data-chat-layout]');
@@ -1235,7 +1355,7 @@ export async function initChatWidget({
     });
   }
 
-  container.addEventListener('click', (event) => {
+  container.addEventListener('click', async (event) => {
     const layoutModeButton = event.target.closest('[data-chat-layout-mode]');
     if (layoutModeButton) {
       setChatLayoutMode(layoutModeButton.dataset.chatLayoutMode);
@@ -1264,8 +1384,13 @@ export async function initChatWidget({
 
     const markAll = event.target.closest('[data-mark-all-notifications]');
     if (markAll) {
-      markAllNotificationsRead(state.notifications).catch((error) => {
+      markAll.disabled = true;
+      markAllNotificationsRead(state.notifications).then(() => {
+        showToast('Notificaciones actualizadas', 'Todos los avisos quedan marcados como revisados.', 'success');
+      }).catch((error) => {
         showToast('No se pudieron marcar', error.message || 'Revisa permisos de notificaciones.', 'error');
+      }).finally(() => {
+        markAll.disabled = false;
       });
       return;
     }
@@ -1274,16 +1399,27 @@ export async function initChatWidget({
     if (openNotification) {
       const item = openNotification.closest('[data-notification-id]');
       const notification = state.notifications.find((entry) => entry.id === item?.dataset.notificationId);
-      if (notification?.id && isNotificationUnread(notification)) markNotificationRead(notification.id).catch(() => {});
-      window.location.href = notificationActionUrl(notification || {});
+      openNotification.disabled = true;
+      if (notification?.id && isNotificationUnread(notification)) {
+        markNotificationRead(notification.id).catch((error) => {
+          showToast('No se pudo marcar', error.message || 'Revisa permisos de notificaciones.', 'error');
+        });
+      }
+      openNotificationAction(notification || {});
+      openNotification.disabled = false;
       return;
     }
 
     const markOne = event.target.closest('[data-mark-notification]');
     if (markOne) {
       const item = markOne.closest('[data-notification-id]');
-      markNotificationRead(item?.dataset.notificationId).catch((error) => {
+      markOne.disabled = true;
+      markNotificationRead(item?.dataset.notificationId).then(() => {
+        showToast('Aviso revisado', 'El aviso queda guardado como revisado.', 'success');
+      }).catch((error) => {
         showToast('No se pudo marcar', error.message || 'Revisa permisos de notificaciones.', 'error');
+      }).finally(() => {
+        markOne.disabled = false;
       });
       return;
     }

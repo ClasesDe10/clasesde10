@@ -58,6 +58,11 @@ assert(chat.includes('data-notification-settings-form'), 'Chat widget must expos
 assert(chat.includes('registerPushNotifications'), 'Chat widget must register push devices.');
 assert(chat.includes('data-open-notification'), 'Chat widget must allow opening notification actions.');
 assert(chat.includes('notificationPriorityClass'), 'Chat widget must render notification priority.');
+assert(chat.includes('dashboardSectionForNotification'), 'Chat widget must map notification actions to dashboard sections.');
+assert(chat.includes('notificationDisplayItems'), 'Chat widget must group duplicate notification cards.');
+assert(chat.includes('Marcar revisada'), 'Notification cards must use clear reviewed wording.');
+assert(!chat.includes('>Abrir</button>'), 'Notification cards must not render a generic open button.');
+assert(!chat.includes('>Leida</button>'), 'Notification cards must not render Leida as an action.');
 
 assert(serviceWorker.includes('firebase-messaging-compat'), 'Service worker must load Firebase Messaging for background push.');
 assert(serviceWorker.includes('onBackgroundMessage'), 'Service worker must handle FCM background messages.');
