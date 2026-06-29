@@ -27,6 +27,11 @@ for (const id of [
 assert.ok(professorDashboard.includes('type="file" id="p-foto-file"'), 'Profile photo must be uploaded as a file');
 assert.ok(professorDashboard.includes('accept="image/jpeg,image/png,image/webp"'), 'Profile photo must restrict image file types');
 assert.ok(professorDashboard.includes('padel, guitarra, piano'), 'Teacher subjects must mention non-academic activities');
+assert.ok(professorDashboard.includes('Etapas y niveles que cubro'), 'Teacher levels section must cover academic and activity levels');
+assert.ok(professorDashboard.includes('Iniciacion'), 'Teacher levels must keep initiation level for sports/music/adults');
+assert.ok(professorDashboard.includes('Intermedio'), 'Teacher levels must keep intermediate level for sports/music/adults');
+assert.ok(professorDashboard.includes('Avanzado'), 'Teacher levels must keep advanced level for sports/music/adults');
+assert.ok(professorDashboard.includes('normalizeTeacherLevels'), 'Teacher levels must be normalized before display/save');
 assert.ok(professorDashboard.includes('Conservatorio / escuela de musica'), 'Teacher profile must support music training');
 assert.ok(professorDashboard.includes('Entrenador / monitor deportivo'), 'Teacher profile must support sports training');
 assert.ok(professorDashboard.includes('Notas finales del curso anterior'), 'Teacher documents must request previous course grades');
@@ -51,6 +56,7 @@ for (const removed of [
   '<option value="titulo">',
   '<option value="certificado">',
   '<option value="identidad">',
+  'Cuenta datos concretos y verificables para aumentar confianza.',
 ]) {
   assert.ok(!professorDashboard.includes(removed), `Removed field still present in professor dashboard: ${removed}`);
   assert.ok(!publicTeacherPage.includes(removed), `Removed field still present in public teacher page: ${removed}`);

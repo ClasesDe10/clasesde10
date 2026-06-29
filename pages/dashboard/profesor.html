@@ -417,8 +417,12 @@
             </div>
 
             <div class="card">
-              <div class="card-header"><span class="card-title">Niveles educativos</span></div>
+              <div class="card-header"><span class="card-title">Etapas y niveles que cubro</span></div>
               <div class="card-body">
+                <div class="form-hint" style="margin-bottom:12px">
+                  Marca etapas escolares y, si impartes actividades como padel, musica, idiomas o adultos,
+                  indica tambien el nivel real: iniciacion, intermedio o avanzado.
+                </div>
                 <div style="display:flex;flex-direction:column;gap:10px" id="niveles-check">
                   <!-- Generados dinámicamente -->
                 </div>
@@ -1336,10 +1340,32 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
 });
 
 const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universidad','Adultos','Iniciacion','Intermedio','Avanzado','Musica','Deporte'];
+const NIVELES_NORMALIZADOS = new Map(NIVELES_LISTA.map((nivel) => [normalizeNivelKey(nivel), nivel]));
 let materiasActuales = [];
 let nivelesActuales  = [];
 let fotoPerfilDataUrl = '';
 let documentosPerfilCache = [];
+
+function normalizeNivelKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function normalizeTeacherLevels(values) {
+  const result = [];
+  const seen = new Set();
+  for (const raw of toProfileList(values)) {
+    const canonical = NIVELES_NORMALIZADOS.get(normalizeNivelKey(raw));
+    if (!canonical || seen.has(canonical)) continue;
+    result.push(canonical);
+    seen.add(canonical);
+  }
+  return result;
+}
 
 function ownerUid() {
   return usuario.uid || usuario.firebase_uid || usuario.id;
@@ -1473,7 +1499,7 @@ async function cargarChat() {
 async function cargarPerfil() {
   await cargarDocumentosPerfilCache();
   materiasActuales = toProfileList(perfil.materias || perfil.subjects || []);
-  nivelesActuales  = toProfileList(perfil.niveles_educativos || perfil.levels || []);
+  nivelesActuales  = normalizeTeacherLevels(perfil.niveles_educativos || perfil.levels || []);
 
   document.getElementById('p-nombre').value      = usuario.nombre || perfil.nombre || '';
   document.getElementById('p-apellidos').value   = usuario.apellidos || perfil.apellidos || '';
@@ -1513,7 +1539,7 @@ async function cargarPerfil() {
       <input type="checkbox" value="${sanitize(n)}" ${nivelesActuales.includes(n) ? 'checked' : ''}
              data-nivel="${sanitize(n)}"
              style="width:18px;height:18px;accent-color:var(--navy)">
-      <span style="font-size:.875rem">${n}</span>
+      <span style="font-size:.875rem">${sanitize(n)}</span>
     </label>`).join('');
 }
 
@@ -1616,7 +1642,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const postalCheck = validatePostalCode(codigoPostal);
   const notasValidas = isValidGrade(notaBachillerato) && isValidGrade(notaUniversidad);
   materiasActuales = toProfileList(materiasActuales);
-  nivelesActuales = toProfileList(nivelesActuales);
+  nivelesActuales = normalizeTeacherLevels(nivelesActuales);
 
   if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid || !zona ||
       !tipoFormacion || !estudioExacto || !colegioEstudios || !centroEstudios || !notasValidas ||
