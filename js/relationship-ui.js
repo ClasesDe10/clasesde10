@@ -49,10 +49,10 @@ function renderModulePills(relationship, role = 'admin') {
     ['Chat', relationship.modules?.chat],
     ['Calendario', relationship.modules?.calendar],
     [paymentLabel, relationship.modules?.payments],
-    ['Docs', relationship.modules?.documents],
+    role === 'familia' && !relationship.modules?.documents ? null : ['Documentos', relationship.modules?.documents],
     ['Incidencias', relationship.modules?.incidents],
     ['IA', relationship.modules?.ai],
-  ];
+  ].filter(Boolean);
   return modules.map(([label, active]) => (
     `<span class="relationship-pill ${active ? 'is-on' : ''}">${escapeHtml(label)}</span>`
   )).join('');

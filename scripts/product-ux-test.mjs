@@ -46,7 +46,8 @@ for (const [needle, message] of [
   assertIncludes(pwa, needle, message);
 }
 
-assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v29'", 'Service worker cache version must be bumped after scale/data model changes.');
+const cacheVersion = sw.match(/CACHE_VERSION = 'clasesde10-pwa-v(\d+)'/);
+if (!cacheVersion || Number(cacheVersion[1]) < 34) failures.push('Service worker cache version must be bumped after UX/data model changes.');
 assertIncludes(pwa, 'platform-public-runtime.js', 'PWA must load public platform runtime configuration.');
 assertIncludes(sw, '/js/scale-engine.js', 'PWA must precache the scale engine used by the data schema.');
 assertIncludes(packageJson.scripts['check:quality'], 'test:product-ux', 'check:quality must run product UX validation.');

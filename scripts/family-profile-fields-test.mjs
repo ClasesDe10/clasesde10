@@ -63,6 +63,9 @@ assert.ok(storageRules.includes('match /users/{uid}/{filePath=**}'), 'Storage ru
 assert.ok(storageRules.includes('match /documentos/{uid}/{filePath=**}'), 'Storage rules must keep legacy document paths readable');
 assert.ok(familyDashboard.includes('ownerUid: ownerUid()'), 'Family document uploads must persist ownerUid');
 assert.ok(professorDashboard.includes('ownerUid: ownerUid()'), 'Professor document uploads must persist ownerUid');
+assert.ok(familyDashboard.includes('Documentos opcionales'), 'Family documents must be clearly optional');
+assert.ok(familyDashboard.includes('No es obligatorio para usar ClasesDe10'), 'Family documents must explain when they are needed');
+assert.ok(!profileEngine.includes("label: 'Documento del tutor subido'"), 'Family completion must not require tutor documents');
 
 for (const removed of ['p-iban', 'tarifa_hora', 'hourlyRate']) {
   assert.ok(!professorDashboard.includes(removed), `Removed teacher field returned: ${removed}`);

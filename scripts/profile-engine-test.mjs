@@ -72,6 +72,28 @@ assert.equal(family.complete, true);
 assert.ok(family.percent >= 90, `Family percent too low: ${family.percent}`);
 assert.ok(family.trustScore >= 70, `Family trust too low: ${family.trustScore}`);
 
+const familyWithoutDocs = evaluateFamilyProfileProfessional({
+  nombre: 'Familia',
+  apellidos: 'Completa',
+  telefono: '600123456',
+  direccion: 'Calle Familia 10',
+  ciudad: 'Madrid',
+  codigo_postal: '28010',
+  zona: 'Chamberi',
+  contacto_preferido: 'chat',
+  contacto_emergencia_nombre: 'Tutor dos',
+  contacto_emergencia_telefono: '699123456',
+  idiomas: ['Espanol'],
+  notas_perfil: 'Preferimos clases presenciales por la tarde y seguimiento semanal.',
+}, [
+  { id: 'a1', active: true },
+], []);
+
+assert.equal(familyWithoutDocs.complete, true);
+assert.ok(familyWithoutDocs.percent >= 90, `Family without docs percent too low: ${familyWithoutDocs.percent}`);
+assert.ok(!familyWithoutDocs.recommendations.includes('Documento del tutor subido'));
+assert.ok(!familyWithoutDocs.indicators.some((item) => item.label === 'Identidad documentada'));
+
 const incompleteFamily = evaluateFamilyProfileProfessional({
   nombre: 'F',
   telefono: '123',

@@ -321,30 +321,37 @@
           </div>
 
           <div class="card">
-            <div class="card-header"><span class="card-title">Verificación del tutor</span></div>
+            <div class="card-header"><span class="card-title">Documentos opcionales</span></div>
             <div class="card-body">
+              <div class="alert alert-info" style="margin-bottom:16px">
+                <span class="alert-icon">i</span>
+                <div class="alert-body">
+                  <div class="alert-title">No es obligatorio para usar ClasesDe10</div>
+                  Sube DNI, autorizacion o documento de tutor solo si el equipo lo solicita para verificar una situacion concreta, resolver una incidencia o proteger al alumno. No afecta al matching si no tienes nada que subir.
+                </div>
+              </div>
               <div class="form-group">
                 <label class="form-label">Tipo de documento</label>
                 <select class="form-control" id="fam-doc-tipo">
-                  <option value="dni">DNI / Pasaporte</option>
-                  <option value="tutor">Documento de tutor legal</option>
-                  <option value="otro">Otro</option>
+                  <option value="dni">DNI / Pasaporte solicitado</option>
+                  <option value="tutor">Autorizacion / tutor legal</option>
+                  <option value="otro">Otro documento solicitado</option>
                 </select>
               </div>
               <label class="upload-zone" id="fam-upload-zone" style="margin-top:8px">
                 <input type="file" id="fam-doc-file" accept=".pdf,.jpg,.jpeg,.png,.webp">
                 <div class="upload-zone-icon">📎</div>
-                <div class="upload-zone-title">Adjuntar documento</div>
+                <div class="upload-zone-title">Adjuntar documento solicitado</div>
                 <div class="upload-zone-sub">PDF, JPG, PNG o WebP · Máx. 10 MB</div>
               </label>
               <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
-                <button class="btn btn-primary" id="btn-subir-doc-familia">Subir verificación</button>
+                <button class="btn btn-primary" id="btn-subir-doc-familia">Subir documento solicitado</button>
                 <span id="fam-upload-progress" style="font-size:.82rem;color:var(--gray-mid)"></span>
               </div>
               <div class="table-wrapper" style="margin-top:16px">
                 <table>
                   <thead><tr><th>Tipo</th><th>Estado</th><th>Acción</th></tr></thead>
-                  <tbody id="tbody-docs-familia"><tr><td colspan="3" style="text-align:center;padding:24px;color:var(--gray-mid)">Sin documentos.</td></tr></tbody>
+                  <tbody id="tbody-docs-familia"><tr><td colspan="3" style="text-align:center;padding:24px;color:var(--gray-mid)">Sin documentos solicitados.</td></tr></tbody>
                 </table>
               </div>
             </div>
@@ -699,6 +706,7 @@ function renderQualityPanel(targetId, evaluation) {
   const trustBadges = (evaluation.trustBadges || []).filter((item) => item.public !== false).slice(0, 5);
   const trustStats = evaluation.publicTrustStats || {};
   const fmtPercent = (value) => (value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? '-' : `${Math.round(Number(value) * 100)}%`);
+  const statText = (value, fallback = '0') => (value === null || value === undefined || value === '' ? fallback : sanitize(String(value)));
   const indicatorHtml = evaluation.indicators.map((indicator) => `
     <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:${indicator.complete ? 'rgba(22,163,74,.10)' : 'rgba(217,119,6,.10)'};color:${indicator.complete ? 'var(--success)' : 'var(--warning)'};font-size:.78rem;font-weight:700">
       ${indicator.complete ? 'OK' : '!'} ${sanitize(indicator.label)}
@@ -717,16 +725,16 @@ function renderQualityPanel(targetId, evaluation) {
         <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${indicatorHtml}</div>
         <div style="font-size:.88rem;color:var(--gray-dark)">
           <strong>Reputacion:</strong> ${evaluation.trustScore}/100 (${sanitize(trustStats.level || evaluation.trustLevel)}).
-          ${evaluation.pendingDocuments ? `${evaluation.pendingDocuments} documento(s) pendiente(s) de validacion.` : ''}
+          ${evaluation.pendingDocuments ? `${evaluation.pendingDocuments} documento(s) opcional(es) pendiente(s) de revision.` : ''}
         </div>
         <div class="trust-badges trust-badges-compact" style="margin-top:10px">
           ${trustBadges.length ? trustBadges.map((item) => `<span class="badge ${item.tone === 'success' ? 'badge-success' : item.tone === 'warning' ? 'badge-warning' : item.tone === 'gold' ? 'badge-gold' : 'badge-info'}">${sanitize(item.label)}</span>`).join('') : '<span class="badge badge-gray">Sin insignias publicas todavia</span>'}
         </div>
         <div class="trust-public-stats trust-public-stats-compact" style="margin-top:10px">
-          <div><strong>${sanitize(trustStats.activeStudents ?? 0)}</strong><span>alumnos</span></div>
-          <div><strong>${sanitize(trustStats.completedClasses ?? 0)}</strong><span>clases</span></div>
-          <div><strong>${sanitize(trustStats.completedHours ?? 0)}h</strong><span>realizadas</span></div>
-          <div><strong>${fmtPercent(trustStats.paymentReliability)}</strong><span>cierres ok</span></div>
+          <div><strong>${statText(trustStats.activeStudents)}</strong><span>alumnos</span></div>
+          <div><strong>${statText(trustStats.completedClasses)}</strong><span>clases</span></div>
+          <div><strong>${statText(trustStats.completedHours)}h</strong><span>horas</span></div>
+          <div><strong>${fmtPercent(trustStats.paymentReliability)}</strong><span>justificantes</span></div>
           <div><strong>${fmtPercent(trustStats.cancellationRate)}</strong><span>cancelacion</span></div>
         </div>
         ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Datos necesarios para asignaciones mas precisas</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
@@ -2260,7 +2268,7 @@ function renderDocumentosFamilia() {
   const tbody = document.getElementById('tbody-docs-familia');
   if (!tbody) return;
   if (!documentosFamiliaPerfilCache.length) {
-    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--gray-mid)">Sin documentos.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--gray-mid)">Sin documentos solicitados.</td></tr>';
     return;
   }
 
@@ -2290,12 +2298,12 @@ document.getElementById('tbody-docs-familia')?.addEventListener('click', async (
 const famUploadZone = document.getElementById('fam-upload-zone');
 const famDocFile = document.getElementById('fam-doc-file');
 famDocFile?.addEventListener('change', () => {
-  famUploadZone.querySelector('.upload-zone-title').textContent = famDocFile.files[0]?.name || 'Adjuntar documento';
+  famUploadZone.querySelector('.upload-zone-title').textContent = famDocFile.files[0]?.name || 'Adjuntar documento solicitado';
 });
 
 document.getElementById('btn-subir-doc-familia')?.addEventListener('click', async () => {
   const file = famDocFile.files[0];
-  if (!file) { showToast('Atención', 'Selecciona un archivo.', 'warning'); return; }
+  if (!file) { showToast('Atención', 'Selecciona el documento solicitado.', 'warning'); return; }
   if (file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
 
   const tipo = document.getElementById('fam-doc-tipo').value;
@@ -2325,7 +2333,7 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
 
   if (error) { showToast('Error', error.message, 'error'); progress.textContent = ''; return; }
   famDocFile.value = '';
-  famUploadZone.querySelector('.upload-zone-title').textContent = 'Adjuntar documento';
+  famUploadZone.querySelector('.upload-zone-title').textContent = 'Adjuntar documento solicitado';
   progress.textContent = '';
   showToast('Subido', 'Documento enviado para revisión.', 'success');
   await cargarDocumentosFamiliaPerfilCache();
@@ -2336,6 +2344,6 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
 // ── INIT ─────────────────────────────────────────────────────────
 cargarInicio();
 </script>
-<script src="/js/pwa.js?v=20260629-family-finance-privacy" defer></script>
+<script src="/js/pwa.js?v=20260629-family-docs-optional-2" defer></script>
 </body>
 </html>

@@ -245,7 +245,6 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
     { key: 'alumnos', label: 'Al menos un alumno activo', weight: 12, required: false, complete: hasStudent },
     { key: 'idiomas', label: 'Idiomas de comunicacion', weight: 4, required: false, complete: languages.length > 0 },
     { key: 'notas', label: 'Preferencias educativas documentadas', weight: 7, required: false, complete: hasText(firstValue(profile, ['notas_perfil', 'profileNotes']), 20) },
-    { key: 'identidad', label: 'Documento del tutor subido', weight: 5, required: false, complete: identityDoc },
   ];
 
   const summary = summarizeChecks(checks);
@@ -291,7 +290,7 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
       trustIndicator('Contacto operativo', phone.valid),
       trustIndicator('Direccion para matching', postalCode.valid && hasText(firstValue(profile, ['zona', 'zone']), 2)),
       trustIndicator('Alumno registrado', hasStudent),
-      trustIndicator('Identidad documentada', identityDoc, identityVerified ? 'Validada por admin' : identityDoc ? 'Pendiente de validacion' : 'Sin documento'),
+      ...(identityDoc ? [trustIndicator('Documento opcional', identityVerified, identityVerified ? 'Validado por admin' : 'Pendiente de validacion')] : []),
       trustIndicator('Preferencias claras', hasText(firstValue(profile, ['notas_perfil', 'profileNotes']), 20)),
       trustIndicator('Pagos sin incidencias', !trustProfile.metrics.pendingPayments, trustProfile.metrics.pendingPayments ? `${trustProfile.metrics.pendingPayments} pendiente(s)` : 'Al dia'),
     ],

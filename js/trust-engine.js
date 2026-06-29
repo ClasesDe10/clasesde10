@@ -637,7 +637,7 @@ function levelForTeacher(score, metrics, docs, flags) {
 
 function levelForFamily(score, metrics, docs, flags) {
   if (flags.blocked) return { key: 'bronce', label: 'Bronce', rank: 1, publicLabel: 'Familia Bronce' };
-  if (score >= 90 && docs.identityVerified && metrics.completedClasses >= 12 && metrics.pendingPayments === 0 && metrics.openIncidents === 0) {
+  if (score >= 90 && metrics.completedClasses >= 12 && metrics.pendingPayments === 0 && metrics.openIncidents === 0) {
     return { key: 'platino', label: 'Platino', rank: 4, publicLabel: 'Familia Platino' };
   }
   if (score >= 78 && metrics.completedClasses >= 5 && metrics.pendingPayments === 0) {
@@ -668,7 +668,6 @@ function familyRiskFlags(metrics, docs, flags) {
   return [
     flags.blocked ? 'profile_blocked_or_inactive' : '',
     !flags.adminVerified ? 'admin_verification_missing' : '',
-    !docs.identityUploaded ? 'guardian_identity_missing' : '',
     metrics.activeStudents < 1 ? 'no_active_students' : '',
     metrics.overdueClassPayments > 0 ? 'overdue_class_payments' : '',
     metrics.pendingPayments > 0 ? 'pending_payments' : '',
@@ -895,7 +894,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
 
   const components = [
     scoreComponent('profile', 'Perfil familiar', completion * 0.17 + (hasContact ? 2 : 0) + (hasAddress ? 1 : 0), 20, `${round(completion)}% completado`),
-    scoreComponent('identity', 'Contacto e identidad', (hasContact ? 5 : 0) + (hasAddress ? 4 : 0) + (docs.identityVerified ? 5 : docs.identityUploaded ? 2 : 0) + (flags.adminVerified ? 2 : 0), 16, `${docs.verifiedCount} documento(s) validados`),
+    scoreComponent('contact', 'Contacto y ubicacion', (hasContact ? 6 : 0) + (hasAddress ? 6 : 0) + (flags.adminVerified ? 2 : 0) + (docs.identityVerified ? 2 : docs.identityUploaded ? 1 : 0), 16, docs.identityUploaded ? `${docs.verifiedCount} documento(s) opcional(es) validados` : 'Documentos no requeridos'),
     scoreComponent('students', 'Alumnos y solicitudes', Math.min(8, metrics.activeStudents * 6) + Math.min(4, metrics.requests.length * 1.2), 12, `${metrics.activeStudents} alumno(s), ${metrics.requests.length} solicitud(es)`),
     scoreComponent('payment', 'Fiabilidad de pagos', paymentReliability * 22 - Math.min(7, metrics.pendingPayments * 2) - Math.min(8, (metrics.overdueClassPayments || 0) * 4), 22, `${metrics.paidPayments} pago(s) validados`),
     scoreComponent('class_history', 'Compromiso con clases', classReliability * 16 - Math.min(5, metrics.openIncidents * 2), 16, `${metrics.completedClasses} clase(s) realizadas`),
@@ -926,7 +925,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     !hasContact ? 'Falta contacto operativo.' : '',
     !hasAddress ? 'Falta direccion o codigo postal para matching presencial.' : '',
     !metrics.activeStudents ? 'Sin alumnos activos.' : '',
-    !docs.identityUploaded ? 'Documento de tutor no subido.' : '',
+    docs.identityUploaded && !docs.identityVerified ? 'Documento del tutor pendiente de validacion.' : '',
     metrics.overdueClassPayments > 0 ? `${metrics.overdueClassPayments} clase(s) con justificante vencido.` : '',
     metrics.pendingPayments > 0 ? `${metrics.pendingPayments} justificante(s) pendiente(s).` : '',
     metrics.openIncidents > 0 ? `${metrics.openIncidents} incidencia(s) abierta(s).` : '',
@@ -951,7 +950,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     signals: [
       signal('level', 'Nivel de reputacion', 'info', level.publicLabel),
       signal('contact', 'Contacto operativo', hasContact ? 'positive' : 'warning', hasContact ? 'Completo' : 'Pendiente'),
-      signal('identity', 'Identidad tutor', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Validada' : docs.identityUploaded ? 'Pendiente' : 'No subida'),
+      signal('optional_documents', 'Documentos opcionales', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Validado' : docs.identityUploaded ? 'Pendiente' : 'No requeridos'),
       signal('students', 'Alumno registrado', metrics.activeStudents > 0 ? 'positive' : 'warning', `${metrics.activeStudents} activo(s)`),
       signal('payments', 'Justificantes', metrics.overdueClassPayments ? 'warning' : metrics.pendingPayments ? 'warning' : 'positive', metrics.overdueClassPayments ? `${metrics.overdueClassPayments} vencido(s)` : metrics.pendingPayments ? `${metrics.pendingPayments} pendiente(s)` : 'Sin justificantes pendientes'),
       signal('classes', 'Historial de clases', metrics.completedClasses > 0 ? 'positive' : 'neutral', `${metrics.completedClasses} clase(s)`),

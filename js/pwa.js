@@ -1481,10 +1481,11 @@
       [/telefono|movil|phone/, 'Anade un telefono operativo para resolver incidencias rapido.'],
       [/direccion|calle|zona|codigo postal|postal|cp\b/, 'Ayuda a calcular cercania y clases presenciales.'],
       [/materia|asignatura|especialidad|subject/, 'Incluye materias escolares y extraescolares: padel, piano, guitarra o programacion.'],
+      [/preferencias educativas|observaciones|notas|seguimiento/, 'Cuenta lo que debe saber el profesor: objetivos, dificultades, ritmo y preferencias de clase.'],
       [/disponibilidad|horario|franja|availability/, 'Usa franjas reales; el matching las tendra en cuenta.'],
       [/bio|descripcion|experiencia|formacion|estudios|colegio|universidad/, 'Cuenta datos concretos y verificables para aumentar confianza.'],
-      [/foto|imagen|avatar|photo|file/, 'Sube una foto clara o documento en PDF, JPG o PNG.'],
-      [/document|dni|titulo|certificado|verificacion/, 'El documento quedara organizado y pendiente de revision.'],
+      [/document|dni|titulo|certificado|verificacion/, 'Sube documentos solo si el equipo los solicita; quedan en revision privada.'],
+      [/foto|imagen|avatar|photo|file/, 'Adjunta un archivo claro y legible; si es foto de perfil, evita imagenes borrosas.'],
       [/bizum/, 'Marca Bizum solo si puedes recibir pagos por ese canal.'],
       [/alumno|hijo|estudiante/, 'Estos datos ayudan a asignar el profesor mas adecuado.'],
     ];
@@ -1524,8 +1525,11 @@
     const describedBy = field.getAttribute('aria-describedby');
     field.setAttribute('aria-describedby', describedBy ? `${describedBy} ${id}` : id);
     const group = field.closest('.form-group, .cf-field, .field, .input-group');
+    const uploadZone = field.type === 'file' ? field.closest('.upload-zone') : null;
     if (group && !group.querySelector('.cd10-smart-hint')) {
       group.appendChild(node);
+    } else if (uploadZone && !uploadZone.nextElementSibling?.classList?.contains('cd10-smart-hint')) {
+      uploadZone.insertAdjacentElement('afterend', node);
     } else {
       field.insertAdjacentElement('afterend', node);
     }
