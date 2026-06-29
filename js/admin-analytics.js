@@ -10,6 +10,7 @@ import {
   buildAnalyticsCsvRows,
   buildAnalyticsReport,
 } from './analytics-engine.js?v=20260628-analytics';
+import { filterAfterClassReset } from './class-reset.js';
 
 const instances = new WeakMap();
 const COLLECTIONS = {
@@ -78,10 +79,12 @@ function toDoc(snap) {
 async function readCollection(firebaseDb, name, max = 2500) {
   try {
     const snap = await getDocs(query(collection(firebaseDb, name), orderBy('createdAt', 'desc'), firestoreLimit(max)));
-    return snap.docs.map(toDoc);
+    const rows = snap.docs.map(toDoc);
+    return name === 'clases' ? filterAfterClassReset(rows) : rows;
   } catch (_) {
     const snap = await getDocs(query(collection(firebaseDb, name), firestoreLimit(max)));
-    return snap.docs.map(toDoc);
+    const rows = snap.docs.map(toDoc);
+    return name === 'clases' ? filterAfterClassReset(rows) : rows;
   }
 }
 

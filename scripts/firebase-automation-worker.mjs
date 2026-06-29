@@ -71,6 +71,12 @@ import {
   shouldSendExpiryReminder,
 } from '../js/document-center-engine.js';
 import { normalizeEntityForWrite } from '../js/data-schema.js';
+import {
+  CLASS_RESET_GENERATION,
+  classResetWriteFields,
+  filterAfterClassReset,
+  isAfterClassReset,
+} from '../js/class-reset.js';
 
 const require = createRequire(import.meta.url);
 const {
@@ -581,8 +587,12 @@ async function materializeWorkerAutomationPlan(db, event, stats) {
 }
 
 async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
-  const snap = await db.collection(collectionName).limit(maxDocs).get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
+  const ref = collectionName === 'clases'
+    ? db.collection(collectionName).where('classResetGeneration', '==', CLASS_RESET_GENERATION)
+    : db.collection(collectionName);
+  const snap = await ref.limit(maxDocs).get();
+  const rows = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
+  return collectionName === 'clases' ? filterAfterClassReset(rows) : rows;
 }
 
 async function loadTrustContext(db) {
@@ -625,9 +635,12 @@ async function loadTrustContext(db) {
 
 async function writeDoc(collectionRef, id, payload, options = {}) {
   const collectionName = collectionRef?.id || '';
+  const normalizedPayload = collectionName === 'clases'
+    ? { ...payload, ...classResetWriteFields() }
+    : payload;
   const data = collectionRef?.parent
-    ? payload
-    : normalizeEntityForWrite(collectionName, payload, { isCreate: !id || options.merge === false });
+    ? normalizedPayload
+    : normalizeEntityForWrite(collectionName, normalizedPayload, { isCreate: !id || options.merge === false });
   if (dryRun) return { id: id || `dry_${Date.now()}` };
   if (id) {
     const ref = collectionRef.doc(id);
@@ -689,6 +702,16 @@ async function countQuery(queryRef) {
   try {
     const snap = await queryRef.count().get();
     return snap.data().count;
+  } catch {
+    return null;
+  }
+}
+
+async function countActiveClasses(db, statuses = null) {
+  try {
+    const rows = await listCollection(db, 'clases', 20000);
+    if (!Array.isArray(statuses) || !statuses.length) return rows.length;
+    return rows.filter((item) => statuses.includes(item.status) || statuses.includes(item.estado)).length;
   } catch {
     return null;
   }
@@ -809,9 +832,9 @@ async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
       assignments: await countQuery(db.collection('asignaciones')),
     },
     classes: {
-      total: await countQuery(db.collection('clases')),
-      scheduled: await countQuery(db.collection('clases').where('status', '==', 'programada')),
-      completed: await countQuery(db.collection('clases').where('status', '==', 'realizada')),
+      total: await countActiveClasses(db),
+      scheduled: await countActiveClasses(db, ['programada']),
+      completed: await countActiveClasses(db, ['realizada']),
     },
     payments: {
       total: await countQuery(db.collection('pagos')),
@@ -1800,12 +1823,15 @@ function classLabel(data) {
 
 async function loadClassDocsByStatuses(db, statuses, perStatusLimit = limit) {
   const docs = new Map();
-  for (const field of ['estado', 'status']) {
-    for (const status of statuses) {
-      const snap = await db.collection('clases').where(field, '==', status).limit(perStatusLimit).get();
-      snap.docs.forEach((doc) => docs.set(doc.id, doc));
-    }
-  }
+  const snap = await db.collection('clases')
+    .where('classResetGeneration', '==', CLASS_RESET_GENERATION)
+    .limit(Math.max(perStatusLimit * statuses.length, perStatusLimit))
+    .get();
+  snap.docs.forEach((doc) => {
+    const data = doc.data();
+    if (!isAfterClassReset(data)) return;
+    if (statuses.includes(data.estado) || statuses.includes(data.status)) docs.set(doc.id, doc);
+  });
   return [...docs.values()];
 }
 
@@ -1854,14 +1880,14 @@ async function notifyLifecycleRecipients(db, transition, recipients, stats) {
 }
 
 async function processClassLifecycle(db, stats) {
-  const snap = await db.collection('clases').limit(limit).get();
-  for (const doc of snap.docs) {
-    const data = doc.data();
-    const transition = buildClassLifecycleTransition(doc.id, data);
+  const classes = await listCollection(db, 'clases', limit);
+  for (const data of classes) {
+    if (!data.__ref) continue;
+    const transition = buildClassLifecycleTransition(data.id, data);
     stats.lifecycleClassesEvaluated += 1;
     if (!transition.changed) continue;
 
-    await updateRef(doc.ref, {
+    await updateRef(data.__ref, {
       ...transition.patch,
       lifecycleTransitionCount: admin.firestore.FieldValue.increment(1),
       updatedAt: now(),
@@ -2245,9 +2271,10 @@ async function processPaymentReminders(db, stats) {
     }
   }
 
-  const classesSnap = await db.collection('clases').limit(limit).get();
-  for (const doc of classesSnap.docs) {
-    const data = { id: doc.id, ...doc.data() };
+  const classes = await listCollection(db, 'clases', limit);
+  for (const data of classes) {
+    const doc = data.__ref ? { id: data.id, ref: data.__ref } : null;
+    if (!doc) continue;
     if (!['realizada', 'completada'].includes(classStatus(data))) continue;
     if (!classHasPrice(data)) continue;
     if (['pagado', 'paid', 'validado'].includes(paymentStatus(data))) continue;
@@ -2311,6 +2338,7 @@ async function createPaymentRequestForClassWorker(db, classId, reason = 'automat
   const classSnap = await db.collection('clases').doc(id).get();
   if (!classSnap.exists) return { created: false, reason: 'class_not_found', classId: id };
   const classData = { id, ...classSnap.data() };
+  if (!isAfterClassReset(classData)) return { created: false, reason: 'class_reset_ignored', classId: id };
 
   if (classHasPaidStatus(classData)) {
     return { created: false, reason: 'class_already_paid', classId: id };
@@ -2620,8 +2648,8 @@ async function processPlatformAutomationSweep(db, stats) {
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
-  const snap = await db.collection('clases').where('familyUid', '==', familyUid).limit(80).get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const rows = await listCollection(db, 'clases', 2000);
+  return rows.filter((item) => clean(item.familyUid || item.familia_id) === familyUid);
 }
 
 async function reconcileVerifiedPayments(db, stats) {

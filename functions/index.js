@@ -15,6 +15,8 @@ const db = admin.firestore();
 
 const REGION = 'europe-west1';
 const ADMIN_EMAIL = 'contacto.clasesde10@gmail.com';
+const CLASS_RESET_CUTOFF_ISO = '2026-06-29T19:26:00.000Z';
+const CLASS_RESET_GENERATION = 'class-reset-20260629';
 const MATCHING_TEACHER_SCAN_LIMIT = Number(process.env.MATCHING_TEACHER_SCAN_LIMIT || 1000);
 const MATCHING_USER_SCAN_LIMIT = Number(process.env.MATCHING_USER_SCAN_LIMIT || 2000);
 const MATCHING_ASSIGNMENT_SCAN_LIMIT = Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000);
@@ -104,6 +106,33 @@ function buildClassPaymentPatch(payment, nowValue = now()) {
 function classHasPaidStatus(data = {}) {
   const status = normalizePaymentStatus(data.paymentStatus || data.familyPaymentStatus || data.estado_pago || data.estado_pago_familia);
   return ['validado', 'pagado', 'paid', 'succeeded'].includes(status);
+}
+
+function dateMillis(value) {
+  if (!value) return NaN;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') return Date.parse(value);
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (Number.isFinite(Number(value.seconds))) return Number(value.seconds) * 1000;
+  return NaN;
+}
+
+function classResetFields() {
+  return {
+    classResetGeneration: CLASS_RESET_GENERATION,
+    createdAfterClassReset: true,
+    classResetCutoffIso: CLASS_RESET_CUTOFF_ISO,
+  };
+}
+
+function isAfterClassReset(data = {}) {
+  if (data.classResetGeneration === CLASS_RESET_GENERATION || data.createdAfterClassReset === true) return true;
+  const createdAt = dateMillis(data.createdAt || data.created_at || data.fecha_creacion || data.updatedAt || data.updated_at);
+  return Number.isFinite(createdAt) && createdAt >= Date.parse(CLASS_RESET_CUTOFF_ISO);
+}
+
+function activeClassesQuery() {
+  return db.collection('clases').where('classResetGeneration', '==', CLASS_RESET_GENERATION);
 }
 
 function asArray(value) {
@@ -509,6 +538,7 @@ function buildBusySlotPayloadsForClass(classId, data = {}) {
   const timestamp = now();
   const common = {
     source: 'class_automation',
+    ...classResetFields(),
     classId: clean(classId, 180),
     assignmentId: clean(data.assignmentId || data.asignacion_id, 180),
     fecha,
@@ -1194,6 +1224,14 @@ function teacherIsInactive(data = {}) {
 
 async function loadDocsByStatuses(collectionName, fields, statuses, perStatusLimit = 25) {
   const docs = new Map();
+  if (collectionName === 'clases') {
+    const snap = await activeClassesQuery().limit(Math.max(perStatusLimit * statuses.length, perStatusLimit)).get();
+    snap.docs.forEach((doc) => {
+      const data = doc.data();
+      if (fields.some((field) => statuses.includes(data[field]))) docs.set(doc.id, doc);
+    });
+    return [...docs.values()];
+  }
   for (const field of fields) {
     for (const status of statuses) {
       const snap = await db.collection(collectionName).where(field, '==', status).limit(perStatusLimit).get();
@@ -1295,6 +1333,20 @@ async function countQuery(queryRef, label) {
     return snap.data().count;
   } catch (error) {
     logger.warn('countQuery failed', { label, message: error.message });
+    return null;
+  }
+}
+
+async function countActiveClasses(statuses = null) {
+  try {
+    const snap = await activeClassesQuery().limit(20000).get();
+    if (!Array.isArray(statuses) || !statuses.length) return snap.size;
+    return snap.docs.filter((doc) => {
+      const data = doc.data();
+      return statuses.includes(data.status) || statuses.includes(data.estado);
+    }).length;
+  } catch (error) {
+    logger.warn('countActiveClasses failed', { message: error.message });
     return null;
   }
 }
@@ -1414,9 +1466,9 @@ async function writeScaleMetricSnapshot(source = 'scheduled') {
       assignments: await countQuery(db.collection('asignaciones'), 'assignments_total'),
     },
     classes: {
-      total: await countQuery(db.collection('clases'), 'classes_total'),
-      scheduled: await countQuery(db.collection('clases').where('status', '==', 'programada'), 'classes_scheduled'),
-      completed: await countQuery(db.collection('clases').where('status', '==', 'realizada'), 'classes_completed'),
+      total: await countActiveClasses(),
+      scheduled: await countActiveClasses(['programada']),
+      completed: await countActiveClasses(['realizada']),
     },
     payments: {
       total: await countQuery(db.collection('pagos'), 'payments_total'),
@@ -2096,6 +2148,9 @@ async function createPaymentRequestForClass(classId, reason = 'automation') {
   const classSnap = await db.collection('clases').doc(id).get();
   if (!classSnap.exists) return { created: false, reason: 'class_not_found', classId: id };
   const classData = { id, ...classSnap.data() };
+  if (!isAfterClassReset(classData)) {
+    return { created: false, reason: 'class_reset_ignored', classId: id };
+  }
 
   if (classHasPaidStatus(classData)) {
     return { created: false, reason: 'class_already_paid', classId: id };
@@ -3048,6 +3103,7 @@ exports.automateClassCreated = onDocumentCreated({
 }, async (event) => {
   const classId = event.params.classId;
   const data = event.data.data();
+  if (!isAfterClassReset(data)) return;
   await syncBusySlotsForClass(classId, data);
   const enriched = await enrichClassAutomationData(data);
   await materializeAutomationPlan({
@@ -3066,6 +3122,7 @@ exports.automateClassUpdated = onDocumentUpdated({
   const classId = event.params.classId;
   const before = event.data.before.data();
   const after = event.data.after.data();
+  if (!isAfterClassReset(after)) return;
   const beforeStatus = statusOf(before);
   const afterStatus = statusOf(after);
   const scheduleChanged = changedAny(before, after, ['fecha', 'date', 'hora_inicio', 'startTime', 'hora_fin', 'endTime']);
@@ -3398,11 +3455,7 @@ exports.generateMonthlySummary = onSchedule({
   const nextMonthDate = new Date(previousMonthDate.getFullYear(), previousMonthDate.getMonth() + 1, 1);
   const monthStart = `${month}-01`;
   const nextMonth = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
-  const classesSnap = await db.collection('clases')
-    .where('fecha', '>=', monthStart)
-    .where('fecha', '<', nextMonth)
-    .limit(20000)
-    .get();
+  const classesSnap = await activeClassesQuery().limit(20000).get();
   const summary = {
     month,
     classes: 0,
@@ -3413,6 +3466,7 @@ exports.generateMonthlySummary = onSchedule({
 
   classesSnap.docs.forEach((doc) => {
     const data = doc.data();
+    if (!isAfterClassReset(data)) return;
     const date = clean(data.fecha || data.date);
     if (!date.startsWith(month)) return;
     if (!['realizada', 'completada'].includes(data.estado || data.status)) return;

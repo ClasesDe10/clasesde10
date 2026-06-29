@@ -47,6 +47,10 @@ import {
   paymentFingerprint,
   storedPaymentStatus,
 } from './payment-engine.js';
+import {
+  classResetWriteFields,
+  filterAfterClassReset,
+} from './class-reset.js';
 
 const COLLECTION_ALIASES = {
   ...CANONICAL_COLLECTION_ALIASES,
@@ -166,7 +170,8 @@ async function listCollection(name, filters = [], sorts = [], max = null) {
   } catch (error) {
     snap = await getDocs(buildServerQuery(name, filters, [], cappedMax));
   }
-  return snap.docs.map(toLegacyDoc);
+  const rows = snap.docs.map(toLegacyDoc);
+  return collectionName(name) === 'clases' ? filterAfterClassReset(rows) : rows;
 }
 
 async function safeListCollection(name) {
@@ -373,6 +378,7 @@ function normalizeWritePayload(table, payload, isCreate = false) {
   }
 
   if (table === 'clases') {
+    Object.assign(data, classResetWriteFields());
     data.estado = data.estado || data.status || 'confirmada';
     data.status = data.status || data.estado;
     if (data.fecha && !data.date) data.date = data.fecha;

@@ -53,10 +53,17 @@ import {
   registerPushNotifications,
   watchForegroundPushMessages,
 } from './push-notifications.js';
+import {
+  classResetWriteFields,
+  filterAfterClassReset,
+  isAfterClassReset,
+  isBusySlotAfterClassReset,
+} from './class-reset.js';
 
 const SCHEDULE_KIND_WEEKLY = 'weekly_recurring';
 const SCHEDULE_KIND_ONE_OFF = 'one_off';
 const SCHEDULE_KINDS = new Set([SCHEDULE_KIND_WEEKLY, SCHEDULE_KIND_ONE_OFF]);
+const ACCEPTED_SCHEDULE_STATUSES = new Set(['aceptada', 'accepted', 'confirmada', 'confirmed']);
 
 function clean(value, max = 2000) {
   return String(value || '').trim().slice(0, max);
@@ -69,6 +76,10 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function isAcceptedScheduleProposal(proposal = {}) {
+  return ACCEPTED_SCHEDULE_STATUSES.has(clean(proposal.status || proposal.estado, 80).toLowerCase());
 }
 
 function normalizeDate(value) {
@@ -497,7 +508,7 @@ function classBlocksAvailability(row = {}) {
 }
 
 function busySlotsFromClassRows(rows = []) {
-  return rows
+  return filterAfterClassReset(rows)
     .filter(classBlocksAvailability)
     .flatMap((row) => buildBusySlotPayloadsForClass(row.id || row.classId, row, {
       assignmentId: row.assignmentId || row.asignacion_id,
@@ -512,7 +523,7 @@ async function loadClassRowsBy(field, value) {
     where(field, '==', cleanValue),
     limit(80),
   ));
-  return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  return filterAfterClassReset(snap.docs.map((item) => ({ id: item.id, ...item.data() })));
 }
 
 async function loadVisibleClassBusySlots(chat = {}, currentUid = '') {
@@ -541,6 +552,7 @@ function repairBusySlotsFromVisibleClasses(slots = [], currentUid = '', role = '
       resourceType: slot.resourceType,
       resourceId: slot.resourceId,
       resourceKey: slot.resourceKey,
+      ...classResetWriteFields(),
       classId: slot.classId,
       assignmentId: slot.assignmentId,
       source: 'class',
@@ -583,7 +595,9 @@ async function loadBusySlotsByResource(resourceType, resourceId) {
     where('resourceType', '==', clean(resourceType, 40)),
     limit(120),
   ));
-  return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  return snap.docs
+    .map((item) => ({ id: item.id, ...item.data() }))
+    .filter(isBusySlotAfterClassReset);
 }
 
 async function loadChatAvailability(chat = {}, currentUid = '', role = '') {
@@ -628,10 +642,12 @@ function busySlotsFromAcceptedProposals(proposals = [], chat = {}, ignoredPropos
   const studentId = clean(chat.studentId || chat.alumno_id, 180);
   const assignmentId = clean(chat.id || chat.assignmentId || chat.asignacion_id, 180);
   return (Array.isArray(proposals) ? proposals : [])
-    .filter((proposal) => proposal && proposal.id !== ignoredProposalId && proposal.status === 'aceptada')
+    .filter((proposal) => proposal && proposal.id !== ignoredProposalId && isAcceptedScheduleProposal(proposal))
+    .filter(isAfterClassReset)
     .flatMap((proposal) => {
       const base = {
         source: 'chat_schedule_proposal',
+        ...classResetWriteFields(),
         classId: clean(proposal.classId, 180),
         scheduleProposalId: proposal.id,
         assignmentId,
@@ -704,6 +720,7 @@ function buildBusySlotPayloadsForClass(classId, classFields = {}, context = {}) 
   const studentId = clean(classFields.studentId || classFields.alumno_id, 180);
   const common = {
     source: 'class',
+    ...classResetWriteFields(),
     classId,
     assignmentId: clean(classFields.assignmentId || classFields.asignacion_id || context.assignmentId, 180),
     fecha: clean(classFields.fecha || classFields.date, 20).slice(0, 10),
@@ -1407,7 +1424,9 @@ export async function initChatWidget({
     );
     state.unsubscribeProposals = onSnapshot(proposalsQuery, (snap) => {
       if (!isCurrentSessionActive()) return;
-      state.scheduleProposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+      state.scheduleProposals = snap.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((proposal) => !isAcceptedScheduleProposal(proposal) || isAfterClassReset(proposal));
       renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id] || { loading: true });
     }, (error) => {
       handleRealtimeError('No se pudieron abrir propuestas de horario', 'Horarios no disponibles', 'No se pudieron abrir las propuestas.', error);
@@ -1822,6 +1841,7 @@ export async function initChatWidget({
       if (cleanUid) participantUids[cleanUid] = true;
     });
     const payload = {
+      ...classResetWriteFields(),
       profesor_id: classFields.profesor_id,
       teacherUid: classFields.teacherUid,
       familia_id: classFields.familia_id,
@@ -1882,6 +1902,7 @@ export async function initChatWidget({
       return [];
     });
     await updateDoc(proposalRef, {
+      ...classResetWriteFields(),
       status: 'aceptada',
       classId,
       respondedByUid: currentUid,

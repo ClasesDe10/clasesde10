@@ -74,6 +74,7 @@
     "test:calendar-notifications": "node scripts/calendar-notifications-test.mjs",
     "test:notification-system": "node scripts/notification-system-test.mjs",
     "test:chat-scheduling": "node scripts/chat-scheduling-system-test.mjs",
+    "test:class-reset": "node scripts/class-reset-test.mjs",
     "test:class-flow:e2e": "node scripts/family-professor-class-flow-e2e.mjs --url https://clasesde10.com",
     "test:relationship-engine": "node scripts/relationship-engine-test.mjs",
     "test:family-journey": "node scripts/family-journey-engine-test.mjs",

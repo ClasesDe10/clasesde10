@@ -21,6 +21,7 @@ import {
   ADMIN_AI_VERSION,
   answerAdminQuestion,
 } from './admin-ai-engine.js?v=20260628-admin-ai';
+import { filterAfterClassReset } from './class-reset.js';
 
 const DATA_CACHE_MS = 60 * 1000;
 const DATA_SPECS = [
@@ -94,13 +95,14 @@ async function loadCollection(key, name, max, isGroup = false) {
     } catch (_) {
       snap = await getDocs(query(ref, limit(max)));
     }
+    const rows = snap.docs.map((docSnap) => ({
+      id: docSnap.id,
+      chatId: isGroup ? clean(docSnap.ref.parent.parent?.id) : undefined,
+      ...docSnap.data(),
+    }));
     return {
       key,
-      rows: snap.docs.map((docSnap) => ({
-        id: docSnap.id,
-        chatId: isGroup ? clean(docSnap.ref.parent.parent?.id) : undefined,
-        ...docSnap.data(),
-      })),
+      rows: name === 'clases' ? filterAfterClassReset(rows) : rows,
       truncated: snap.size >= max,
       error: null,
     };

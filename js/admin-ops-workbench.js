@@ -13,6 +13,7 @@ import {
   searchOpsIndex,
   summarizeOpsForClipboard,
 } from './admin-ops-engine.js?v=20260629-ops';
+import { filterAfterClassReset } from './class-reset.js';
 
 export const ADMIN_OPS_WORKBENCH_VERSION = 'admin-ops-workbench-2026-06-29';
 
@@ -48,6 +49,10 @@ function escapeHtml(value) {
 
 function toDoc(docSnap) {
   return { id: docSnap.id, ...docSnap.data() };
+}
+
+function filterCollectionRows(name, rows = []) {
+  return name === 'clases' ? filterAfterClassReset(rows) : rows;
 }
 
 function formatNumber(value, decimals = 0) {
@@ -113,12 +118,12 @@ async function readCollection(firebaseDb, name, config) {
       : [firestoreLimit(config.max)];
     const snap = await getDocs(query(collection(firebaseDb, name), ...constraints));
     const ordered = snap.docs.map(toDoc);
-    if (!config.includeUnordered) return ordered;
+    if (!config.includeUnordered) return filterCollectionRows(name, ordered);
     const fallbackSnap = await getDocs(query(collection(firebaseDb, name), firestoreLimit(Math.min(config.max, 400))));
-    return mergeDocs(ordered, fallbackSnap.docs.map(toDoc));
+    return filterCollectionRows(name, mergeDocs(ordered, fallbackSnap.docs.map(toDoc)));
   } catch (_) {
     const snap = await getDocs(query(collection(firebaseDb, name), firestoreLimit(config.max)));
-    return snap.docs.map(toDoc);
+    return filterCollectionRows(name, snap.docs.map(toDoc));
   }
 }
 
