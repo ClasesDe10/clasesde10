@@ -67,7 +67,7 @@ Comprobaciones ejecutadas:
 - Produccion principal: Firebase Hosting.
 - Dominio canonico esperado: `https://clasesde10.com`.
 - Dominio Firebase: `https://clasesde10-50add.web.app`.
-- Netlify queda como legado/rollback, no como produccion deseada.
+- Netlify queda eliminado de la operativa: DNS en Firebase Hosting, repo desvinculado y sitio legacy desactivado el 2026-06-29.
 - `firebase.json` tiene headers de seguridad, cache, rewrites y redirects.
 - CSP permite `unsafe-inline`, necesario por el codigo actual, pero no ideal.
 
@@ -235,7 +235,7 @@ Dificultad: Baja, Media, Alta.
 | 60 | CI GitHub Actions | Checks locales no bastan | No hay pipeline obligado | `npm run check:quality`, functions, audits ligeros | Alto | P1 | Media | 1d | Calidad continua |
 | 61 | Deploy preview controlado | Produccion se toca directamente | Flujo rapido sin staging real | Canal Firebase preview por branch | Medio | P2 | Media | 0.5d | Menos riesgo |
 | 62 | Rollback documentado | Hay docs pero no flujo unico | Mucha historia acumulada | Runbook unico de deploy/rollback | Medio | P2 | Baja | 0.3d | Recuperacion rapida |
-| 63 | Eliminar Netlify final | Doble hosting confunde | Config legacy persiste | Borrar Netlify tras DNS/Firebase estable | Medio | P2 | Baja | 0.5d | Menos superficies |
+| 63 | Eliminar Netlify final | Resuelto | DNS en Firebase, sitio Netlify desactivado y repo desvinculado | Mantener Firebase Hosting como unico despliegue | Cerrado | P0 | Baja | Hecho | Menos superficies |
 | 64 | Eliminar Supabase final | Runtime aun lo usa | Dashboards legacy | Migrar modulos y borrar cliente/config | Muy alto | P0 | Alta | 5d | Backend unico |
 | 65 | CSP sin `unsafe-inline` | Seguridad degradada | JS/CSS inline masivo | Mover handlers/estilos a archivos y nonces si aplica | Alto | P2 | Alta | 3d | Menos XSS |
 | 66 | Reducir `innerHTML` | Riesgo XSS y bugs layout | Render manual con strings | Helpers DOM seguros o templates sanitizadas | Alto | P1 | Alta | 2d | Seguridad y mantenibilidad |
@@ -388,7 +388,7 @@ No recomiendo RAG, embeddings ni agentes complejos en esta fase. Antes hay que c
 10. Migrar documentos.
 11. Migrar clases y pagos.
 12. Eliminar runtime Supabase.
-13. Quitar Netlify.
+13. Netlify quitado de la operativa: mantener Firebase Hosting como unica produccion.
 14. Endurecer CSP quitando inline JS/CSS.
 
 ## 10. Porcentaje real estimado

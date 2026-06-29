@@ -1,6 +1,6 @@
 # Estado de produccion Firebase
 
-Fecha: 2026-06-25
+Fecha: 2026-06-29
 
 ## Resultado
 
@@ -57,10 +57,13 @@ Firebase Auth:
 - Disabled: false.
 - Login real: OK.
 
+## Estado actual de hosting
+
+- DNS personalizado `clasesde10.com` apunta a Firebase Hosting.
+- Netlify queda fuera de produccion: sitio legacy desactivado y repo GitHub desvinculado el 2026-06-29.
+
 ## Lo que NO esta hecho todavia
 
-- DNS personalizado `clasesde10.com` no se ha cambiado a Firebase Hosting.
-- Netlify no se ha apagado.
 - Dashboards de datos siguen en Supabase legacy excepto Leads.
 - Documentos siguen en Supabase Storage.
 - Notificaciones siguen en Supabase Realtime.
@@ -68,6 +71,6 @@ Firebase Auth:
 
 ## Siguiente bloqueo externo
 
-Para que Firebase Hosting sea la unica produccion visible en `clasesde10.com`, hay que cambiar DNS del dominio hacia Firebase Hosting.
+Firebase Hosting es la unica produccion visible en `clasesde10.com`.
 
-Mientras DNS no cambie, Firebase Hosting ya esta desplegado pero el dominio principal puede seguir apuntando a Netlify.
+Netlify no debe usarse para nuevos despliegues. El sitio legacy `clasesde10` en Netlify quedo desactivado tras confirmar que `clasesde10.com` y `www.clasesde10.com` resuelven contra Firebase Hosting.

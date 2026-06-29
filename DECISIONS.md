@@ -51,9 +51,9 @@ Consecuencia: instalacion movil habilitada sin aumentar riesgo de datos privados
 
 Estado: aceptada.
 
-Contexto: `web/` es publish root de Netlify. La documentacion interna debe versionarse pero no publicarse.
+Contexto: `web/` es el directorio publico servido por Firebase Hosting. Netlify queda fuera de la operativa y la documentacion interna debe versionarse sin exponerse por HTTP.
 
-Decision: crear docs en `web/` y bloquear `ARCHITECTURE.md`, `AUDIT.md`, `DECISIONS.md`, `TODO.md` y documentos internos en Netlify/robots.
+Decision: mantener documentacion interna como Markdown versionado y servir solo documentos explicitamente publicados desde rutas como `/docs/`. Firebase Hosting ignora `*.md`; `robots.txt` mantiene bloqueos defensivos de rutas internas.
 
 Consecuencia: el equipo tiene documentacion junto al codigo y no queda expuesta por HTTP.
 
