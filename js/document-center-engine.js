@@ -6,7 +6,7 @@
  * model so document handling stays consistent across dashboards.
  */
 
-export const DOCUMENT_CENTER_VERSION = 'document-center-2026-06-28';
+export const DOCUMENT_CENTER_VERSION = 'document-center-2026-06-29-teacher-docs';
 
 export const DOCUMENT_STATUSES = Object.freeze([
   'pendiente',
@@ -94,6 +94,39 @@ export const DOCUMENT_TYPE_DEFINITIONS = Object.freeze({
     sensitive: true,
     trustWeight: 8,
     publicSignal: 'Certificacion validada',
+    autoVerifiable: false,
+  },
+  certificado_idiomas: {
+    label: 'Certificado de idiomas',
+    category: 'idiomas',
+    roles: ['profesor'],
+    requiredFor: [],
+    defaultValidityDays: 1095,
+    sensitive: true,
+    trustWeight: 6,
+    publicSignal: 'Idioma certificado',
+    autoVerifiable: false,
+  },
+  certificado_formacion_especializada: {
+    label: 'Titulo o certificado de formacion especializada',
+    category: 'academica',
+    roles: ['profesor'],
+    requiredFor: [],
+    defaultValidityDays: null,
+    sensitive: true,
+    trustWeight: 8,
+    publicSignal: 'Especialidad certificada',
+    autoVerifiable: false,
+  },
+  referencia_academica_profesional: {
+    label: 'Referencia academica o profesional',
+    category: 'perfil',
+    roles: ['profesor'],
+    requiredFor: [],
+    defaultValidityDays: 730,
+    sensitive: true,
+    trustWeight: 4,
+    publicSignal: 'Referencia revisada',
     autoVerifiable: false,
   },
   antecedentes: {
@@ -296,6 +329,9 @@ function typeKey(value) {
   if (['notas', 'boletin', 'boletin_notas', 'notas_finales', 'notas_curso', 'notas_curso_anterior', 'curso_anterior', 'nota_bachillerato', 'bachillerato'].includes(raw)) return 'notas_curso_anterior';
   if (['expediente', 'expediente_academico', 'expediente_universitario', 'notas_universidad', 'nota_universidad', 'universidad', 'notas_formacion_superior', 'formacion_superior'].includes(raw)) return 'notas_universidad';
   if (['certificacion', 'licencia'].includes(raw)) return 'certificado';
+  if (['idioma', 'idiomas', 'certificado_idioma', 'certificado_idiomas', 'language_certificate', 'language_certification', 'cambridge', 'ielts', 'toefl', 'dele', 'delf'].includes(raw)) return 'certificado_idiomas';
+  if (['formacion_especializada', 'certificado_formacion', 'certificado_formacion_especializada', 'certificado_docente', 'titulo_monitor', 'monitor_deportivo', 'conservatorio', 'titulo_conservatorio', 'certificado_deportivo', 'certificado_musica'].includes(raw)) return 'certificado_formacion_especializada';
+  if (['referencia', 'referencias', 'recomendacion', 'carta_recomendacion', 'referencia_academica', 'referencia_profesional'].includes(raw)) return 'referencia_academica_profesional';
   if (['cv'].includes(raw)) return 'curriculum';
   if (['pago'].includes(raw)) return 'justificante_pago';
   return DOCUMENT_TYPE_DEFINITIONS[raw] ? raw : 'otro';

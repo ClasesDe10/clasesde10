@@ -42,6 +42,7 @@ const teacher = evaluateTeacherProfileProfessional({
 }, [
   { tipo: 'dni', estado: 'validado' },
   { tipo: 'notas_universidad', estado: 'pendiente' },
+  { tipo: 'certificado_idiomas', estado: 'validado' },
 ]);
 
 assert.equal(teacher.complete, true);
@@ -52,6 +53,7 @@ assert.ok(teacher.trustProfile.riskFlags.includes('low_activity_sample'));
 assert.deepEqual(teacher.normalized.subjects, ['Matematicas', 'Padel']);
 assert.equal(teacher.normalized.schoolName, 'Colegio El Prado');
 assert.equal(teacher.normalized.studyCenter, 'Universidad Complutense de Madrid');
+assert.ok(teacher.indicators.some((item) => item.label === 'Idiomas certificados' && item.complete));
 
 const family = evaluateFamilyProfileProfessional({
   nombre: 'Familia',

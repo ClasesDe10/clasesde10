@@ -437,7 +437,7 @@
               <span class="alert-icon">i</span>
               <div class="alert-body">
                 <div class="alert-title">Solo pedimos documentos utiles para validar tu perfil</div>
-                Sube tu DNI, las notas finales del curso anterior y el expediente o notas universitarias/formacion principal. El curriculum es opcional, pero ayuda si resume bien tu experiencia.
+                Sube tu DNI, las notas finales del curso anterior y el expediente o notas universitarias/formacion principal. Tambien puedes anadir certificados de idiomas, formacion especializada o referencias si ayudan a validar mejor tu perfil.
               </div>
             </div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
@@ -447,6 +447,9 @@
                   <option value="dni">DNI / NIE / Pasaporte</option>
                   <option value="notas_curso_anterior">Notas finales del curso anterior</option>
                   <option value="notas_universidad">Expediente o notas universitarias</option>
+                  <option value="certificado_idiomas">Certificado de idiomas</option>
+                  <option value="certificado_formacion_especializada">Titulo o certificado de formacion especializada</option>
+                  <option value="referencia_academica_profesional">Referencia academica o profesional</option>
                   <option value="curriculum">Curriculum opcional</option>
                   <option value="otro">Otro documento solicitado por ClasesDe10</option>
                 </select>
@@ -572,7 +575,7 @@
 import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs';
+import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
 import {
   evaluateTeacherProfileProfessional,
   isValidGrade,

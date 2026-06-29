@@ -2,12 +2,14 @@
 import assert from 'node:assert/strict';
 import {
   DOCUMENT_CENTER_VERSION,
+  DOCUMENT_TYPE_DEFINITIONS,
   buildDocumentAutomationEvents,
   buildDocumentCenterReport,
   buildDocumentCompliance,
   buildDocumentExpiryPatch,
   buildDocumentUploadRecord,
   buildDocumentVerificationPatch,
+  documentTypeDefinition,
   documentRowsForCsv,
   normalizeDocumentRecord,
 } from '../js/document-center-engine.js';
@@ -40,6 +42,26 @@ assert.equal(upload.versions.length, 1);
 assert.equal(upload.permissions.adminCanRead, true);
 assert.equal(upload.permissions.ownerCanReplace, true);
 assert.equal(upload.autoChecks.valid, true);
+assert.equal(DOCUMENT_TYPE_DEFINITIONS.certificado_idiomas.label, 'Certificado de idiomas');
+assert.equal(documentTypeDefinition('cambridge').label, 'Certificado de idiomas');
+assert.equal(documentTypeDefinition('certificado_formacion_especializada').publicSignal, 'Especialidad certificada');
+
+const languageUpload = buildDocumentUploadRecord({
+  ownerUid: 'teacher_1',
+  role: 'profesor',
+  type: 'certificado_idiomas',
+  file: {
+    name: 'cambridge-c1.pdf',
+    type: 'application/pdf',
+    size: 80_000,
+  },
+  storagePath: 'documentos/teacher_1/cambridge-c1.pdf',
+  profileId: 'teacher_profile_1',
+  uploadedByUid: 'teacher_1',
+  source: 'test',
+});
+assert.equal(languageUpload.documentType, 'certificado_idiomas');
+assert.equal(languageUpload.typeLabel, 'Certificado de idiomas');
 
 const verifiedPatch = buildDocumentVerificationPatch(upload, {
   status: 'validado',

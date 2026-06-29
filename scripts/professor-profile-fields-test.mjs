@@ -31,6 +31,9 @@ assert.ok(professorDashboard.includes('Conservatorio / escuela de musica'), 'Tea
 assert.ok(professorDashboard.includes('Entrenador / monitor deportivo'), 'Teacher profile must support sports training');
 assert.ok(professorDashboard.includes('Notas finales del curso anterior'), 'Teacher documents must request previous course grades');
 assert.ok(professorDashboard.includes('Expediente o notas universitarias'), 'Teacher documents must request university/main training grades');
+assert.ok(professorDashboard.includes('Certificado de idiomas'), 'Teacher documents must allow language certificates');
+assert.ok(professorDashboard.includes('certificado_formacion_especializada'), 'Teacher documents must allow specialized training certificates');
+assert.ok(professorDashboard.includes('referencia_academica_profesional'), 'Teacher documents must allow academic/professional references');
 assert.ok(professorDashboard.includes('Curriculum opcional'), 'Teacher documents must keep CV optional');
 assert.ok(professorDashboard.includes('Coche para desplazamientos'), 'Teacher profile must ask for car availability');
 assert.ok(professorDashboard.includes('Colegio donde estudiaste'), 'Teacher profile must require the school attended');

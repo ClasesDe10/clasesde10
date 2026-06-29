@@ -316,7 +316,9 @@ function signal(key, label, state, detail = '', publicVisible = true) {
 
 function docsSummary(docs = []) {
   const identityDocs = docs.filter((doc) => ['dni', 'identidad', 'pasaporte', 'tutor'].includes(documentType(doc)));
-  const academicDocs = docs.filter((doc) => ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificacion', 'academic'].includes(documentType(doc)));
+  const academicDocs = docs.filter((doc) => ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificado_formacion_especializada', 'certificacion', 'academic'].includes(documentType(doc)));
+  const languageDocs = docs.filter((doc) => ['certificado_idiomas'].includes(documentType(doc)));
+  const referenceDocs = docs.filter((doc) => ['referencia_academica_profesional'].includes(documentType(doc)));
   const cvDocs = docs.filter((doc) => ['cv', 'curriculum'].includes(documentType(doc)));
   const verifiedDocs = docs.filter((doc) => VERIFIED_STATUSES.has(documentStatus(doc)));
   const pendingDocs = docs.filter((doc) => PENDING_STATUSES.has(documentStatus(doc)));
@@ -328,6 +330,10 @@ function docsSummary(docs = []) {
     identityVerified: identityDocs.some((doc) => VERIFIED_STATUSES.has(documentStatus(doc))),
     academicUploaded: academicDocs.length > 0,
     academicVerified: academicDocs.some((doc) => VERIFIED_STATUSES.has(documentStatus(doc))),
+    languageUploaded: languageDocs.length > 0,
+    languageVerified: languageDocs.some((doc) => VERIFIED_STATUSES.has(documentStatus(doc))),
+    referenceUploaded: referenceDocs.length > 0,
+    referenceVerified: referenceDocs.some((doc) => VERIFIED_STATUSES.has(documentStatus(doc))),
     cvUploaded: cvDocs.length > 0,
     cvVerified: cvDocs.some((doc) => VERIFIED_STATUSES.has(documentStatus(doc))),
   };
@@ -727,6 +733,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
   const verificationPoints = (flags.adminVerified ? 5 : 0)
     + (docs.identityVerified ? 5 : docs.identityUploaded ? 2 : 0)
     + (docs.academicVerified ? 4 : docs.academicUploaded ? 2 : 0)
+    + (docs.languageVerified ? 1.5 : docs.languageUploaded ? 0.75 : 0)
+    + (docs.referenceVerified ? 1 : docs.referenceUploaded ? 0.5 : 0)
     + (docs.cvUploaded ? 1 : 0)
     + (hasPhoto ? 1.5 : 0)
     + (hasContact ? 1.5 : 0);
@@ -754,6 +762,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
     flags.adminVerified ? badge('admin_verified', 'Verificado por ClasesDe10', 'success', 'Perfil revisado por administracion', 'estado verificado') : null,
     docs.identityVerified ? badge('identity_verified', 'Identidad validada', 'success', 'Documento de identidad validado', 'documento identidad validado') : null,
     docs.academicVerified ? badge('academic_verified', 'Formacion validada', 'success', 'Notas o expediente academico validado', 'documento academico validado') : null,
+    docs.languageVerified ? badge('language_verified', 'Idioma certificado', 'info', 'Certificado de idiomas validado', 'certificado idiomas validado') : null,
+    docs.referenceVerified ? badge('reference_verified', 'Referencia validada', 'info', 'Referencia academica o profesional revisada', 'referencia validada', false, 'admin') : null,
     completion >= 95 ? badge('profile_complete', 'Perfil completo', 'success', 'Perfil con datos suficientes para decidir rapido', 'perfil >= 95%') : null,
     metrics.averageResponseHours !== null && metrics.averageResponseHours !== undefined && metrics.averageResponseHours <= 4 && metrics.responseSamples >= 2 ? badge('fast_response', 'Responde rapido', 'success', `${round(metrics.averageResponseHours, 1)}h de media`, 'respuesta media <= 4h') : null,
     (metrics.acceptanceRate ?? 0) >= 0.8 && metrics.offeredRequests >= 3 ? badge('high_acceptance', 'Alta aceptacion', 'success', `${round((metrics.acceptanceRate ?? 0) * 100)}% de solicitudes aceptadas`, 'aceptacion >= 80% con muestra') : null,
@@ -801,6 +811,7 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
       signal('admin_verified', 'Verificacion administrativa', flags.adminVerified ? 'positive' : 'warning', flags.adminVerified ? 'Validado' : 'Pendiente'),
       signal('identity', 'Identidad', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Validada' : docs.identityUploaded ? 'Pendiente' : 'No subida'),
       signal('academic', 'Expediente academico', docs.academicVerified ? 'positive' : docs.academicUploaded ? 'warning' : 'neutral', docs.academicVerified ? 'Validado' : docs.academicUploaded ? 'Pendiente' : 'No subido'),
+      signal('languages', 'Idiomas certificados', docs.languageVerified ? 'positive' : docs.languageUploaded ? 'warning' : 'neutral', docs.languageVerified ? 'Validado' : docs.languageUploaded ? 'Pendiente' : 'No subido'),
       signal('history', 'Historial de clases', metrics.completedClasses > 0 ? 'positive' : 'neutral', `${metrics.completedClasses} clase(s), ${metrics.completedHours}h`),
       signal('response', 'Tiempo medio de respuesta', metrics.averageResponseHours !== null && metrics.averageResponseHours !== undefined ? 'positive' : 'neutral', metrics.averageResponseHours !== null && metrics.averageResponseHours !== undefined ? `${round(metrics.averageResponseHours, 1)}h` : 'Sin historico'),
       signal('punctuality', 'Puntualidad', metrics.punctualitySamples ? 'positive' : 'neutral', metrics.punctualitySamples ? `${round((metrics.punctualityRate ?? 0) * 100)}%` : 'Sin muestra suficiente'),

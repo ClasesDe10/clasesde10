@@ -53,6 +53,7 @@ const context = {
   documents: [
     { ownerUid: 'teacher_1', tipo: 'dni', estado: 'validado' },
     { ownerUid: 'teacher_1', tipo: 'notas_universidad', estado: 'validado' },
+    { ownerUid: 'teacher_1', tipo: 'certificado_idiomas', estado: 'validado' },
     { ownerUid: 'teacher_weak', tipo: 'dni', estado: 'pendiente' },
     { ownerUid: 'family_1', tipo: 'dni', estado: 'validado' },
   ],
@@ -88,6 +89,8 @@ assert.ok(['Bronce', 'Plata', 'Oro', 'Platino'].includes(teacherTrust.level), `U
 assert.notEqual(teacherTrust.level, 'Platino', 'Three classes must not produce a top tier automatically.');
 assert.ok(teacherTrust.badges.some((item) => item.key === 'admin_verified'));
 assert.ok(teacherTrust.badges.some((item) => item.key === 'identity_verified'));
+assert.ok(teacherTrust.badges.some((item) => item.key === 'language_verified'));
+assert.ok(teacherTrust.signals.some((item) => item.key === 'languages' && item.state === 'positive'));
 assert.equal(teacherTrust.metrics.completedClasses, 3);
 assert.equal(teacherTrust.metrics.openIncidents, 0);
 assert.equal(teacherTrust.adminStats.reputationCanBeManipulatedByProfileOnly, false);
