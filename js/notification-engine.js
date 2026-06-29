@@ -222,8 +222,8 @@ export function notificationPriority(type, explicitPriority = '') {
 
 export function notificationPriorityClass(notification = {}) {
   const priority = notificationPriority(notification.type, notification.priority);
-  if (priority === 'critical') return 'critical';
-  if (priority === 'high') return 'high';
+  if (priority === 'critical') return 'critica';
+  if (priority === 'high') return 'alta';
   return 'normal';
 }
 

@@ -31,7 +31,7 @@ for (const [name, html] of [
   assert.match(html, /dashboard-empty-state\.js\?v=20260629-ux-empty-states/, `${name} dashboard must import contextual empty-state helpers.`);
   assert.match(html, /renderTableEmptyState\(/, `${name} dashboard must use table empty states.`);
   assert.match(html, /renderEmptyState\(/, `${name} dashboard must use panel empty states.`);
-  assert.match(html, /dashboard\.css\?v=20260629-weekly-payments/, `${name} dashboard must bust CSS cache.`);
+  assert.match(html, /dashboard\.css\?v=20260629-notifications-polish/, `${name} dashboard must bust CSS cache.`);
 }
 
 assert.match(familyDashboard, /Enviar solicitud y avisarme/);

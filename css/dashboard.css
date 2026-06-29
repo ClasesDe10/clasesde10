@@ -26,6 +26,10 @@
   --success:     #16a34a;
   --warning:     #d97706;
   --danger:      #dc2626;
+  --critical-ink: #7f2f2a;
+  --critical-rail:#a85a4b;
+  --critical-bg: #fff7f2;
+  --critical-border: rgba(168,90,75,.32);
   --info:        #2563eb;
   --shadow-sm:   0 1px 3px rgba(0,0,0,0.08);
   --shadow:      0 4px 16px rgba(0,0,0,0.1);
@@ -629,9 +633,10 @@ textarea {
 .topbar-btn .badge {
   position: absolute; top: 4px; right: 4px;
   width: 8px; height: 8px;
-  background: var(--danger);
+  background: var(--gold);
   border-radius: 50%;
   border: 2px solid white;
+  box-shadow: 0 0 0 2px rgba(232,160,48,.18);
 }
 
 /* Chat */
@@ -701,8 +706,9 @@ textarea {
   justify-content: center;
   margin-left: 4px;
   border-radius: 999px;
-  background: var(--danger);
-  color: var(--white);
+  background: rgba(232,160,48,.18);
+  color: var(--navy);
+  border: 1px solid rgba(232,160,48,.38);
   font-size: .68rem;
 }
 .chat-title, .chat-thread-title {
@@ -1119,12 +1125,29 @@ textarea {
   border-color: rgba(232,160,48,.45);
   box-shadow: inset 3px 0 0 var(--gold);
 }
-.notification-item.priority-high {
-  border-color: rgba(232,160,48,.5);
+.notification-item.priority-high,
+.notification-item.priority-alta {
+  border-color: rgba(232,160,48,.45);
+  background: linear-gradient(90deg, rgba(232,160,48,.08), var(--white) 42%);
 }
-.notification-item.priority-critical {
-  border-color: rgba(191,74,74,.55);
-  box-shadow: inset 3px 0 0 var(--danger);
+.notification-item.priority-critical,
+.notification-item.priority-critica {
+  border-color: var(--critical-border);
+  background: linear-gradient(90deg, var(--critical-bg), var(--white) 46%);
+  box-shadow: inset 3px 0 0 var(--critical-rail);
+}
+.notification-item.priority-critical.unread,
+.notification-item.priority-critica.unread {
+  border-color: rgba(168,90,75,.42);
+  box-shadow: inset 3px 0 0 var(--critical-rail), 0 10px 24px rgba(127,47,42,.08);
+}
+.notification-item.priority-critical .notification-kicker,
+.notification-item.priority-critica .notification-kicker {
+  color: var(--critical-ink);
+}
+.notification-item.priority-high .notification-kicker,
+.notification-item.priority-alta .notification-kicker {
+  color: #8a5b13;
 }
 .notification-kicker {
   margin-bottom: 4px;
