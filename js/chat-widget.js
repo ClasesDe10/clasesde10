@@ -13,7 +13,7 @@ import {
   updateDoc,
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
-import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import { firebaseAuth, firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 import {
   buildAdminClassPayload,
   validateClassTimeRange,
@@ -108,10 +108,46 @@ function assignmentIds(assignment) {
   return { familyUid, teacherUid, studentId, familyUserUid, teacherUserUid };
 }
 
-function chatTitle(chat, role) {
-  if (role === 'profesor') return chat.familyName || chat.studentName || 'Familia';
+function reliableName(value, fallback = '') {
+  const text = clean(value, 180);
+  return text.length > 1 ? text : clean(fallback, 180);
+}
+
+function hydrateChatNames(data = {}, fallback = {}) {
+  return {
+    ...data,
+    familyName: reliableName(data.familyName, fallback.familyName),
+    teacherName: reliableName(data.teacherName, fallback.teacherName),
+    studentName: reliableName(data.studentName, fallback.studentName),
+    materia: reliableName(data.materia, fallback.materia),
+    familyUid: clean(data.familyUid || data.familia_id || fallback.familyUid, 180),
+    familia_id: clean(data.familia_id || data.familyUid || fallback.familyUid, 180),
+    teacherUid: clean(data.teacherUid || data.profesor_id || fallback.teacherUid, 180),
+    profesor_id: clean(data.profesor_id || data.teacherUid || fallback.teacherUid, 180),
+    studentId: clean(data.studentId || data.alumno_id || fallback.studentId, 180) || null,
+    alumno_id: clean(data.alumno_id || data.studentId || fallback.studentId, 180) || null,
+    assignmentId: clean(data.assignmentId || data.asignacion_id || fallback.assignmentId, 180),
+    asignacion_id: clean(data.asignacion_id || data.assignmentId || fallback.assignmentId, 180),
+  };
+}
+
+function defaultChatTitle(chat, role) {
+  if (role === 'profesor') return chat.studentName || chat.familyName || 'Familia';
   if (role === 'familia') return chat.teacherName || 'Profesor';
   return [chat.familyName || 'Familia', chat.teacherName || 'Profesor'].join(' / ');
+}
+
+function chatTitle(chat, role, preference = {}) {
+  return reliableName(preference.displayNameOverride, '') || defaultChatTitle(chat, role);
+}
+
+function chatSubtitle(chat, role, preference = {}) {
+  const parts = [];
+  if (preference.displayNameOverride) parts.push(`Nombre real: ${defaultChatTitle(chat, role)}`);
+  if (role === 'profesor' && chat.familyName && chat.familyName !== defaultChatTitle(chat, role)) parts.push(`Familia: ${chat.familyName}`);
+  if (role !== 'profesor' && chat.studentName) parts.push(`Alumno/a: ${chat.studentName}`);
+  if (chat.materia) parts.push(chat.materia);
+  return parts.join(' · ') || 'Asignacion activa';
 }
 
 async function loadAssignments(dbCompat, role, profileId) {
@@ -183,11 +219,11 @@ async function ensureChatForAssignment(assignment, usuario, role) {
   } else if (role === 'admin') {
     await setDoc(ref, base, { merge: true });
   } else {
-    return { id: existing.id, ...existing.data() };
+    return { id: existing.id, ...hydrateChatNames(existing.data(), base) };
   }
 
   const snap = await getDoc(ref);
-  return { id: snap.id, ...snap.data() };
+  return { id: snap.id, ...hydrateChatNames(snap.data(), base) };
 }
 
 async function loadChats(dbCompat, role, profileId, usuario) {
@@ -209,6 +245,19 @@ async function loadChats(dbCompat, role, profileId, usuario) {
     .filter(Boolean);
   chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
   return chats;
+}
+
+async function loadChatPreferences(chats = [], currentUid = '') {
+  if (!currentUid || !chats.length) return {};
+  const entries = await Promise.all(chats.map(async (chat) => {
+    try {
+      const snap = await getDoc(doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid));
+      return [chat.id, snap.exists() ? { exists: true, ...snap.data() } : { exists: false }];
+    } catch (error) {
+      return [chat.id, { exists: false, error: error.message || 'No se pudo cargar el nombre guardado.' }];
+    }
+  }));
+  return Object.fromEntries(entries);
 }
 
 function uniqueAvailabilityRows(rows = []) {
@@ -374,7 +423,7 @@ function renderShell(container, role) {
     </div>`;
 }
 
-function renderSchedulePanel(container, chat, proposals, role, currentUid, availability = {}) {
+function renderSchedulePanel(container, chat, proposals, role, currentActorIds = new Set(), availability = {}) {
   const panel = container.querySelector('[data-chat-schedule-panel]');
   if (!panel || !chat) return;
   panel.style.display = '';
@@ -385,7 +434,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentUid, avail
   const disabledAttr = proposalDisabled ? 'disabled' : '';
   const proposalRows = proposals.length
     ? proposals.slice(0, 5).map((proposal) => {
-      const mine = proposal.proposedByUid === currentUid;
+      const mine = currentActorIds.has(clean(proposal.proposedByUid, 180)) || (role !== 'admin' && proposal.proposedByRole === role);
       const canRespond = proposal.status === 'propuesta' && (role === 'admin' || !mine);
       const statusLabel = proposal.status === 'aceptada' ? 'Aceptada'
         : proposal.status === 'rechazada' ? 'Rechazada'
@@ -402,6 +451,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentUid, avail
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             <span class="badge ${proposal.status === 'aceptada' ? 'badge-success' : proposal.status === 'rechazada' ? 'badge-danger' : 'badge-warning'}">${statusLabel}</span>
             ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-reject-schedule>Rechazar</button>' : ''}
+            ${proposal.status === 'propuesta' && mine ? '<span class="badge badge-info">Esperando respuesta</span>' : ''}
           </div>
         </article>`;
     }).join('')
@@ -430,7 +480,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentUid, avail
     <div class="schedule-proposal-list">${proposalRows}</div>`;
 }
 
-function renderChatList(container, chats, selectedId, role) {
+function renderChatList(container, chats, selectedId, role, preferences = {}) {
   const list = container.querySelector('[data-chat-list]');
   if (!chats.length) {
     list.innerHTML = '<div class="chat-empty-state">No hay chats disponibles. Apareceran cuando exista una asignacion activa.</div>';
@@ -438,20 +488,26 @@ function renderChatList(container, chats, selectedId, role) {
   }
   list.innerHTML = chats.map((chat) => `
     <button class="chat-list-item ${chat.id === selectedId ? 'active' : ''}" type="button" data-chat-id="${escapeHtml(chat.id)}">
-      <span class="chat-list-name">${escapeHtml(chatTitle(chat, role))}</span>
-      <span class="chat-list-meta">${escapeHtml(chat.materia || chat.studentName || 'Asignacion')}</span>
+      <span class="chat-list-name">${escapeHtml(chatTitle(chat, role, preferences[chat.id] || {}))}</span>
+      <span class="chat-list-meta">${escapeHtml(chatSubtitle(chat, role, preferences[chat.id] || {}))}</span>
       <span class="chat-list-preview">${escapeHtml(chat.lastMessage || 'Sin mensajes todavia')}</span>
     </button>`).join('');
 }
 
-function renderThreadHeader(container, chat, role) {
+function renderThreadHeader(container, chat, role, preference = {}) {
   const header = container.querySelector('[data-chat-header]');
   if (!chat) return;
+  const customName = clean(preference.displayNameOverride, 120);
   header.innerHTML = `
-    <div>
-      <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role))}</div>
-      <div class="chat-thread-subtitle">${escapeHtml([chat.studentName, chat.materia].filter(Boolean).join(' · ') || 'Asignacion activa')}</div>
-    </div>`;
+    <div class="chat-thread-heading">
+      <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
+      <div class="chat-thread-subtitle">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
+    </div>
+    <form class="chat-alias-form" data-chat-name-form hidden>
+      <input class="form-control" type="text" maxlength="120" value="${escapeHtml(customName)}" data-chat-name-input aria-label="Nombre guardado para este chat" placeholder="${escapeHtml(defaultChatTitle(chat, role))}">
+      <button class="btn btn-primary btn-sm" type="submit">Guardar</button>
+    </form>
+    <button class="btn btn-ghost btn-sm chat-alias-toggle" type="button" data-edit-chat-name>${customName ? 'Cambiar nombre' : 'Guardar nombre'}</button>`;
 }
 
 function renderMessages(container, messages, currentUid) {
@@ -582,8 +638,16 @@ export async function initChatWidget({
     notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
     notificationPublicConfig: {},
     availabilityByChat: {},
+    chatPreferencesById: {},
   };
-  const currentUid = clean(usuario.uid || usuario.firebase_uid || usuario.id);
+  const currentUid = clean(firebaseAuth.currentUser?.uid || usuario.firebase_uid || usuario.uid || usuario.id, 180);
+  const currentActorIds = new Set([
+    currentUid,
+    usuario.uid,
+    usuario.firebase_uid,
+    usuario.id,
+    profileId,
+  ].map((value) => clean(value, 180)).filter(Boolean));
   const senderName = fullName(usuario.nombre, usuario.apellidos) || usuario.email || role;
 
   async function sendAdminNotification(targetRole, title, body) {
@@ -611,7 +675,8 @@ export async function initChatWidget({
   async function refreshChats() {
     container.querySelector('[data-chat-list]').innerHTML = '<div class="chat-empty-state">Cargando chats...</div>';
     state.chats = await loadChats(db, role, profileId, usuario);
-    renderChatList(container, state.chats, state.selectedChat?.id, role);
+    state.chatPreferencesById = await loadChatPreferences(state.chats, currentUid);
+    renderChatList(container, state.chats, state.selectedChat?.id, role, state.chatPreferencesById);
     if (!state.selectedChat && state.chats.length) selectChat(state.chats[0].id);
   }
 
@@ -619,17 +684,17 @@ export async function initChatWidget({
     const chat = state.chats.find((item) => item.id === chatId);
     if (!chat) return;
     state.selectedChat = chat;
-    renderChatList(container, state.chats, chat.id, role);
-    renderThreadHeader(container, chat, role);
+    renderChatList(container, state.chats, chat.id, role, state.chatPreferencesById);
+    renderThreadHeader(container, chat, role, state.chatPreferencesById[chat.id] || {});
     container.querySelector('[data-chat-form]').style.display = '';
     state.scheduleProposals = [];
     state.availabilityByChat[chat.id] = { loading: true, teacherSlots: [], studentSlots: [] };
-    renderSchedulePanel(container, chat, state.scheduleProposals, role, currentUid, state.availabilityByChat[chat.id]);
+    renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id]);
 
     loadChatAvailability(chat).then((availability) => {
       if (state.selectedChat?.id !== chat.id) return;
       state.availabilityByChat[chat.id] = availability;
-      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentUid, availability);
+      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentActorIds, availability);
     }).catch((error) => {
       if (state.selectedChat?.id !== chat.id) return;
       state.availabilityByChat[chat.id] = {
@@ -638,7 +703,7 @@ export async function initChatWidget({
         studentSlots: [],
         error: error.message || 'No se pudo cargar la disponibilidad.',
       };
-      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentUid, state.availabilityByChat[chat.id]);
+      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[chat.id]);
     });
 
     if (state.unsubscribe) state.unsubscribe();
@@ -662,7 +727,7 @@ export async function initChatWidget({
     );
     state.unsubscribeProposals = onSnapshot(proposalsQuery, (snap) => {
       state.scheduleProposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
-      renderSchedulePanel(container, chat, state.scheduleProposals, role, currentUid, state.availabilityByChat[chat.id] || { loading: true });
+      renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id] || { loading: true });
     }, (error) => {
       console.error('No se pudieron abrir propuestas de horario', error);
       showToast('Horarios no disponibles', error.message || 'No se pudieron abrir las propuestas.', 'error');
@@ -725,6 +790,15 @@ export async function initChatWidget({
       return;
     }
 
+    const editChatName = event.target.closest('[data-edit-chat-name]');
+    if (editChatName) {
+      const form = container.querySelector('[data-chat-name-form]');
+      if (!form) return;
+      form.hidden = !form.hidden;
+      if (!form.hidden) form.querySelector('[data-chat-name-input]')?.focus();
+      return;
+    }
+
     const item = event.target.closest('[data-chat-id]');
     if (item) {
       selectChat(item.dataset.chatId);
@@ -751,6 +825,38 @@ export async function initChatWidget({
   });
 
   container.addEventListener('submit', async (event) => {
+    const chatNameForm = event.target.closest('[data-chat-name-form]');
+    if (chatNameForm) {
+      event.preventDefault();
+      if (!state.selectedChat || !currentUid) return;
+      const input = chatNameForm.querySelector('[data-chat-name-input]');
+      const displayNameOverride = clean(input?.value, 120);
+      const existingPreference = state.chatPreferencesById[state.selectedChat.id] || {};
+      const payload = {
+        displayNameOverride,
+        updatedAt: serverTimestamp(),
+      };
+      if (!existingPreference.exists) payload.createdAt = serverTimestamp();
+
+      const button = chatNameForm.querySelector('button[type="submit"]');
+      button.disabled = true;
+      try {
+        await setDoc(doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid), payload, { merge: true });
+        state.chatPreferencesById[state.selectedChat.id] = {
+          exists: true,
+          displayNameOverride,
+        };
+        renderChatList(container, state.chats, state.selectedChat.id, role, state.chatPreferencesById);
+        renderThreadHeader(container, state.selectedChat, role, state.chatPreferencesById[state.selectedChat.id] || {});
+        showToast(displayNameOverride ? 'Nombre guardado' : 'Nombre restablecido', displayNameOverride ? 'Solo lo veras tu en este chat.' : 'Vuelves a ver el nombre por defecto.', 'success');
+      } catch (error) {
+        showToast('No se pudo guardar', error.message || 'Revisa permisos del chat.', 'error');
+      } finally {
+        button.disabled = false;
+      }
+      return;
+    }
+
     const scheduleForm = event.target.closest('[data-schedule-form]');
     if (!scheduleForm) return;
     event.preventDefault();
@@ -876,8 +982,37 @@ export async function initChatWidget({
       observaciones: proposal.notas || '',
       calendarUid: classId,
     };
+    const classFields = buildAdminClassPayload(input, {}, { nowIso, calendarUid: classId });
     const payload = {
-      ...buildAdminClassPayload(input, {}, { nowIso, calendarUid: classId }),
+      profesor_id: classFields.profesor_id,
+      teacherUid: classFields.teacherUid,
+      familia_id: classFields.familia_id,
+      familyUid: classFields.familyUid,
+      alumno_id: classFields.alumno_id,
+      studentId: classFields.studentId,
+      fecha: classFields.fecha,
+      date: classFields.date,
+      materia: classFields.materia,
+      subject: classFields.subject,
+      hora_inicio: classFields.hora_inicio,
+      startTime: classFields.startTime,
+      hora_fin: classFields.hora_fin,
+      endTime: classFields.endTime,
+      duracion_minutos: classFields.duracion_minutos,
+      durationMinutes: classFields.durationMinutes,
+      estado: classFields.estado,
+      status: classFields.status,
+      lifecycleStatus: classFields.lifecycleStatus,
+      attendanceStatus: classFields.attendanceStatus,
+      paymentStatus: classFields.paymentStatus,
+      familyPaymentStatus: classFields.familyPaymentStatus,
+      estado_pago: classFields.estado_pago,
+      estado_pago_familia: classFields.estado_pago_familia,
+      teacherPaymentStatus: classFields.teacherPaymentStatus,
+      estado_pago_profesor: classFields.estado_pago_profesor,
+      observaciones: classFields.observaciones,
+      calendarUid: classFields.calendarUid,
+      updated_at: classFields.updated_at,
       assignmentId: input.assignmentId,
       asignacion_id: input.assignmentId,
       scheduleProposalId: proposal.id,

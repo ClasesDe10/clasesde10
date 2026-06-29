@@ -685,6 +685,21 @@ service cloud.firestore {
         );
     }
 
+    function availabilityTeacherBelongsToAuth(teacherUid) {
+      return signedIn()
+        && teacherUid is string
+        && (
+          teacherUid == request.auth.uid
+          || (
+            exists(/databases/$(database)/documents/profesores/$(teacherUid))
+            && (
+              get(/databases/$(database)/documents/profesores/$(teacherUid)).data.userUid == request.auth.uid
+              || get(/databases/$(database)/documents/profesores/$(teacherUid)).data.usuario_id == request.auth.uid
+            )
+          )
+        );
+    }
+
     function availabilityStudentOwnedByFamily(studentId, familyUid) {
       return availabilityFamilyBelongsToAuth(familyUid)
         && studentId is string
@@ -697,9 +712,16 @@ service cloud.firestore {
     }
 
     function isTeacherAvailability(data) {
-      return data.keys().hasAll(['teacherUid', 'profesor_id'])
-        && data.teacherUid == data.profesor_id
+      return data.keys().hasAny(['teacherUid', 'profesor_id'])
+        && (
+          !data.keys().hasAll(['teacherUid', 'profesor_id'])
+          || data.teacherUid == data.profesor_id
+        )
         && !data.keys().hasAny(['familyUid', 'familia_id', 'studentId', 'alumno_id']);
+    }
+
+    function availabilityTeacherUid(data) {
+      return data.keys().hasAny(['teacherUid']) ? data.teacherUid : data.profesor_id;
     }
 
     function isStudentAvailability(data) {
@@ -713,7 +735,7 @@ service cloud.firestore {
         && (
           (
             isTeacherAvailability(data)
-            && data.teacherUid == request.auth.uid
+            && availabilityTeacherBelongsToAuth(availabilityTeacherUid(data))
           )
           || (
             isStudentAvailability(data)
@@ -726,6 +748,7 @@ service cloud.firestore {
       return isAdmin()
         || isAvailabilityOwner(data)
         || (signedIn() && hasRole('familia') && isTeacherAvailability(data))
+        || (signedIn() && hasRole('profesor') && isTeacherAvailability(data))
         || (signedIn() && hasRole('profesor') && isStudentAvailability(data));
     }
 
@@ -762,7 +785,7 @@ service cloud.firestore {
     function validTeacherAvailabilityPayload(data) {
       return validAvailabilityFields(data)
         && isTeacherAvailability(data)
-        && data.teacherUid == request.auth.uid;
+        && availabilityTeacherBelongsToAuth(availabilityTeacherUid(data));
     }
 
     function validStudentAvailabilityPayload(data) {
@@ -927,12 +950,26 @@ service cloud.firestore {
       return signedIn()
         && (
           data.familyUid == request.auth.uid
+          || data.familia_id == request.auth.uid
           || data.teacherUid == request.auth.uid
+          || data.profesor_id == request.auth.uid
           || (
             data.keys().hasAny(['participantUids'])
             && data.participantUids[request.auth.uid] == true
           )
         );
+    }
+
+    function chatFamilyUid(data) {
+      return data.keys().hasAny(['familyUid']) ? data.familyUid : data.familia_id;
+    }
+
+    function chatTeacherUid(data) {
+      return data.keys().hasAny(['teacherUid']) ? data.teacherUid : data.profesor_id;
+    }
+
+    function chatStudentId(data) {
+      return data.keys().hasAny(['studentId']) ? data.studentId : data.alumno_id;
     }
 
     function isChatParticipantUid(data, uid) {
@@ -1117,6 +1154,44 @@ service cloud.firestore {
         && (isAdmin() || isChatParticipant(request.resource.data));
     }
 
+    function canReadChatPreference(chatId, userUid) {
+      return signedIn()
+        && userUid == request.auth.uid
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data);
+    }
+
+    function validChatPreferenceCreate(chatId, userUid) {
+      return canReadChatPreference(chatId, userUid)
+        && request.resource.data.keys().hasOnly([
+          'displayNameOverride',
+          'createdAt',
+          'updatedAt'
+        ])
+        && optionalString('displayNameOverride', 120)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validChatPreferenceUpdate(chatId, userUid) {
+      return canReadChatPreference(chatId, userUid)
+        && request.resource.data.keys().hasOnly([
+          'displayNameOverride',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayNameOverride',
+          'updatedAt'
+        ])
+        && optionalString('displayNameOverride', 120)
+        && (
+          !resource.data.keys().hasAny(['createdAt'])
+          || request.resource.data.createdAt == resource.data.createdAt
+        )
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function validClassScheduleProposalCreate(chatId) {
       return signedIn()
         && exists(/databases/$(database)/documents/chats/$(chatId))
@@ -1168,6 +1243,15 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function canRespondToScheduleProposal(proposalData) {
+      return isAdmin()
+        || (
+          request.auth.uid != proposalData.proposedByUid
+          && !(proposalData.proposedByRole == 'familia' && hasRole('familia'))
+          && !(proposalData.proposedByRole == 'profesor' && hasRole('profesor'))
+        );
+    }
+
     function validClassScheduleProposalUpdate(chatId) {
       return signedIn()
         && exists(/databases/$(database)/documents/chats/$(chatId))
@@ -1188,7 +1272,7 @@ service cloud.firestore {
         && (
           isAdmin()
           || request.resource.data.status == 'cancelada'
-          || request.auth.uid != resource.data.proposedByUid
+          || canRespondToScheduleProposal(resource.data)
         )
         && (!request.resource.data.keys().hasAny(['classId']) || request.resource.data.classId is string)
         && optionalString('rejectionReason', 300)
@@ -1266,13 +1350,13 @@ service cloud.firestore {
         && exists(proposalPath)
         && isChatParticipant(get(chatPath).data)
         && get(proposalPath).data.status == 'propuesta'
-        && (isAdmin() || request.auth.uid != get(proposalPath).data.proposedByUid)
-        && request.resource.data.teacherUid == get(chatPath).data.teacherUid
-        && request.resource.data.profesor_id == get(chatPath).data.teacherUid
-        && request.resource.data.familyUid == get(chatPath).data.familyUid
-        && request.resource.data.familia_id == get(chatPath).data.familyUid
-        && request.resource.data.studentId == get(chatPath).data.studentId
-        && request.resource.data.alumno_id == get(chatPath).data.studentId
+        && canRespondToScheduleProposal(get(proposalPath).data)
+        && request.resource.data.teacherUid == chatTeacherUid(get(chatPath).data)
+        && request.resource.data.profesor_id == chatTeacherUid(get(chatPath).data)
+        && request.resource.data.familyUid == chatFamilyUid(get(chatPath).data)
+        && request.resource.data.familia_id == chatFamilyUid(get(chatPath).data)
+        && request.resource.data.studentId == chatStudentId(get(chatPath).data)
+        && request.resource.data.alumno_id == chatStudentId(get(chatPath).data)
         && request.resource.data.fecha == get(proposalPath).data.fecha
         && request.resource.data.date == get(proposalPath).data.fecha
         && request.resource.data.hora_inicio == get(proposalPath).data.hora_inicio
@@ -1554,6 +1638,13 @@ service cloud.firestore {
           )
           && validChatMessageCreate();
         allow update, delete: if isAdmin();
+      }
+
+      match /preferencias/{userUid} {
+        allow read: if isAdmin() || canReadChatPreference(chatId, userUid);
+        allow create: if validChatPreferenceCreate(chatId, userUid);
+        allow update: if validChatPreferenceUpdate(chatId, userUid);
+        allow delete: if canReadChatPreference(chatId, userUid);
       }
 
       match /programaciones/{proposalId} {
