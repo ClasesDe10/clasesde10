@@ -21,6 +21,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../firebase-client.js';
+import { normalizeEntityForWrite } from '../data-schema.js';
 import {
   adapterError,
   adapterResult,
@@ -29,8 +30,8 @@ import {
   toDocument,
 } from './contracts.js';
 
-function applyTimestamps(payload, mode) {
-  const base = cleanUndefined(payload || {});
+function applyTimestamps(collectionName, payload, mode) {
+  const base = cleanUndefined(normalizeEntityForWrite(collectionName, payload || {}, { isCreate: mode === 'create' }));
   if (mode === 'create') {
     return {
       ...base,
@@ -94,7 +95,7 @@ export function makeFirestoreAdapter(collectionName, { db = firebaseDb } = {}) {
 
     async create(payload, options = {}) {
       try {
-        const data = applyTimestamps(payload, 'create');
+        const data = applyTimestamps(collectionName, payload, 'create');
         const cleanId = normalizeId(options.id);
 
         if (cleanId) {
@@ -114,7 +115,7 @@ export function makeFirestoreAdapter(collectionName, { db = firebaseDb } = {}) {
         const cleanId = normalizeId(id);
         if (!cleanId) return adapterResult(null, adapterError('ID no valido.'));
 
-        const data = applyTimestamps(payload, 'update');
+        const data = applyTimestamps(collectionName, payload, 'update');
         await updateDoc(doc(db, collectionName, cleanId), data);
         return adapterResult({ id: cleanId, ...data }, null);
       } catch (error) {
@@ -127,7 +128,7 @@ export function makeFirestoreAdapter(collectionName, { db = firebaseDb } = {}) {
         const cleanId = normalizeId(id);
         if (!cleanId) return adapterResult(null, adapterError('ID no valido.'));
 
-        const data = applyTimestamps(payload, 'update');
+        const data = applyTimestamps(collectionName, payload, 'update');
         await setDoc(doc(db, collectionName, cleanId), data, { merge: true });
         return adapterResult({ id: cleanId, ...data }, null);
       } catch (error) {

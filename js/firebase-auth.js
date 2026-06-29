@@ -28,6 +28,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseAuth, firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 import { recordAuthAudit } from './audit-client.js?v=20260628-audit';
+import { normalizeEntityForWrite } from './data-schema.js';
 
 const CANONICAL_ORIGIN = 'https://clasesde10.com';
 const AUTH_ALLOWED_ORIGINS = new Set([
@@ -126,7 +127,7 @@ async function createMinimalRoleProfile(user, role) {
     updatedAt: serverTimestamp(),
   };
 
-  await setDoc(doc(firebaseDb, 'users', user.uid), basePayload, { merge: true });
+  await setDoc(doc(firebaseDb, 'users', user.uid), normalizeEntityForWrite('users', basePayload, { isCreate: true }), { merge: true });
 
   const profilePayload = {
     userUid: user.uid,
@@ -140,21 +141,21 @@ async function createMinimalRoleProfile(user, role) {
   };
 
   if (role === 'familia') {
-    await setDoc(doc(firebaseDb, 'familias', user.uid), {
+    await setDoc(doc(firebaseDb, 'familias', user.uid), normalizeEntityForWrite('familias', {
       ...profilePayload,
       status: 'activo',
-    }, { merge: true });
+    }, { isCreate: true }), { merge: true });
   }
 
   if (role === 'profesor') {
-    await setDoc(doc(firebaseDb, 'profesores', user.uid), {
+    await setDoc(doc(firebaseDb, 'profesores', user.uid), normalizeEntityForWrite('profesores', {
       ...profilePayload,
       perfil_completo: false,
       profileComplete: false,
       estado_verificacion: 'pendiente_perfil',
       verificationStatus: 'pendiente_perfil',
       status: 'pendiente_perfil',
-    }, { merge: true });
+    }, { isCreate: true }), { merge: true });
   }
 
   return getUsuarioActual();
@@ -447,7 +448,7 @@ export async function register({
       displayName: `${nombreClean} ${apellidosClean}`.trim(),
     });
 
-    await setDoc(doc(firebaseDb, 'users', user.uid), {
+    await setDoc(doc(firebaseDb, 'users', user.uid), normalizeEntityForWrite('users', {
       email: emailClean,
       nombre: nombreClean,
       apellidos: apellidosClean,
@@ -456,7 +457,7 @@ export async function register({
       active: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }, { isCreate: true }));
 
     const profilePayload = {
       userUid: user.uid,
@@ -470,14 +471,14 @@ export async function register({
     };
 
     if (role === 'familia') {
-      await setDoc(doc(firebaseDb, 'familias', user.uid), {
+      await setDoc(doc(firebaseDb, 'familias', user.uid), normalizeEntityForWrite('familias', {
         ...profilePayload,
         status: 'activo',
-      }, { merge: true });
+      }, { isCreate: true }), { merge: true });
     }
 
     if (role === 'profesor') {
-      await setDoc(doc(firebaseDb, 'profesores', user.uid), {
+      await setDoc(doc(firebaseDb, 'profesores', user.uid), normalizeEntityForWrite('profesores', {
         ...profilePayload,
         ...(fotoUrlClean ? { foto_url: fotoUrlClean, photoUrl: fotoUrlClean } : {}),
         ...(direccionClean ? { direccion: direccionClean, address: direccionClean } : {}),
@@ -494,16 +495,16 @@ export async function register({
         estado_verificacion: teacherProfileComplete ? 'pendiente' : 'pendiente_perfil',
         verificationStatus: teacherProfileComplete ? 'pendiente' : 'pendiente_perfil',
         status: teacherProfileComplete ? 'pendiente_revision' : 'pendiente_perfil',
-      }, { merge: true });
+      }, { isCreate: true }), { merge: true });
     }
 
     if (role === 'alumno') {
-      await updateDoc(doc(firebaseDb, 'alumnos', studentInvitation.studentId || studentInvitation.alumno_id), {
+      await updateDoc(doc(firebaseDb, 'alumnos', studentInvitation.studentId || studentInvitation.alumno_id), normalizeEntityForWrite('alumnos', {
         studentUid: user.uid,
         usuario_id: user.uid,
         updatedAt: serverTimestamp(),
         updated_at: new Date().toISOString(),
-      });
+      }));
       await updateDoc(doc(firebaseDb, 'alumno_invitaciones', studentInvitation.id), {
         status: 'usada',
         estado: 'usada',

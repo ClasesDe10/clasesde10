@@ -30,6 +30,11 @@ import { firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-dom
 import { recordDataAudit } from './audit-client.js?v=20260628-audit';
 import { trackDataMutation } from './analytics-client.js?v=20260628-analytics';
 import { lifecycleStatusForClassStatus } from './calendar-engine.js';
+import {
+  COLLECTION_ALIASES as CANONICAL_COLLECTION_ALIASES,
+  FIELD_ALIAS_GROUPS as CANONICAL_FIELD_ALIAS_GROUPS,
+  normalizeEntityForWrite,
+} from './data-schema.js';
 import { buildIncidentCreatePayload, normalizeIncident } from './incident-engine.js?v=20260628-incidents';
 import { getConfigValue } from './platform-config.js?v=20260628-config';
 import {
@@ -43,6 +48,7 @@ import {
 } from './payment-engine.js';
 
 const COLLECTION_ALIASES = {
+  ...CANONICAL_COLLECTION_ALIASES,
   usuarios: 'users',
   v_clases_completas: 'clases',
   v_dashboard_admin: 'dashboardStats',
@@ -50,17 +56,20 @@ const COLLECTION_ALIASES = {
 };
 
 const FIELD_ALIASES = {
-  usuario_id: ['usuario_id', 'userUid', 'uid', 'firebase_uid'],
-  familia_id: ['familia_id', 'familyUid'],
-  profesor_id: ['profesor_id', 'teacherUid'],
-  alumno_id: ['alumno_id', 'studentId', 'studentUid'],
-  profesor_asignado_id: ['profesor_asignado_id', 'assignedTeacherUid'],
-  estado_verificacion: ['estado_verificacion', 'verificationStatus'],
-  estado: ['estado', 'status'],
-  activa: ['activa', 'active'],
-  activo: ['activo', 'active'],
-  created_at: ['created_at', 'createdAt'],
-  fecha: ['fecha', 'date'],
+  usuario_id: CANONICAL_FIELD_ALIAS_GROUPS.userUid,
+  familia_id: CANONICAL_FIELD_ALIAS_GROUPS.familyUid,
+  profesor_id: CANONICAL_FIELD_ALIAS_GROUPS.teacherUid,
+  alumno_id: CANONICAL_FIELD_ALIAS_GROUPS.studentId,
+  profesor_asignado_id: CANONICAL_FIELD_ALIAS_GROUPS.assignedTeacherUid,
+  estado_verificacion: CANONICAL_FIELD_ALIAS_GROUPS.verificationStatus,
+  estado: CANONICAL_FIELD_ALIAS_GROUPS.status,
+  activa: CANONICAL_FIELD_ALIAS_GROUPS.active,
+  activo: CANONICAL_FIELD_ALIAS_GROUPS.active,
+  created_at: CANONICAL_FIELD_ALIAS_GROUPS.createdAt,
+  updated_at: CANONICAL_FIELD_ALIAS_GROUPS.updatedAt,
+  fecha: CANONICAL_FIELD_ALIAS_GROUPS.date,
+  hora_inicio: CANONICAL_FIELD_ALIAS_GROUPS.startTime,
+  hora_fin: CANONICAL_FIELD_ALIAS_GROUPS.endTime,
 };
 
 const SERVER_FIELD_ALIASES = {
@@ -387,7 +396,7 @@ function normalizeWritePayload(table, payload, isCreate = false) {
     data.familyUid = data.familyUid || data.creado_por;
   }
 
-  return data;
+  return normalizeEntityForWrite(table, data, { isCreate });
 }
 
 function auditModuleForTable(table) {

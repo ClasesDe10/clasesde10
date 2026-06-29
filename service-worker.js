@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'clasesde10-pwa-v26';
+const CACHE_VERSION = 'clasesde10-pwa-v27';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const FIREBASE_CONFIG = {
@@ -17,6 +17,7 @@ const PRECACHE_URLS = [
   '/offline.html',
   '/manifest.json',
   '/css/style.css',
+  '/js/data-schema.js',
   '/js/pwa.js',
   '/js/nav.js',
   '/pages/login.html',

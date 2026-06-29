@@ -40,7 +40,7 @@ for (const [needle, message] of [
   assertIncludes(pwa, needle, message);
 }
 
-assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v26'", 'Service worker cache version must be bumped after automation changes.');
+assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v27'", 'Service worker cache version must be bumped after data model changes.');
 assertIncludes(pwa, 'platform-public-runtime.js', 'PWA must load public platform runtime configuration.');
 assertIncludes(packageJson.scripts['check:quality'], 'test:product-ux', 'check:quality must run product UX validation.');
 assertIncludes(packageJson.scripts['check:syntax'], 'scripts/product-ux-test.mjs', 'check:syntax must parse product UX validation.');

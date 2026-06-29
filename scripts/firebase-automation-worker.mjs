@@ -68,6 +68,7 @@ import {
   normalizeDocumentRecord,
   shouldSendExpiryReminder,
 } from '../js/document-center-engine.js';
+import { normalizeEntityForWrite } from '../js/data-schema.js';
 
 const require = createRequire(import.meta.url);
 const {
@@ -618,13 +619,17 @@ async function loadTrustContext(db) {
 }
 
 async function writeDoc(collectionRef, id, payload, options = {}) {
+  const collectionName = collectionRef?.id || '';
+  const data = collectionRef?.parent
+    ? payload
+    : normalizeEntityForWrite(collectionName, payload, { isCreate: !id || options.merge === false });
   if (dryRun) return { id: id || `dry_${Date.now()}` };
   if (id) {
     const ref = collectionRef.doc(id);
-    await ref.set(payload, options.merge === false ? undefined : { merge: true });
+    await ref.set(data, options.merge === false ? undefined : { merge: true });
     return ref;
   }
-  return collectionRef.add(payload);
+  return collectionRef.add(data);
 }
 
 async function updateRef(ref, payload) {
