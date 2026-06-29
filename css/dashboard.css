@@ -639,10 +639,28 @@ textarea {
   box-shadow: 0 0 0 2px rgba(232,160,48,.18);
 }
 
+.class-flow-helper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15,31,61,.10);
+  border-radius: 8px;
+  background: #fffdf8;
+}
+.class-flow-helper strong {
+  color: var(--navy);
+}
+.class-flow-helper p {
+  margin: 4px 0 0;
+  color: var(--gray-mid);
+  font-size: .86rem;
+}
+
 /* Chat */
 .chat-layout {
-  --chat-schedule-height: min(34dvh, 300px);
-  --chat-schedule-min-height: 150px;
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;
   height: clamp(540px, calc(100dvh - var(--topbar-h) - 56px), 820px);
@@ -654,13 +672,11 @@ textarea {
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
-.chat-layout-chat {
-  --chat-schedule-height: min(22dvh, 180px);
-  --chat-schedule-min-height: 108px;
+.chat-layout-notifications {
+  grid-template-columns: 1fr;
 }
-.chat-layout-classes {
-  --chat-schedule-height: min(54dvh, 460px);
-  --chat-schedule-min-height: 230px;
+.chat-layout-notifications .chat-list-panel {
+  display: none;
 }
 .chat-list-panel {
   border-right: 1px solid rgba(0,0,0,0.08);
@@ -776,37 +792,6 @@ textarea {
   justify-content: space-between;
   gap: 12px;
 }
-.chat-view-controls {
-  display: inline-grid;
-  grid-template-columns: repeat(3, minmax(54px, auto));
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 8px;
-  background: #f8f7f4;
-  flex: 0 0 auto;
-}
-.chat-view-btn {
-  min-height: 34px;
-  padding: 6px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--gray-mid);
-  font-size: .76rem;
-  font-weight: 800;
-  cursor: pointer;
-  white-space: nowrap;
-  touch-action: manipulation;
-}
-.chat-view-btn:hover {
-  color: var(--navy);
-  background: rgba(15,31,61,.06);
-}
-.chat-view-btn.active {
-  color: var(--white);
-  background: var(--navy);
-}
 .chat-thread-heading {
   min-width: 0;
   flex: 1;
@@ -841,20 +826,29 @@ textarea {
   background: linear-gradient(180deg, #fff, #fbfaf7);
 }
 .chat-schedule-panel {
-  flex: 0 0 var(--chat-schedule-height);
-  min-height: var(--chat-schedule-min-height);
-  max-height: var(--chat-schedule-height);
+  flex: 0 0 auto;
+  max-height: min(42dvh, 390px);
   overflow: auto;
   border-top: 1px solid rgba(0,0,0,0.08);
   background: #fffdf8;
-  padding: 14px 16px;
+  padding: 10px 14px;
 }
-.chat-schedule-header {
+.chat-schedule-summary {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+}
+.chat-schedule-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chat-schedule-planner {
+  margin-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  padding-top: 12px;
 }
 .schedule-availability-note,
 .schedule-availability-summary {
@@ -917,7 +911,7 @@ textarea {
 }
 .chat-schedule-form {
   display: grid;
-  grid-template-columns: minmax(130px, 1fr) minmax(96px, .7fr) minmax(96px, .7fr) minmax(140px, 1fr) minmax(160px, 1.4fr) auto;
+  grid-template-columns: minmax(128px, .9fr) minmax(132px, 1fr) minmax(96px, .7fr) minmax(96px, .7fr) minmax(140px, 1fr) minmax(160px, 1.4fr) auto;
   gap: 8px;
   align-items: start;
 }
@@ -3191,9 +3185,15 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .dash-section > div[style*="display:flex"] .form-control {
     max-width: 100%;
   }
+  .class-flow-helper {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .class-flow-helper .btn {
+    width: 100%;
+    justify-content: center;
+  }
   .chat-layout {
-    --chat-schedule-height: min(28dvh, 220px);
-    --chat-schedule-min-height: 118px;
     display: flex;
     flex-direction: column;
     grid-template-columns: 1fr;
@@ -3201,13 +3201,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     min-height: 0;
     max-height: calc(100dvh - var(--topbar-h) - 24px);
   }
-  .chat-layout-chat {
-    --chat-schedule-height: min(18dvh, 140px);
-    --chat-schedule-min-height: 92px;
-  }
-  .chat-layout-classes {
-    --chat-schedule-height: min(42dvh, 310px);
-    --chat-schedule-min-height: 170px;
+  .chat-layout-notifications .chat-list-panel {
+    display: none;
   }
   .chat-list-panel {
     flex: 0 0 auto;
@@ -3221,8 +3216,13 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .chat-thread-panel {
     flex: 1 1 auto;
   }
-  .chat-view-controls {
-    order: 2;
+  .chat-schedule-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .chat-schedule-actions .btn {
+    flex: 1 1 140px;
+    justify-content: center;
   }
   .chat-message {
     max-width: 94%;
@@ -3596,19 +3596,12 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     width: 48px;
   }
   .chat-layout {
-    --chat-schedule-height: min(24dvh, 180px);
-    --chat-schedule-min-height: 104px;
     height: calc(100dvh - var(--topbar-h) - 24px - var(--keyboard-inset, 0px));
     min-height: 0;
     max-height: calc(100dvh - var(--topbar-h) - 16px - var(--keyboard-inset, 0px));
   }
-  .chat-layout-chat {
-    --chat-schedule-height: min(16dvh, 124px);
-    --chat-schedule-min-height: 86px;
-  }
-  .chat-layout-classes {
-    --chat-schedule-height: min(38dvh, 270px);
-    --chat-schedule-min-height: 150px;
+  .chat-layout-notifications .chat-list-panel {
+    display: none;
   }
   .chat-panel-header,
   .chat-panel-header {
@@ -3639,16 +3632,6 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     padding: 6px 10px;
     justify-content: center;
   }
-  .chat-view-controls {
-    order: 2;
-    grid-template-columns: repeat(3, 1fr);
-    width: 100%;
-  }
-  .chat-view-btn {
-    min-height: 32px;
-    padding: 6px 8px;
-    font-size: .72rem;
-  }
   .chat-list {
     max-height: none;
   }
@@ -3661,9 +3644,7 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     padding: 12px;
   }
   .chat-schedule-panel {
-    flex-basis: var(--chat-schedule-height);
-    min-height: var(--chat-schedule-min-height);
-    max-height: var(--chat-schedule-height);
+    max-height: min(46dvh, 320px);
     padding: 12px;
   }
   .chat-schedule-form {

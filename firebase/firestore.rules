@@ -1448,6 +1448,37 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function validScheduleRecurrence(data) {
+      return (
+          !data.keys().hasAny(['recurrence'])
+          && (!data.keys().hasAny(['recurrenceLabel']) || data.recurrenceLabel is string)
+          && (!data.keys().hasAny(['kind']) || data.kind == 'one_off')
+        )
+        || (
+          data.keys().hasAll(['kind', 'scheduleKind', 'recurrence', 'recurrenceLabel'])
+          && data.kind == 'weekly_recurring'
+          && data.scheduleKind == data.kind
+          && data.recurrence is map
+          && data.recurrence.keys().hasOnly([
+            'frequency',
+            'dayOfWeek',
+            'startTime',
+            'endTime',
+            'timezone'
+          ])
+          && data.recurrence.frequency == 'weekly'
+          && data.recurrence.dayOfWeek is int
+          && data.recurrence.dayOfWeek >= 0
+          && data.recurrence.dayOfWeek <= 6
+          && data.recurrence.startTime == data.hora_inicio
+          && data.recurrence.endTime == data.hora_fin
+          && data.recurrence.timezone is string
+          && data.recurrence.timezone.size() <= 80
+          && data.recurrenceLabel is string
+          && data.recurrenceLabel.size() <= 160
+        );
+    }
+
     function validClassScheduleProposalCreate(chatId) {
       return signedIn()
         && exists(/databases/$(database)/documents/chats/$(chatId))
@@ -1458,12 +1489,17 @@ service cloud.firestore {
           'teacherUid',
           'studentId',
           'materia',
+          'kind',
+          'scheduleKind',
+          'firstClassDate',
           'fecha',
           'hora_inicio',
           'hora_fin',
           'durationMinutes',
           'modalidad',
           'notas',
+          'recurrence',
+          'recurrenceLabel',
           'status',
           'availabilityStatus',
           'availabilityValidation',
@@ -1478,6 +1514,10 @@ service cloud.firestore {
         && request.resource.data.teacherUid == get(/databases/$(database)/documents/chats/$(chatId)).data.teacherUid
         && request.resource.data.studentId == get(/databases/$(database)/documents/chats/$(chatId)).data.studentId
         && request.resource.data.status == 'propuesta'
+        && (!request.resource.data.keys().hasAny(['kind']) || request.resource.data.kind in ['weekly_recurring', 'one_off'])
+        && (!request.resource.data.keys().hasAny(['scheduleKind']) || request.resource.data.scheduleKind == request.resource.data.kind)
+        && (!request.resource.data.keys().hasAny(['firstClassDate']) || request.resource.data.firstClassDate == request.resource.data.fecha)
+        && validScheduleRecurrence(request.resource.data)
         && request.resource.data.proposedByUid == request.auth.uid
         && request.resource.data.proposedByRole in ['familia', 'profesor', 'admin']
         && request.resource.data.fecha is string

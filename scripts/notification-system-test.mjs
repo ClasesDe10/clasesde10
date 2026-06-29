@@ -60,6 +60,9 @@ assert(chat.includes('data-open-notification'), 'Chat widget must allow opening 
 assert(chat.includes('notificationPriorityClass'), 'Chat widget must render notification priority.');
 assert(chat.includes('dashboardSectionForNotification'), 'Chat widget must map notification actions to dashboard sections.');
 assert(chat.includes('notificationDisplayItems'), 'Chat widget must group duplicate notification cards.');
+assert(chat.includes('notificationSourceLabel'), 'Notification cards must label Admin vs Sistema source.');
+assert(chat.includes('chat-layout-notifications'), 'Notification view must hide chat list when opened from notifications.');
+assert(chat.includes('Activar avisos en este dispositivo'), 'Notification view must expose a clear PWA/mobile push activation action.');
 assert(chat.includes('Marcar revisada'), 'Notification cards must use clear reviewed wording.');
 assert(!chat.includes('>Abrir</button>'), 'Notification cards must not render a generic open button.');
 assert(!chat.includes('>Leida</button>'), 'Notification cards must not render Leida as an action.');
@@ -88,5 +91,6 @@ assert(indexes.includes('"collectionGroup": "notificationTokens"'), 'Firestore i
 
 assert(css.includes('.notification-settings-form'), 'Dashboard CSS must style notification settings.');
 assert(css.includes('.notification-item.priority-critical'), 'Dashboard CSS must style critical notifications.');
+assert(css.includes('.chat-layout-notifications'), 'Dashboard CSS must isolate notifications from chat list.');
 
 console.log('Notification system validation passed.');

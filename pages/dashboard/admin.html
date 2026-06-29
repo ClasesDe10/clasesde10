@@ -1199,7 +1199,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-notification-actions';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-weekly-chat';
 import {
   addDoc,
   collection,
@@ -1476,10 +1476,23 @@ document.addEventListener('click', (e) => {
   if (btn) closeModal(btn.dataset.closeModal);
 });
 document.getElementById('btn-logout').addEventListener('click', () => logout());
-document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
+function abrirPanelNotificaciones() {
   irA('chats');
-  setTimeout(() => document.querySelector('[data-chat-tab="notificaciones"]')?.click(), 100);
-});
+  let intentos = 0;
+  const abrir = () => {
+    const tab = document.querySelector('[data-chat-tab="notificaciones"]');
+    if (tab) {
+      tab.click();
+      return;
+    }
+    if (intentos < 20) {
+      intentos += 1;
+      setTimeout(abrir, 100);
+    }
+  };
+  abrir();
+}
+document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
 
 async function cargarBadgeLeads() {
   const { data: leadsNuevos, error } = await leads.countNew();

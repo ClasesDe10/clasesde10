@@ -160,6 +160,13 @@
 
       <!-- ══ CLASES ══ -->
       <section id="section-clases" class="dash-section" style="display:none">
+        <div class="class-flow-helper">
+          <div>
+            <strong>Horario semanal y clases puntuales</strong>
+            <p>El horario normal debe quedar como clase semanal fija. Usa una clase puntual solo para recuperaciones, cambios o sesiones extra.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button" data-action="abrir-planificador-puntual">+ Clase puntual</button>
+        </div>
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center">
           <select class="form-control" id="filtro-cl-alumno" style="width:180px">
             <option value="">Todos los hijos</option>
@@ -637,7 +644,7 @@ import {
   paymentStatusForBadge,
 } from '../../js/payment-engine.js?v=20260629-weekly-payments';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-notification-actions';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-weekly-chat';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-family-finance-privacy';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-finance-privacy';
@@ -816,9 +823,32 @@ document.addEventListener('click', (e) => {
   document.body.style.overflow = '';
 });
 document.getElementById('btn-logout').addEventListener('click', logout);
-document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
+function abrirPanelNotificaciones() {
   irA('chat');
-  setTimeout(() => document.querySelector('[data-chat-tab="notificaciones"]')?.click(), 100);
+  let intentos = 0;
+  const abrir = () => {
+    const tab = document.querySelector('[data-chat-tab="notificaciones"]');
+    if (tab) {
+      tab.click();
+      return;
+    }
+    if (intentos < 20) {
+      intentos += 1;
+      setTimeout(abrir, 100);
+    }
+  };
+  abrir();
+}
+document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="abrir-planificador-puntual"]');
+  if (!btn) return;
+  e.preventDefault();
+  irA('chat');
+  setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('cd10:open-chat-planner', { detail: { kind: 'one_off' } }));
+  }, 220);
 });
 
 function abrirModalNuevoHijo() {

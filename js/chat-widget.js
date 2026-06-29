@@ -29,6 +29,8 @@ import {
   summarizeAvailabilitySlots,
   summarizeBusySlots,
   validateScheduleAvailability,
+  weekdayIndexFromDate,
+  WEEKDAY_LABELS,
 } from './availability-engine.js?v=20260629-busy-slots';
 import {
   createAdminNotification,
@@ -52,8 +54,9 @@ import {
   watchForegroundPushMessages,
 } from './push-notifications.js';
 
-const CHAT_LAYOUT_STORAGE_KEY = 'cd10.chat.layoutMode';
-const CHAT_LAYOUT_MODES = new Set(['chat', 'balanced', 'classes']);
+const SCHEDULE_KIND_WEEKLY = 'weekly_recurring';
+const SCHEDULE_KIND_ONE_OFF = 'one_off';
+const SCHEDULE_KINDS = new Set([SCHEDULE_KIND_WEEKLY, SCHEDULE_KIND_ONE_OFF]);
 
 function clean(value, max = 2000) {
   return String(value || '').trim().slice(0, max);
@@ -94,6 +97,36 @@ function formatDate(value) {
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return clean(value, 20);
   return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function normalizeScheduleKind(value) {
+  const kind = clean(value, 40);
+  return SCHEDULE_KINDS.has(kind) ? kind : SCHEDULE_KIND_WEEKLY;
+}
+
+function scheduleKindLabel(value) {
+  return normalizeScheduleKind(value) === SCHEDULE_KIND_WEEKLY ? 'Horario semanal fijo' : 'Clase puntual';
+}
+
+function proposalScheduleKind(proposal = {}) {
+  return normalizeScheduleKind(proposal.kind || proposal.scheduleKind);
+}
+
+function isWeeklyRecurringProposal(proposal = {}) {
+  return proposalScheduleKind(proposal) === SCHEDULE_KIND_WEEKLY;
+}
+
+function recurrenceLabelFromFields(fecha = '', start = '', end = '') {
+  const dayIndex = weekdayIndexFromDate(fecha);
+  const dayLabel = Number.isInteger(dayIndex) ? WEEKDAY_LABELS[dayIndex] : 'dia acordado';
+  return `Todos los ${dayLabel} ${start}-${end}`;
+}
+
+function scheduleProposalDisplayLabel(proposal = {}) {
+  if (isWeeklyRecurringProposal(proposal)) {
+    return proposal.recurrenceLabel || recurrenceLabelFromFields(proposal.fecha, proposal.hora_inicio, proposal.hora_fin);
+  }
+  return `${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}`;
 }
 
 function fullName(...parts) {
@@ -771,16 +804,13 @@ function renderAvailabilitySummary(availability = {}, role = '') {
 }
 
 function renderShell(container, role) {
-  const storedLayoutMode = CHAT_LAYOUT_MODES.has(localStorage.getItem(CHAT_LAYOUT_STORAGE_KEY))
-    ? localStorage.getItem(CHAT_LAYOUT_STORAGE_KEY)
-    : 'balanced';
   container.innerHTML = `
-    <div class="chat-layout chat-layout-${storedLayoutMode}" data-chat-layout data-chat-layout-current="${storedLayoutMode}">
+    <div class="chat-layout" data-chat-layout>
       <aside class="chat-list-panel">
         <div class="chat-panel-header">
           <div>
-            <div class="chat-title">Chat / Notificaciones</div>
-            <div class="chat-subtitle">Familias, profesores y administracion</div>
+            <div class="chat-title">Chat</div>
+            <div class="chat-subtitle">Conversaciones de asignaciones activas</div>
           </div>
         </div>
         <div class="chat-tabs">
@@ -805,10 +835,11 @@ function renderShell(container, role) {
         <div class="chat-thread-header">
           <div>
             <div class="chat-thread-title">Notificaciones</div>
-            <div class="chat-thread-subtitle">Avisos enviados por administracion y automatizaciones</div>
+            <div class="chat-thread-subtitle">Avisos de Admin y Sistema. En movil/PWA activa avisos para recibirlos fuera de la app.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-chat-tab="chats">Ver chats</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos en este dispositivo</button>
             <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar revisadas</button>
           </div>
         </div>
@@ -849,7 +880,7 @@ function renderShell(container, role) {
     </div>`;
 }
 
-function renderSchedulePanel(container, chat, proposals, role, currentActorIds = new Set(), availability = {}) {
+function renderSchedulePanelLegacy(container, chat, proposals, role, currentActorIds = new Set(), availability = {}) {
   const panel = container.querySelector('[data-chat-schedule-panel]');
   if (!panel || !chat) return;
   panel.style.display = '';
@@ -906,6 +937,90 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
     <div class="schedule-proposal-list">${proposalRows}</div>`;
 }
 
+function renderSchedulePanel(container, chat, proposals, role, currentActorIds = new Set(), availability = {}) {
+  const panel = container.querySelector('[data-chat-schedule-panel]');
+  if (!panel || !chat) return;
+  panel.style.display = '';
+  const plannerOpen = panel.dataset.schedulePlannerOpen === 'true';
+  const selectedKind = normalizeScheduleKind(panel.dataset.scheduleKind || SCHEDULE_KIND_WEEKLY);
+  panel.classList.toggle('is-open', plannerOpen);
+  const activeProposal = proposals.find((proposal) => proposal.status === 'propuesta');
+  const accepted = proposals.find((proposal) => proposal.status === 'aceptada');
+  const acceptedRecurring = proposals.find((proposal) => proposal.status === 'aceptada' && isWeeklyRecurringProposal(proposal));
+  const pendingRecurring = proposals.find((proposal) => proposal.status === 'propuesta' && isWeeklyRecurringProposal(proposal));
+  const roleAvailability = availabilityForRole(role, availability);
+  const proposalDisabled = role !== 'admin' && (availability.loading || !roleAvailability.targetSlots.length);
+  const disabledAttr = proposalDisabled ? 'disabled' : '';
+  const proposalRows = proposals.length
+    ? proposals.map((proposal) => {
+      const mine = currentActorIds.has(clean(proposal.proposedByUid, 180)) || (role !== 'admin' && proposal.proposedByRole === role);
+      const canRespond = proposal.status === 'propuesta' && (role === 'admin' || !mine);
+      const statusLabel = proposal.status === 'aceptada' ? 'Aceptada'
+        : proposal.status === 'rechazada' ? 'Rechazada'
+          : proposal.status === 'cancelada' ? 'Cancelada'
+            : 'Pendiente';
+      return `
+        <article class="schedule-proposal ${proposal.status === 'propuesta' ? 'active' : ''}" data-schedule-proposal-id="${escapeHtml(proposal.id)}">
+          <div>
+            <strong>${escapeHtml(scheduleKindLabel(proposalScheduleKind(proposal)))} - ${escapeHtml(scheduleProposalDisplayLabel(proposal))}</strong>
+            <div>${escapeHtml(proposal.materia || chat.materia || 'Clase')} - ${escapeHtml(proposal.modalidad || 'online/presencial por acordar')}</div>
+            ${proposal.availabilityStatus === 'matched' ? '<small class="schedule-availability-ok">Disponibilidad validada</small>' : ''}
+            ${proposal.notas ? `<small>${escapeHtml(proposal.notas)}</small>` : ''}
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <span class="badge ${proposal.status === 'aceptada' ? 'badge-success' : proposal.status === 'rechazada' ? 'badge-danger' : 'badge-warning'}">${statusLabel}</span>
+            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-reject-schedule>Rechazar</button>' : ''}
+            ${proposal.status === 'propuesta' && mine ? '<span class="badge badge-info">Esperando respuesta</span>' : ''}
+          </div>
+        </article>`;
+    }).join('')
+    : '<div class="chat-empty-state">Aun no hay horarios propuestos.</div>';
+
+  const summary = acceptedRecurring
+    ? escapeHtml(scheduleProposalDisplayLabel(acceptedRecurring))
+    : pendingRecurring
+      ? 'Horario semanal pendiente de respuesta.'
+      : accepted
+        ? 'Hay una clase puntual creada desde el acuerdo.'
+        : activeProposal
+          ? 'Hay una propuesta puntual pendiente de respuesta.'
+          : 'Acordad un horario semanal fijo y usad clases puntuales solo como excepcion.';
+
+  panel.innerHTML = `
+    <div class="chat-schedule-summary">
+      <div>
+        <div class="chat-thread-title">Horario de clases</div>
+        <div class="chat-thread-subtitle">${summary}</div>
+      </div>
+      <div class="chat-schedule-actions">
+        <button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">${acceptedRecurring ? 'Cambiar semanal' : 'Proponer semanal'}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_ONE_OFF}">Clase puntual</button>
+        ${plannerOpen ? '<button class="btn btn-ghost btn-sm" type="button" data-close-schedule-planner>Cerrar</button>' : ''}
+      </div>
+    </div>
+    ${plannerOpen ? `
+      <div class="chat-schedule-planner">
+        ${renderAvailabilitySummary(availability, role)}
+        <form class="chat-schedule-form" data-schedule-form>
+          <select class="form-control" data-schedule-kind aria-label="Tipo de clase" ${disabledAttr}>
+            <option value="${SCHEDULE_KIND_WEEKLY}" ${selectedKind === SCHEDULE_KIND_WEEKLY ? 'selected' : ''}>Semanal fija</option>
+            <option value="${SCHEDULE_KIND_ONE_OFF}" ${selectedKind === SCHEDULE_KIND_ONE_OFF ? 'selected' : ''}>Puntual</option>
+          </select>
+          <input class="form-control" type="date" data-schedule-date required aria-label="Fecha de primera clase o clase puntual" ${disabledAttr}>
+          <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio" ${disabledAttr}>
+          <input class="form-control" type="time" data-schedule-end required aria-label="Hora de fin" ${disabledAttr}>
+          <select class="form-control" data-schedule-modality aria-label="Modalidad" ${disabledAttr}>
+            <option value="por_acordar">Modalidad por acordar</option>
+            <option value="online">Online</option>
+            <option value="presencial">Presencial</option>
+          </select>
+          <input class="form-control" type="text" maxlength="300" data-schedule-notes placeholder="Notas: lugar, material, excepcion..." ${disabledAttr}>
+          <button class="btn btn-primary btn-sm" type="submit" ${disabledAttr}>Proponer</button>
+        </form>
+        <div class="schedule-proposal-list">${proposalRows}</div>
+      </div>` : ''}`;
+}
+
 function renderChatList(container, chats, selectedId, role, preferences = {}) {
   const list = container.querySelector('[data-chat-list]');
   if (!chats.length) {
@@ -924,16 +1039,10 @@ function renderThreadHeader(container, chat, role, preference = {}) {
   const header = container.querySelector('[data-chat-header]');
   if (!chat) return;
   const customName = clean(preference.displayNameOverride, 120);
-  const layoutMode = container.querySelector('[data-chat-layout]')?.dataset.chatLayoutCurrent || 'balanced';
   header.innerHTML = `
     <div class="chat-thread-heading">
       <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
       <div class="chat-thread-subtitle">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
-    </div>
-    <div class="chat-view-controls" role="group" aria-label="Ajustar espacio de chat y clases">
-      <button class="chat-view-btn ${layoutMode === 'chat' ? 'active' : ''}" type="button" data-chat-layout-mode="chat" aria-pressed="${layoutMode === 'chat'}" title="Mas espacio para mensajes">Chat</button>
-      <button class="chat-view-btn ${layoutMode === 'balanced' ? 'active' : ''}" type="button" data-chat-layout-mode="balanced" aria-pressed="${layoutMode === 'balanced'}" title="Reparto equilibrado">Mixto</button>
-      <button class="chat-view-btn ${layoutMode === 'classes' ? 'active' : ''}" type="button" data-chat-layout-mode="classes" aria-pressed="${layoutMode === 'classes'}" title="Mas espacio para coordinar clases">Clases</button>
     </div>
     <form class="chat-alias-form" data-chat-name-form hidden>
       <input class="form-control" type="text" maxlength="120" value="${escapeHtml(customName)}" data-chat-name-input aria-label="Nombre guardado para este chat" placeholder="${escapeHtml(defaultChatTitle(chat, role))}">
@@ -981,6 +1090,14 @@ function notificationPriorityLabel(priority) {
   if (normalized === 'high' || normalized === 'alta') return 'alta';
   if (normalized === 'medium' || normalized === 'media') return 'media';
   return '';
+}
+
+function notificationSourceLabel(notification = {}) {
+  const source = clean(notification.source || notification.origin || '', 80).toLowerCase();
+  const actorRole = clean(notification.createdByRole || notification.senderRole || notification.actorRole || '', 80).toLowerCase();
+  const type = clean(notification.type, 80);
+  if (source === 'admin' || actorRole === 'admin' || type === 'admin_manual') return 'Admin';
+  return 'Sistema';
 }
 
 function notificationDisplayKey(notification) {
@@ -1067,7 +1184,7 @@ function renderNotifications(container, notifications) {
     const unread = isNotificationUnread(notification);
     const priority = notificationPriorityClass(notification);
     const priorityLabel = notificationPriorityLabel(priority);
-    const label = notificationCategoryLabel(notification.type);
+    const label = `${notificationSourceLabel(notification)} - ${notificationCategoryLabel(notification.type)}`;
     const action = notificationAction(notification, container.dataset.chatRole || '');
     const meta = [
       formatDateTime(notification.createdAt),
@@ -1245,6 +1362,11 @@ export async function initChatWidget({
     renderChatList(container, state.chats, chat.id, role, state.chatPreferencesById);
     renderThreadHeader(container, chat, role, state.chatPreferencesById[chat.id] || {});
     container.querySelector('[data-chat-form]').style.display = '';
+    const schedulePanel = container.querySelector('[data-chat-schedule-panel]');
+    if (schedulePanel) {
+      schedulePanel.dataset.schedulePlannerOpen = 'false';
+      schedulePanel.dataset.scheduleKind = SCHEDULE_KIND_WEEKLY;
+    }
     state.scheduleProposals = [];
     state.availabilityByChat[chat.id] = { loading: true, teacherSlots: [], studentSlots: [] };
     renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id]);
@@ -1299,6 +1421,7 @@ export async function initChatWidget({
     container.querySelectorAll('[data-chat-panel]').forEach((panelNode) => {
       panelNode.style.display = panelNode.dataset.chatPanel === panel ? '' : 'none';
     });
+    container.querySelector('[data-chat-layout]')?.classList.toggle('chat-layout-notifications', panel === 'notificaciones');
   }
 
   function navigateDashboardSection(section) {
@@ -1340,31 +1463,32 @@ export async function initChatWidget({
     return false;
   }
 
-  function setChatLayoutMode(mode = 'balanced') {
-    const safeMode = CHAT_LAYOUT_MODES.has(mode) ? mode : 'balanced';
-    const layout = container.querySelector('[data-chat-layout]');
-    if (!layout) return;
-    CHAT_LAYOUT_MODES.forEach((entry) => layout.classList.remove(`chat-layout-${entry}`));
-    layout.classList.add(`chat-layout-${safeMode}`);
-    layout.dataset.chatLayoutCurrent = safeMode;
-    localStorage.setItem(CHAT_LAYOUT_STORAGE_KEY, safeMode);
-    container.querySelectorAll('[data-chat-layout-mode]').forEach((button) => {
-      const active = button.dataset.chatLayoutMode === safeMode;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
-    });
-  }
-
   container.addEventListener('click', async (event) => {
-    const layoutModeButton = event.target.closest('[data-chat-layout-mode]');
-    if (layoutModeButton) {
-      setChatLayoutMode(layoutModeButton.dataset.chatLayoutMode);
-      return;
-    }
-
     const tab = event.target.closest('[data-chat-tab]');
     if (tab) {
       setPanel(tab.dataset.chatTab);
+      return;
+    }
+
+    const openSchedulePlanner = event.target.closest('[data-open-schedule-planner]');
+    if (openSchedulePlanner) {
+      const panel = container.querySelector('[data-chat-schedule-panel]');
+      if (panel) {
+        panel.dataset.schedulePlannerOpen = 'true';
+        panel.dataset.scheduleKind = normalizeScheduleKind(openSchedulePlanner.dataset.openSchedulePlanner);
+        renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
+        panel.querySelector('[data-schedule-date]')?.focus();
+      }
+      return;
+    }
+
+    const closeSchedulePlanner = event.target.closest('[data-close-schedule-planner]');
+    if (closeSchedulePlanner) {
+      const panel = container.querySelector('[data-chat-schedule-panel]');
+      if (panel) {
+        panel.dataset.schedulePlannerOpen = 'false';
+        renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
+      }
       return;
     }
 
@@ -1458,6 +1582,17 @@ export async function initChatWidget({
     }
   });
 
+  window.addEventListener('cd10:open-chat-planner', (event) => {
+    if (!state.selectedChat) return;
+    setPanel('chats');
+    const panel = container.querySelector('[data-chat-schedule-panel]');
+    if (!panel) return;
+    panel.dataset.schedulePlannerOpen = 'true';
+    panel.dataset.scheduleKind = normalizeScheduleKind(event.detail?.kind || SCHEDULE_KIND_ONE_OFF);
+    renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
+    setTimeout(() => panel.querySelector('[data-schedule-date]')?.focus(), 50);
+  });
+
   container.addEventListener('submit', async (event) => {
     const chatNameForm = event.target.closest('[data-chat-name-form]');
     if (chatNameForm) {
@@ -1495,6 +1630,7 @@ export async function initChatWidget({
     if (!scheduleForm) return;
     event.preventDefault();
     if (!state.selectedChat) return;
+    const scheduleKind = normalizeScheduleKind(scheduleForm.querySelector('[data-schedule-kind]')?.value);
     const fecha = clean(scheduleForm.querySelector('[data-schedule-date]')?.value, 20);
     const horaInicio = clean(scheduleForm.querySelector('[data-schedule-start]')?.value, 8);
     const horaFin = clean(scheduleForm.querySelector('[data-schedule-end]')?.value, 8);
@@ -1539,6 +1675,9 @@ export async function initChatWidget({
         teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
         studentId: state.selectedChat.studentId || state.selectedChat.alumno_id || null,
         materia: state.selectedChat.materia || '',
+        kind: scheduleKind,
+        scheduleKind,
+        firstClassDate: fecha,
         fecha,
         hora_inicio: horaInicio,
         hora_fin: horaFin,
@@ -1564,6 +1703,16 @@ export async function initChatWidget({
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       };
+      if (scheduleKind === SCHEDULE_KIND_WEEKLY) {
+        proposal.recurrence = {
+          frequency: 'weekly',
+          dayOfWeek: weekdayIndexFromDate(fecha),
+          startTime: horaInicio,
+          endTime: horaFin,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid',
+        };
+        proposal.recurrenceLabel = recurrenceLabelFromFields(fecha, horaInicio, horaFin);
+      }
       await addDoc(collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones'), proposal);
       await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
         schedulingStatus: 'horario_propuesto',
@@ -1574,8 +1723,8 @@ export async function initChatWidget({
         updatedAt: serverTimestamp(),
       });
       scheduleForm.reset();
-      await addSystemChatMessage(state.selectedChat, `Horario propuesto: ${formatDate(fecha)} de ${horaInicio} a ${horaFin}.`);
-      showToast('Horario propuesto', 'La otra parte puede aceptarlo desde este chat.', 'success');
+      await addSystemChatMessage(state.selectedChat, `${scheduleKindLabel(scheduleKind)} propuesto: ${scheduleKind === SCHEDULE_KIND_WEEKLY ? recurrenceLabelFromFields(fecha, horaInicio, horaFin) : `${formatDate(fecha)} de ${horaInicio} a ${horaFin}`}.`);
+      showToast('Horario propuesto', scheduleKind === SCHEDULE_KIND_WEEKLY ? 'La otra parte puede aceptar el horario semanal fijo.' : 'La otra parte puede aceptar la clase puntual.', 'success');
     } catch (error) {
       showToast('No se pudo proponer', error.message || 'Revisa permisos de chat.', 'error');
     } finally {
@@ -1758,8 +1907,11 @@ export async function initChatWidget({
         ...busySlotsFromAcceptedProposals([{ ...proposal, id: proposal.id, status: 'aceptada', classId }], state.selectedChat),
       ]),
     };
-    await addSystemChatMessage(state.selectedChat, `Horario aceptado y clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);
-    showToast('Clase creada', 'La clase ya aparece en el calendario de familia y profesor.', 'success');
+    const scheduleText = isWeeklyRecurringProposal(proposal)
+      ? `Horario semanal aceptado (${scheduleProposalDisplayLabel(proposal)}). Primera clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`
+      : `Clase puntual aceptada y creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`;
+    await addSystemChatMessage(state.selectedChat, scheduleText);
+    showToast(isWeeklyRecurringProposal(proposal) ? 'Horario semanal guardado' : 'Clase creada', 'La clase ya aparece en el calendario de familia y profesor.', 'success');
   }
 
   container.querySelector('[data-chat-form]').addEventListener('submit', async (event) => {

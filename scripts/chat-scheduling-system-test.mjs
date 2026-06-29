@@ -50,8 +50,11 @@ assert(chat.includes('pickClassPriceFields(classFields)'), 'Accepted proposals m
 assert(chat.includes('participantUids'), 'Accepted proposal classes must store participant auth ids for legacy/id-compatible reads.');
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
 assert(chat.includes('data-chat-name-form'), 'Chat widget must let each participant save a private chat display name.');
-assert(chat.includes('data-chat-layout-mode'), 'Chat widget must let users resize chat vs class scheduling space.');
-assert(chat.includes('CHAT_LAYOUT_STORAGE_KEY'), 'Chat layout preference must persist per browser.');
+assert(chat.includes('data-open-schedule-planner'), 'Chat widget must keep schedule planning collapsed behind explicit actions.');
+assert(chat.includes('weekly_recurring'), 'Chat widget must support fixed weekly class schedules.');
+assert(chat.includes('one_off'), 'Chat widget must support one-off class exceptions.');
+assert(chat.includes('recurrenceLabelFromFields'), 'Weekly schedules must render a compact recurring label.');
+assert(!chat.includes('data-chat-layout-mode'), 'Chat widget must not expose the old mixed chat/classes layout selector.');
 assert(chat.includes("doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid)"), 'Chat widget must load per-user chat preferences.');
 assert(chat.includes("doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid)"), 'Chat widget must persist chat preferences per current user.');
 assert(chat.includes('Esperando respuesta'), 'Own schedule proposals must clearly show they are waiting for the other participant.');
@@ -79,6 +82,7 @@ assert(rules.includes('match /busySlots/{busySlotId}'), 'Firestore rules must pr
 assert(rules.includes('validBusySlotCreate'), 'Firestore rules must validate busy slot creation against a real class.');
 assert(rules.includes('busySlotMatchesClass'), 'Busy slot rules must ensure occupied times match class times.');
 assert(rules.includes('availabilityValidation'), 'Firestore rules must allow audited availability validation on proposals.');
+assert(rules.includes('validScheduleRecurrence'), 'Firestore rules must validate weekly recurring schedule metadata.');
 assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must validate proposal responses.');
 assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
 assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');
@@ -94,8 +98,8 @@ assert(rules.includes("'class_scheduled_from_chat'"), 'Chat rules must validate 
 assert(css.includes('.chat-schedule-panel'), 'Dashboard CSS must style the schedule panel.');
 assert(css.includes('.schedule-proposal'), 'Dashboard CSS must style schedule proposals.');
 assert(css.includes('.chat-alias-form'), 'Dashboard CSS must style the private chat-name editor.');
-assert(css.includes('.chat-view-controls'), 'Dashboard CSS must style chat/class layout controls.');
-assert(css.includes('.chat-layout-classes'), 'Dashboard CSS must support a class-focused chat layout.');
+assert(css.includes('.chat-schedule-summary'), 'Dashboard CSS must style compact schedule summaries.');
+assert(css.includes('.chat-layout-notifications'), 'Dashboard CSS must isolate notification-only view.');
 assert(css.includes('.schedule-availability-busy'), 'Dashboard CSS must style occupied schedule slots.');
 
 console.log('Chat scheduling system validation passed.');

@@ -78,8 +78,9 @@ assert(adminDashboard.includes('data-family-uid'), 'Admin class selector must pr
 assert(adminDashboard.includes("type: 'class_schedule_change'"), 'Admin class changes must notify class participants.');
 assert(adminDashboard.includes('result.data?.id'), 'New class notifications must use the real saved class id.');
 
-assert(chatWidget.includes('Chat / Notificaciones'), 'Chat widget must expose the combined chat/notifications surface.');
+assert(chatWidget.includes('<div class="chat-title">Chat</div>'), 'Chat widget must expose a dedicated chat surface.');
 assert(chatWidget.includes('data-chat-tab="notificaciones"'), 'Chat widget must render a notifications tab.');
+assert(chatWidget.includes('chat-layout-notifications'), 'Notifications view must be visually isolated from chat list.');
 assert(chatWidget.includes('watchUserNotifications'), 'Chat widget must subscribe to user notifications.');
 assert(chatWidget.includes('requestBrowserNotificationPermission'), 'Chat widget must offer browser/PWA notification permission.');
 assert(chatWidget.includes('showBrowserNotification'), 'Chat widget must surface new notifications through browser notifications when allowed.');
