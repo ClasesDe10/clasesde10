@@ -1287,6 +1287,29 @@ const selectedFamilias = new Set();
 let crmActivo = null;
 let auditLogsCache = [];
 let incidenciasCache = [];
+const ADMIN_SCALE_LIMITS = Object.freeze({
+  users: 1500,
+  profesores: 1200,
+  familias: 1200,
+  alumnos: 1600,
+  solicitudes: 1200,
+  solicitudMatches: 2000,
+  asignaciones: 1600,
+  clases: 2500,
+  pagos: 2500,
+  documentos: 1500,
+  incidencias: 1500,
+  crmNotes: 800,
+  crmTasks: 800,
+  auditLogs: 1500,
+  notificaciones: 1200,
+  chats: 1000,
+});
+
+function adminReadLimit(collectionName) {
+  return ADMIN_SCALE_LIMITS[collectionName] || 1000;
+}
+
 const LEGACY_TABLES = {
   clases: { id: 'tbody-clases', colspan: 9, countId: null },
   profesores: { id: 'tbody-profesores', colspan: 10, countId: 'prof-count' },
@@ -2537,7 +2560,10 @@ function timestampMillis(value) {
 
 async function safeListFirestore(collectionName) {
   try {
-    const snap = await getDocs(collection(firebaseDb, collectionName));
+    const snap = await getDocs(firestoreQuery(
+      collection(firebaseDb, collectionName),
+      firestoreLimit(adminReadLimit(collectionName)),
+    ));
     return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
   } catch (error) {
     console.warn(`No se pudo cargar ${collectionName} para confianza`, error);
@@ -3158,7 +3184,7 @@ function mapProfesorFirestore(docSnap) {
 async function cargarProfesoresFirestore() {
   if (profesoresFirestoreCache) return profesoresFirestoreCache;
   const [snap, trustContext] = await Promise.all([
-    getDocs(collection(firebaseDb, 'profesores')),
+    getDocs(firestoreQuery(collection(firebaseDb, 'profesores'), firestoreLimit(adminReadLimit('profesores')))),
     cargarTrustContextFirestore(),
   ]);
   profesoresFirestoreCache = snap.docs
@@ -3184,7 +3210,7 @@ function mapDoc(docSnap) {
 }
 
 async function cargarColeccionMap(nombreColeccion) {
-  const snap = await getDocs(collection(firebaseDb, nombreColeccion));
+  const snap = await getDocs(firestoreQuery(collection(firebaseDb, nombreColeccion), firestoreLimit(adminReadLimit(nombreColeccion))));
   return new Map(snap.docs.map((docSnap) => [docSnap.id, { id: docSnap.id, ...docSnap.data() }]));
 }
 
@@ -3218,7 +3244,7 @@ function mapSolicitudFirestore(docSnap, familiasMap, alumnosMap, profesoresMap) 
 
 async function cargarSolicitudesFirestore() {
   const [solicitudesSnap, familiasMap, alumnosMap, profesores] = await Promise.all([
-    getDocs(collection(firebaseDb, 'solicitudes')),
+    getDocs(firestoreQuery(collection(firebaseDb, 'solicitudes'), firestoreLimit(adminReadLimit('solicitudes')))),
     cargarColeccionMap('familias'),
     cargarColeccionMap('alumnos'),
     cargarProfesoresFirestore(),
@@ -3339,7 +3365,10 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor }) {
 }
 
 async function cargarSolicitudMatchesFirestore(solicitudId) {
-  const snap = await getDocs(collection(firebaseDb, 'solicitudMatches'));
+  const snap = await getDocs(firestoreQuery(
+    collection(firebaseDb, 'solicitudMatches'),
+    firestoreLimit(adminReadLimit('solicitudMatches')),
+  ));
   return snap.docs
     .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
     .filter((match) => (match.requestId || match.solicitud_id) === solicitudId)
@@ -3722,7 +3751,7 @@ function mapFamiliaFirestore(docSnap, user = {}) {
 async function cargarFamiliasFirestore() {
   if (familiasFirestoreCache) return familiasFirestoreCache;
   const [familiasSnap, usersMap, trustContext] = await Promise.all([
-    getDocs(collection(firebaseDb, 'familias')),
+    getDocs(firestoreQuery(collection(firebaseDb, 'familias'), firestoreLimit(adminReadLimit('familias')))),
     cargarColeccionMap('users'),
     cargarTrustContextFirestore(),
   ]);

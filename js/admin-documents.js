@@ -12,6 +12,7 @@ import {
   collection,
   doc as firestoreDoc,
   getDocs,
+  limit as firestoreLimit,
   orderBy,
   query,
   updateDoc,
@@ -19,6 +20,7 @@ import {
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 
 const instances = new WeakMap();
+const DOCUMENT_ADMIN_READ_LIMIT = 1500;
 
 function clean(value, max = 4000) {
   return String(value ?? '').trim().slice(0, max);
@@ -174,15 +176,15 @@ function toRow(snapshotDoc) {
 
 async function safeList(table, fallback = []) {
   try {
-    const snap = await getDocs(query(collection(firebaseDb, table), orderBy('createdAt', 'desc')));
+    const snap = await getDocs(query(collection(firebaseDb, table), orderBy('createdAt', 'desc'), firestoreLimit(DOCUMENT_ADMIN_READ_LIMIT)));
     return snap.docs.map(toRow);
   } catch (_) {
     try {
-      const snap = await getDocs(query(collection(firebaseDb, table), orderBy('created_at', 'desc')));
+      const snap = await getDocs(query(collection(firebaseDb, table), orderBy('created_at', 'desc'), firestoreLimit(DOCUMENT_ADMIN_READ_LIMIT)));
       return snap.docs.map(toRow);
     } catch {
       try {
-        const snap = await getDocs(collection(firebaseDb, table));
+        const snap = await getDocs(query(collection(firebaseDb, table), firestoreLimit(DOCUMENT_ADMIN_READ_LIMIT)));
         return snap.docs.map(toRow);
       } catch {
         return fallback;

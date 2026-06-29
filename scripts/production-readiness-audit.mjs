@@ -230,12 +230,76 @@ function checkIndexes() {
       { fieldPath: 'status', order: 'ASCENDING' },
       { fieldPath: 'createdAt', order: 'DESCENDING' },
     ]],
+    ['clases', [
+      { fieldPath: 'month', order: 'ASCENDING' },
+      { fieldPath: 'teacherUid', order: 'ASCENDING' },
+      { fieldPath: 'startAtIso', order: 'ASCENDING' },
+    ]],
+    ['pagos', [
+      { fieldPath: 'month', order: 'ASCENDING' },
+      { fieldPath: 'status', order: 'ASCENDING' },
+      { fieldPath: 'dueAt', order: 'ASCENDING' },
+    ]],
+    ['notificaciones', [
+      { fieldPath: 'userUid', order: 'ASCENDING' },
+      { fieldPath: 'month', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
+    ['analyticsEvents', [
+      { fieldPath: 'day', order: 'ASCENDING' },
+      { fieldPath: 'scaleShard', order: 'ASCENDING' },
+      { fieldPath: 'createdAt', order: 'DESCENDING' },
+    ]],
+    ['systemJobs', [
+      { fieldPath: 'day', order: 'ASCENDING' },
+      { fieldPath: 'status', order: 'ASCENDING' },
+      { fieldPath: 'runAt', order: 'ASCENDING' },
+      { fieldPath: 'priority', order: 'DESCENDING' },
+    ]],
   ];
 
   for (const [collectionGroup, fields] of required) {
     if (!hasCompositeIndex(indexes, collectionGroup, fields)) {
       fail(`Missing Firestore composite index for ${collectionGroup}: ${fields.map((field) => field.fieldPath).join(', ')}.`);
     }
+  }
+}
+
+function checkFutureScaleGuards() {
+  const scaleEngine = readText('js/scale-engine.js');
+  for (const needle of [
+    'SCALE_COLLECTION_POLICIES',
+    'buildQueryBudget',
+    'scalePartitionKeys',
+    'buildRetentionPlan',
+    'buildAdminScaleChecklist',
+  ]) {
+    if (!scaleEngine.includes(needle)) fail(`Future scale engine guard missing: ${needle}.`);
+  }
+
+  const dataSchema = readText('js/data-schema.js');
+  for (const needle of ['scalePartitionKeys', 'partitionKey', 'scaleShard']) {
+    if (!dataSchema.includes(needle)) fail(`Data schema must derive scale field: ${needle}.`);
+  }
+
+  const adminControl = readText('js/admin-control-center.js');
+  if (/onSnapshot\(collection\(firebaseDb,\s*name\)/.test(adminControl)) {
+    fail('Admin Mission Control must not subscribe to whole collections in realtime.');
+  }
+  if (!adminControl.includes('LIVE_SIGNAL_COLLECTIONS') || !adminControl.includes('firestoreLimit')) {
+    fail('Admin Mission Control must use limited realtime signal queries.');
+  }
+
+  const runtimeFiles = walk(root).filter((file) => {
+    const relative = rel(file);
+    return !relative.startsWith('scripts/') && !relative.startsWith('functions/') && !relative.startsWith('supabase/');
+  });
+  const unboundedReads = runtimeFiles
+    .map((file) => ({ file: rel(file), text: fs.readFileSync(file, 'utf8') }))
+    .filter(({ text }) => /getDocs\(\s*collection\(/.test(text))
+    .map(({ file }) => file);
+  if (unboundedReads.length) {
+    fail(`Runtime Firestore reads must not call getDocs(collection(...)) without query limits: ${unboundedReads.join(', ')}.`);
   }
 }
 
@@ -326,6 +390,7 @@ checkHosting();
 checkPwa();
 checkRules();
 checkIndexes();
+checkFutureScaleGuards();
 checkFunctions();
 checkSupabaseBoundary();
 

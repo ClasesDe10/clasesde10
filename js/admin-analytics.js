@@ -80,8 +80,8 @@ async function readCollection(firebaseDb, name, max = 2500) {
     const snap = await getDocs(query(collection(firebaseDb, name), orderBy('createdAt', 'desc'), firestoreLimit(max)));
     return snap.docs.map(toDoc);
   } catch (_) {
-    const snap = await getDocs(collection(firebaseDb, name));
-    return snap.docs.map(toDoc).slice(0, max);
+    const snap = await getDocs(query(collection(firebaseDb, name), firestoreLimit(max)));
+    return snap.docs.map(toDoc);
   }
 }
 

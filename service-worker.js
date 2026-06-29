@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'clasesde10-pwa-v28';
+const CACHE_VERSION = 'clasesde10-pwa-v29';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const FIREBASE_CONFIG = {
@@ -18,6 +18,7 @@ const PRECACHE_URLS = [
   '/manifest.json',
   '/css/style.css',
   '/js/data-schema.js',
+  '/js/scale-engine.js',
   '/js/pwa.js',
   '/js/nav.js',
   '/pages/login.html',

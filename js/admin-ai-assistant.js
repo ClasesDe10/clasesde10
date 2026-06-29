@@ -10,6 +10,7 @@ import {
   collectionGroup,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
@@ -75,10 +76,24 @@ function badgeTone(value) {
   return 'info';
 }
 
+function orderFieldForCollection(name) {
+  if (['users', 'profesores', 'familias', 'chats', 'incidencias', 'platformHealthChecks'].includes(name)) return 'updatedAt';
+  if (['experiments', 'experimentsPublic'].includes(name)) return 'updatedAt';
+  if (name === 'pagos') return 'dueAt';
+  if (name === 'clases') return 'startAtIso';
+  if (name === 'systemJobs') return 'runAt';
+  return 'createdAt';
+}
+
 async function loadCollection(key, name, max, isGroup = false) {
   try {
     const ref = isGroup ? collectionGroup(firebaseDb, name) : collection(firebaseDb, name);
-    const snap = await getDocs(query(ref, limit(max)));
+    let snap;
+    try {
+      snap = await getDocs(query(ref, orderBy(orderFieldForCollection(name), 'desc'), limit(max)));
+    } catch (_) {
+      snap = await getDocs(query(ref, limit(max)));
+    }
     return {
       key,
       rows: snap.docs.map((docSnap) => ({
@@ -86,6 +101,7 @@ async function loadCollection(key, name, max, isGroup = false) {
         chatId: isGroup ? clean(docSnap.ref.parent.parent?.id) : undefined,
         ...docSnap.data(),
       })),
+      truncated: snap.size >= max,
       error: null,
     };
   } catch (error) {
@@ -101,14 +117,17 @@ async function loadAdminAiData(force = false) {
   const results = await Promise.all(DATA_SPECS.map((spec) => loadCollection(...spec)));
   const data = {};
   const errors = [];
+  const truncated = [];
   results.forEach((item) => {
     data[item.key] = item.rows;
     if (item.error) errors.push(`${item.key}: ${item.error}`);
+    if (item.truncated) truncated.push(item.key);
   });
 
   cachedData = {
     data,
     errors,
+    truncated,
     loadedAt: new Date().toISOString(),
     expiresAt: Date.now() + DATA_CACHE_MS,
     durationMs: Math.round(performance.now() - startedAt),
@@ -240,7 +259,8 @@ function setCacheLabel(container, meta) {
     return;
   }
   const total = Object.values(meta.data || {}).reduce((sum, rows) => sum + (Array.isArray(rows) ? rows.length : 0), 0);
-  label.textContent = `${total} registros · ${meta.durationMs} ms · cache 60s`;
+  const suffix = meta.truncated?.length ? ` - muestra limitada: ${meta.truncated.length}` : '';
+  label.textContent = `${total} registros - ${meta.durationMs} ms - cache 60s${suffix}`;
 }
 
 export function initAdminAiAssistant({ container, onNavigate, actor } = {}) {

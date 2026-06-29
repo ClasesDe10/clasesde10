@@ -35,6 +35,7 @@ import {
   FIELD_ALIAS_GROUPS as CANONICAL_FIELD_ALIAS_GROUPS,
   normalizeEntityForWrite,
 } from './data-schema.js';
+import { buildQueryBudget, defaultReadLimit } from './scale-engine.js';
 import { buildIncidentCreatePayload, normalizeIncident } from './incident-engine.js?v=20260628-incidents';
 import { getConfigValue } from './platform-config.js?v=20260628-config';
 import {
@@ -150,13 +151,20 @@ function buildServerQuery(name, filters = [], sorts = [], max = null) {
   return constraints.length ? query(ref, ...constraints) : ref;
 }
 
+function effectiveReadLimit(name, filters = [], sorts = [], max = null, options = {}) {
+  if (options.singleRow) return 1;
+  if (options.rangeBounds?.to !== undefined) return defaultReadLimit(collectionName(name), Number(options.rangeBounds.to) + 1);
+  const requested = Number(max);
+  return defaultReadLimit(collectionName(name), Number.isFinite(requested) && requested > 0 ? requested : null);
+}
+
 async function listCollection(name, filters = [], sorts = [], max = null) {
+  const cappedMax = effectiveReadLimit(name, filters, sorts, max);
   let snap;
   try {
-    snap = await getDocs(buildServerQuery(name, filters, sorts, max));
+    snap = await getDocs(buildServerQuery(name, filters, sorts, cappedMax));
   } catch (error) {
-    if (!sorts.length && !max) throw error;
-    snap = await getDocs(buildServerQuery(name, filters));
+    snap = await getDocs(buildServerQuery(name, filters, [], cappedMax));
   }
   return snap.docs.map(toLegacyDoc);
 }
@@ -554,7 +562,18 @@ class FirebaseCompatQuery {
       return { data: this.singleRow ? data : [data], count: 1, error: null };
     }
 
-    const serverMax = this.singleRow ? 1 : this.max;
+    const serverMax = effectiveReadLimit(this.table, this.filters, this.sorts, this.max, {
+      singleRow: this.singleRow,
+      rangeBounds: this.rangeBounds,
+    });
+    this.queryBudget = buildQueryBudget({
+      collectionName: collectionName(this.table),
+      requestedLimit: this.max || serverMax,
+      filters: this.filters,
+      orderField: this.sorts[0]?.field || '',
+      hasCursor: Boolean(this.rangeBounds),
+      purpose: 'compat_db_from',
+    });
     let rows = await listCollection(this.table, this.filters, this.sorts, serverMax);
     rows = await hydrateRows(this.table, rows);
     rows = rows.filter((row) => this.filters.every((filter) => matchesFilter(row, filter)));

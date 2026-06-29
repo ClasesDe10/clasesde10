@@ -6,7 +6,9 @@
  * which ones are compatibility aliases, and which values are derived.
  */
 
-export const DATA_SCHEMA_VERSION = 'data-schema-2026-06-29';
+import { collectionScalePolicy, scalePartitionKeys } from './scale-engine.js';
+
+export const DATA_SCHEMA_VERSION = 'data-schema-2026-06-29-scale';
 
 export const DATA_COLLECTIONS = Object.freeze({
   users: 'users',
@@ -74,14 +76,14 @@ export const CANONICAL_FIELDS = Object.freeze({
   ],
   familias: ['userUid', 'email', 'nombre', 'apellidos', 'displayName', 'telefono', 'address', 'city', 'postalCode', 'zone', 'status', 'active', 'createdAt', 'updatedAt'],
   alumnos: ['familyUid', 'studentUid', 'nombre', 'apellidos', 'displayName', 'level', 'course', 'school', 'birthDate', 'active', 'createdAt', 'updatedAt'],
-  solicitudes: ['familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference', 'notes', 'status', 'matchStatus', 'assignedTeacherUid', 'createdAt', 'updatedAt'],
+  solicitudes: ['familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference', 'notes', 'status', 'matchStatus', 'assignedTeacherUid', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
   asignaciones: ['requestId', 'familyUid', 'teacherUid', 'studentId', 'subject', 'status', 'active', 'chatId', 'schedulingStatus', 'relationshipStage', 'createdAt', 'updatedAt'],
-  clases: ['assignmentId', 'scheduleProposalId', 'familyUid', 'teacherUid', 'studentId', 'subject', 'date', 'startTime', 'endTime', 'startAtIso', 'endAtIso', 'durationMinutes', 'status', 'lifecycleStatus', 'attendanceStatus', 'familyAmount', 'teacherAmount', 'platformFee', 'familyPaymentStatus', 'teacherPaymentStatus', 'createdAt', 'updatedAt'],
-  pagos: ['paymentType', 'familyUid', 'teacherUid', 'studentId', 'classIds', 'amount', 'method', 'gateway', 'status', 'dueAt', 'reconciliationStatus', 'idempotencyKey', 'createdAt', 'updatedAt'],
-  documentos: ['ownerUid', 'ownerRole', 'type', 'name', 'storagePath', 'downloadUrl', 'status', 'verificationStatus', 'expiresAt', 'createdAt', 'updatedAt'],
-  notificaciones: ['userUid', 'role', 'type', 'title', 'body', 'payload', 'readAt', 'leida', 'createdAt', 'updatedAt'],
+  clases: ['assignmentId', 'scheduleProposalId', 'familyUid', 'teacherUid', 'studentId', 'subject', 'date', 'startTime', 'endTime', 'startAtIso', 'endAtIso', 'durationMinutes', 'status', 'lifecycleStatus', 'attendanceStatus', 'familyAmount', 'teacherAmount', 'platformFee', 'familyPaymentStatus', 'teacherPaymentStatus', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
+  pagos: ['paymentType', 'familyUid', 'teacherUid', 'studentId', 'classIds', 'amount', 'method', 'gateway', 'status', 'dueAt', 'reconciliationStatus', 'idempotencyKey', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
+  documentos: ['ownerUid', 'ownerRole', 'type', 'name', 'storagePath', 'downloadUrl', 'status', 'verificationStatus', 'expiresAt', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
+  notificaciones: ['userUid', 'role', 'type', 'title', 'body', 'payload', 'readAt', 'leida', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
   chats: ['assignmentId', 'familyUid', 'teacherUid', 'studentId', 'participantUids', 'relationshipStatus', 'relationshipStage', 'schedulingStatus', 'active', 'createdAt', 'updatedAt'],
-  incidencias: ['ticketId', 'category', 'priority', 'status', 'familyUid', 'teacherUid', 'studentId', 'classId', 'paymentId', 'assignedAdminUid', 'resolution', 'createdAt', 'updatedAt'],
+  incidencias: ['ticketId', 'category', 'priority', 'status', 'familyUid', 'teacherUid', 'studentId', 'classId', 'paymentId', 'assignedAdminUid', 'resolution', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
 });
 
 const LEGACY_WRITE_ALIASES = Object.freeze({
@@ -308,6 +310,27 @@ function localIso(date) {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}:00`;
 }
 
+function attachScaleFields(collectionName, data, preferredDate = null, seed = '') {
+  const policy = collectionScalePolicy(collectionName);
+  if (policy.partition === 'none') return data;
+  const date = preferredDate
+    || data.startAtIso
+    || data.dueAt
+    || data.expiresAt
+    || data.createdAt
+    || data.created_at
+    || data.updatedAt
+    || data.updated_at
+    || new Date();
+  const keys = scalePartitionKeys(date, seed || data.id || data.userUid || data.familyUid || data.teacherUid || data.email || collectionName);
+  if (!data.day) data.day = keys.day;
+  if (!data.month) data.month = keys.month;
+  if (!data.partitionKey) data.partitionKey = policy.partition === 'day' ? keys.dayPartitionKey : keys.partitionKey;
+  if (!data.dayPartitionKey) data.dayPartitionKey = keys.dayPartitionKey;
+  if (!data.scaleShard) data.scaleShard = keys.scaleShard;
+  return data;
+}
+
 function endIsoFromClass(data) {
   const explicit = isoDateTime(data.date, data.endTime);
   if (explicit) return explicit;
@@ -399,7 +422,7 @@ function normalizeRequest(payload, options) {
   setIfMissing(data, 'matchStatus', data.assignedTeacherUid ? 'assigned' : 'pending');
   setIfMissing(data, 'lifecycleStatus', data.assignedTeacherUid ? 'profesor_asignado' : 'solicitud_enviada');
   data.searchKeywords = searchKeywords(data.subject, data.level, data.zone, data.schedulePreference, data.notes);
-  return data;
+  return attachScaleFields('solicitudes', data, data.createdAt || data.created_at, `${data.familyUid || ''}:${data.studentId || ''}:${data.subject || ''}`);
 }
 
 function normalizeAssignment(payload, options) {
@@ -425,7 +448,7 @@ function normalizeClass(payload, options) {
   setIfMissing(data, 'teacherPaymentStatus', 'pendiente');
   setIfMissing(data, 'lifecycleStatus', STATUS_TO_LIFECYCLE[data.status] || data.status);
   data.searchKeywords = searchKeywords(data.subject, data.status, data.date, data.familyUid, data.teacherUid, data.studentId);
-  return data;
+  return attachScaleFields('clases', data, data.startAtIso || data.date, `${data.assignmentId || ''}:${data.teacherUid || ''}:${data.date || ''}`);
 }
 
 function normalizePayment(payload, options) {
@@ -438,7 +461,7 @@ function normalizePayment(payload, options) {
   setIfMissing(data, 'reconciliationStatus', data.classIds?.length ? 'pending_payment' : 'needs_review');
   if (Array.isArray(data.classIds)) data.classIds = data.classIds.map((item) => cleanText(item, 180)).filter(Boolean);
   data.searchKeywords = searchKeywords(data.paymentType, data.status, data.familyUid, data.teacherUid, data.classIds);
-  return data;
+  return attachScaleFields('pagos', data, data.dueAt || data.createdAt || data.created_at, `${data.familyUid || ''}:${data.teacherUid || ''}:${data.idempotencyKey || ''}`);
 }
 
 function normalizeDocument(payload, options) {
@@ -446,7 +469,7 @@ function normalizeDocument(payload, options) {
   data.status = normalizeStatusValue(data.status || data.verificationStatus, 'pendiente');
   setIfMissing(data, 'verificationStatus', data.status);
   data.searchKeywords = searchKeywords(data.name, data.type, data.ownerUid, data.ownerRole, data.status);
-  return data;
+  return attachScaleFields('documentos', data, data.expiresAt || data.createdAt || data.created_at, `${data.ownerUid || ''}:${data.type || ''}:${data.name || ''}`);
 }
 
 function normalizeNotification(payload, options) {
@@ -455,7 +478,7 @@ function normalizeNotification(payload, options) {
   setIfMissing(data, 'body', data.cuerpo);
   if (data.leida === undefined) data.leida = Boolean(data.readAt);
   data.status = data.leida ? 'leida' : 'nueva';
-  return data;
+  return attachScaleFields('notificaciones', data, data.createdAt || data.created_at, `${data.userUid || ''}:${data.type || ''}:${data.title || ''}`);
 }
 
 function normalizeIncident(payload, options) {
@@ -464,7 +487,7 @@ function normalizeIncident(payload, options) {
   data.category = cleanText(data.category || data.categoria || 'general', 80);
   data.priority = cleanText(data.priority || data.prioridad || 'media', 40);
   data.searchKeywords = searchKeywords(data.ticketId, data.category, data.priority, data.status, data.familyUid, data.teacherUid);
-  return data;
+  return attachScaleFields('incidencias', data, data.createdAt || data.created_at, `${data.ticketId || ''}:${data.familyUid || ''}:${data.teacherUid || ''}`);
 }
 
 function normalizeChat(payload, options) {
@@ -503,6 +526,9 @@ export function normalizeEntityForWrite(collectionName, payload = {}, options = 
 
   data.schemaVersion = data.schemaVersion || DATA_SCHEMA_VERSION;
   data.canonicalCollection = data.canonicalCollection || canonicalCollection;
+  if (['auditLogs', 'analyticsEvents', 'automationEvents', 'automationRuleRuns', 'systemJobs', 'deadLetters', 'metricSnapshots', 'opsAlerts', 'platformHealthChecks'].includes(canonicalCollection)) {
+    attachScaleFields(canonicalCollection, data, data.createdAt || data.created_at || data.runAt || data.updatedAt || data.updated_at, `${canonicalCollection}:${data.id || data.type || data.eventName || data.action || data.scope || ''}`);
+  }
   return data;
 }
 
@@ -531,7 +557,7 @@ export function analyzeEntityData(collectionName, payload = {}) {
     presentCanonical,
     missingCanonical,
     duplicateAliases,
-    derivedFields: ['displayName', 'searchKeywords', 'startAtIso', 'endAtIso', 'lifecycleStatus', 'profileCompletionPercent'].filter((field) => normalized[field] !== undefined),
+    derivedFields: ['displayName', 'searchKeywords', 'startAtIso', 'endAtIso', 'lifecycleStatus', 'profileCompletionPercent', 'month', 'partitionKey', 'dayPartitionKey', 'scaleShard'].filter((field) => normalized[field] !== undefined),
   };
 }
 

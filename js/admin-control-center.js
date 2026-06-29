@@ -8,7 +8,10 @@
 import {
   addDoc,
   collection,
+  limit as firestoreLimit,
   onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
@@ -19,39 +22,14 @@ import {
 import { renderRelationshipDigest } from './relationship-ui.js?v=20260629-relations';
 
 const instances = new WeakMap();
-const LIVE_COLLECTIONS = [
-  'leadsPublicos',
-  'solicitudes',
-  'profesores',
-  'familias',
-  'alumnos',
-  'clases',
-  'pagos',
-  'documentos',
-  'incidencias',
-  'notificaciones',
-  'notificationTokens',
-  'asignaciones',
-  'matchingRuns',
-  'solicitudMatches',
-  'chats',
-  'classLifecycleEvents',
-  'configuracion',
-  'platformConfigHistory',
-  'automationEvents',
-  'automationRules',
-  'automationRuleRuns',
-  'auditLogs',
-  'analyticsEvents',
-  'analyticsDailyRollups',
-  'experiments',
-  'experimentsPublic',
-  'adminAiQueries',
-  'systemJobs',
-  'deadLetters',
-  'metricSnapshots',
-  'opsAlerts',
-  'platformHealthChecks',
+const CONTROL_CENTER_REFRESH_MS = 60 * 1000;
+const LIVE_SIGNAL_COLLECTIONS = [
+  { name: 'metricSnapshots', orderField: 'createdAt', limit: 8 },
+  { name: 'opsAlerts', orderField: 'createdAt', limit: 20 },
+  { name: 'platformHealthChecks', orderField: 'createdAt', limit: 12 },
+  { name: 'systemJobs', orderField: 'updatedAt', limit: 20 },
+  { name: 'automationEvents', orderField: 'createdAt', limit: 20 },
+  { name: 'incidencias', orderField: 'updatedAt', limit: 20 },
 ];
 
 function clean(value, max = 4000) {
@@ -2281,17 +2259,35 @@ function bindEvents(state) {
 function subscribeLive(state) {
   if (state.subscribed) return;
   state.subscribed = true;
-  state.unsubscribes = LIVE_COLLECTIONS.map((name) => {
+  const fallbackSubscriptions = new Set();
+  state.unsubscribes = LIVE_SIGNAL_COLLECTIONS.map(({ name, orderField, limit }) => {
     try {
-      return onSnapshot(collection(firebaseDb, name), () => {
+      const liveQuery = query(
+        collection(firebaseDb, name),
+        orderBy(orderField, 'desc'),
+        firestoreLimit(limit),
+      );
+      return onSnapshot(liveQuery, () => {
         state.live = true;
         window.clearTimeout(state.refreshTimeout);
         state.refreshTimeout = window.setTimeout(() => state.refresh(false), 900);
-      }, () => {});
+      }, () => {
+        if (fallbackSubscriptions.has(name)) return;
+        fallbackSubscriptions.add(name);
+        const fallbackQuery = query(collection(firebaseDb, name), firestoreLimit(Math.min(limit, 5)));
+        const unsubscribe = onSnapshot(fallbackQuery, () => {
+          state.live = true;
+          window.clearTimeout(state.refreshTimeout);
+          state.refreshTimeout = window.setTimeout(() => state.refresh(false), 1400);
+        }, () => {});
+        state.unsubscribes.push(unsubscribe);
+      });
     } catch (_) {
       return null;
     }
   }).filter(Boolean);
+
+  state.refreshInterval = window.setInterval(() => state.refresh(false), CONTROL_CENTER_REFRESH_MS);
 }
 
 export async function initAdminControlCenter({
@@ -2318,6 +2314,7 @@ export async function initAdminControlCenter({
       subscribed: false,
       refreshTimeout: null,
       lastHealthWriteAt: 0,
+      refreshInterval: null,
       refresh: null,
     };
     state.refresh = async (manual = false) => {

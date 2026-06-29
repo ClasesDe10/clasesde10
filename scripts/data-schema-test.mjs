@@ -65,6 +65,9 @@ assert.equal(classDoc.teacherAmount, 18);
 assert.equal(classDoc.lifecycleStatus, 'clase_programada');
 assert.ok(classDoc.startAtIso.includes('2026-07-01T17:00:00'));
 assert.ok(classDoc.endAtIso.includes('2026-07-01T18:00:00'));
+assert.equal(classDoc.month, '2026-07');
+assert.equal(classDoc.partitionKey, '2026-07');
+assert.ok(/^s\d{2}$/.test(classDoc.scaleShard));
 
 const payment = normalizeEntityForWrite('pagos', {
   familia_id: 'family_1',
@@ -79,6 +82,8 @@ assert.equal(payment.monto, 25.5);
 assert.equal(payment.method, 'bizum');
 assert.equal(payment.status, 'pendiente');
 assert.equal(payment.estado, 'pendiente');
+assert.ok(payment.month, 'Payment documents must include scale partition month.');
+assert.ok(payment.scaleShard, 'Payment documents must include scale shard.');
 assert.equal(payment.precio_total, undefined, 'Payment documents must not inherit class price aliases.');
 assert.equal(payment.familyAmount, undefined, 'Payment documents must not expose class familyAmount.');
 
@@ -94,6 +99,7 @@ assert.equal(request.subject, 'Piano');
 assert.equal(request.schedulePreference, 'Tardes');
 assert.equal(request.matchStatus, 'pending');
 assert.equal(request.lifecycleStatus, 'solicitud_enviada');
+assert.ok(request.partitionKey, 'Requests must include a partition key for future scale.');
 
 const analysis = analyzeEntityData('profesores', teacher);
 assert.equal(analysis.collection, 'profesores');
@@ -114,6 +120,7 @@ assert(firestoreAdapter.includes('normalizeEntityForWrite'), 'Firestore adapters
 assert(firebaseAuth.includes('normalizeEntityForWrite'), 'Auth-created profiles must normalize writes.');
 assert(worker.includes('normalizeEntityForWrite'), 'Automation worker must normalize writes.');
 assert(serviceWorker.includes('/js/data-schema.js'), 'PWA must precache data schema runtime module.');
+assert(serviceWorker.includes('/js/scale-engine.js'), 'PWA must precache scale engine runtime module.');
 assert(pkg.includes('test:data-schema'), 'package.json must expose data schema validation.');
 
 console.log(JSON.stringify({

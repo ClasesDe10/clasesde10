@@ -69,7 +69,10 @@ assert(module.includes('forecastMonthClose'), 'Control center must forecast mont
 assert(module.includes('detectBusinessAnomalies'), 'Control center must detect business anomalies.');
 assert(module.includes('computeTeacherLeaderboard'), 'Control center must rank outstanding teachers.');
 assert(module.includes('computeOperationalTiming'), 'Control center must compute operational timing.');
-assert(module.includes('LIVE_COLLECTIONS'), 'Control center must subscribe to live Firestore collections.');
+assert(module.includes('LIVE_SIGNAL_COLLECTIONS'), 'Control center must subscribe to bounded live Firestore signal collections.');
+assert(module.includes('firestoreLimit(limit)'), 'Control center live subscriptions must cap realtime reads.');
+assert(module.includes('orderBy(orderField'), 'Control center live subscriptions must use ordered signal queries.');
+assert(!module.includes('onSnapshot(collection(firebaseDb, name))'), 'Control center must not subscribe to whole Firestore collections.');
 assert(module.includes('Inteligencia empresarial'), 'Control center must render the business intelligence hero.');
 assert(module.includes('Prevision de cierre'), 'Control center must render close forecast.');
 assert(module.includes('Deteccion de anomalias'), 'Control center must render anomaly detection.');
