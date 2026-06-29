@@ -1,4 +1,7 @@
 import {
+  onAuthStateChanged,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
+import {
   addDoc,
   collection,
   doc,
@@ -765,6 +768,8 @@ export async function initChatWidget({
     unsubscribeProposals: null,
     unsubscribeNotifications: null,
     unsubscribePushMessages: null,
+    unsubscribeAuth: null,
+    disposed: false,
     notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
     notificationPublicConfig: {},
     availabilityByChat: {},
@@ -779,6 +784,45 @@ export async function initChatWidget({
     profileId,
   ].map((value) => clean(value, 180)).filter(Boolean));
   const senderName = fullName(usuario.nombre, usuario.apellidos) || usuario.email || role;
+
+  function disposeRealtimeListeners() {
+    state.disposed = true;
+    [
+      'unsubscribe',
+      'unsubscribeProposals',
+      'unsubscribeNotifications',
+      'unsubscribePushMessages',
+    ].forEach((key) => {
+      if (typeof state[key] === 'function') {
+        state[key]();
+        state[key] = null;
+      }
+    });
+  }
+
+  function disposeWidget() {
+    disposeRealtimeListeners();
+    if (typeof state.unsubscribeAuth === 'function') {
+      state.unsubscribeAuth();
+      state.unsubscribeAuth = null;
+    }
+  }
+
+  function isCurrentSessionActive() {
+    const activeUid = clean(firebaseAuth.currentUser?.uid, 180);
+    return Boolean(activeUid && activeUid === currentUid && !state.disposed);
+  }
+
+  function handleRealtimeError(label, fallbackTitle, fallbackBody, error) {
+    if (!isCurrentSessionActive()) return;
+    console.error(label, error);
+    showToast(fallbackTitle, error.message || fallbackBody, 'error');
+  }
+
+  state.unsubscribeAuth = onAuthStateChanged(firebaseAuth, (user) => {
+    if (!user || clean(user.uid, 180) !== currentUid) disposeRealtimeListeners();
+  });
+  window.addEventListener('pagehide', disposeWidget, { once: true });
 
   async function sendAdminNotification(targetRole, title, body) {
     if (role !== 'admin') return 0;
@@ -844,10 +888,10 @@ export async function initChatWidget({
       limit(100),
     );
     state.unsubscribe = onSnapshot(messagesQuery, (snap) => {
+      if (!isCurrentSessionActive()) return;
       renderMessages(container, snap.docs.map((item) => ({ id: item.id, ...item.data() })), currentUid);
     }, (error) => {
-      console.error('No se pudo abrir el chat', error);
-      showToast('Chat no disponible', error.message || 'No se pudo abrir la conversacion.', 'error');
+      handleRealtimeError('No se pudo abrir el chat', 'Chat no disponible', 'No se pudo abrir la conversacion.', error);
     });
 
     const proposalsQuery = query(
@@ -856,11 +900,11 @@ export async function initChatWidget({
       limit(20),
     );
     state.unsubscribeProposals = onSnapshot(proposalsQuery, (snap) => {
+      if (!isCurrentSessionActive()) return;
       state.scheduleProposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
       renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id] || { loading: true });
     }, (error) => {
-      console.error('No se pudieron abrir propuestas de horario', error);
-      showToast('Horarios no disponibles', error.message || 'No se pudieron abrir las propuestas.', 'error');
+      handleRealtimeError('No se pudieron abrir propuestas de horario', 'Horarios no disponibles', 'No se pudieron abrir las propuestas.', error);
     });
   }
 
