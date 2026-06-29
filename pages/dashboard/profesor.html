@@ -124,6 +124,8 @@
           </div>
         </div>
 
+        <div id="teacher-relationship-digest"></div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
           <div class="card">
             <div class="card-header">
@@ -559,8 +561,10 @@ import {
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260628-calendar';
 import { buildTeacherPayoutPayload } from '../../js/payment-engine.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-scheduling';
-import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-relations';
+import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
+import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
+import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
@@ -665,17 +669,71 @@ document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
 });
 
 // ── INICIO ───────────────────────────────────────────────────────
+async function cargarChatsUsuarioActual() {
+  const uid = usuario.uid || usuario.firebase_uid || usuario.id;
+  if (!uid) return [];
+  try {
+    const snap = await getDocs(firestoreQuery(
+      firestoreCollection(firebaseDb, 'chats'),
+      where(`participantUids.${uid}`, '==', true),
+    ));
+    return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    console.warn('No se pudieron cargar chats para el resumen operativo', error);
+    return [];
+  }
+}
+
+async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
+  if (valor === undefined || valor === null || valor === '') return [];
+  try {
+    const snap = await getDocs(firestoreQuery(
+      firestoreCollection(firebaseDb, nombreColeccion),
+      where(campo, operador, valor),
+    ));
+    return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    console.warn(`No se pudo cargar ${nombreColeccion} para el resumen operativo`, error);
+    return [];
+  }
+}
+
+function renderTeacherRelationshipDigest({ asignaciones = [], clases = [], pagos = [], documentos = [], chats = [] } = {}) {
+  const container = document.getElementById('teacher-relationship-digest');
+  if (!container) return;
+  const relationships = buildRelationshipsFromCollections({
+    assignments: asignaciones,
+    chats,
+    classes: clases,
+    payments: pagos,
+    documents: documentos,
+    teachers: [{ id: profesorId, ...perfil, userUid: profesorFirestoreId }],
+  });
+  container.innerHTML = renderRelationshipDigest(relationships, 'profesor', {
+    title: 'Siguiente paso con tus alumnos',
+    subtitle: 'Cada relacion resume chat, horario, clase, confirmacion, pagos e incidencias.',
+    emptyTitle: 'Sin alumnos activos',
+    emptyDesc: 'Cuando tengas una asignacion aparecera aqui que accion toca hacer.',
+    navAttribute: 'data-section',
+    max: 4,
+  });
+}
+
 async function cargarInicio() {
   if (!profesorId) return;
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
 
-  const [{ data: clasesMes }, { data: alumnos }, { data: pendientesRaw }] = await Promise.all([
+  const [{ data: clasesMes }, { data: alumnos }, { data: pendientesRaw }, { data: clasesRelacion }, { data: pagosRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
     db.from('clases').select('duracion_minutos, importe_profesor, estado')
       .eq('profesor_id', profesorId).gte('fecha', mesInicio),
-    db.from('asignaciones').select('alumno_id').eq('profesor_id', profesorId).eq('activa', true),
+    db.from('asignaciones').select('*').eq('profesor_id', profesorId).eq('activa', true),
     db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId)
       .lte('fecha', hoy).order('fecha').limit(40),
+    cargarFirestoreWhere('clases', 'profesor_id', '==', profesorId),
+    cargarFirestoreWhere('pagos', 'profesor_id', '==', profesorFirestoreId),
+    cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
+    cargarChatsUsuarioActual(),
   ]);
   const pendientes = (pendientesRaw || [])
     .filter((clase) => isScheduledClassStatus(clase.estado || clase.status) && claseTerminada(clase, 0))
@@ -687,6 +745,13 @@ async function cargarInicio() {
   document.getElementById('stat-ingresos-mes').textContent = formatEuros(realizadas.reduce((s,c) => s + (c.importe_profesor||0), 0));
   const horas = realizadas.reduce((s,c) => s + (c.duracion_minutos||0), 0);
   document.getElementById('stat-horas-mes').textContent = `${Math.floor(horas/60)}h ${horas%60}m`;
+  renderTeacherRelationshipDigest({
+    asignaciones: alumnos || [],
+    clases: clasesRelacion || [],
+    pagos: pagosRelacion || [],
+    documentos: documentosRelacion || [],
+    chats: chatsRelacion || [],
+  });
 
   // Próximas clases
   const { data: proximasRaw } = await db.from('clases').select('*, alumnos(nombre,apellidos)')

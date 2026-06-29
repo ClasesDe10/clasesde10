@@ -25,6 +25,8 @@ async (page) => {
       'Inteligencia empresarial',
       'Prevision de cierre',
       'Deteccion de anomalias',
+      'Expedientes conectados',
+      'Producto integrado',
       'SLA operativo',
       'Profesores destacados',
       'Salud del marketplace',

@@ -737,6 +737,14 @@ export async function initChatWidget({
         updatedAt: serverTimestamp(),
       };
       await addDoc(collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones'), proposal);
+      await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
+        schedulingStatus: 'horario_propuesto',
+        relationshipStage: 'horario_propuesto',
+        relationshipStatus: 'active',
+        lastRelationshipEvent: 'schedule_proposed',
+        relationshipUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
       scheduleForm.reset();
       await addSystemChatMessage(state.selectedChat, `Horario propuesto: ${formatDate(fecha)} de ${horaInicio} a ${horaFin}.`);
       showToast('Horario propuesto', 'La otra parte puede aceptarlo desde este chat.', 'success');
@@ -754,6 +762,14 @@ export async function initChatWidget({
       respondedByUid: currentUid,
       respondedByRole: role,
       respondedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
+      schedulingStatus: 'pendiente_horario',
+      relationshipStage: 'pendiente_horario',
+      relationshipStatus: 'active',
+      lastRelationshipEvent: 'schedule_rejected',
+      relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     await addSystemChatMessage(state.selectedChat, `Horario rechazado: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);
@@ -805,6 +821,15 @@ export async function initChatWidget({
       respondedByUid: currentUid,
       respondedByRole: role,
       respondedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
+      schedulingStatus: 'clase_programada',
+      relationshipStage: 'clase_programada',
+      relationshipStatus: 'active',
+      activeClassId: classId,
+      lastRelationshipEvent: 'class_scheduled_from_chat',
+      relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     await addSystemChatMessage(state.selectedChat, `Horario aceptado y clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);

@@ -1336,8 +1336,45 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'lastMessage',
             'lastMessageAt',
+            'schedulingStatus',
+            'relationshipStage',
+            'relationshipStatus',
+            'activeClassId',
+            'lastRelationshipEvent',
+            'relationshipUpdatedAt',
             'updatedAt'
           ])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['schedulingStatus'])
+            || request.resource.data.schedulingStatus in ['pendiente_horario', 'horario_propuesto', 'clase_programada', 'confirmed']
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipStage'])
+            || request.resource.data.relationshipStage in ['pendiente_horario', 'horario_propuesto', 'clase_programada']
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipStatus'])
+            || request.resource.data.relationshipStatus in ['active']
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeClassId'])
+            || (
+              request.resource.data.activeClassId is string
+              && request.resource.data.activeClassId.size() <= 180
+            )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastRelationshipEvent'])
+            || request.resource.data.lastRelationshipEvent in ['schedule_proposed', 'schedule_rejected', 'class_scheduled_from_chat']
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipUpdatedAt'])
+            || request.resource.data.relationshipUpdatedAt == request.time
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['updatedAt'])
+            || request.resource.data.updatedAt == request.time
+          )
         );
       allow delete: if isAdmin();
 

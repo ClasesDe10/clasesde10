@@ -34,6 +34,209 @@
   --keyboard-inset: 0px;
 }
 
+.relationship-digest {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.relationship-digest-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.relationship-digest-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--navy, #0b1f3a);
+}
+
+.relationship-digest-head p {
+  margin: 4px 0 0;
+  color: var(--gray-mid, #64748b);
+  font-size: .88rem;
+}
+
+.relationship-eyebrow {
+  color: var(--gold, #b68a35);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.relationship-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(70px, 1fr));
+  gap: 8px;
+  min-width: min(420px, 100%);
+}
+
+.relationship-summary > div {
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 8px;
+  background: #fff;
+  padding: 10px;
+}
+
+.relationship-summary strong {
+  display: block;
+  font-size: 1.05rem;
+  color: var(--navy, #0b1f3a);
+}
+
+.relationship-summary span {
+  color: var(--gray-mid, #64748b);
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+.relationship-list {
+  display: grid;
+  gap: 10px;
+}
+
+.relationship-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-left: 4px solid rgba(100, 116, 139, .35);
+  border-radius: 8px;
+  background: #fff;
+  padding: 14px;
+}
+
+.relationship-row.urgency-critical {
+  border-left-color: var(--danger, #dc2626);
+}
+
+.relationship-row.urgency-high {
+  border-left-color: var(--gold, #b68a35);
+}
+
+.relationship-row.urgency-normal {
+  border-left-color: var(--teal, #0f766e);
+}
+
+.relationship-title-line {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.relationship-title-line strong {
+  min-width: 0;
+  color: var(--navy, #0b1f3a);
+}
+
+.relationship-subtitle,
+.relationship-last,
+.relationship-action span {
+  color: var(--gray-mid, #64748b);
+  font-size: .8rem;
+}
+
+.relationship-modules {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.relationship-pill {
+  border: 1px solid rgba(100, 116, 139, .18);
+  border-radius: 999px;
+  color: var(--gray-mid, #64748b);
+  font-size: .68rem;
+  font-weight: 800;
+  padding: 3px 7px;
+}
+
+.relationship-pill.is-on {
+  background: rgba(15, 118, 110, .08);
+  border-color: rgba(15, 118, 110, .22);
+  color: var(--teal, #0f766e);
+}
+
+.relationship-row-side {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.relationship-health {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
+  background: rgba(100, 116, 139, .08);
+  color: var(--navy, #0b1f3a);
+}
+
+.relationship-health strong {
+  line-height: 1;
+}
+
+.relationship-health span {
+  font-size: .68rem;
+  font-weight: 800;
+}
+
+.relationship-health.success {
+  background: rgba(22, 163, 74, .1);
+  color: #15803d;
+}
+
+.relationship-health.warning {
+  background: rgba(182, 138, 53, .14);
+  color: #92400e;
+}
+
+.relationship-health.danger {
+  background: rgba(220, 38, 38, .1);
+  color: #b91c1c;
+}
+
+.relationship-action {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.relationship-last {
+  grid-column: 1 / -1;
+}
+
+.relationship-empty {
+  border: 1px dashed rgba(100, 116, 139, .25);
+  border-radius: 8px;
+  background: #fff;
+}
+
+@media (max-width: 760px) {
+  .relationship-digest-head,
+  .relationship-row,
+  .relationship-row-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .relationship-summary {
+    grid-template-columns: 1fr 1fr;
+    min-width: 0;
+  }
+
+  .relationship-row-side .btn {
+    width: 100%;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html {
   min-height: 100%;

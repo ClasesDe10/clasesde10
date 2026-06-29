@@ -31,6 +31,9 @@ assert(chat.includes('acceptScheduleProposal'), 'Chat widget must support accept
 assert(chat.includes("createdFrom: 'chat_schedule_proposal'"), 'Accepted proposals must create traceable class documents.');
 assert(chat.includes('buildAdminClassPayload'), 'Accepted proposals must reuse the shared class payload engine.');
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
+assert(chat.includes("relationshipStage: 'horario_propuesto'"), 'Schedule proposals must update the chat relationship stage.');
+assert(chat.includes("relationshipStage: 'clase_programada'"), 'Accepted proposals must activate the scheduled relationship stage.');
+assert(chat.includes("lastRelationshipEvent: 'class_scheduled_from_chat'"), 'Accepted proposals must leave a relationship event marker.');
 
 assert(rules.includes('match /programaciones/{proposalId}'), 'Firestore rules must protect chat schedule proposals.');
 assert(rules.includes('validClassScheduleProposalCreate'), 'Firestore rules must validate proposal creation.');
@@ -38,6 +41,8 @@ assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must
 assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
 assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');
 assert(rules.includes("'assignmentIntroSentAt'"), 'Chat creation rules must allow the assignment intro marker.');
+assert(rules.includes("'relationshipStage'"), 'Chat rules must allow validated relationship stage updates.');
+assert(rules.includes("'class_scheduled_from_chat'"), 'Chat rules must validate accepted schedule relationship events.');
 
 assert(css.includes('.chat-schedule-panel'), 'Dashboard CSS must style the schedule panel.');
 assert(css.includes('.schedule-proposal'), 'Dashboard CSS must style schedule proposals.');

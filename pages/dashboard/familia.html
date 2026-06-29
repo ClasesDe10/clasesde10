@@ -119,6 +119,8 @@
           </div>
         </div>
 
+        <div id="family-relationship-digest"></div>
+
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
           <!-- Próximas clases -->
           <div class="card">
@@ -513,8 +515,10 @@ import {
 } from '../../js/calendar-engine.js?v=20260628-calendar';
 import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-scheduling';
-import { doc as firestoreDoc, getDoc, serverTimestamp, setDoc } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-relations';
+import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
+import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
+import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
@@ -679,13 +683,77 @@ document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
 });
 
 // ── INICIO ───────────────────────────────────────────────────────
+async function cargarChatsUsuarioActual() {
+  const uid = usuario.uid || usuario.firebase_uid || usuario.id;
+  if (!uid) return [];
+  try {
+    const snap = await getDocs(firestoreQuery(
+      firestoreCollection(firebaseDb, 'chats'),
+      where(`participantUids.${uid}`, '==', true),
+    ));
+    return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    console.warn('No se pudieron cargar chats para el resumen operativo', error);
+    return [];
+  }
+}
+
+async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
+  if (valor === undefined || valor === null || valor === '') return [];
+  try {
+    const snap = await getDocs(firestoreQuery(
+      firestoreCollection(firebaseDb, nombreColeccion),
+      where(campo, operador, valor),
+    ));
+    return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    console.warn(`No se pudo cargar ${nombreColeccion} para el resumen operativo`, error);
+    return [];
+  }
+}
+
+async function cargarFirestoreIn(nombreColeccion, campo, valores = []) {
+  const cleanValues = [...new Set((valores || []).filter(Boolean))];
+  if (!cleanValues.length) return [];
+  const chunks = [];
+  for (let index = 0; index < cleanValues.length; index += 30) chunks.push(cleanValues.slice(index, index + 30));
+  const results = await Promise.all(chunks.map((chunk) => cargarFirestoreWhere(nombreColeccion, campo, 'in', chunk)));
+  const map = new Map();
+  results.flat().forEach((item) => map.set(item.id, item));
+  return Array.from(map.values());
+}
+
+function renderFamilyRelationshipDigest({ hijos = [], asignaciones = [], clases = [], pagos = [], solicitudes = [], documentos = [], chats = [], profesores = [] } = {}) {
+  const container = document.getElementById('family-relationship-digest');
+  if (!container) return;
+  const relationships = buildRelationshipsFromCollections({
+    requests: solicitudes,
+    assignments: asignaciones,
+    chats,
+    classes: clases,
+    payments: pagos,
+    documents: documentos,
+    teachers: profesores,
+    families: [{ id: familiaId, ...familiaData, userUid: familiaFirestoreId }],
+    students: hijos,
+  });
+  container.innerHTML = renderRelationshipDigest(relationships, 'familia', {
+    title: 'Siguiente paso',
+    subtitle: 'Aqui ves que falta en cada relacion: chat, horario, clase, confirmacion o pago.',
+    emptyTitle: 'Sin relaciones activas',
+    emptyDesc: 'Cuando solicites profesor o tengas una asignacion, apareceran aqui los pasos siguientes.',
+    navAttribute: 'data-section',
+    max: 4,
+  });
+}
+
 async function cargarInicio() {
   if (!familiaId) return;
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
 
   // Cargar hijos primero para poder filtrar clases correctamente
-  const { data: hijos } = await db.from('alumnos').select('id').eq('familia_id', familiaId).eq('activo', true);
+  const { data: hijos } = await db.from('alumnos').select('*').eq('familia_id', familiaId).eq('activo', true);
   const { count: pagosPend } = await db.from('pagos').select('id', {count:'exact',head:true})
     .eq('familia_id', familiaId).eq('estado','pendiente');
 
@@ -694,13 +762,19 @@ async function cargarInicio() {
 
   if (hijos?.length) {
     const ids = hijos.map(h => h.id);
-    const [{ count: cm }, { data: asig }] = await Promise.all([
+    const [{ count: cm }, { data: asig }, { data: clasesRelacion }, { data: pagosRelacion }, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
       db.from('clases').select('id',{count:'exact',head:true}).in('alumno_id', ids).gte('fecha', mesInicio),
-      db.from('asignaciones').select('profesor_id').in('alumno_id', ids).eq('activa', true),
+      db.from('asignaciones').select('*').in('alumno_id', ids).eq('activa', true),
+      cargarFirestoreIn('clases', 'alumno_id', ids),
+      cargarFirestoreWhere('pagos', 'familia_id', '==', familiaId),
+      cargarFirestoreWhere('solicitudes', 'familia_id', '==', familiaId),
+      cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
+      cargarChatsUsuarioActual(),
     ]);
     document.getElementById('stat-clases-mes').textContent = cm || 0;
     const profUnicos = [...new Set((asig||[]).map(a => a.profesor_id))];
     document.getElementById('stat-profesores').textContent = profUnicos.length;
+    let profesoresRelacion = [];
 
     // Próximas clases
     const { data: proximasRaw } = await db.from('v_clases_completas')
@@ -727,6 +801,7 @@ async function cargarInicio() {
       const { data: profs } = await db.from('profesores')
         .select('id, bio, materias, trustScore, trustLevel, trustBadges, publicTrustStats, reputationMetrics, usuarios(nombre,apellidos,telefono)')
         .in('id', profUnicos);
+      profesoresRelacion = profs || [];
       document.getElementById('lista-profesores-inicio').innerHTML = (profs||[]).map(p => `
         <div style="display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid rgba(0,0,0,.06)">
           <div class="avatar avatar-lg">${getIniciales(p.usuarios?.nombre, p.usuarios?.apellidos)}</div>
@@ -746,9 +821,20 @@ async function cargarInicio() {
     } else {
       document.getElementById('lista-profesores-inicio').innerHTML = '<div class="empty-state"><div class="empty-icon">👩‍🏫</div><div class="empty-title">Sin profesor asignado</div><div class="empty-desc">Envía una solicitud y te asignaremos el mejor profesor.</div><button class="btn btn-gold" data-action="abrir-modal-solicitud">Solicitar profesor</button></div>';
     }
+    renderFamilyRelationshipDigest({
+      hijos,
+      asignaciones: asig || [],
+      clases: clasesRelacion || [],
+      pagos: pagosRelacion || [],
+      solicitudes: solicitudesRelacion || [],
+      documentos: documentosRelacion || [],
+      chats: chatsRelacion || [],
+      profesores: profesoresRelacion,
+    });
   } else {
     document.getElementById('stat-clases-mes').textContent = 0;
     document.getElementById('stat-profesores').textContent = 0;
+    renderFamilyRelationshipDigest();
   }
 }
 

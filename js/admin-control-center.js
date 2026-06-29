@@ -12,6 +12,11 @@ import {
   serverTimestamp,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import {
+  buildRelationshipsFromCollections,
+  summarizeRelationships,
+} from './relationship-engine.js?v=20260629-relations';
+import { renderRelationshipDigest } from './relationship-ui.js?v=20260629-relations';
 
 const instances = new WeakMap();
 const LIVE_COLLECTIONS = [
@@ -1382,6 +1387,19 @@ function computeControlCenter(data) {
   const timing = computeOperationalTiming(data, requestsAssigned, requestsUnassigned);
   const inactive = computeInactiveUsers(data, completedRecentClasses);
   const teacherLeaderboard = computeTeacherLeaderboard(data, completedRecentClasses);
+  const relationships = buildRelationshipsFromCollections({
+    requests: data.requests,
+    assignments: data.assignments,
+    chats: data.chats,
+    classes: data.classes,
+    payments: data.payments,
+    incidents: data.incidents,
+    documents: data.documents,
+    teachers: data.teachers,
+    families: data.families,
+    students: data.students,
+  }, { nowMs: Date.now() });
+  const relationshipSummary = summarizeRelationships(relationships);
 
   const riskyClasses = data.classes.filter((item) => {
     if (!isCompletedClass(item)) return false;
@@ -1462,6 +1480,8 @@ function computeControlCenter(data) {
     inactiveTeachers: inactive.inactiveTeachers,
     inactiveFamilies: inactive.inactiveFamilies,
     teacherLeaderboard,
+    relationships,
+    relationshipSummary,
   };
   const anomalies = detectBusinessAnomalies(baseMetrics);
   const missionControl = computeMissionControl(data, {
@@ -1470,6 +1490,12 @@ function computeControlCenter(data) {
   });
 
   const alerts = [
+    ...relationshipSummary.priority.slice(0, 4).map((item) => ({
+      tone: item.urgency === 'critical' ? 'danger' : 'warning',
+      title: `Expediente: ${item.stageLabel}`,
+      body: `${item.title || item.subject || 'Relacion'} - ${item.nextActions?.admin?.[0]?.detail || 'Revisar siguiente paso.'}`,
+      section: item.nextActions?.admin?.[0]?.section || 'chat',
+    })),
     ...anomalies,
     ...overduePayments.map((item) => ({
       tone: 'danger',
@@ -1584,6 +1610,9 @@ function computeControlCenter(data) {
   ].slice(0, 10);
 
   const dataQuality = [
+    { label: 'Expedientes con bloqueo operativo', value: relationshipSummary.blocked.length, section: 'chat' },
+    { label: 'Relaciones sin chat operativo', value: relationshipSummary.withMissingChat.length, section: 'chat' },
+    { label: 'Relaciones pendientes de horario', value: relationshipSummary.pendingSchedule.length, section: 'chat' },
     { label: 'Clases con precio/margen incompleto', value: riskyClasses.length, section: 'finanzas' },
     { label: 'Solicitudes antiguas sin asignar', value: staleUnassigned.length, section: 'solicitudes' },
     { label: 'Pagos vencidos', value: overduePayments.length, section: 'pagos' },
@@ -1639,6 +1668,8 @@ function computeControlCenter(data) {
     inactiveTeachers: inactive.inactiveTeachers,
     inactiveFamilies: inactive.inactiveFamilies,
     teacherLeaderboard,
+    relationships,
+    relationshipSummary,
     alerts,
     activity,
     moderation,
@@ -2019,6 +2050,13 @@ function renderControlCenter(container, metrics, state) {
       ${renderKpi({ label: 'Tiempo hasta profesor', value: formatHours(metrics.timing.avgTimeToAssignHours), tone: metrics.timing.avgTimeToAssignHours > 24 ? 'red' : 'green', sub: `mediana ${formatHours(metrics.timing.medianTimeToAssignHours)}` })}
       ${renderKpi({ label: 'Anomalias activas', value: metrics.anomalies.length, tone: metrics.anomalies.some((item) => item.tone === 'danger') ? 'red' : metrics.anomalies.length ? 'gold' : 'green', sub: `${metrics.alerts.length} alertas totales` })}
     </div>
+
+    ${renderRelationshipDigest(metrics.relationships, 'admin', {
+      title: 'Expedientes conectados',
+      subtitle: 'Cada relacion agrupa solicitud, matching, chat, calendario, pagos, documentos, reputacion e incidencias.',
+      navAttribute: 'data-control-nav',
+      max: 7,
+    })}
 
     <div class="control-grid-main">
       <section class="card control-card">
