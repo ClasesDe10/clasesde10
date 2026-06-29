@@ -1,6 +1,7 @@
 import {
   buildClassPaymentPatch,
   buildFamilyPaymentPayload,
+  buildPaymentScheduleIndex,
   buildWeeklyPaymentSchedulePayload,
   classFamilyPaymentState,
   buildGatewayPaymentUpdate,
@@ -11,6 +12,7 @@ import {
   matchPaymentToClasses,
   normalizePaymentStatus,
   paymentFingerprint,
+  paymentScheduleForClass,
   paymentScheduleLabel,
   paymentStatusForBadge,
   weeklyPaymentDueAtForClass,
@@ -78,6 +80,15 @@ const weeklySchedule = buildWeeklyPaymentSchedulePayload({
   time: '20:00',
 });
 assert(paymentScheduleLabel(weeklySchedule) === 'Viernes 20:00', 'Weekly payment schedule must render a clear label.');
+const scheduleIndex = buildPaymentScheduleIndex([weeklySchedule]);
+assert(
+  paymentScheduleForClass({ teacherUid: 'teacher_1', studentId: 'student_1' }, scheduleIndex)?.id === weeklySchedule.id,
+  'Weekly payment schedule must be found from teacher/student class data.',
+);
+assert(
+  scheduleIndex.get('teacher_student:teacher_1:student_1')?.id === weeklySchedule.id,
+  'Weekly payment schedules must keep compatibility with underscore cache keys.',
+);
 const scheduledDueAt = weeklyPaymentDueAtForClass(
   { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
   weeklySchedule,

@@ -1201,6 +1201,11 @@ import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-weekly-chat';
 import {
+  NOTIFICATION_EVENTS,
+  buildNotificationDocument,
+} from '../../js/notification-engine.js';
+import { isAfterClassReset } from '../../js/class-reset.js?v=20260629-reset';
+import {
   addDoc,
   collection,
   doc as firestoreDoc,
@@ -1212,6 +1217,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260629-school-profile';
@@ -1229,8 +1235,10 @@ import {
 import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calendar';
 import {
   PAID_PAYMENT_STATUSES,
+  buildPaymentScheduleIndex,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
+  classFamilyPaymentState,
   isFamilyPayment,
   isPaymentOverdue,
   isPaymentVerified,
@@ -1238,8 +1246,9 @@ import {
   matchPaymentToClasses,
   normalizePaymentStatus,
   paymentAmount,
+  paymentScheduleForClass,
   paymentStatusForBadge,
-} from '../../js/payment-engine.js';
+} from '../../js/payment-engine.js?v=20260629-overdue-admin';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -1493,6 +1502,188 @@ function abrirPanelNotificaciones() {
   abrir();
 }
 document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
+void ensureAdminOverdueClassPaymentNotifications().catch((error) => {
+  console.warn('No se pudo verificar avisos de pagos vencidos para admin', error);
+});
+
+function cleanAdminNotificationText(value, max = 180) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+function firstAdminValue(...values) {
+  return values.find((value) => cleanAdminNotificationText(value));
+}
+
+function adminNotificationDocId(type, classId, adminUid) {
+  return [`${type}_${classId}_admin`, adminUid]
+    .map((part) => cleanAdminNotificationText(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__')
+    .slice(0, 900);
+}
+
+function formatAdminDateTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function adminClassEndAt(clase = {}) {
+  const date = cleanAdminNotificationText(clase.fecha || clase.date, 20);
+  if (!date) return '';
+  const endTime = cleanAdminNotificationText(clase.hora_fin || clase.endTime || clase.hora_inicio || clase.startTime || '23:59', 8).slice(0, 5);
+  return `${date}T${endTime || '23:59'}:00`;
+}
+
+async function loadAdminNotificationRecipients() {
+  const snap = await getDocs(firestoreQuery(
+    collection(firebaseDb, 'users'),
+    where('role', '==', 'admin'),
+    firestoreLimit(25),
+  )).catch(() => null);
+  const admins = snap?.docs
+    ?.map((item) => ({ id: item.id, ...item.data() }))
+    .filter((item) => item.active !== false) || [];
+  if (!admins.length && usuario?.uid) {
+    admins.push({ id: usuario.uid, role: 'admin' });
+  }
+  return admins;
+}
+
+async function loadAdminPaymentScheduleIndex() {
+  const snap = await getDocs(firestoreQuery(
+    collection(firebaseDb, 'paymentSchedules'),
+    firestoreLimit(adminReadLimit('paymentSchedules')),
+  )).catch(() => null);
+  return buildPaymentScheduleIndex(snap?.docs?.map((item) => ({ id: item.id, ...item.data() })) || []);
+}
+
+function adminClassPaymentStatus(clase = {}) {
+  return normalizePaymentStatus(
+    clase.familyPaymentStatus
+    || clase.estado_pago_familia
+    || clase.paymentStatus
+    || clase.estado_pago
+    || clase.status_pago_familia,
+  );
+}
+
+function adminOverdueClassNotificationBody(clase = {}, state = {}) {
+  const familyName = firstAdminValue(
+    clase.familia_nombre,
+    clase.familyName,
+    clase.familiaName,
+    clase.parentName,
+    clase.familyUid,
+    clase.familia_id,
+    'familia sin nombre',
+  );
+  const studentName = firstAdminValue(clase.alumno_nombre, clase.studentName, clase.alumnoName, clase.studentId, clase.alumno_id, 'alumno/a sin nombre');
+  const teacherName = firstAdminValue(clase.profesor_nombre, clase.teacherName, clase.profesor_id, clase.teacherUid, 'profesor sin nombre');
+  const subject = firstAdminValue(clase.materia, clase.subject, 'clase');
+  const amount = classTotal(clase);
+  const dueText = formatAdminDateTime(state.dueAt);
+  const overdueText = state.graceHours ? `${state.graceHours} h de margen` : 'margen superado';
+  return `La familia ${familyName} falta por pagar/justificar la clase de ${subject} de ${studentName} con ${teacherName}. Importe familia: ${amount ? formatEuros(amount) : 'sin importe'}. Limite: ${dueText || 'sin fecha registrada'} (${overdueText}).`;
+}
+
+async function writeAdminPaymentOverdueNotification(adminUser, clase, state) {
+  const type = NOTIFICATION_EVENTS.PAYMENT_OVERDUE;
+  const classId = cleanAdminNotificationText(clase.id, 180);
+  const adminUid = cleanAdminNotificationText(adminUser.id || adminUser.uid, 180);
+  if (!classId || !adminUid) return false;
+  const id = adminNotificationDocId(type, classId, adminUid);
+  const ref = firestoreDoc(firebaseDb, 'notificaciones', id);
+  const existing = await getDoc(ref).catch(() => null);
+  if (existing?.exists()) return false;
+  const nowIso = new Date().toISOString();
+  await setDoc(ref, {
+    ...buildNotificationDocument({
+      userUid: adminUid,
+      role: 'admin',
+      title: 'Pago familiar vencido',
+      body: adminOverdueClassNotificationBody(clase, state),
+      type,
+      priority: 'critical',
+      category: 'pagos',
+      source: 'system',
+      payload: {
+        type,
+        classId,
+        clase_id: classId,
+        familyUid: clase.familyUid || clase.familia_id || '',
+        teacherUid: clase.teacherUid || clase.profesor_id || '',
+        studentId: clase.studentId || clase.alumno_id || '',
+        amount: classTotal(clase),
+        dueAt: state.dueAt || '',
+        graceHours: state.graceHours || 24,
+        url: '/pages/dashboard/admin.html#pagos',
+      },
+    }),
+    idempotencyKey: id,
+    notificationKey: id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    created_at: nowIso,
+    updated_at: nowIso,
+  }, { merge: false });
+  return true;
+}
+
+async function ensureAdminOverdueClassPaymentNotifications() {
+  const [{ data, error }, scheduleIndex, admins] = await Promise.all([
+    db.from('v_clases_completas').select('*').order('fecha', { ascending: false }).limit(500),
+    loadAdminPaymentScheduleIndex(),
+    loadAdminNotificationRecipients(),
+  ]);
+  if (error) throw error;
+  if (!admins.length) return 0;
+
+  const overdueClasses = (data || [])
+    .filter((clase) => isAfterClassReset(clase))
+    .filter((clase) => claseRealizada(clase))
+    .filter((clase) => classTotal(clase) > 0)
+    .filter((clase) => !PAID_PAYMENT_STATUSES.includes(adminClassPaymentStatus(clase)))
+    .map((clase) => ({
+      clase,
+      state: classFamilyPaymentState(clase, paymentScheduleForClass(clase, scheduleIndex), {
+        classEndAt: adminClassEndAt(clase),
+        nowMs: Date.now(),
+      }),
+    }))
+    .filter(({ state }) => state.overdue)
+    .slice(0, 50);
+
+  let created = 0;
+  for (const { clase, state } of overdueClasses) {
+    if (adminClassPaymentStatus(clase) !== 'vencido') {
+      try {
+        await db.from('clases').update({
+          familyPaymentStatus: 'vencido',
+          estado_pago_familia: 'vencido',
+          paymentStatus: 'vencido',
+          estado_pago: 'vencido',
+          familyPaymentDueAt: state.dueAt || '',
+          paymentDueAt: state.dueAt || '',
+          familyPaymentOverdueAt: new Date().toISOString(),
+        }).eq('id', clase.id);
+      } catch (error) {
+        console.warn('No se pudo marcar clase como pago vencido', clase.id, error);
+      }
+    }
+    for (const adminUser of admins) {
+      if (await writeAdminPaymentOverdueNotification(adminUser, clase, state)) created += 1;
+    }
+  }
+  return created;
+}
 
 async function cargarBadgeLeads() {
   const { data: leadsNuevos, error } = await leads.countNew();

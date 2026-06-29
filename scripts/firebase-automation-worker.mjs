@@ -2281,6 +2281,10 @@ async function processPaymentReminders(db, stats) {
 
     const { familyUid } = await resolveClassRecipients(db, data);
     const label = classLabel(data);
+    const familyName = clean(data.familyName || data.familia_nombre || data.parentName || data.familyUid || data.familia_id || 'familia sin nombre', 120);
+    const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || data.studentId || data.alumno_id || 'alumno/a sin nombre', 120);
+    const teacherName = clean(data.teacherName || data.profesor_nombre || data.teacherName || data.teacherUid || data.profesor_id || 'profesor sin nombre', 120);
+    const amount = classFamilyAmount(data);
     const schedule = paymentScheduleForClass(data, scheduleIndex);
     const paymentState = classFamilyPaymentState(data, schedule, {
       classEndAt: classEndAt(data),
@@ -2307,6 +2311,10 @@ async function processPaymentReminders(db, stats) {
       type: paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due',
       classId: doc.id,
       dueAt: paymentState.dueAt || '',
+      familyName,
+      studentName,
+      teacherName,
+      amount,
       url: '/pages/login.html',
     };
     let created = 0;
@@ -2323,7 +2331,9 @@ async function processPaymentReminders(db, stats) {
     created += await notifyAdminsOnce(
       db,
       paymentState.overdue ? 'Justificante vencido' : 'Justificante pendiente',
-      paymentState.overdue ? `Revisar vencimiento de la clase ${label}.` : `Revisar justificante de la clase ${label}.`,
+      paymentState.overdue
+        ? `La familia ${familyName} falta por pagar/justificar la clase ${label} de ${studentName} con ${teacherName}. Importe familia: ${amount ? `${amount.toFixed(2)} EUR` : 'sin importe'}.`
+        : `Revisar justificante pendiente de ${familyName}: clase ${label}${amount ? ` (${amount.toFixed(2)} EUR)` : ''}.`,
       payload,
       `${paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due'}_${doc.id}_admin`,
     );

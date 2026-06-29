@@ -166,6 +166,50 @@ export function paymentScheduleDocumentId(input = {}) {
   ].map((value) => cleanPaymentText(value, 120).toLowerCase().replace(/[^a-z0-9_-]+/g, '_')).join('__').slice(0, 900);
 }
 
+function pushPaymentScheduleKey(keys, key) {
+  if (key && !keys.includes(key)) keys.push(key);
+}
+
+export function paymentScheduleKeysFor(item = {}) {
+  const keys = [];
+  const assignmentId = cleanPaymentText(item.assignmentId || item.asignacion_id, 180);
+  const teacherUid = cleanPaymentText(item.teacherUid || item.profesor_id, 180);
+  const familyUid = cleanPaymentText(item.familyUid || item.familia_id, 180);
+  const studentId = cleanPaymentText(item.studentId || item.alumno_id, 180);
+
+  pushPaymentScheduleKey(keys, assignmentId ? `assignment:${assignmentId}` : '');
+  if (teacherUid && studentId) {
+    pushPaymentScheduleKey(keys, `teacher-student:${teacherUid}:${studentId}`);
+    pushPaymentScheduleKey(keys, `teacher_student:${teacherUid}:${studentId}`);
+  }
+  if (teacherUid && familyUid) {
+    pushPaymentScheduleKey(keys, `teacher-family:${teacherUid}:${familyUid}`);
+    pushPaymentScheduleKey(keys, `teacher_family:${teacherUid}:${familyUid}`);
+  }
+  pushPaymentScheduleKey(keys, teacherUid ? `teacher:${teacherUid}` : '');
+  return keys;
+}
+
+export function buildPaymentScheduleIndex(schedules = []) {
+  const index = new Map();
+  for (const schedule of schedules || []) {
+    if (!schedule || schedule.active === false || schedule.status === 'inactive') continue;
+    if (schedule.id) index.set(cleanPaymentText(schedule.id, 180), schedule);
+    paymentScheduleKeysFor(schedule).forEach((key) => {
+      if (!index.has(key)) index.set(key, schedule);
+    });
+  }
+  return index;
+}
+
+export function paymentScheduleForClass(classData = {}, scheduleIndex = new Map()) {
+  for (const key of paymentScheduleKeysFor(classData)) {
+    const schedule = scheduleIndex.get(key);
+    if (schedule) return schedule;
+  }
+  return null;
+}
+
 export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
   const nowIso = options.nowIso || new Date().toISOString();
   const dayOfWeek = normalizePaymentScheduleDay(input.dayOfWeek ?? input.paymentDay ?? input.dia_semana_pago);

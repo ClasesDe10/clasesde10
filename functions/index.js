@@ -1116,6 +1116,7 @@ async function processWeeklyClassPaymentReminders(stats) {
   for (const doc of docs) {
     const data = { id: doc.id, ...doc.data() };
     stats.weeklyClassPaymentsChecked += 1;
+    if (!isAfterClassReset(data)) continue;
     if (classFamilyPaymentPaid(data)) continue;
 
     const schedule = paymentScheduleForClass(data, scheduleIndex);
@@ -1142,17 +1143,27 @@ async function processWeeklyClassPaymentReminders(stats) {
 
     const familyUserUid = clean(schedule?.ownerUid || data.ownerUid || data.familyUserUid || data.familia_user_uid, 180);
     const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || 'tu alumno/a', 120);
+    const familyName = clean(data.familyName || data.familia_nombre || data.parentName || data.familyDisplayName || 'familia sin nombre', 120);
+    const teacherName = clean(data.teacherName || data.profesor_nombre || data.teacherDisplayName || data.profesor_id || 'profesor sin nombre', 120);
     const subject = clean(data.subject || data.materia || 'clase', 120);
+    const amount = classFamilyAmount(data);
     const title = state.state === 'overdue' ? 'Justificante vencido' : 'Justificante pendiente';
     const body = state.state === 'overdue'
       ? `Ha pasado el margen de 24 h para justificar la ${subject} de ${studentName}.`
       : `Recuerda justificar la ${subject} de ${studentName}.`;
+    const adminBody = state.state === 'overdue'
+      ? `La familia ${familyName} falta por pagar/justificar la ${subject} de ${studentName} con ${teacherName}. Importe familia: ${amount ? `${amount.toFixed(2)} EUR` : 'sin importe'}. Limite: ${dueIso}. Vencido desde: ${overdueIso}.`
+      : `Revisar justificante pendiente de ${familyName}: ${subject} de ${studentName}${amount ? ` (${amount.toFixed(2)} EUR)` : ''}. Limite: ${dueIso}.`;
     const payload = {
       type,
       classId: doc.id,
       clase_id: doc.id,
       dueAt: dueIso,
       overdueAt: overdueIso,
+      familyName,
+      studentName,
+      teacherName,
+      amount,
       url: '/pages/dashboard/familia.html',
     };
 
@@ -1176,7 +1187,7 @@ async function processWeeklyClassPaymentReminders(stats) {
 
     await notifyAdminsOnce(
       title,
-      `${body} Revisa la clase desde el panel de administracion.`,
+      `${adminBody} Revisa la clase desde el panel de administracion.`,
       { ...payload, url: '/pages/dashboard/admin.html' },
       `${type}_${doc.id}_admin`,
       {
