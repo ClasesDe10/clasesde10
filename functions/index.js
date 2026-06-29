@@ -55,6 +55,11 @@ function paymentAmount(data = {}) {
   return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
 }
 
+function classFamilyAmount(data = {}) {
+  const amount = Number(data.precio_total ?? data.familyAmount ?? data.amount ?? data.total ?? 0);
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+}
+
 function buildClassPaymentPatch(payment, nowValue = now()) {
   if (isTeacherPayout(payment)) {
     return {
@@ -74,6 +79,11 @@ function buildClassPaymentPatch(payment, nowValue = now()) {
     familyPaymentValidatedAt: nowValue,
     updatedAt: nowValue,
   };
+}
+
+function classHasPaidStatus(data = {}) {
+  const status = normalizePaymentStatus(data.paymentStatus || data.familyPaymentStatus || data.estado_pago || data.estado_pago_familia);
+  return ['validado', 'pagado', 'paid', 'succeeded'].includes(status);
 }
 
 function asArray(value) {
@@ -157,7 +167,17 @@ const NOTIFICATION_DEFINITIONS = {
   assignment_created: { category: 'matching', priority: 'high', channels: ['internal', 'browser', 'push'] },
   verification_pending: { category: 'verificacion', priority: 'high', channels: ['internal', 'browser', 'push'] },
   document_review_pending: { category: 'verificacion', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  document_verified: { category: 'verificacion', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  document_rejected: { category: 'verificacion', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  document_expiring_soon: { category: 'verificacion', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  document_expired: { category: 'verificacion', priority: 'critical', channels: ['internal', 'browser', 'push'] },
   profile_updated: { category: 'perfil', priority: 'normal', channels: ['internal', 'browser'] },
+  user_registered: { category: 'usuarios', priority: 'normal', channels: ['internal', 'browser'] },
+  teacher_verified: { category: 'verificacion', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  schedule_proposed: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  schedule_accepted: { category: 'clases', priority: 'normal', channels: ['internal', 'browser', 'push'] },
+  schedule_rejected: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  incident_resolved: { category: 'incidencias', priority: 'normal', channels: ['internal', 'browser'] },
   contact_lead: { category: 'leads', priority: 'normal', channels: ['internal', 'browser', 'push'] },
   teacher_lead: { category: 'leads', priority: 'high', channels: ['internal', 'browser', 'push'] },
   family_lead_request: { category: 'leads', priority: 'high', channels: ['internal', 'browser', 'push'] },
@@ -790,6 +810,27 @@ function paymentIsOverdue(data = {}) {
   return Boolean(due && due.getTime() < Date.now());
 }
 
+function documentExpiryDate(data = {}) {
+  return dateFromUnknown(data.expiresAt || data.fecha_caducidad || data.expirationDate || data.validUntil);
+}
+
+function documentExpiryAutomationType(data = {}, warningDays = 30) {
+  const status = normalizeStatus(data);
+  if (!['validado', 'verificado', 'approved', 'verified', 'aprobado'].includes(status)) return '';
+  const expiry = documentExpiryDate(data);
+  if (!expiry) return '';
+  const msUntilExpiry = expiry.getTime() - Date.now();
+  if (msUntilExpiry < 0) return 'document.expired';
+  if (msUntilExpiry <= warningDays * 24 * 60 * 60 * 1000) return 'document.expiring_soon';
+  return '';
+}
+
+function daysToExpiry(data = {}) {
+  const expiry = documentExpiryDate(data);
+  if (!expiry) return '';
+  return Math.ceil((expiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
 function profileLastActivityDate(data = {}) {
   return dateFromUnknown(data.lastActivityAt || data.lastLoginAt || data.lastClassAt || data.updatedAt || data.createdAt);
 }
@@ -1116,6 +1157,208 @@ async function enrichPaymentAutomationData(data = {}) {
   };
 }
 
+function fullName(...parts) {
+  return parts.map((part) => clean(part, 120)).filter(Boolean).join(' ').trim();
+}
+
+function participantMap(values = []) {
+  return values
+    .map((value) => clean(value, 180))
+    .filter(Boolean)
+    .reduce((acc, uid) => ({ ...acc, [uid]: true }), {});
+}
+
+async function profileRecord(collectionName, profileId) {
+  const id = clean(profileId, 180);
+  if (!id) return { id: '', exists: false, data: {} };
+  const snap = await db.collection(collectionName).doc(id).get().catch(() => null);
+  return {
+    id,
+    exists: Boolean(snap?.exists),
+    data: snap?.exists ? snap.data() : {},
+  };
+}
+
+async function userRecord(uid) {
+  const id = clean(uid, 180);
+  if (!id) return { id: '', exists: false, data: {} };
+  const snap = await db.collection('users').doc(id).get().catch(() => null);
+  return {
+    id,
+    exists: Boolean(snap?.exists),
+    data: snap?.exists ? snap.data() : {},
+  };
+}
+
+async function roleForUserUid(uid, chat = {}) {
+  const id = clean(uid, 180);
+  if (!id) return '';
+  const user = await userRecord(id);
+  if (user.data.role) return clean(user.data.role, 40);
+  if ([chat.teacherUserUid, chat.teacherUid, chat.profesor_id].map((item) => clean(item, 180)).includes(id)) return 'profesor';
+  if ([chat.familyUserUid, chat.familyUid, chat.familia_id].map((item) => clean(item, 180)).includes(id)) return 'familia';
+  return '';
+}
+
+async function ensureChatForAssignmentServer(assignmentId, reason = 'automation') {
+  const id = clean(assignmentId, 180);
+  if (!id) return { created: false, reason: 'missing_assignment_id' };
+  const assignmentSnap = await db.collection('asignaciones').doc(id).get();
+  if (!assignmentSnap.exists) return { created: false, reason: 'assignment_not_found', assignmentId: id };
+
+  const assignment = { id, ...assignmentSnap.data() };
+  const teacherProfileId = clean(assignment.teacherUid || assignment.profesor_id, 180);
+  const familyProfileId = clean(assignment.familyUid || assignment.familia_id, 180);
+  const studentId = clean(assignment.studentId || assignment.alumno_id, 180);
+
+  const [teacherProfile, familyProfile, studentProfile] = await Promise.all([
+    profileRecord('profesores', teacherProfileId),
+    profileRecord('familias', familyProfileId),
+    profileRecord('alumnos', studentId),
+  ]);
+  const teacherUserUid = clean(assignment.teacherUserUid || teacherProfile.data.userUid || teacherProfile.data.firebase_uid || teacherProfile.data.usuario_id || teacherProfileId, 180);
+  const familyUserUid = clean(assignment.familyUserUid || familyProfile.data.userUid || familyProfile.data.firebase_uid || familyProfile.data.usuario_id || familyProfileId, 180);
+  const [teacherUser, familyUser] = await Promise.all([
+    userRecord(teacherUserUid),
+    userRecord(familyUserUid),
+  ]);
+
+  const teacherName = fullName(
+    teacherProfile.data.nombre || teacherUser.data.nombre,
+    teacherProfile.data.apellidos || teacherUser.data.apellidos,
+  ) || teacherProfile.data.email || teacherUser.data.email || 'Profesor';
+  const familyName = fullName(
+    familyProfile.data.nombre || familyUser.data.nombre,
+    familyProfile.data.apellidos || familyUser.data.apellidos,
+  ) || familyProfile.data.email || familyUser.data.email || 'Familia';
+  const studentName = fullName(studentProfile.data.nombre, studentProfile.data.apellidos);
+  const subject = clean(assignment.materia || assignment.subject, 180);
+  const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const chatRef = db.collection('chats').doc(id);
+  const chatSnap = await chatRef.get();
+  const introAlreadySent = Boolean(chatSnap.exists && chatSnap.data().assignmentIntroSentAt);
+
+  await chatRef.set({
+    assignmentId: id,
+    asignacion_id: id,
+    familyUid: familyProfileId,
+    familia_id: familyProfileId,
+    familyUserUid,
+    teacherUid: teacherProfileId,
+    profesor_id: teacherProfileId,
+    teacherUserUid,
+    studentId: studentId || null,
+    alumno_id: studentId || null,
+    materia: subject,
+    subject,
+    familyName,
+    teacherName,
+    studentName,
+    participantUids: participantMap([familyProfileId, teacherProfileId, familyUserUid, teacherUserUid]),
+    active: true,
+    schedulingStatus: chatSnap.data()?.schedulingStatus || assignment.schedulingStatus || assignment.estado_programacion || 'pendiente_horario',
+    relationshipStage: chatSnap.data()?.relationshipStage || 'pendiente_horario',
+    relationshipStatus: 'active',
+    source: chatSnap.data()?.source || 'assignment_automation',
+    lastRelationshipEvent: chatSnap.data()?.lastRelationshipEvent || 'assignment_chat_ready',
+    relationshipUpdatedAt: now(),
+    createdAt: chatSnap.exists ? (chatSnap.data().createdAt || now()) : now(),
+    updatedAt: now(),
+    ...(introAlreadySent ? {} : {
+      lastMessage: introBody,
+      lastMessageAt: now(),
+      assignmentIntroSentAt: now(),
+    }),
+  }, { merge: true });
+
+  if (!introAlreadySent) {
+    await chatRef.collection('mensajes').doc('system_assignment_intro').create({
+      senderUid: 'system',
+      senderRole: 'system',
+      senderName: 'ClasesDe10',
+      body: introBody,
+      systemEventType: 'assignment_intro',
+      createdAt: now(),
+      readBy: {},
+    }).catch(async (error) => {
+      if (error.code !== 6 && error.code !== 'already-exists') throw error;
+    });
+  }
+
+  await db.collection('asignaciones').doc(id).set({
+    chatId: id,
+    schedulingStatus: 'pendiente_horario',
+    estado_programacion: 'pendiente_horario',
+    relationshipStage: 'pendiente_horario',
+    teacherUserUid,
+    familyUserUid,
+    updatedAt: now(),
+  }, { merge: true });
+
+  return {
+    created: !chatSnap.exists,
+    introSent: !introAlreadySent,
+    assignmentId: id,
+    teacherUserUid,
+    familyUserUid,
+    reason,
+  };
+}
+
+function isVerifiedProfileStatus(status) {
+  return ['verificado', 'verified', 'validado', 'aprobado', 'activo'].includes(lower(status));
+}
+
+function documentEventForStatus(status) {
+  const normalized = lower(status);
+  if (['validado', 'verificado', 'approved', 'verified', 'aprobado'].includes(normalized)) return 'document.verified';
+  if (['rechazado', 'rejected', 'denegado', 'requiere_correccion', 'needs_correction'].includes(normalized)) return 'document.rejected';
+  if (['caducado', 'expired'].includes(normalized)) return 'document.expired';
+  return '';
+}
+
+function incidentIsResolved(status) {
+  return ['resuelta', 'resuelto', 'cerrada', 'cerrado', 'resolved', 'closed', 'done'].includes(lower(status));
+}
+
+function scheduleProposalLabel(data = {}) {
+  const date = clean(data.fecha || data.date, 20);
+  const start = clean(data.hora_inicio || data.startTime || data.hora, 8);
+  const end = clean(data.hora_fin || data.endTime, 8);
+  return [clean(data.materia || data.subject || 'Clase', 120), date, [start, end].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
+}
+
+function scheduleProposalPayload(chatId, proposalId, proposal = {}, chat = {}) {
+  return {
+    id: proposalId,
+    chatId,
+    proposalId,
+    assignmentId: chat.assignmentId || chat.asignacion_id || proposal.assignmentId || proposal.asignacion_id || chatId,
+    familyUid: chat.familyUid || chat.familia_id || proposal.familyUid || proposal.familia_id || '',
+    familyUserUid: chat.familyUserUid || '',
+    teacherUid: chat.teacherUid || chat.profesor_id || proposal.teacherUid || proposal.profesor_id || '',
+    teacherUserUid: chat.teacherUserUid || '',
+    studentId: chat.studentId || chat.alumno_id || proposal.studentId || proposal.alumno_id || '',
+    materia: proposal.materia || chat.materia || chat.subject || '',
+    subject: proposal.subject || proposal.materia || chat.subject || chat.materia || '',
+    fecha: proposal.fecha || proposal.date || '',
+    hora_inicio: proposal.hora_inicio || proposal.startTime || '',
+    hora_fin: proposal.hora_fin || proposal.endTime || '',
+    proposedByUid: proposal.proposedByUid || proposal.createdByUid || '',
+    proposedByRole: proposal.proposedByRole || proposal.createdByRole || '',
+    respondedByUid: proposal.respondedByUid || '',
+    respondedByRole: proposal.respondedByRole || '',
+    classId: proposal.classId || proposal.clase_id || '',
+    status: proposal.status || proposal.estado || '',
+    preview: scheduleProposalLabel({ ...chat, ...proposal }),
+  };
+}
+
+async function loadChatForSchedule(chatId) {
+  const snap = await db.collection('chats').doc(clean(chatId, 180)).get().catch(() => null);
+  return snap?.exists ? snap.data() : {};
+}
+
 exports.sendPushOnNotificationCreated = onDocumentCreated({
   region: REGION,
   document: 'notificaciones/{notificationId}',
@@ -1153,23 +1396,80 @@ exports.notifyOnChatMessage = onDocumentCreated({
 
   const chat = chatSnap.data();
   const recipients = await recipientUidsForChat(chat, senderUid);
-  const senderLabel = clean(message.senderName || message.senderRole || 'ClasesDe10', 120);
-  const body = clean(message.body, 180);
-
-  await Promise.all(recipients.map((uid) => writeNotificationOnce(
-    uid,
-    `Nuevo mensaje de ${senderLabel}`,
-    body,
-    {
-      type: 'chat_message',
+  const senderName = clean(message.senderName || message.senderRole || 'ClasesDe10', 120);
+  await Promise.all(recipients.map(async (uid) => materializeAutomationPlan({
+    type: 'message.received',
+    entityType: 'chats',
+    entityId: `${chatId}_${messageId}`,
+    data: {
+      id: `${chatId}_${messageId}`,
       chatId,
       messageId,
       assignmentId: chat.assignmentId || chat.asignacion_id || '',
-      url: '/pages/login.html',
+      recipientUid: uid,
+      recipientRole: await roleForUserUid(uid, chat),
+      senderUid,
+      senderRole: message.senderRole || '',
+      senderName,
+      body: message.body || '',
+      preview: clean(message.body, 240),
     },
-    `chat_message_${chatId}_${messageId}_${uid}`,
-    { role: '', fromRole: message.senderRole || 'chat' },
-  )));
+    source: 'chats.messages.onCreate',
+  })));
+});
+
+exports.automateScheduleProposalCreated = onDocumentCreated({
+  region: REGION,
+  document: 'chats/{chatId}/programaciones/{proposalId}',
+}, async (event) => {
+  const { chatId, proposalId } = event.params;
+  const proposal = event.data.data();
+  const chat = await loadChatForSchedule(chatId);
+  const actorUid = clean(proposal.proposedByUid || proposal.createdByUid, 180);
+  const recipients = participantUidsFromChat(chat).filter((uid) => uid && uid !== actorUid);
+  const base = scheduleProposalPayload(chatId, proposalId, proposal, chat);
+  const targets = recipients.length ? recipients : [''];
+
+  await Promise.all(targets.map(async (uid) => materializeAutomationPlan({
+    type: 'schedule.proposed',
+    entityType: 'chats.programaciones',
+    entityId: `${chatId}_${proposalId}`,
+    data: {
+      ...base,
+      recipientUid: uid,
+      recipientRole: await roleForUserUid(uid, chat),
+    },
+    source: 'chats.programaciones.onCreate',
+  })));
+});
+
+exports.automateScheduleProposalUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'chats/{chatId}/programaciones/{proposalId}',
+}, async (event) => {
+  const { chatId, proposalId } = event.params;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const beforeStatus = lower(before.status || before.estado);
+  const afterStatus = lower(after.status || after.estado);
+  if (!afterStatus || beforeStatus === afterStatus) return;
+
+  const chat = await loadChatForSchedule(chatId);
+  const base = scheduleProposalPayload(chatId, proposalId, after, chat);
+  const type = ['aceptada', 'accepted', 'confirmada', 'confirmed'].includes(afterStatus)
+    ? 'schedule.accepted'
+    : ['rechazada', 'rejected', 'cancelada', 'cancelled', 'canceled'].includes(afterStatus)
+      ? 'schedule.rejected'
+      : '';
+  if (!type) return;
+
+  await materializeAutomationPlan({
+    type,
+    entityType: 'chats.programaciones',
+    entityId: `${chatId}_${proposalId}`,
+    data: base,
+    source: 'chats.programaciones.onUpdate',
+  });
 });
 
 exports.notifyOnDocumentCreated = onDocumentCreated({
@@ -1187,6 +1487,27 @@ exports.notifyOnDocumentCreated = onDocumentCreated({
   });
 });
 
+exports.automateDocumentUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'documentos/{documentId}',
+}, async (event) => {
+  const documentId = event.params.documentId;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const beforeStatus = normalizeStatus(before);
+  const afterStatus = normalizeStatus(after);
+  if (beforeStatus === afterStatus) return;
+  const type = documentEventForStatus(afterStatus);
+  if (!type) return;
+  await materializeAutomationPlan({
+    type,
+    entityType: 'documentos',
+    entityId: documentId,
+    data: { id: documentId, ...after },
+    source: 'documentos.onUpdate',
+  });
+});
+
 exports.notifyOnIncidentCreated = onDocumentCreated({
   region: REGION,
   document: 'incidencias/{incidentId}',
@@ -1199,6 +1520,55 @@ exports.notifyOnIncidentCreated = onDocumentCreated({
     entityId: incidentId,
     data: { id: incidentId, ...data },
     source: 'incidencias.onCreate',
+  });
+});
+
+exports.automateIncidentUpdated = onDocumentUpdated({
+  region: REGION,
+  document: 'incidencias/{incidentId}',
+}, async (event) => {
+  const incidentId = event.params.incidentId;
+  const before = event.data.before.data();
+  const after = event.data.after.data();
+  const beforeStatus = statusOf(before);
+  const afterStatus = statusOf(after);
+  if (beforeStatus === afterStatus || !incidentIsResolved(afterStatus)) return;
+  await materializeAutomationPlan({
+    type: 'incident.resolved',
+    entityType: 'incidencias',
+    entityId: incidentId,
+    data: { id: incidentId, ...after },
+    source: 'incidencias.onResolved',
+  });
+});
+
+exports.automateUserCreated = onDocumentCreated({
+  region: REGION,
+  document: 'users/{userId}',
+}, async (event) => {
+  const userId = event.params.userId;
+  const data = event.data.data();
+  await materializeAutomationPlan({
+    type: 'user.registered',
+    entityType: 'users',
+    entityId: userId,
+    data: { id: userId, ...data },
+    source: 'users.onCreate',
+  });
+});
+
+exports.automateTeacherProfileCreated = onDocumentCreated({
+  region: REGION,
+  document: 'profesores/{teacherId}',
+}, async (event) => {
+  const teacherId = event.params.teacherId;
+  const data = event.data.data();
+  await materializeAutomationPlan({
+    type: 'profile.updated',
+    entityType: 'profesores',
+    entityId: teacherId,
+    data: { id: teacherId, userType: 'profesores', ...data },
+    source: 'profesores.onCreate',
   });
 });
 
@@ -1223,12 +1593,38 @@ exports.notifyOnTeacherProfileUpdated = onDocumentUpdated({
     'profileCompletion',
   ];
   if (!changedAny(before, after, fields)) return;
+  const beforeVerification = before.estado_verificacion || before.verificationStatus || before.status || before.estado;
+  const afterVerification = after.estado_verificacion || after.verificationStatus || after.status || after.estado;
+  if (!isVerifiedProfileStatus(beforeVerification) && isVerifiedProfileStatus(afterVerification)) {
+    await materializeAutomationPlan({
+      type: 'teacher.verified',
+      entityType: 'profesores',
+      entityId: teacherId,
+      data: { id: teacherId, userType: 'profesores', ...after },
+      source: 'profesores.onVerified',
+    });
+  }
   await materializeAutomationPlan({
     type: 'profile.updated',
     entityType: 'profesores',
     entityId: teacherId,
     data: { id: teacherId, userType: 'profesores', ...after },
     source: 'profesores.onUpdate',
+  });
+});
+
+exports.automateFamilyProfileCreated = onDocumentCreated({
+  region: REGION,
+  document: 'familias/{familyId}',
+}, async (event) => {
+  const familyId = event.params.familyId;
+  const data = event.data.data();
+  await materializeAutomationPlan({
+    type: 'profile.updated',
+    entityType: 'familias',
+    entityId: familyId,
+    data: { id: familyId, userType: 'familias', ...data },
+    source: 'familias.onCreate',
   });
 });
 
@@ -1343,6 +1739,84 @@ async function reconcilePaymentRef(paymentRef) {
   }, { merge: true });
   await batch.commit();
   return { applied: true, classIds };
+}
+
+async function createPaymentRequestForClass(classId, reason = 'automation') {
+  const id = clean(classId, 180);
+  if (!id) return { created: false, reason: 'missing_class_id' };
+  const classSnap = await db.collection('clases').doc(id).get();
+  if (!classSnap.exists) return { created: false, reason: 'class_not_found', classId: id };
+  const classData = { id, ...classSnap.data() };
+
+  if (classHasPaidStatus(classData)) {
+    return { created: false, reason: 'class_already_paid', classId: id };
+  }
+
+  const existing = await db.collection('pagos').where('classIds', 'array-contains', id).limit(1).get().catch(() => null);
+  if (existing && !existing.empty) {
+    return { created: false, reason: 'payment_already_exists', classId: id, paymentId: existing.docs[0].id };
+  }
+
+  const amount = classFamilyAmount(classData);
+  const familyUid = clean(classData.familyUid || classData.familia_id, 180);
+  if (!familyUid || amount <= 0) {
+    await db.collection('automationEvents').doc(`payment_request_skipped_${id}`).set({
+      type: 'payment_request_skipped',
+      classId: id,
+      reason: !familyUid ? 'missing_family' : 'missing_amount',
+      source: 'payment.request_for_class',
+      createdAt: now(),
+      updatedAt: now(),
+    }, { merge: true });
+    return { created: false, reason: !familyUid ? 'missing_family' : 'missing_amount', classId: id };
+  }
+
+  const platformConfig = await loadPlatformConfig();
+  const dueDays = Math.max(0, configNumber(platformConfig, 'payments.defaultPaymentDueDays', 7));
+  const paymentId = `class_${id}_family_payment`.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 900);
+  const dueAt = timestampAfter(dueDays * 24 * 60 * 60 * 1000);
+  await db.collection('pagos').doc(paymentId).set({
+    paymentType: 'family_payment',
+    tipo: 'family_payment',
+    classIds: [id],
+    clase_id: id,
+    familyUid,
+    familia_id: familyUid,
+    teacherUid: clean(classData.teacherUid || classData.profesor_id, 180),
+    profesor_id: clean(classData.teacherUid || classData.profesor_id, 180),
+    studentId: clean(classData.studentId || classData.alumno_id, 180),
+    alumno_id: clean(classData.studentId || classData.alumno_id, 180),
+    materia: clean(classData.materia || classData.subject, 180),
+    amount,
+    monto: amount,
+    estado: 'pendiente',
+    status: 'pendiente',
+    familyPaymentStatus: 'pendiente',
+    estado_pago_familia: 'pendiente',
+    gateway: 'bizum',
+    provider: 'bizum',
+    source: 'class_completed_automation',
+    reason,
+    dueAt,
+    fecha_vencimiento: dueAt,
+    reconciliationStatus: 'pending_payment',
+    createdAt: now(),
+    updatedAt: now(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }, { merge: false });
+
+  await db.collection('clases').doc(id).set({
+    paymentId,
+    familyPaymentId: paymentId,
+    paymentStatus: 'pendiente',
+    familyPaymentStatus: 'pendiente',
+    estado_pago: 'pendiente',
+    estado_pago_familia: 'pendiente',
+    updatedAt: now(),
+  }, { merge: true });
+
+  return { created: true, paymentId, classId: id, amount };
 }
 
 function calculateTeacherPrice(data) {
@@ -1783,6 +2257,18 @@ async function dispatchSystemJob(job) {
     return { requestId, candidatesCount: result?.candidates?.length || 0, runId: result?.runId || null };
   }
 
+  if (type === 'relationship.ensure_chat') {
+    const assignmentId = clean(payload.assignmentId || payload.asignacion_id, 180);
+    if (!assignmentId) throw new Error('relationship.ensure_chat requires assignmentId.');
+    return ensureChatForAssignmentServer(assignmentId, payload.reason || 'system_job');
+  }
+
+  if (type === 'payment.request_for_class') {
+    const classId = clean(payload.classId || payload.clase_id, 180);
+    if (!classId) throw new Error('payment.request_for_class requires classId.');
+    return createPaymentRequestForClass(classId, payload.reason || 'system_job');
+  }
+
   if (type === 'metrics.snapshot') {
     const snapshot = await writeScaleMetricSnapshot(payload.source || 'system_job');
     return { alerts: snapshot.alerts.length };
@@ -2098,6 +2584,30 @@ exports.createAssignmentOnRequestAssigned = onDocumentUpdated({
   });
 });
 
+exports.automateAssignmentCreated = onDocumentCreated({
+  region: REGION,
+  document: 'asignaciones/{assignmentId}',
+}, async (event) => {
+  const assignmentId = event.params.assignmentId;
+  const data = event.data.data();
+  const [teacherUserUid, familyUserUid] = await Promise.all([
+    resolveUserUidFromProfile('profesores', data.teacherUid || data.profesor_id, data.teacherUserUid),
+    resolveUserUidFromProfile('familias', data.familyUid || data.familia_id, data.familyUserUid),
+  ]);
+  await materializeAutomationPlan({
+    type: 'assignment.created',
+    entityType: 'asignaciones',
+    entityId: assignmentId,
+    data: {
+      id: assignmentId,
+      ...data,
+      teacherUserUid,
+      familyUserUid,
+    },
+    source: 'asignaciones.onCreate',
+  });
+});
+
 exports.automateClassCreated = onDocumentCreated({
   region: REGION,
   document: 'clases/{classId}',
@@ -2166,8 +2676,9 @@ exports.automatePaymentCreated = onDocumentCreated({
   const paymentId = event.params.paymentId;
   const data = event.data.data();
   const enriched = await enrichPaymentAutomationData(data);
+  const status = normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
   await materializeAutomationPlan({
-    type: ['validado', 'pagado'].includes(normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status))
+    type: ['validado', 'pagado'].includes(status)
       ? 'payment.verified'
       : paymentIsOverdue(data) ? 'payment.overdue' : 'payment.created',
     entityType: 'pagos',
@@ -2175,6 +2686,9 @@ exports.automatePaymentCreated = onDocumentCreated({
     data: { id: paymentId, ...enriched },
     source: 'pagos.onCreate',
   });
+  if (['validado', 'pagado'].includes(status)) {
+    await reconcilePaymentRef(event.data.ref);
+  }
 });
 
 exports.automatePaymentUpdated = onDocumentUpdated({
@@ -2196,6 +2710,7 @@ exports.automatePaymentUpdated = onDocumentUpdated({
       data: { id: paymentId, ...enriched },
       source: 'pagos.onVerified',
     });
+    await reconcilePaymentRef(event.data.after.ref);
   }
 
   if (beforeStatus !== afterStatus && afterStatus === 'vencido') {
@@ -2208,6 +2723,21 @@ exports.automatePaymentUpdated = onDocumentUpdated({
       source: 'pagos.onOverdue',
     });
   }
+});
+
+exports.automateReviewCreated = onDocumentCreated({
+  region: REGION,
+  document: 'valoraciones/{reviewId}',
+}, async (event) => {
+  const reviewId = event.params.reviewId;
+  const data = event.data.data();
+  await materializeAutomationPlan({
+    type: 'review.created',
+    entityType: 'valoraciones',
+    entityId: reviewId,
+    data: { id: reviewId, ...data },
+    source: 'valoraciones.onCreate',
+  });
 });
 
 exports.scanPendingMatching = onSchedule({
@@ -2251,6 +2781,8 @@ exports.runPlatformAutomationSweep = onSchedule({
     requestEvents: 0,
     documentsChecked: 0,
     documentEvents: 0,
+    assignmentsChecked: 0,
+    assignmentEvents: 0,
     incidentsChecked: 0,
     incidentEvents: 0,
     teachersChecked: 0,
@@ -2319,6 +2851,40 @@ exports.runPlatformAutomationSweep = onSchedule({
       source: 'platformAutomationSweep',
     });
     stats.documentEvents += 1;
+  }
+
+  const validDocumentDocs = await loadDocsByStatuses('documentos', ['status', 'estado'], ['validado', 'verificado', 'approved', 'verified'], 25);
+  for (const doc of validDocumentDocs) {
+    const data = doc.data();
+    stats.documentsChecked += 1;
+    const type = documentExpiryAutomationType(data, configNumber(platformConfig, 'documents.expiryWarningDays', 30));
+    if (!type) continue;
+    await materializeAutomationPlan({
+      type,
+      entityType: 'documentos',
+      entityId: doc.id,
+      data: { id: doc.id, ...data, daysToExpiry: daysToExpiry(data) },
+      source: 'platformAutomationSweep',
+    });
+    stats.documentEvents += 1;
+  }
+
+  const assignmentDocs = await loadDocsByStatuses('asignaciones', ['active', 'activa', 'status', 'estado'], [true, 'activa', 'active'], 25);
+  for (const doc of assignmentDocs) {
+    const data = doc.data();
+    stats.assignmentsChecked += 1;
+    const chatId = clean(data.chatId || doc.id, 180);
+    const chatSnap = chatId ? await db.collection('chats').doc(chatId).get().catch(() => null) : null;
+    if (chatSnap?.exists) continue;
+    await enqueueSystemJob('relationship.ensure_chat', {
+      assignmentId: doc.id,
+      reason: 'missing_chat_sweep',
+    }, {
+      priority: 'high',
+      idempotencyKey: `ensure_chat_${doc.id}`,
+      source: 'platformAutomationSweep',
+    });
+    stats.assignmentEvents += 1;
   }
 
   const incidentDocs = await loadDocsByStatuses('incidencias', ['status', 'estado'], ['abierta', 'open', 'pendiente'], 25);

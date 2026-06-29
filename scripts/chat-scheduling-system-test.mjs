@@ -12,18 +12,20 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const [admin, chat, rules, css] = await Promise.all([
+const [admin, chat, rules, functionsIndex, automationEngine, css] = await Promise.all([
   read('pages/dashboard/admin.html'),
   read('js/chat-widget.js'),
   read('firebase/firestore.rules'),
+  read('functions/index.js'),
+  read('functions/platform-automation-engine.js'),
   read('css/dashboard.css'),
 ]);
 
 assert(admin.includes('prepararFlujoAsignacion'), 'Admin assignment must prepare chat scheduling flow.');
 assert(admin.includes("schedulingStatus: 'pendiente_horario'"), 'Assignments must start as pending scheduling.');
 assert(admin.includes('Profesor asignado, chat creado'), 'Admin must confirm chat creation after assignment.');
-assert(admin.includes('assignment_ready_for_scheduling'), 'Admin must register the scheduling automation event.');
-assert(admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment must notify family and teacher.');
+assert(!admin.includes('assignment_ready_for_scheduling'), 'Admin must not write duplicate scheduling automation events from the browser.');
+assert(!admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment notifications must be centralized in Functions.');
 
 assert(chat.includes('data-schedule-form'), 'Chat widget must render schedule proposal form.');
 assert(chat.includes("collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones')"), 'Chat widget must persist schedule proposals.');
@@ -34,6 +36,13 @@ assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satis
 assert(chat.includes("relationshipStage: 'horario_propuesto'"), 'Schedule proposals must update the chat relationship stage.');
 assert(chat.includes("relationshipStage: 'clase_programada'"), 'Accepted proposals must activate the scheduled relationship stage.');
 assert(chat.includes("lastRelationshipEvent: 'class_scheduled_from_chat'"), 'Accepted proposals must leave a relationship event marker.');
+assert(!chat.includes("collection(firebaseDb, 'notificaciones')"), 'Chat widget must not create chat notifications directly.');
+
+assert(functionsIndex.includes("document: 'asignaciones/{assignmentId}'"), 'Functions must react to assignment creation.');
+assert(functionsIndex.includes("'relationship.ensure_chat'"), 'Functions must support server-side chat repair/creation.');
+assert(functionsIndex.includes("document: 'chats/{chatId}/programaciones/{proposalId}'"), 'Functions must react to chat schedule proposals.');
+assert(automationEngine.includes('schedule.proposed.core'), 'Automation rules must cover schedule proposals.');
+assert(automationEngine.includes('assignment.created.core'), 'Automation rules must cover assignment creation.');
 
 assert(rules.includes('match /programaciones/{proposalId}'), 'Firestore rules must protect chat schedule proposals.');
 assert(rules.includes('validClassScheduleProposalCreate'), 'Firestore rules must validate proposal creation.');

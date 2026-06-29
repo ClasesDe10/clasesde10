@@ -243,6 +243,15 @@ function paymentAmountLabel(data) {
   return `${Math.round(amount * 100) / 100} EUR`;
 }
 
+function scheduleLabel(data) {
+  const subject = firstPresent(data, ['materia', 'subject', 'asignatura']) || 'Clase';
+  const date = firstPresent(data, ['fecha', 'date']);
+  const start = firstPresent(data, ['hora_inicio', 'startTime', 'hora']);
+  const end = firstPresent(data, ['hora_fin', 'endTime']);
+  const time = [start, end].filter(Boolean).join(' - ');
+  return [subject, date, time].filter(Boolean).join(' · ') || subject;
+}
+
 function userUid(data, fields) {
   return firstPresent(data, fields);
 }
@@ -317,6 +326,7 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'notification', target: { userUid: { path: 'computed.teacherUid' }, role: 'profesor' }, title: 'Nueva asignacion', body: 'Tienes una nueva solicitud asignada de {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'high', key: 'teacher' } },
       { type: 'notification', target: { userUid: { path: 'computed.familyUid' }, role: 'familia' }, title: 'Profesor asignado', body: 'Ya hay profesor asignado para {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'high', key: 'family' } },
       { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Asignacion creada', body: 'Se ha asignado profesor para {{computed.subject}}.', payload: { requestId: { firstOf: ['data.requestId', 'data.solicitud_id'] }, assignmentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'assignment_created', priority: 'normal', key: 'admin' } },
+      { type: 'systemJob', jobType: 'relationship.ensure_chat', payload: { assignmentId: { path: 'computed.id' }, reason: 'assignment_created' }, options: { priority: 'high', key: 'chat' } },
       { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'assignment.created' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
       { type: 'audit', action: 'assignment.created', metadata: { teacherUid: { path: 'computed.teacherUid' }, familyUid: { path: 'computed.familyUid' } } },
     ],
@@ -370,6 +380,7 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 51,
     when: { path: 'computed.classPaid', operator: 'falsy' },
     actions: [
+      { type: 'systemJob', jobType: 'payment.request_for_class', payload: { classId: { path: 'computed.id' }, reason: 'class_completed_unpaid' }, options: { priority: 'high', key: 'payment_request' } },
       { type: 'crmTask', title: 'Seguimiento de pago de clase', description: 'La {{computed.classLabel}} esta finalizada y no consta como pagada.', options: { priority: 'high', tags: ['pagos', 'clase'], dueAfterMinutes: configNumber('automation.unpaidClassFollowupMinutes', 1440) } },
     ],
   },
@@ -475,6 +486,29 @@ const DEFAULT_AUTOMATION_RULES = [
     ],
   },
   {
+    id: 'document.verified.core',
+    eventTypes: ['document.verified'],
+    priority: 110,
+    actions: [
+      { type: 'automationEvent', summary: 'Documento validado; se actualiza confianza y trazabilidad.', severity: 'info' },
+      { type: 'notification', target: { userUid: { path: 'computed.ownerUid' }, role: { firstOf: ['data.role', 'data.ownerRole'] } }, title: 'Documento validado', body: '{{computed.documentLabel}} ya esta validado.', payload: { documentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'document_verified', priority: 'normal', key: 'owner' } },
+      { type: 'automationEvent', eventType: 'trust.recalculation_requested', summary: 'Recalculo de reputacion solicitado por documento validado.', severity: 'info', payload: { profileId: { path: 'computed.ownerUid' }, userType: { firstOf: ['data.ownerCollection', 'data.userType', 'data.role'] } } },
+      { type: 'audit', action: 'document.verified', metadata: { ownerUid: { path: 'computed.ownerUid' }, documentType: { firstOf: ['data.tipo', 'data.type', 'data.documentType'] } } },
+    ],
+  },
+  {
+    id: 'document.rejected.core',
+    eventTypes: ['document.rejected'],
+    priority: 110,
+    actions: [
+      { type: 'automationEvent', summary: 'Documento rechazado o requiere correccion.', severity: 'warning' },
+      { type: 'notification', target: { userUid: { path: 'computed.ownerUid' }, role: { firstOf: ['data.role', 'data.ownerRole'] } }, title: 'Documento requiere correccion', body: '{{computed.documentLabel}} no ha podido validarse. Revisa la observacion y sube una version correcta.', payload: { documentId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'document_rejected', priority: 'high', key: 'owner' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Documento rechazado', body: '{{computed.documentLabel}} queda pendiente de nueva version.', payload: { documentId: { path: 'computed.id' }, ownerUid: { path: 'computed.ownerUid' }, url: '/pages/login.html' }, options: { type: 'document_rejected', priority: 'normal', key: 'admin' } },
+      { type: 'crmTask', title: 'Seguimiento de documento rechazado', description: 'Comprobar que el usuario sube una version valida y cerrar la verificacion.', options: { priority: 'normal', tags: ['documentos', 'correccion'], dueAfterMinutes: configNumber('automation.rejectedDocumentFollowUpMinutes', 2880) } },
+      { type: 'audit', action: 'document.rejected', metadata: { ownerUid: { path: 'computed.ownerUid' }, documentType: { firstOf: ['data.tipo', 'data.type', 'data.documentType'] } } },
+    ],
+  },
+  {
     id: 'document.expiring_soon.core',
     eventTypes: ['document.expiring_soon'],
     priority: 111,
@@ -534,6 +568,17 @@ const DEFAULT_AUTOMATION_RULES = [
       { type: 'crmTask', title: 'Resolver incidencia atascada', description: 'Clasificar, contactar a las partes y cerrar con resultado trazado.', options: { priority: 'critical', tags: ['incidencias'], dueAfterMinutes: configNumber('automation.staleIncidentReviewMinutes', 60) } },
       { type: 'opsAlert', alertType: 'incident_attention_required', level: 'high', message: 'Incidencia requiere atencion administrativa.' },
       { type: 'audit', action: 'incident.stale_detected', metadata: { priority: { path: 'computed.incidentPriority' } } },
+    ],
+  },
+  {
+    id: 'incident.resolved.core',
+    eventTypes: ['incident.resolved'],
+    priority: 122,
+    actions: [
+      { type: 'automationEvent', summary: 'Incidencia resuelta y archivada para analitica operacional.', severity: 'info' },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Incidencia resuelta', body: '{{computed.incidentLabel}}', payload: { incidentId: { path: 'computed.id' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, url: '/pages/login.html' }, options: { type: 'incident_resolved', priority: 'normal', key: 'admin' } },
+      { type: 'systemJob', jobType: 'metrics.snapshot', payload: { source: 'incident.resolved' }, options: { priority: 'low', key: 'metrics', runAfterMinutes: configNumber('automation.metricsSnapshotDelayMinutes', 5) } },
+      { type: 'audit', action: 'incident.resolved', metadata: { priority: { path: 'computed.incidentPriority' }, resolution: { firstOf: ['data.resolution', 'data.resolucion'] } } },
     ],
   },
   {
@@ -597,8 +642,41 @@ const DEFAULT_AUTOMATION_RULES = [
     priority: 170,
     actions: [
       { type: 'automationEvent', summary: 'Mensaje recibido y canalizado a notificacion interna.', severity: 'info' },
-      { type: 'notification', target: { userUid: { firstOf: ['data.recipientUid', 'data.toUid', 'data.userUid'] }, role: { firstOf: ['data.recipientRole', 'data.role'] } }, title: 'Nuevo mensaje', body: '{{computed.messagePreview}}', payload: { chatId: { firstOf: ['data.chatId', 'data.threadId', 'data.id'] }, url: '/pages/login.html' }, options: { type: 'chat_message', priority: 'normal', key: 'recipient' } },
+      { type: 'notification', target: { userUid: { firstOf: ['data.recipientUid', 'data.toUid', 'data.userUid'] }, role: { firstOf: ['data.recipientRole', 'data.role'] } }, title: 'Nuevo mensaje de {{data.senderName}}', body: '{{computed.messagePreview}}', payload: { chatId: { firstOf: ['data.chatId', 'data.threadId', 'data.id'] }, messageId: { path: 'data.messageId' }, url: '/pages/login.html' }, options: { type: 'chat_message', priority: 'normal', key: 'recipient' } },
       { type: 'audit', action: 'message.received', metadata: { chatId: { firstOf: ['data.chatId', 'data.threadId'] } } },
+    ],
+  },
+  {
+    id: 'schedule.proposed.core',
+    eventTypes: ['schedule.proposed'],
+    priority: 171,
+    actions: [
+      { type: 'automationEvent', summary: 'Horario propuesto desde chat.', severity: 'info' },
+      { type: 'notification', target: { userUid: { firstOf: ['data.recipientUid', 'data.toUid'] }, role: { firstOf: ['data.recipientRole', 'data.role'] } }, title: 'Horario propuesto', body: '{{computed.scheduleLabel}}. Puedes aceptarlo desde el chat.', payload: { chatId: { path: 'data.chatId' }, proposalId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'schedule_proposed', priority: 'high', key: 'recipient' } },
+      { type: 'crmTask', title: 'Horario pendiente de respuesta', description: 'Hay una propuesta de clase esperando aceptacion o alternativa.', options: { priority: 'normal', tags: ['chat', 'calendario'], dueAfterMinutes: configNumber('automation.scheduleProposalFollowUpMinutes', 1440) } },
+      { type: 'audit', action: 'schedule.proposed', metadata: { chatId: { path: 'data.chatId' }, proposedByUid: { firstOf: ['data.proposedByUid', 'data.createdByUid'] }, label: { path: 'computed.scheduleLabel' } } },
+    ],
+  },
+  {
+    id: 'schedule.accepted.core',
+    eventTypes: ['schedule.accepted'],
+    priority: 172,
+    actions: [
+      { type: 'automationEvent', summary: 'Horario aceptado; clase y calendario deben quedar sincronizados.', severity: 'info' },
+      { type: 'notification', target: { userUid: { firstOf: ['data.proposedByUid', 'data.createdByUid'] }, role: { firstOf: ['data.proposedByRole', 'data.role'] } }, title: 'Horario aceptado', body: '{{computed.scheduleLabel}} queda aceptado.', payload: { chatId: { path: 'data.chatId' }, proposalId: { path: 'computed.id' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, url: '/pages/login.html' }, options: { type: 'schedule_accepted', priority: 'normal', key: 'proposer' } },
+      { type: 'notification', target: { targetRole: 'admin', role: 'admin' }, title: 'Clase coordinada', body: 'Horario aceptado: {{computed.scheduleLabel}}.', payload: { chatId: { path: 'data.chatId' }, proposalId: { path: 'computed.id' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, url: '/pages/login.html' }, options: { type: 'schedule_accepted', priority: 'normal', key: 'admin' } },
+      { type: 'audit', action: 'schedule.accepted', metadata: { chatId: { path: 'data.chatId' }, classId: { firstOf: ['data.classId', 'data.clase_id'] }, label: { path: 'computed.scheduleLabel' } } },
+    ],
+  },
+  {
+    id: 'schedule.rejected.core',
+    eventTypes: ['schedule.rejected'],
+    priority: 173,
+    actions: [
+      { type: 'automationEvent', summary: 'Horario rechazado; vuelve a quedar pendiente de propuesta.', severity: 'warning' },
+      { type: 'notification', target: { userUid: { firstOf: ['data.proposedByUid', 'data.createdByUid'] }, role: { firstOf: ['data.proposedByRole', 'data.role'] } }, title: 'Horario rechazado', body: '{{computed.scheduleLabel}} se ha rechazado. Propón otra alternativa desde el chat.', payload: { chatId: { path: 'data.chatId' }, proposalId: { path: 'computed.id' }, url: '/pages/login.html' }, options: { type: 'schedule_rejected', priority: 'high', key: 'proposer' } },
+      { type: 'crmTask', title: 'Recoordinar horario', description: 'Una propuesta de horario ha sido rechazada. Si no hay nueva propuesta, intervenir.', options: { priority: 'normal', tags: ['chat', 'calendario'], dueAfterMinutes: configNumber('automation.rejectedScheduleFollowUpMinutes', 1440) } },
+      { type: 'audit', action: 'schedule.rejected', metadata: { chatId: { path: 'data.chatId' }, label: { path: 'computed.scheduleLabel' } } },
     ],
   },
   {
@@ -660,6 +738,7 @@ function buildRuleContext(normalizedEvent, config = {}) {
       ownerUid: firstPresent(data, ['ownerUid', 'userUid', 'usuario_id']),
       documentLabel: firstPresent(data, ['nombre', 'tipo', 'type']) || 'Documento',
       documentDaysToExpiry: firstPresent(data, ['daysToExpiry', 'dias_caducidad']) || '',
+      scheduleLabel: scheduleLabel(data),
       userType,
       userLabel: personLabel(data, userType === 'profesores' ? 'Profesor' : 'Familia'),
       profileStatus,

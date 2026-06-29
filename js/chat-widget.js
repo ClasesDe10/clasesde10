@@ -11,7 +11,6 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
-  where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 import {
@@ -30,7 +29,6 @@ import {
 } from './notifications-provider.js?v=20260627-domain-auth';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
-  buildNotificationDocument,
   mergeNotificationSettings,
   notificationActionUrl,
   notificationCategoryLabel,
@@ -95,10 +93,6 @@ function participantMap(ids) {
     .reduce((acc, id) => ({ ...acc, [id]: true }), {});
 }
 
-function unique(values) {
-  return [...new Set(values.map(clean).filter(Boolean))];
-}
-
 function assignmentIds(assignment) {
   const familyUid = clean(assignment.familyUid || assignment.familia_id);
   const teacherUid = clean(assignment.teacherUid || assignment.profesor_id);
@@ -112,21 +106,6 @@ function chatTitle(chat, role) {
   if (role === 'profesor') return chat.familyName || chat.studentName || 'Familia';
   if (role === 'familia') return chat.teacherName || 'Profesor';
   return [chat.familyName || 'Familia', chat.teacherName || 'Profesor'].join(' / ');
-}
-
-function chatParticipantUids(chat = {}) {
-  const mapped = chat.participantUids && typeof chat.participantUids === 'object'
-    ? Object.keys(chat.participantUids).filter((uid) => chat.participantUids[uid] === true)
-    : [];
-  return unique([
-    ...mapped,
-    chat.familyUid,
-    chat.familia_id,
-    chat.teacherUid,
-    chat.profesor_id,
-    chat.familyUserUid,
-    chat.teacherUserUid,
-  ]);
 }
 
 async function loadAssignments(dbCompat, role, profileId) {
@@ -513,51 +492,9 @@ export async function initChatWidget({
     return createAdminNotification({ targetRole, title, body, currentUid });
   }
 
-  async function loadAdminUids() {
-    const snap = await getDocs(query(collection(firebaseDb, 'users'), where('role', '==', 'admin')));
-    return snap.docs.map((item) => item.id);
-  }
-
-  async function existingUserUids(candidates) {
-    const uniqueCandidates = unique(candidates);
-    const checks = await Promise.all(uniqueCandidates.map(async (uid) => {
-      const snap = await getDoc(doc(firebaseDb, 'users', uid)).catch(() => null);
-      return snap?.exists() ? uid : '';
-    }));
-    return unique(checks);
-  }
-
-  async function notifyChatRecipients(chat, messageId, body) {
-    const recipients = (await existingUserUids([
-      ...chatParticipantUids(chat),
-      ...(await loadAdminUids().catch(() => [])),
-    ])).filter((uid) => uid !== currentUid);
-    if (!recipients.length) return;
-
-    const title = `Nuevo mensaje de ${senderName}`;
-    await Promise.all(recipients.map((uid) => addDoc(collection(firebaseDb, 'notificaciones'), {
-      ...buildNotificationDocument({
-        userUid: uid,
-        title,
-        body,
-        type: 'chat_message',
-        source: role,
-        createdByUid: currentUid,
-        payload: {
-          chatId: chat.id,
-          messageId,
-          assignmentId: chat.assignmentId || chat.asignacion_id || '',
-          url: '/pages/login.html',
-        },
-      }),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })));
-  }
-
   async function addSystemChatMessage(chat, body) {
     const chatRef = doc(firebaseDb, 'chats', chat.id);
-    const messageRef = await addDoc(collection(chatRef, 'mensajes'), {
+    await addDoc(collection(chatRef, 'mensajes'), {
       senderUid: currentUid,
       senderRole: role,
       senderName,
@@ -569,9 +506,6 @@ export async function initChatWidget({
       lastMessage: body.slice(0, 180),
       lastMessageAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
-    await notifyChatRecipients(chat, messageRef.id, body).catch((error) => {
-      console.warn('No se pudieron crear notificaciones de coordinacion', error);
     });
   }
 
@@ -845,7 +779,7 @@ export async function initChatWidget({
     input.disabled = true;
     try {
       const chatRef = doc(firebaseDb, 'chats', state.selectedChat.id);
-      const messageRef = await addDoc(collection(chatRef, 'mensajes'), {
+      await addDoc(collection(chatRef, 'mensajes'), {
         senderUid: currentUid,
         senderRole: role,
         senderName,
@@ -857,9 +791,6 @@ export async function initChatWidget({
         lastMessage: body.slice(0, 180),
         lastMessageAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
-      await notifyChatRecipients(state.selectedChat, messageRef.id, body).catch((error) => {
-        console.warn('No se pudieron crear notificaciones de chat', error);
       });
       input.value = '';
       await refreshChats();

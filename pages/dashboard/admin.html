@@ -1187,7 +1187,6 @@ import { initAdminDocuments } from '../../js/admin-documents.js?v=20260628-docum
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260628-config';
 import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260628-config';
-import { buildNotificationDocument, NOTIFICATION_EVENTS } from '../../js/notification-engine.js';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260628-audit';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
@@ -3271,32 +3270,7 @@ function nombreFamiliaSolicitud(solicitud = {}) {
     || 'Familia';
 }
 
-async function crearNotificacionAsignacion({ userUid, role, asignacionId, solicitud, profesor, title, body }) {
-  if (!userUid) return;
-  await addDoc(collection(firebaseDb, 'notificaciones'), {
-    ...buildNotificationDocument({
-      userUid,
-      role,
-      title,
-      body,
-      type: NOTIFICATION_EVENTS.ASSIGNMENT_CREATED,
-      source: 'admin',
-      createdByUid: usuario.uid || usuario.id || '',
-      payload: {
-        assignmentId: asignacionId,
-        requestId: solicitud?.id || '',
-        teacherUid: profesor?.id || '',
-        familyUid: solicitud?.familia_id || solicitud?.familyUid || '',
-        studentId: solicitud?.alumno_id || solicitud?.studentId || '',
-        url: '/pages/login.html',
-      },
-    }),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-}
-
-async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, notas }) {
+async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor }) {
   const familyUid = adminPlainText(solicitud?.familia_id || solicitud?.familyUid || '', 180);
   const teacherUid = adminPlainText(profesor?.id || solicitud?.profesor_asignado_id || solicitud?.assignedTeacherUid || '', 180);
   const studentId = adminPlainText(solicitud?.alumno_id || solicitud?.studentId || solicitud?.studentUid || '', 180);
@@ -3354,41 +3328,14 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, nota
     });
   }
 
-  await Promise.all([
-    crearNotificacionAsignacion({
-      userUid: familyUid,
-      role: 'familia',
-      asignacionId,
-      solicitud,
-      profesor,
-      title: 'Profesor asignado',
-      body: `Ya tienes profesor para ${materia || 'la solicitud'}. Entra en el chat para acordar horario.`,
-    }),
-    crearNotificacionAsignacion({
-      userUid: teacherUid,
-      role: 'profesor',
-      asignacionId,
-      solicitud,
-      profesor,
-      title: 'Nueva familia asignada',
-      body: `Tienes una nueva asignacion${studentName ? ` con ${studentName}` : ''}. Entra en el chat para acordar horario.`,
-    }),
-  ]);
-
-  await addDoc(collection(firebaseDb, 'automationEvents'), {
-    type: 'assignment_ready_for_scheduling',
-    status: 'completed',
-    assignmentId: asignacionId,
-    requestId: solicitud?.id || '',
-    teacherUid,
-    familyUid,
-    studentId,
-    subject: materia,
-    notes: adminPlainText(notas, 500),
-    createdByUid: usuario.uid || usuario.id || '',
-    createdAt: serverTimestamp(),
+  await setDoc(firestoreDoc(firebaseDb, 'asignaciones', asignacionId), {
+    chatId: asignacionId,
+    schedulingStatus: 'pendiente_horario',
+    estado_programacion: 'pendiente_horario',
+    relationshipStage: 'pendiente_horario',
+    relationshipStatus: 'active',
     updatedAt: serverTimestamp(),
-  });
+  }, { merge: true });
 }
 
 async function cargarSolicitudMatchesFirestore(solicitudId) {
