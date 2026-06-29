@@ -438,7 +438,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   const proposalDisabled = role !== 'admin' && (availability.loading || !roleAvailability.targetSlots.length);
   const disabledAttr = proposalDisabled ? 'disabled' : '';
   const proposalRows = proposals.length
-    ? proposals.slice(0, 5).map((proposal) => {
+    ? proposals.map((proposal) => {
       const mine = currentActorIds.has(clean(proposal.proposedByUid, 180)) || (role !== 'admin' && proposal.proposedByRole === role);
       const canRespond = proposal.status === 'propuesta' && (role === 'admin' || !mine);
       const statusLabel = proposal.status === 'aceptada' ? 'Aceptada'
@@ -517,6 +517,10 @@ function renderThreadHeader(container, chat, role, preference = {}) {
 
 function renderMessages(container, messages, currentUid) {
   const box = container.querySelector('[data-chat-messages]');
+  const hadMessages = Boolean(box.querySelector('.chat-message'));
+  const distanceFromBottom = box.scrollHeight - box.scrollTop - box.clientHeight;
+  const shouldStickToBottom = !hadMessages || distanceFromBottom < 120;
+  const previousScrollTop = box.scrollTop;
   if (!messages.length) {
     box.innerHTML = '<div class="chat-empty-state">Todavia no hay mensajes. Escribe el primero para coordinar la clase.</div>';
     return;
@@ -529,7 +533,7 @@ function renderMessages(container, messages, currentUid) {
         <div class="chat-message-body">${escapeHtml(message.body)}</div>
       </div>`;
   }).join('');
-  box.scrollTop = box.scrollHeight;
+  box.scrollTop = shouldStickToBottom ? box.scrollHeight : previousScrollTop;
 }
 
 function notificationTitle(notification) {

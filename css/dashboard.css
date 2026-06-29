@@ -638,7 +638,9 @@ textarea {
 .chat-layout {
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;
-  min-height: 620px;
+  height: clamp(540px, calc(100dvh - var(--topbar-h) - 56px), 820px);
+  min-height: 0;
+  max-height: calc(100dvh - var(--topbar-h) - 40px);
   background: var(--white);
   border: 1px solid rgba(0,0,0,0.08);
   border-radius: var(--radius-sm);
@@ -649,6 +651,9 @@ textarea {
   border-right: 1px solid rgba(0,0,0,0.08);
   background: #f8f7f4;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .chat-panel-header {
   min-height: 72px;
@@ -702,7 +707,8 @@ textarea {
 .chat-list {
   display: flex;
   flex-direction: column;
-  max-height: 548px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
 }
 .chat-list-item {
@@ -739,9 +745,11 @@ textarea {
 }
 .chat-thread-panel {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: var(--white);
+  overflow: hidden;
 }
 .chat-thread-header {
   min-height: 72px;
@@ -777,6 +785,7 @@ textarea {
 }
 .chat-messages {
   flex: 1;
+  min-height: 0;
   padding: 18px 20px;
   overflow: auto;
   display: flex;
@@ -785,6 +794,9 @@ textarea {
   background: linear-gradient(180deg, #fff, #fbfaf7);
 }
 .chat-schedule-panel {
+  flex: 0 0 auto;
+  max-height: min(38dvh, 320px);
+  overflow: auto;
   border-top: 1px solid rgba(0,0,0,0.08);
   background: #fffdf8;
   padding: 14px 16px;
@@ -857,6 +869,7 @@ textarea {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+  min-width: 0;
 }
 .schedule-proposal {
   display: grid;
@@ -3065,15 +3078,24 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     max-width: 100%;
   }
   .chat-layout {
+    display: flex;
+    flex-direction: column;
     grid-template-columns: 1fr;
-    min-height: calc(100dvh - var(--topbar-h) - 32px);
+    height: calc(100dvh - var(--topbar-h) - 32px);
+    min-height: 0;
+    max-height: calc(100dvh - var(--topbar-h) - 24px);
   }
   .chat-list-panel {
+    flex: 0 0 auto;
+    max-height: min(24dvh, 170px);
     border-right: 0;
     border-bottom: 1px solid rgba(0,0,0,0.08);
   }
   .chat-list {
-    max-height: 220px;
+    max-height: none;
+  }
+  .chat-thread-panel {
+    flex: 1 1 auto;
   }
   .chat-message {
     max-width: 94%;
@@ -3447,35 +3469,52 @@ textarea.form-control { resize: vertical; min-height: 90px; }
     width: 48px;
   }
   .chat-layout {
-    min-height: calc(100dvh - var(--topbar-h) - 24px);
+    height: calc(100dvh - var(--topbar-h) - 24px - var(--keyboard-inset, 0px));
+    min-height: 0;
+    max-height: calc(100dvh - var(--topbar-h) - 16px - var(--keyboard-inset, 0px));
   }
   .chat-panel-header,
-  .chat-thread-header {
+  .chat-panel-header {
     min-height: 58px;
     padding: 12px;
     align-items: stretch;
     flex-direction: column;
   }
+  .chat-thread-header {
+    min-height: 58px;
+    padding: 10px 12px;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .chat-thread-heading {
+    flex: 1 1 170px;
+  }
   .chat-alias-form {
+    order: 3;
+    flex: 1 1 100%;
     width: 100%;
     min-width: 0;
   }
   .chat-alias-toggle {
-    width: 100%;
+    width: auto;
+    min-height: 36px;
+    padding: 6px 10px;
     justify-content: center;
   }
   .chat-list {
-    max-height: 180px;
+    max-height: none;
   }
   .chat-list-item {
     min-height: 70px;
     padding: 10px 12px;
   }
   .chat-messages {
-    min-height: 280px;
+    min-height: 0;
     padding: 12px;
   }
   .chat-schedule-panel {
+    max-height: min(24dvh, 180px);
     padding: 12px;
   }
   .chat-schedule-form {
@@ -3493,6 +3532,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .chat-compose {
     padding: 12px;
+  }
+  .chat-compose textarea {
+    min-height: 68px;
+    max-height: 96px;
   }
   .notification-item {
     grid-template-columns: 1fr;
