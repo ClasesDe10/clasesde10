@@ -10,6 +10,7 @@ const publicTeacherPage = fs.readFileSync('para-profesores.html', 'utf8');
 for (const id of [
   'p-foto-file',
   'p-estudio-exacto',
+  'p-colegio',
   'p-centro-estudios',
   'p-nota-bachillerato',
   'p-nota-universidad',
@@ -32,6 +33,8 @@ assert.ok(professorDashboard.includes('Notas finales del curso anterior'), 'Teac
 assert.ok(professorDashboard.includes('Expediente o notas universitarias'), 'Teacher documents must request university/main training grades');
 assert.ok(professorDashboard.includes('Curriculum opcional'), 'Teacher documents must keep CV optional');
 assert.ok(professorDashboard.includes('Coche para desplazamientos'), 'Teacher profile must ask for car availability');
+assert.ok(professorDashboard.includes('Colegio donde estudiaste'), 'Teacher profile must require the school attended');
+assert.ok(professorDashboard.includes('Universidad o centro superior'), 'Teacher profile must require university or higher education center separately');
 assert.ok(aiEngine.includes('estimateTravelForMatch'), 'Matching engine must estimate travel distance/time');
 assert.ok(aiEngine.includes('locationEstimate'), 'Matching results must expose location estimate');
 
@@ -52,6 +55,8 @@ for (const removed of [
 
 for (const field of [
   'estudio_exacto',
+  'colegio',
+  'schoolName',
   'centro_estudios',
   'nota_bachillerato',
   'nota_media_universidad',
@@ -70,6 +75,8 @@ for (const field of [
 
 assert.ok(adminDashboard.includes("fila('Nota Bachillerato'"), 'Admin detail must show Bachillerato grade');
 assert.ok(adminDashboard.includes("fila('Nota formacion superior'"), 'Admin detail must show higher education grade');
+assert.ok(adminDashboard.includes("fila('Colegio'"), 'Admin detail must show teacher school');
+assert.ok(adminDashboard.includes("fila('Universidad / centro superior'"), 'Admin detail must show teacher university/higher center');
 assert.ok(adminDashboard.includes("fila('Bizum'"), 'Admin detail must show Bizum confirmation');
 assert.ok(adminDashboard.includes("fila('Coche'"), 'Admin detail must show car availability');
 assert.ok(!adminDashboard.includes("fila('Tarifa'"), 'Admin detail must not show teacher-provided tariff');

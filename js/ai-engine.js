@@ -424,8 +424,9 @@ export function getTeacherProfile(teacher = {}) {
     subjects,
     levels,
     studyLevel: clean(teacher.nivel_estudios || teacher.studyLevel, 160),
-    exactStudy: clean(teacher.estudio_exacto || teacher.exactStudy || teacher.titulacion || teacher.universidad, 300),
-    studyCenter: clean(teacher.centro_estudios || teacher.studyCenter || teacher.colegio_estudios || teacher.universidad, 300),
+    exactStudy: clean(teacher.estudio_exacto || teacher.exactStudy || teacher.titulacion, 300),
+    schoolName: clean(teacher.colegio || teacher.schoolName || teacher.school || teacher.colegio_nombre, 240),
+    studyCenter: clean(teacher.centro_estudios || teacher.studyCenter || teacher.universidad || teacher.universityName || teacher.colegio_estudios, 300),
     bachilleratoGrade: firstNumber(teacher.nota_bachillerato, teacher.bachilleratoGrade),
     universityAverageGrade: firstNumber(teacher.nota_media_universidad, teacher.universityAverageGrade),
     experienceYears: firstNumber(teacher.experiencia_anios, teacher.experienceYears, teacher.anios_experiencia)
@@ -506,7 +507,10 @@ export function evaluateTeacherProfile(teacher = {}) {
   if (!profile.studyLevel) issues.push({ field: 'tipo_formacion', label: 'Indicar tipo de formacion principal', weight: 5 });
   if (!profile.exactStudy) issues.push({ field: 'estudio_exacto', label: 'Completar estudio exacto o titulacion', weight: 8 });
   else strengths.push(`Formacion: ${profile.exactStudy}`);
-  if (!profile.studyCenter) issues.push({ field: 'centro_estudios', label: 'Completar colegio, universidad o centro', weight: 6 });
+  if (!profile.schoolName) issues.push({ field: 'colegio', label: 'Completar colegio donde estudio', weight: 6 });
+  else strengths.push(`Colegio: ${profile.schoolName}`);
+  if (!profile.studyCenter) issues.push({ field: 'centro_estudios', label: 'Completar universidad o centro superior', weight: 6 });
+  else strengths.push(`Centro superior: ${profile.studyCenter}`);
   if (profile.bachilleratoGrade === null || profile.bachilleratoGrade < 0 || profile.bachilleratoGrade > 10) {
     issues.push({ field: 'nota_bachillerato', label: 'Completar nota media de Bachillerato', weight: 4 });
   }
@@ -654,7 +658,7 @@ function scoreAvailability(requestProfile, teacherProfile) {
 
 function scoreExperience(requestProfile, teacherProfile) {
   const requestSubjects = subjectTags(requestProfile.subject);
-  const educationText = normalizeText([teacherProfile.studyLevel, teacherProfile.exactStudy, teacherProfile.studyCenter, teacherProfile.bio].join(' '));
+  const educationText = normalizeText([teacherProfile.studyLevel, teacherProfile.exactStudy, teacherProfile.schoolName, teacherProfile.studyCenter, teacherProfile.bio].join(' '));
   const educationSubjects = subjectTags(educationText);
   const subjectSpecific = overlapCount(requestSubjects, educationSubjects) > 0;
   const years = Number(teacherProfile.experienceYears || 0);

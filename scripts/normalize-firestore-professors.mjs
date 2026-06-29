@@ -93,6 +93,7 @@ function profileIssues(data) {
   if (!(data.zona || data.zone)) issues.push('zona');
   if (!(data.nivel_estudios || data.studyLevel)) issues.push('tipo formacion');
   if (!(data.estudio_exacto || data.exactStudy || data.titulacion)) issues.push('estudio exacto');
+  if (!(data.colegio || data.schoolName || data.school || data.colegio_nombre)) issues.push('colegio');
   if (!(data.centro_estudios || data.studyCenter || data.colegio_estudios || data.universidad)) issues.push('centro estudios');
   if (!hasValidBachilleratoGrade) issues.push('nota bachillerato');
   if (!hasValidUniversityGrade) issues.push('nota formacion superior');
@@ -132,6 +133,10 @@ function buildPatch(data) {
     patch.estudio_exacto = clean(data.exactStudy || data.titulacion, 300);
   }
   if (data.estudio_exacto && !data.exactStudy) patch.exactStudy = clean(data.estudio_exacto, 300);
+  if ((data.colegio || data.schoolName || data.school || data.colegio_nombre) && !data.colegio) {
+    patch.colegio = clean(data.schoolName || data.school || data.colegio_nombre, 240);
+  }
+  if (data.colegio && !data.schoolName) patch.schoolName = clean(data.colegio, 240);
   if ((data.centro_estudios || data.studyCenter || data.colegio_estudios || data.universidad) && !data.centro_estudios) {
     patch.centro_estudios = clean(data.studyCenter || data.colegio_estudios || data.universidad, 300);
   }

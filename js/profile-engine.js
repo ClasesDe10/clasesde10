@@ -150,6 +150,8 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
   const cvDoc = hasDocument(docs, ['curriculum', 'cv']);
   const pendingDocs = (docs || []).filter((doc) => PENDING_DOCUMENT_STATUSES.has(documentStatus(doc))).length;
   const carKnown = booleanKnown(firstValue(profile, ['tiene_coche', 'hasCar', 'carAvailable', 'vehiculo_propio']));
+  const schoolName = firstValue(profile, ['colegio', 'schoolName', 'school', 'colegio_nombre']);
+  const studyCenter = firstValue(profile, ['centro_estudios', 'studyCenter', 'universidad', 'universityName', 'colegio_estudios']);
   const hasAvailability = hasText(firstValue(profile, ['disponibilidad_resumen', 'availabilitySummary']), 10)
     || Array.isArray(profile.disponibilidad) && profile.disponibilidad.length > 0;
 
@@ -158,7 +160,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     { key: 'telefono', label: 'Telefono valido', weight: 7, required: true, complete: phone.valid },
     { key: 'foto', label: 'Foto de perfil clara', weight: 7, required: true, complete: hasText(firstValue(profile, ['foto_url', 'photoUrl']), 20) },
     { key: 'direccion', label: 'Direccion, ciudad y zona', weight: 8, required: true, complete: hasText(firstValue(profile, ['direccion', 'address']), 5) && hasText(firstValue(profile, ['ciudad', 'city']), 2) && postalCode.valid && hasText(firstValue(profile, ['zona', 'zone']), 2) },
-    { key: 'formacion', label: 'Formacion principal, estudio exacto y centro', weight: 10, required: true, complete: hasText(firstValue(profile, ['nivel_estudios', 'studyLevel']), 2) && hasText(firstValue(profile, ['estudio_exacto', 'exactStudy', 'titulacion']), 4) && hasText(firstValue(profile, ['centro_estudios', 'studyCenter', 'colegio_estudios']), 4) },
+    { key: 'formacion', label: 'Formacion principal, estudio exacto, colegio y universidad/centro', weight: 10, required: true, complete: hasText(firstValue(profile, ['nivel_estudios', 'studyLevel']), 2) && hasText(firstValue(profile, ['estudio_exacto', 'exactStudy', 'titulacion']), 4) && hasText(schoolName, 4) && hasText(studyCenter, 4) },
     { key: 'notas', label: 'Notas academicas dentro de 0-10', weight: 7, required: true, complete: isValidGrade(firstValue(profile, ['nota_bachillerato', 'bachilleratoGrade'])) && isValidGrade(firstValue(profile, ['nota_media_universidad', 'universityAverageGrade'])) },
     { key: 'bio', label: 'Presentacion profesional de al menos 40 caracteres', weight: 8, required: true, complete: hasText(profile.bio, 40) },
     { key: 'experiencia', label: 'Anios de experiencia validos', weight: 5, required: true, complete: Number(firstValue(profile, ['experiencia_anios', 'experienceYears'])) >= 0 },
@@ -220,6 +222,8 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
       hasCar: firstValue(profile, ['tiene_coche', 'hasCar', 'carAvailable', 'vehiculo_propio']) === true,
       phone: phone.value,
       postalCode: postalCode.value,
+      schoolName: cleanText(schoolName, 240),
+      studyCenter: cleanText(studyCenter, 300),
       bachilleratoGrade: parseGrade(firstValue(profile, ['nota_bachillerato', 'bachilleratoGrade'])),
       universityAverageGrade: parseGrade(firstValue(profile, ['nota_media_universidad', 'universityAverageGrade'])),
     },

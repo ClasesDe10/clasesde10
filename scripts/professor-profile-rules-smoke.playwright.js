@@ -90,9 +90,11 @@ async (page) => {
     await mergeStage('exact-study', {
       estudio_exacto: 'Grado en Matematicas',
     });
-    await mergeStage('study-center', {
+    await mergeStage('school-legacy', {
+      colegio: 'Colegio El Prado',
+    });
+    await mergeStage('study-center-legacy', {
       centro_estudios: 'Universidad Complutense de Madrid',
-      colegio_estudios: 'Universidad Complutense de Madrid',
     });
     await mergeStage('grades', {
       nota_bachillerato: 8.5,
@@ -105,18 +107,11 @@ async (page) => {
       materias: ['Matematicas', 'Padel', 'Guitarra'],
       niveles_educativos: ['ESO', 'Bachillerato', 'Deporte', 'Musica'],
       especialidades: ['EVAU', 'Padel iniciacion'],
-      specialties: ['EVAU', 'Padel iniciacion'],
       idiomas: ['Espanol', 'Ingles'],
-      languages: ['Espanol', 'Ingles'],
       certificaciones: ['C1 Ingles'],
-      certifications: ['C1 Ingles'],
       acepta_bizum: true,
-      hasBizum: true,
+      tiene_coche: true,
       perfil_completo: true,
-      profileComplete: true,
-      profileCompletionPercent: 96,
-      profileCompletion: 96,
-      profileIssues: [],
     });
     return {
       uid,

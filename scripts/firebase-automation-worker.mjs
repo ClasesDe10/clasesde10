@@ -2758,6 +2758,8 @@ async function main() {
         zona: 'Madrid',
         nivel_estudios: 'Grado universitario',
         estudio_exacto: 'Grado en Matematicas',
+        colegio: 'Colegio El Prado',
+        schoolName: 'Colegio El Prado',
         centro_estudios: 'Universidad Complutense de Madrid',
         nota_bachillerato: 8.7,
         nota_media_universidad: 8.1,

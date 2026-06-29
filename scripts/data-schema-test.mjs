@@ -23,6 +23,8 @@ const teacher = normalizeEntityForWrite('profesores', {
   zona: 'Centro',
   materias: 'Matematicas, Fisica',
   niveles_educativos: ['ESO', 'Bachillerato'],
+  colegio: 'Colegio El Prado',
+  centro_estudios: 'Universidad Complutense de Madrid',
   experiencia_anios: '4',
   disponibilidad_resumen: 'Tardes',
   acepta_bizum: true,
@@ -35,6 +37,8 @@ assert.equal(teacher.userUid, 'user_1');
 assert.equal(teacher.usuario_id, 'user_1');
 assert.equal(teacher.displayName, 'Ana Garcia');
 assert.deepEqual(teacher.subjects, ['Matematicas', 'Fisica']);
+assert.equal(teacher.schoolName, 'Colegio El Prado');
+assert.equal(teacher.studyCenter, 'Universidad Complutense de Madrid');
 assert.equal(teacher.experienceYears, 4);
 assert.equal(teacher.hasBizum, true);
 assert.equal(teacher.hasCar, true);

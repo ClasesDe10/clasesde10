@@ -1214,7 +1214,7 @@ import {
   updateDoc,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260629-travel-matching';
+import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260629-school-profile';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -3529,7 +3529,8 @@ function renderProfesorDetalle(p) {
       ${fila('Idiomas', idiomas.join(', '))}
       ${fila('Certificaciones', certificaciones.join(', '))}
       ${fila('Formacion', p.estudio_exacto || p.exactStudy || p.nivel_estudios || p.studyLevel)}
-      ${fila('Centro', p.centro_estudios || p.studyCenter || p.colegio_estudios || p.universidad)}
+      ${fila('Colegio', p.colegio || p.schoolName || p.school || p.colegio_nombre)}
+      ${fila('Universidad / centro superior', p.centro_estudios || p.studyCenter || p.universidad || p.universityName || p.colegio_estudios)}
       ${fila('Nota Bachillerato', p.nota_bachillerato ?? p.bachilleratoGrade ?? '')}
       ${fila('Nota formacion superior', p.nota_media_universidad ?? p.universityAverageGrade ?? '')}
       ${fila('Bizum', (p.acepta_bizum === true || p.hasBizum === true) ? 'Si' : 'No confirmado')}

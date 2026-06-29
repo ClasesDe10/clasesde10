@@ -335,8 +335,13 @@
                   <input class="form-control" type="text" id="p-estudio-exacto" placeholder="Ej: Grado en Fisica, TAFAD, Conservatorio profesional de piano">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Colegio, universidad o centro donde estudiaste</label>
-                  <input class="form-control" type="text" id="p-centro-estudios" placeholder="Ej: Universidad Complutense, IES Ramiro de Maeztu, Federacion Madrilena de Padel">
+                  <label class="form-label">Colegio donde estudiaste</label>
+                  <input class="form-control" type="text" id="p-colegio" placeholder="Ej: Colegio El Prado, IES Ramiro de Maeztu">
+                  <div class="form-hint">Dato obligatorio: ayuda a valorar contexto academico y confianza del perfil.</div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Universidad o centro superior donde estudias / estudiaste</label>
+                  <input class="form-control" type="text" id="p-centro-estudios" placeholder="Ej: Universidad Complutense, UPM, Conservatorio profesional, Federacion Madrilena de Padel">
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -575,7 +580,7 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260629-travel-matching';
+} from '../../js/profile-engine.js?v=20260629-school-profile';
 import {
   buildTeacherAttendancePayload,
   classEnded,
@@ -1476,8 +1481,9 @@ async function cargarPerfil() {
   document.getElementById('p-cp').value          = perfil.codigo_postal || perfil.postalCode || '';
   document.getElementById('p-zona').value        = perfil.zona || perfil.zone || '';
   document.getElementById('p-nivel').value       = perfil.nivel_estudios || '';
-  document.getElementById('p-estudio-exacto').value = perfil.estudio_exacto || perfil.exactStudy || perfil.universidad || '';
-  document.getElementById('p-centro-estudios').value = perfil.centro_estudios || perfil.studyCenter || perfil.colegio_estudios || '';
+  document.getElementById('p-estudio-exacto').value = perfil.estudio_exacto || perfil.exactStudy || perfil.titulacion || '';
+  document.getElementById('p-colegio').value = perfil.colegio || perfil.schoolName || perfil.school || perfil.colegio_nombre || '';
+  document.getElementById('p-centro-estudios').value = perfil.centro_estudios || perfil.studyCenter || perfil.universidad || perfil.universityName || perfil.colegio_estudios || '';
   document.getElementById('p-nota-bachillerato').value = perfil.nota_bachillerato ?? perfil.bachilleratoGrade ?? '';
   document.getElementById('p-nota-universidad').value = perfil.nota_media_universidad ?? perfil.universityAverageGrade ?? '';
   document.getElementById('p-bio').value         = perfil.bio || '';
@@ -1589,6 +1595,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const zona = document.getElementById('p-zona').value.trim();
   const tipoFormacion = document.getElementById('p-nivel').value.trim();
   const estudioExacto = document.getElementById('p-estudio-exacto').value.trim();
+  const colegioEstudios = document.getElementById('p-colegio').value.trim();
   const centroEstudios = document.getElementById('p-centro-estudios').value.trim();
   const notaBachillerato = parseGrade(document.getElementById('p-nota-bachillerato').value);
   const notaUniversidad = parseGrade(document.getElementById('p-nota-universidad').value);
@@ -1609,10 +1616,10 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   nivelesActuales = toProfileList(nivelesActuales);
 
   if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid || !zona ||
-      !tipoFormacion || !estudioExacto || !centroEstudios || !notasValidas ||
+      !tipoFormacion || !estudioExacto || !colegioEstudios || !centroEstudios || !notasValidas ||
       !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum || !movilidadDeclarada ||
       !Number.isFinite(experiencia) || experiencia < 0 || experiencia > 60) {
-    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, CP de 5 digitos, zona, estudios, centro, notas, materias/actividades, niveles, disponibilidad, movilidad, Bizum y presentacion.', 'warning');
+    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, CP de 5 digitos, zona, estudio exacto, colegio, universidad/centro superior, notas, materias/actividades, niveles, disponibilidad, movilidad, Bizum y presentacion.', 'warning');
     return;
   }
 
@@ -1636,8 +1643,11 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     studyLevel: tipoFormacion,
     estudio_exacto: estudioExacto,
     exactStudy: estudioExacto,
+    colegio: colegioEstudios,
     centro_estudios: centroEstudios,
     studyCenter: centroEstudios,
+    universidad: centroEstudios,
+    universityName: centroEstudios,
     nota_bachillerato: notaBachillerato,
     bachilleratoGrade: notaBachillerato,
     nota_media_universidad: notaUniversidad,
@@ -1671,51 +1681,27 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     telefono,
     active: perfilActivo,
     foto_url: fotoUrl,
-    photoUrl: fotoUrl,
     direccion,
-    address: direccion,
     ciudad,
-    city: ciudad,
     codigo_postal: codigoPostal,
-    postalCode: codigoPostal,
     zona,
-    zone: zona,
     nivel_estudios: tipoFormacion,
-    studyLevel: tipoFormacion,
     estudio_exacto: estudioExacto,
-    exactStudy: estudioExacto,
+    colegio: colegioEstudios,
     centro_estudios: centroEstudios,
-    studyCenter: centroEstudios,
-    colegio_estudios: centroEstudios,
     nota_bachillerato: notaBachillerato,
-    bachilleratoGrade: notaBachillerato,
     nota_media_universidad: notaUniversidad,
-    universityAverageGrade: notaUniversidad,
     bio,
     experiencia_anios: Number.isFinite(experiencia) ? experiencia : 0,
-    experienceYears: Number.isFinite(experiencia) ? experiencia : 0,
     disponibilidad_resumen: disponibilidad,
-    availabilitySummary: disponibilidad,
     materias: materiasActuales,
-    subjects: materiasActuales,
     niveles_educativos: nivelesActuales,
-    levels: nivelesActuales,
     especialidades,
-    specialties: especialidades,
     idiomas,
-    languages: idiomas,
     certificaciones,
-    certifications: certificaciones,
     acepta_bizum: aceptaBizum,
-    hasBizum: aceptaBizum,
     tiene_coche: tieneCoche,
-    hasCar: tieneCoche,
-    carAvailable: tieneCoche,
     perfil_completo: evaluation.complete,
-    profileComplete: evaluation.complete,
-    profileCompletionPercent: evaluation.percent,
-    profileCompletion: evaluation.percent,
-    profileIssues: evaluation.issueLabels,
     updatedAt: serverTimestamp(),
     updated_at: new Date().toISOString(),
   };
@@ -1770,10 +1756,11 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       studyLevel:        tipoFormacion,
       estudio_exacto:    estudioExacto,
       exactStudy:        estudioExacto,
+      colegio:           colegioEstudios,
       universidad:       centroEstudios,
       centro_estudios:   centroEstudios,
       studyCenter:       centroEstudios,
-      colegio_estudios:  centroEstudios,
+      universityName:    centroEstudios,
       nota_bachillerato: notaBachillerato,
       bachilleratoGrade: notaBachillerato,
       nota_media_universidad: notaUniversidad,

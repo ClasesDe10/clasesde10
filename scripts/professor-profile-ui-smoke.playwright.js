@@ -45,6 +45,7 @@ async (page) => {
     ['#p-cp', '28020'],
     ['#p-zona', 'Madrid centro'],
     ['#p-estudio-exacto', 'Grado en Matematicas'],
+    ['#p-colegio', 'Colegio El Prado'],
     ['#p-centro-estudios', 'Universidad Complutense de Madrid'],
     ['#p-nota-bachillerato', '8.70'],
     ['#p-nota-universidad', '8.10'],
@@ -81,11 +82,12 @@ async (page) => {
   const t = result.teacher || {};
   if (result.user?.telefono !== '611222333') throw new Error('Professor user phone was not saved.');
   if (!String(t.foto_url || '').startsWith('data:image/jpeg')) throw new Error('Professor file photo was not saved.');
-  if (t.exactStudy !== 'Grado en Matematicas' || t.acepta_bizum !== true || t.hasCar !== true || t.perfil_completo !== true) throw new Error('Professor core profile was not saved.');
+  if (t.estudio_exacto !== 'Grado en Matematicas' || t.acepta_bizum !== true || t.tiene_coche !== true || t.perfil_completo !== true) throw new Error('Professor core profile was not saved.');
+  if (t.colegio !== 'Colegio El Prado') throw new Error('Professor school was not saved separately.');
+  if (t.centro_estudios !== 'Universidad Complutense de Madrid') throw new Error('Professor higher education center was not saved.');
   if (!Array.isArray(t.materias) || !t.materias.includes('Padel')) throw new Error('Professor activities were not saved.');
-  if (!Array.isArray(t.specialties) || !t.specialties.includes('EVAU')) throw new Error('Professor specialties were not saved.');
-  if (!Array.isArray(t.languages) || !t.languages.includes('Ingles')) throw new Error('Professor languages were not saved.');
-  if (typeof t.profileCompletionPercent !== 'number') throw new Error('Professor profile completion was not saved.');
+  if (!Array.isArray(t.especialidades) || !t.especialidades.includes('EVAU')) throw new Error('Professor specialties were not saved.');
+  if (!Array.isArray(t.idiomas) || !t.idiomas.includes('Ingles')) throw new Error('Professor languages were not saved.');
 
   return {
     uid: setup.uid,
@@ -93,7 +95,7 @@ async (page) => {
     teacher: {
       materias: t.materias,
       perfil_completo: t.perfil_completo,
-      profileCompletionPercent: t.profileCompletionPercent,
+      colegio: t.colegio,
     },
   };
 }

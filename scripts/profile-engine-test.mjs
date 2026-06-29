@@ -25,6 +25,7 @@ const teacher = evaluateTeacherProfileProfessional({
   zona: 'Madrid centro',
   nivel_estudios: 'Grado universitario',
   estudio_exacto: 'Grado en Matematicas',
+  colegio: 'Colegio El Prado',
   centro_estudios: 'Universidad Complutense de Madrid',
   nota_bachillerato: 8.7,
   nota_media_universidad: 8.1,
@@ -49,6 +50,8 @@ assert.ok(teacher.trustScore >= 60, `Teacher trust too low: ${teacher.trustScore
 assert.equal(teacher.trustProfile.adminStats.reputationCanBeManipulatedByProfileOnly, false);
 assert.ok(teacher.trustProfile.riskFlags.includes('low_activity_sample'));
 assert.deepEqual(teacher.normalized.subjects, ['Matematicas', 'Padel']);
+assert.equal(teacher.normalized.schoolName, 'Colegio El Prado');
+assert.equal(teacher.normalized.studyCenter, 'Universidad Complutense de Madrid');
 
 const family = evaluateFamilyProfileProfessional({
   nombre: 'Familia',
