@@ -670,18 +670,73 @@ service cloud.firestore {
         || isStudentParticipant(data);
     }
 
+    function availabilityFamilyBelongsToAuth(familyUid) {
+      return signedIn()
+        && familyUid is string
+        && (
+          familyUid == request.auth.uid
+          || (
+            exists(/databases/$(database)/documents/familias/$(familyUid))
+            && (
+              get(/databases/$(database)/documents/familias/$(familyUid)).data.userUid == request.auth.uid
+              || get(/databases/$(database)/documents/familias/$(familyUid)).data.usuario_id == request.auth.uid
+            )
+          )
+        );
+    }
+
+    function availabilityStudentOwnedByFamily(studentId, familyUid) {
+      return availabilityFamilyBelongsToAuth(familyUid)
+        && studentId is string
+        && familyUid is string
+        && exists(/databases/$(database)/documents/alumnos/$(studentId))
+        && (
+          get(/databases/$(database)/documents/alumnos/$(studentId)).data.familyUid == familyUid
+          || get(/databases/$(database)/documents/alumnos/$(studentId)).data.familia_id == familyUid
+        );
+    }
+
+    function isTeacherAvailability(data) {
+      return data.keys().hasAll(['teacherUid', 'profesor_id'])
+        && data.teacherUid == data.profesor_id
+        && !data.keys().hasAny(['familyUid', 'familia_id', 'studentId', 'alumno_id']);
+    }
+
+    function isStudentAvailability(data) {
+      return data.keys().hasAll(['familyUid', 'familia_id', 'studentId', 'alumno_id'])
+        && data.familyUid == data.familia_id
+        && data.studentId == data.alumno_id;
+    }
+
     function isAvailabilityOwner(data) {
       return signedIn()
         && (
-          data.teacherUid == request.auth.uid
-          || data.profesor_id == request.auth.uid
+          (
+            isTeacherAvailability(data)
+            && data.teacherUid == request.auth.uid
+          )
+          || (
+            isStudentAvailability(data)
+            && availabilityStudentOwnedByFamily(data.studentId, data.familyUid)
+          )
         );
+    }
+
+    function canReadAvailability(data) {
+      return isAdmin()
+        || isAvailabilityOwner(data)
+        || (signedIn() && hasRole('familia') && isTeacherAvailability(data))
+        || (signedIn() && hasRole('profesor') && isStudentAvailability(data));
     }
 
     function validAvailabilityFields(data) {
       return data.keys().hasOnly([
           'teacherUid',
           'profesor_id',
+          'familyUid',
+          'familia_id',
+          'studentId',
+          'alumno_id',
           'dia_semana',
           'hora_inicio',
           'hora_fin',
@@ -692,15 +747,7 @@ service cloud.firestore {
           'updatedAt',
           'updated_at'
         ])
-        && data.keys().hasAll([
-          'teacherUid',
-          'profesor_id',
-          'dia_semana',
-          'hora_inicio',
-          'hora_fin'
-        ])
-        && data.teacherUid == request.auth.uid
-        && data.profesor_id == request.auth.uid
+        && data.keys().hasAll(['dia_semana', 'hora_inicio', 'hora_fin'])
         && data.dia_semana is int
         && data.dia_semana >= 0
         && data.dia_semana <= 6
@@ -712,8 +759,29 @@ service cloud.firestore {
         && (!data.keys().hasAny(['canonicalCollection']) || data.canonicalCollection == 'disponibilidad');
     }
 
-    function validAvailabilityCreate(data) {
+    function validTeacherAvailabilityPayload(data) {
       return validAvailabilityFields(data)
+        && isTeacherAvailability(data)
+        && data.teacherUid == request.auth.uid;
+    }
+
+    function validStudentAvailabilityPayload(data) {
+      return validAvailabilityFields(data)
+        && isStudentAvailability(data)
+        && availabilityStudentOwnedByFamily(data.studentId, data.familyUid);
+    }
+
+    function validAvailabilityCreate(data) {
+      return (
+        (
+          hasRole('profesor')
+          && validTeacherAvailabilityPayload(data)
+        )
+        || (
+          hasRole('familia')
+          && validStudentAvailabilityPayload(data)
+        )
+      )
         && (!data.keys().hasAny(['createdAt']) || data.createdAt == request.time)
         && (!data.keys().hasAny(['created_at']) || data.created_at is string)
         && (!data.keys().hasAny(['updatedAt']) || data.updatedAt == request.time)
@@ -722,9 +790,22 @@ service cloud.firestore {
 
     function validAvailabilityUpdate() {
       return isAvailabilityOwner(resource.data)
-        && validAvailabilityFields(request.resource.data)
-        && request.resource.data.teacherUid == resource.data.teacherUid
-        && request.resource.data.profesor_id == resource.data.profesor_id
+        && (
+          (
+            isTeacherAvailability(resource.data)
+            && validTeacherAvailabilityPayload(request.resource.data)
+            && request.resource.data.teacherUid == resource.data.teacherUid
+            && request.resource.data.profesor_id == resource.data.profesor_id
+          )
+          || (
+            isStudentAvailability(resource.data)
+            && validStudentAvailabilityPayload(request.resource.data)
+            && request.resource.data.familyUid == resource.data.familyUid
+            && request.resource.data.familia_id == resource.data.familia_id
+            && request.resource.data.studentId == resource.data.studentId
+            && request.resource.data.alumno_id == resource.data.alumno_id
+          )
+        )
         && (
           !resource.data.keys().hasAny(['createdAt'])
           || request.resource.data.createdAt == resource.data.createdAt
@@ -1053,6 +1134,8 @@ service cloud.firestore {
           'modalidad',
           'notas',
           'status',
+          'availabilityStatus',
+          'availabilityValidation',
           'proposedByUid',
           'proposedByRole',
           'proposedAt',
@@ -1078,6 +1161,8 @@ service cloud.firestore {
         && optionalString('materia', 180)
         && optionalString('modalidad', 40)
         && optionalString('notas', 300)
+        && (!request.resource.data.keys().hasAny(['availabilityStatus']) || request.resource.data.availabilityStatus is string)
+        && (!request.resource.data.keys().hasAny(['availabilityValidation']) || request.resource.data.availabilityValidation is map)
         && request.resource.data.proposedAt == request.time
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -1375,13 +1460,12 @@ service cloud.firestore {
     }
 
     match /disponibilidad/{availabilityId} {
-      allow create: if isAdmin()
-        || (hasRole('profesor') && validAvailabilityCreate(request.resource.data));
-      allow read: if isAdmin() || isAvailabilityOwner(resource.data);
+      allow create: if isAdmin() || validAvailabilityCreate(request.resource.data);
+      allow read: if canReadAvailability(resource.data);
       allow update: if isAdmin()
-        || (hasRole('profesor') && validAvailabilityUpdate());
+        || validAvailabilityUpdate();
       allow delete: if isAdmin()
-        || (hasRole('profesor') && isAvailabilityOwner(resource.data));
+        || isAvailabilityOwner(resource.data);
     }
 
     match /asignaciones/{assignmentId} {

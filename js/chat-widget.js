@@ -11,12 +11,18 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 import {
   buildAdminClassPayload,
   validateClassTimeRange,
 } from './calendar-engine.js?v=20260628-calendar';
+import {
+  availabilitySlotLabel,
+  summarizeAvailabilitySlots,
+  validateScheduleAvailability,
+} from './availability-engine.js?v=20260629-availability';
 import {
   createAdminNotification,
   loadNotificationSettings,
@@ -205,6 +211,93 @@ async function loadChats(dbCompat, role, profileId, usuario) {
   return chats;
 }
 
+function uniqueAvailabilityRows(rows = []) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = row.id || `${row.teacherUid || row.profesor_id || ''}:${row.familyUid || row.familia_id || ''}:${row.studentId || row.alumno_id || ''}:${row.dia_semana}:${row.hora_inicio}:${row.hora_fin}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function loadAvailabilityBy(field, value) {
+  const cleanValue = clean(value, 180);
+  if (!cleanValue) return [];
+  const snap = await getDocs(query(
+    collection(firebaseDb, 'disponibilidad'),
+    where(field, '==', cleanValue),
+    limit(80),
+  ));
+  return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+}
+
+async function loadChatAvailability(chat = {}) {
+  const teacherUid = clean(chat.teacherUid || chat.profesor_id, 180);
+  const studentId = clean(chat.studentId || chat.alumno_id, 180);
+  const [teacherCanonical, teacherLegacy, studentCanonical, studentLegacy] = await Promise.all([
+    loadAvailabilityBy('teacherUid', teacherUid).catch(() => []),
+    loadAvailabilityBy('profesor_id', teacherUid).catch(() => []),
+    loadAvailabilityBy('studentId', studentId).catch(() => []),
+    loadAvailabilityBy('alumno_id', studentId).catch(() => []),
+  ]);
+  return {
+    loading: false,
+    teacherSlots: uniqueAvailabilityRows([...teacherCanonical, ...teacherLegacy]),
+    studentSlots: uniqueAvailabilityRows([...studentCanonical, ...studentLegacy]),
+  };
+}
+
+function availabilityForRole(role, availability = {}) {
+  const teacherSlots = availability.teacherSlots || [];
+  const studentSlots = availability.studentSlots || [];
+  if (role === 'familia') return {
+    targetLabel: 'profesor',
+    targetSlots: teacherSlots,
+    ownLabel: 'alumno',
+    ownSlots: studentSlots,
+  };
+  if (role === 'profesor') return {
+    targetLabel: 'alumno',
+    targetSlots: studentSlots,
+    ownLabel: 'profesor',
+    ownSlots: teacherSlots,
+  };
+  return {
+    targetLabel: 'ambas partes',
+    targetSlots: [...teacherSlots, ...studentSlots],
+    ownLabel: 'agenda',
+    ownSlots: [],
+  };
+}
+
+function renderAvailabilitySummary(availability = {}, role = '') {
+  if (availability.loading) {
+    return '<div class="schedule-availability-note">Cargando disponibilidad de la asignacion...</div>';
+  }
+  if (availability.error) {
+    return `<div class="schedule-availability-note warning">${escapeHtml(availability.error)}</div>`;
+  }
+
+  const teacherSummary = summarizeAvailabilitySlots(availability.teacherSlots || []);
+  const studentSummary = summarizeAvailabilitySlots(availability.studentSlots || []);
+  const roleContext = availabilityForRole(role, availability);
+  const targetMissing = role !== 'admin' && !roleContext.targetSlots.length;
+  const statusClass = targetMissing ? 'warning' : 'success';
+  const statusText = targetMissing
+    ? `Falta disponibilidad del ${roleContext.targetLabel}; no se puede proponer horario todavia.`
+    : `Las propuestas deben estar dentro de las franjas del ${roleContext.targetLabel}.`;
+
+  return `
+    <div class="schedule-availability-summary ${statusClass}">
+      <div class="schedule-availability-status">${escapeHtml(statusText)}</div>
+      <div class="schedule-availability-grid">
+        <div><span>Profesor</span><strong>${escapeHtml(teacherSummary || 'Sin franjas marcadas')}</strong></div>
+        <div><span>Alumno</span><strong>${escapeHtml(studentSummary || 'Sin franjas marcadas')}</strong></div>
+      </div>
+    </div>`;
+}
+
 function renderShell(container, role) {
   container.innerHTML = `
     <div class="chat-layout">
@@ -281,12 +374,15 @@ function renderShell(container, role) {
     </div>`;
 }
 
-function renderSchedulePanel(container, chat, proposals, role, currentUid) {
+function renderSchedulePanel(container, chat, proposals, role, currentUid, availability = {}) {
   const panel = container.querySelector('[data-chat-schedule-panel]');
   if (!panel || !chat) return;
   panel.style.display = '';
   const activeProposal = proposals.find((proposal) => proposal.status === 'propuesta');
   const accepted = proposals.find((proposal) => proposal.status === 'aceptada');
+  const roleAvailability = availabilityForRole(role, availability);
+  const proposalDisabled = role !== 'admin' && (availability.loading || !roleAvailability.targetSlots.length);
+  const disabledAttr = proposalDisabled ? 'disabled' : '';
   const proposalRows = proposals.length
     ? proposals.slice(0, 5).map((proposal) => {
       const mine = proposal.proposedByUid === currentUid;
@@ -300,6 +396,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentUid) {
           <div>
             <strong>${escapeHtml(formatDate(proposal.fecha))} · ${escapeHtml(proposal.hora_inicio)}-${escapeHtml(proposal.hora_fin)}</strong>
             <div>${escapeHtml(proposal.materia || chat.materia || 'Clase')} · ${escapeHtml(proposal.modalidad || 'online/presencial por acordar')}</div>
+            ${proposal.availabilityStatus === 'matched' ? '<small class="schedule-availability-ok">Disponibilidad validada</small>' : ''}
             ${proposal.notas ? `<small>${escapeHtml(proposal.notas)}</small>` : ''}
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
@@ -317,17 +414,18 @@ function renderSchedulePanel(container, chat, proposals, role, currentUid) {
         <div class="chat-thread-subtitle">${accepted ? 'Ya hay una clase creada desde el chat.' : activeProposal ? 'Hay una propuesta pendiente de respuesta.' : 'Propón fecha y hora para convertir el acuerdo en clase programada.'}</div>
       </div>
     </div>
+    ${renderAvailabilitySummary(availability, role)}
     <form class="chat-schedule-form" data-schedule-form>
-      <input class="form-control" type="date" data-schedule-date required aria-label="Fecha de clase">
-      <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio">
-      <input class="form-control" type="time" data-schedule-end required aria-label="Hora de fin">
-      <select class="form-control" data-schedule-modality aria-label="Modalidad">
+      <input class="form-control" type="date" data-schedule-date required aria-label="Fecha de clase" ${disabledAttr}>
+      <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio" ${disabledAttr}>
+      <input class="form-control" type="time" data-schedule-end required aria-label="Hora de fin" ${disabledAttr}>
+      <select class="form-control" data-schedule-modality aria-label="Modalidad" ${disabledAttr}>
         <option value="por_acordar">Modalidad por acordar</option>
         <option value="online">Online</option>
         <option value="presencial">Presencial</option>
       </select>
-      <input class="form-control" type="text" maxlength="300" data-schedule-notes placeholder="Notas: lugar, material, frecuencia...">
-      <button class="btn btn-primary btn-sm" type="submit">Proponer horario</button>
+      <input class="form-control" type="text" maxlength="300" data-schedule-notes placeholder="Notas: lugar, material, frecuencia..." ${disabledAttr}>
+      <button class="btn btn-primary btn-sm" type="submit" ${disabledAttr}>Proponer horario</button>
     </form>
     <div class="schedule-proposal-list">${proposalRows}</div>`;
 }
@@ -483,6 +581,7 @@ export async function initChatWidget({
     unsubscribePushMessages: null,
     notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
     notificationPublicConfig: {},
+    availabilityByChat: {},
   };
   const currentUid = clean(usuario.uid || usuario.firebase_uid || usuario.id);
   const senderName = fullName(usuario.nombre, usuario.apellidos) || usuario.email || role;
@@ -523,6 +622,24 @@ export async function initChatWidget({
     renderChatList(container, state.chats, chat.id, role);
     renderThreadHeader(container, chat, role);
     container.querySelector('[data-chat-form]').style.display = '';
+    state.scheduleProposals = [];
+    state.availabilityByChat[chat.id] = { loading: true, teacherSlots: [], studentSlots: [] };
+    renderSchedulePanel(container, chat, state.scheduleProposals, role, currentUid, state.availabilityByChat[chat.id]);
+
+    loadChatAvailability(chat).then((availability) => {
+      if (state.selectedChat?.id !== chat.id) return;
+      state.availabilityByChat[chat.id] = availability;
+      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentUid, availability);
+    }).catch((error) => {
+      if (state.selectedChat?.id !== chat.id) return;
+      state.availabilityByChat[chat.id] = {
+        loading: false,
+        teacherSlots: [],
+        studentSlots: [],
+        error: error.message || 'No se pudo cargar la disponibilidad.',
+      };
+      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentUid, state.availabilityByChat[chat.id]);
+    });
 
     if (state.unsubscribe) state.unsubscribe();
     if (state.unsubscribeProposals) state.unsubscribeProposals();
@@ -545,7 +662,7 @@ export async function initChatWidget({
     );
     state.unsubscribeProposals = onSnapshot(proposalsQuery, (snap) => {
       state.scheduleProposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
-      renderSchedulePanel(container, chat, state.scheduleProposals, role, currentUid);
+      renderSchedulePanel(container, chat, state.scheduleProposals, role, currentUid, state.availabilityByChat[chat.id] || { loading: true });
     }, (error) => {
       console.error('No se pudieron abrir propuestas de horario', error);
       showToast('Horarios no disponibles', error.message || 'No se pudieron abrir las propuestas.', 'error');
@@ -648,6 +765,23 @@ export async function initChatWidget({
       showToast('Horario no valido', 'La fecha y la hora de fin deben ser correctas.', 'warning');
       return;
     }
+    const availability = state.availabilityByChat[state.selectedChat.id] || { loading: true };
+    if (availability.loading && role !== 'admin') {
+      showToast('Disponibilidad cargando', 'Espera unos segundos a que se carguen las franjas antes de proponer.', 'warning');
+      return;
+    }
+    const availabilityValidation = validateScheduleAvailability({
+      role,
+      fecha,
+      horaInicio,
+      horaFin,
+      teacherSlots: availability.teacherSlots || [],
+      studentSlots: availability.studentSlots || [],
+    });
+    if (!availabilityValidation.valid) {
+      showToast('Fuera de disponibilidad', availabilityValidation.message || 'El horario no encaja con las franjas marcadas.', 'warning');
+      return;
+    }
     const button = scheduleForm.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
@@ -664,6 +798,16 @@ export async function initChatWidget({
         modalidad,
         notas,
         status: 'propuesta',
+        availabilityStatus: availabilityValidation.reason === 'matched' ? 'matched' : availabilityValidation.reason,
+        availabilityValidation: {
+          checkedByRole: role,
+          checkedAt: new Date().toISOString(),
+          requiredScope: availabilityValidation.requiredScope || '',
+          teacherSlotId: availabilityValidation.teacherSlot?.id || '',
+          teacherSlotLabel: availabilityValidation.teacherSlot ? availabilitySlotLabel(availabilityValidation.teacherSlot) : '',
+          studentSlotId: availabilityValidation.studentSlot?.id || '',
+          studentSlotLabel: availabilityValidation.studentSlot ? availabilitySlotLabel(availabilityValidation.studentSlot) : '',
+        },
         proposedByUid: currentUid,
         proposedByRole: role,
         proposedAt: serverTimestamp(),

@@ -29,6 +29,10 @@ assert(!admin.includes('assignment_ready_for_scheduling'), 'Admin must not write
 assert(!admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment notifications must be centralized in Functions.');
 
 assert(chat.includes('data-schedule-form'), 'Chat widget must render schedule proposal form.');
+assert(chat.includes('availability-engine.js'), 'Chat widget must use the shared availability engine.');
+assert(chat.includes('loadChatAvailability'), 'Chat widget must load teacher and student availability.');
+assert(chat.includes('validateScheduleAvailability'), 'Chat widget must validate proposals against availability slots.');
+assert(chat.includes('availabilityStatus'), 'Schedule proposals must store availability validation status.');
 assert(chat.includes("collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones')"), 'Chat widget must persist schedule proposals.');
 assert(chat.includes('acceptScheduleProposal'), 'Chat widget must support accepting schedule proposals.');
 assert(chat.includes("createdFrom: 'chat_schedule_proposal'"), 'Accepted proposals must create traceable class documents.');
@@ -51,6 +55,8 @@ assert(automationWorker.includes("'payment.request_for_class'"), 'Worker must di
 
 assert(rules.includes('match /programaciones/{proposalId}'), 'Firestore rules must protect chat schedule proposals.');
 assert(rules.includes('validClassScheduleProposalCreate'), 'Firestore rules must validate proposal creation.');
+assert(rules.includes('canReadAvailability'), 'Firestore rules must expose availability safely to scheduling participants.');
+assert(rules.includes('availabilityValidation'), 'Firestore rules must allow audited availability validation on proposals.');
 assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must validate proposal responses.');
 assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
 assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');

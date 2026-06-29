@@ -775,6 +775,57 @@ textarea {
   gap: 12px;
   margin-bottom: 10px;
 }
+.schedule-availability-note,
+.schedule-availability-summary {
+  margin-bottom: 10px;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  background: var(--white);
+  padding: 10px 12px;
+  font-size: .84rem;
+}
+.schedule-availability-note.warning,
+.schedule-availability-summary.warning {
+  border-color: rgba(217,119,6,.28);
+  background: rgba(217,119,6,.08);
+}
+.schedule-availability-summary.success {
+  border-color: rgba(22,163,74,.20);
+  background: rgba(22,163,74,.06);
+}
+.schedule-availability-status {
+  color: var(--navy);
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.schedule-availability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.schedule-availability-grid div {
+  min-width: 0;
+}
+.schedule-availability-grid span {
+  display: block;
+  color: var(--gray-mid);
+  font-size: .72rem;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.schedule-availability-grid strong {
+  display: block;
+  color: var(--gray-dark);
+  font-size: .82rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.schedule-availability-ok {
+  display: inline-flex;
+  margin-top: 4px;
+  color: var(--success);
+  font-weight: 700;
+}
 .chat-schedule-form {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) minmax(96px, .7fr) minmax(96px, .7fr) minmax(140px, 1fr) minmax(160px, 1.4fr) auto;
@@ -805,6 +856,44 @@ textarea {
 .schedule-proposal small {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.availability-mini {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.availability-mini > span:first-child {
+  color: var(--gray-mid);
+}
+.availability-mini-summary {
+  color: var(--navy);
+  font-weight: 700;
+}
+.availability-mini-empty {
+  color: var(--warning);
+  font-weight: 700;
+}
+.availability-slot-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.availability-slot-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--white);
+}
+.availability-slot-row span {
+  display: block;
+  color: var(--gray-mid);
+  font-size: .78rem;
+  margin-top: 2px;
 }
 .notifications-panel {
   min-width: 0;
@@ -2896,12 +2985,22 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .chat-schedule-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .schedule-availability-grid {
+    grid-template-columns: 1fr;
+  }
   .chat-schedule-form [data-schedule-notes],
   .chat-schedule-form button {
     grid-column: 1 / -1;
   }
   .schedule-proposal {
     grid-template-columns: 1fr;
+  }
+  .availability-slot-row {
+    grid-template-columns: 1fr;
+  }
+  .availability-slot-row .btn {
+    width: 100%;
+    justify-content: center;
   }
   .admin-notification-form {
     grid-template-columns: 1fr;

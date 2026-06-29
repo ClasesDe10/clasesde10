@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-ux-empty-states">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-availability">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -375,6 +375,7 @@
         <select class="form-control" id="sol-alumno" required>
           <option value="">Seleccionar…</option>
         </select>
+        <div class="form-hint" id="sol-disponibilidad-hint">Marca disponibilidad por hijo para mejorar el matching.</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -465,6 +466,52 @@
   </div>
 </div>
 
+<!-- MODAL: DISPONIBILIDAD HIJO -->
+<div class="modal-overlay" id="modal-disponibilidad-hijo">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-disponibilidad-hijo-titulo">Disponibilidad del alumno</span>
+      <button class="modal-close">x</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="disp-hijo-id">
+      <div class="alert alert-info" style="margin-bottom:16px">
+        <span class="alert-icon">i</span>
+        <div class="alert-body">
+          Estas franjas se usan para que el profesor solo pueda proponer horarios compatibles con el alumno.
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Dia</label>
+          <select class="form-control" id="disp-hijo-dia">
+            <option value="0">Lunes</option>
+            <option value="1">Martes</option>
+            <option value="2">Miercoles</option>
+            <option value="3">Jueves</option>
+            <option value="4">Viernes</option>
+            <option value="5">Sabado</option>
+            <option value="6">Domingo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Inicio</label>
+          <input class="form-control" type="time" id="disp-hijo-inicio">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fin</label>
+          <input class="form-control" type="time" id="disp-hijo-fin">
+        </div>
+      </div>
+      <div id="disp-hijo-lista" class="availability-slot-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-disponibilidad-hijo">Cancelar</button>
+      <button class="btn btn-primary" id="btn-guardar-disponibilidad-hijo">Guardar franja</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: SUBIR JUSTIFICANTE PAGO -->
 <div class="modal-overlay" id="modal-pago">
   <div class="modal">
@@ -529,12 +576,13 @@ import {
 } from '../../js/calendar-engine.js?v=20260628-calendar';
 import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-relations';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-availability';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-journey';
 import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
+import { availabilitySlotLabel, summarizeAvailabilitySlots } from '../../js/availability-engine.js?v=20260629-availability';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -582,6 +630,7 @@ const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
 let chatInicializado = false;
 let documentosFamiliaPerfilCache = [];
 let alumnosFamiliaPerfilCache = [];
+let disponibilidadHijosCache = new Map();
 
 function ownerUid() {
   return usuario.uid || usuario.firebase_uid || usuario.id;
@@ -1101,10 +1150,97 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
 });
 
 // ── MIS HIJOS ────────────────────────────────────────────────────
+function disponibilidadStudentId(slot = {}) {
+  return slot.studentId || slot.alumno_id || '';
+}
+
+function disponibilidadForStudent(studentId) {
+  return disponibilidadHijosCache.get(studentId) || [];
+}
+
+function renderDisponibilidadMini(slots = []) {
+  const summary = summarizeAvailabilitySlots(slots, 3);
+  if (!summary) return '<span class="availability-mini-empty">Sin franjas marcadas</span>';
+  return `<span class="availability-mini-summary">${sanitize(summary)}</span>`;
+}
+
+async function cargarDisponibilidadHijos() {
+  if (!familiaId) return new Map();
+  const { data, error } = await db.from('disponibilidad').select('*').eq('familia_id', familiaId).order('dia_semana');
+  if (error) {
+    console.warn('No se pudo cargar disponibilidad de hijos', error);
+    disponibilidadHijosCache = new Map();
+    return disponibilidadHijosCache;
+  }
+  disponibilidadHijosCache = (data || []).reduce((map, slot) => {
+    const studentId = disponibilidadStudentId(slot);
+    if (!studentId) return map;
+    const current = map.get(studentId) || [];
+    current.push(slot);
+    map.set(studentId, current);
+    return map;
+  }, new Map());
+  return disponibilidadHijosCache;
+}
+
+function renderDisponibilidadHijoActual() {
+  const studentId = document.getElementById('disp-hijo-id').value;
+  const cont = document.getElementById('disp-hijo-lista');
+  const slots = disponibilidadForStudent(studentId);
+  if (!slots.length) {
+    cont.innerHTML = renderEmptyState({
+      icon: 'i',
+      title: 'Sin franjas todavia',
+      description: 'Anade los dias y horas en los que este alumno podria recibir clase.',
+      compact: true,
+    });
+    return;
+  }
+  cont.innerHTML = slots.map((slot) => `
+    <div class="availability-slot-row">
+      <div>
+        <strong>${sanitize(availabilitySlotLabel(slot))}</strong>
+        <span>Se usara para validar propuestas del profesor.</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="eliminar-disponibilidad-hijo" data-id="${sanitize(slot.id)}">Eliminar</button>
+    </div>`).join('');
+}
+
+function abrirDisponibilidadHijo(studentId, nombre) {
+  document.getElementById('disp-hijo-id').value = studentId;
+  document.getElementById('modal-disponibilidad-hijo-titulo').textContent = `Disponibilidad de ${nombre || 'alumno'}`;
+  document.getElementById('disp-hijo-dia').value = '0';
+  document.getElementById('disp-hijo-inicio').value = '';
+  document.getElementById('disp-hijo-fin').value = '';
+  renderDisponibilidadHijoActual();
+  document.getElementById('modal-disponibilidad-hijo').classList.add('open');
+}
+
+function renderSolicitudDisponibilidadHint() {
+  const select = document.getElementById('sol-alumno');
+  const hint = document.getElementById('sol-disponibilidad-hint');
+  const horario = document.getElementById('sol-horario');
+  if (!select || !hint) return;
+  const studentId = select.value;
+  const slots = disponibilidadForStudent(studentId);
+  const summary = summarizeAvailabilitySlots(slots, 5);
+  if (!studentId) {
+    hint.textContent = 'Selecciona un hijo para ver sus franjas disponibles.';
+    return;
+  }
+  if (!summary) {
+    hint.textContent = 'Este alumno aun no tiene franjas. Puedes anadirlas desde Mis hijos > Disponibilidad.';
+    return;
+  }
+  hint.textContent = `Disponibilidad marcada: ${summary}.`;
+  if (horario && !horario.value.trim()) horario.value = summary;
+}
+
 async function cargarHijos() {
   if (!familiaId) return;
   const { data } = await db.from('alumnos').select('*, asignaciones(materia,profesores(usuarios(nombre,apellidos)))')
     .eq('familia_id', familiaId).eq('activo', true);
+  await cargarDisponibilidadHijos();
 
   const grid = document.getElementById('grid-hijos');
   if (!data?.length) {
@@ -1117,7 +1253,9 @@ async function cargarHijos() {
     return;
   }
 
-  grid.innerHTML = data.map(h => `
+  grid.innerHTML = data.map(h => {
+    const slots = disponibilidadForStudent(h.id);
+    return `
     <div class="card">
       <div class="card-body">
         <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px">
@@ -1133,6 +1271,7 @@ async function cargarHijos() {
             ? sanitize(h.asignaciones[0].profesores?.usuarios?.nombre||'') + ' ' + sanitize(h.asignaciones[0].profesores?.usuarios?.apellidos||'')
             : '<span style="color:var(--warning)">Pendiente asignación</span>'}</div>
           ${h.asignaciones?.length ? `<div><span style="color:var(--gray-mid)">Materia:</span> ${sanitize(h.asignaciones[0].materia)}</div>` : ''}
+          <div class="availability-mini"><span>Disponibilidad:</span> ${renderDisponibilidadMini(slots)}</div>
         </div>
         <div style="display:flex;gap:8px;margin-top:16px">
           <button class="btn btn-outline btn-sm"
@@ -1144,13 +1283,18 @@ async function cargarHijos() {
                   data-curso="${sanitize(h.curso||'')}"
                   data-colegio="${sanitize(h.colegio||'')}"
                   data-nacimiento="${sanitize(h.fecha_nacimiento||'')}">Editar</button>
+          <button class="btn btn-outline btn-sm"
+                  data-action="disponibilidad-hijo"
+                  data-id="${sanitize(h.id)}"
+                  data-nombre="${sanitize(`${h.nombre || ''} ${h.apellidos || ''}`.trim())}">Disponibilidad</button>
           ${!h.asignaciones?.length ? `<button class="btn btn-gold btn-sm" data-action="solicitar-hijo" data-id="${sanitize(h.id)}">Solicitar profesor</button>` : ''}
           ${h.usuario_id
             ? '<span class="badge badge-success">Acceso vinculado</span>'
             : `<button class="btn btn-ghost btn-sm" data-action="invitar-alumno" data-alumno-id="${sanitize(h.id)}" data-alumno-nombre="${sanitize(h.nombre)}">Invitar acceso</button>`}
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 window.editarHijo = (id, nombre, apellidos, nivel, curso, colegio, nacimiento) => {
@@ -1167,6 +1311,7 @@ window.editarHijo = (id, nombre, apellidos, nivel, curso, colegio, nacimiento) =
 
 window.abrirSolicitudHijo = (id, nombre) => {
   document.getElementById('sol-alumno').value = id;
+  renderSolicitudDisponibilidadHint();
   document.getElementById('modal-solicitud').classList.add('open');
 };
 
@@ -1174,6 +1319,7 @@ document.getElementById('grid-hijos').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-action="invitar-alumno"]');
   const editBtn = e.target.closest('[data-action="editar-hijo"]');
   const solicitarBtn = e.target.closest('[data-action="solicitar-hijo"]');
+  const disponibilidadBtn = e.target.closest('[data-action="disponibilidad-hijo"]');
 
   if (editBtn) {
     window.editarHijo(
@@ -1190,6 +1336,11 @@ document.getElementById('grid-hijos').addEventListener('click', async (e) => {
 
   if (solicitarBtn) {
     window.abrirSolicitudHijo(solicitarBtn.dataset.id);
+    return;
+  }
+
+  if (disponibilidadBtn) {
+    abrirDisponibilidadHijo(disponibilidadBtn.dataset.id, disponibilidadBtn.dataset.nombre);
     return;
   }
 
@@ -1213,13 +1364,60 @@ document.getElementById('grid-hijos').addEventListener('click', async (e) => {
 
 document.addEventListener('click', (e) => {
   if (e.target.closest('[data-action="abrir-modal-solicitud"]')) {
-    cargarSolicitudes();
+    cargarSolicitudes().then(renderSolicitudDisponibilidadHint);
     document.getElementById('modal-solicitud').classList.add('open');
   }
   if (e.target.closest('[data-action="abrir-modal-pago"]')) {
     document.getElementById('modal-pago').classList.add('open');
   }
 });
+
+document.getElementById('btn-guardar-disponibilidad-hijo').addEventListener('click', async () => {
+  const studentId = document.getElementById('disp-hijo-id').value;
+  const dia = Number(document.getElementById('disp-hijo-dia').value);
+  const inicio = document.getElementById('disp-hijo-inicio').value;
+  const fin = document.getElementById('disp-hijo-fin').value;
+  if (!studentId || !inicio || !fin || fin <= inicio) {
+    showToast('Horario no valido', 'Indica dia, hora de inicio y hora de fin coherentes.', 'warning');
+    return;
+  }
+
+  const { error } = await db.from('disponibilidad').insert({
+    familyUid: familiaId,
+    familia_id: familiaId,
+    studentId,
+    alumno_id: studentId,
+    dia_semana: dia,
+    hora_inicio: inicio,
+    hora_fin: fin,
+  });
+  if (error) {
+    showToast('Error', error.message || 'No se pudo guardar la franja.', 'error');
+    return;
+  }
+  await cargarDisponibilidadHijos();
+  renderDisponibilidadHijoActual();
+  await cargarHijos();
+  renderSolicitudDisponibilidadHint();
+  showToast('Disponibilidad guardada', 'El profesor solo podra proponer horarios compatibles.', 'success');
+});
+
+document.getElementById('disp-hijo-lista').addEventListener('click', async (event) => {
+  const btn = event.target.closest('[data-action="eliminar-disponibilidad-hijo"]');
+  if (!btn) return;
+  const { error } = await db.from('disponibilidad').delete().eq('id', btn.dataset.id);
+  if (error) {
+    showToast('Error', error.message || 'No se pudo eliminar la franja.', 'error');
+    return;
+  }
+  await cargarDisponibilidadHijos();
+  renderDisponibilidadHijoActual();
+  await cargarHijos();
+  renderSolicitudDisponibilidadHint();
+  showToast('Franja eliminada', 'Disponibilidad actualizada.', 'success');
+});
+
+document.getElementById('sol-alumno')?.addEventListener('change', renderSolicitudDisponibilidadHint);
 
 document.getElementById('btn-nuevo-hijo').addEventListener('click', () => {
   document.getElementById('hijo-id').value = '';
@@ -1258,6 +1456,7 @@ document.getElementById('btn-guardar-hijo').addEventListener('click', async () =
   if (isNew) {
     await cargarSolicitudes();
     if (saved?.id) document.getElementById('sol-alumno').value = saved.id;
+    renderSolicitudDisponibilidadHint();
     document.getElementById('modal-solicitud').classList.add('open');
     showToast('Hijo/a añadido/a', 'Ahora indica materia y horario para pedir profesor.', 'success');
   } else {
@@ -1268,10 +1467,13 @@ document.getElementById('btn-guardar-hijo').addEventListener('click', async () =
 // ── SOLICITUDES ──────────────────────────────────────────────────
 async function cargarSolicitudes() {
   if (!familiaId) return;
+  await cargarDisponibilidadHijos();
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
   const selSol = document.getElementById('sol-alumno');
   selSol.innerHTML = '<option value="">Seleccionar…</option>' +
     (hijos||[]).map(h => `<option value="${h.id}">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</option>`).join('');
+
+  renderSolicitudDisponibilidadHint();
 
   const { data } = await db.from('solicitudes')
     .select('*, alumnos(nombre,apellidos), profesores(usuarios(nombre,apellidos))')
@@ -1306,7 +1508,7 @@ async function cargarSolicitudes() {
 // Nueva solicitud
 [document.getElementById('btn-nueva-solicitud'), document.getElementById('btn-nueva-solicitud-top')].forEach(btn => {
   btn?.addEventListener('click', () => {
-    cargarSolicitudes();
+    cargarSolicitudes().then(renderSolicitudDisponibilidadHint);
     document.getElementById('modal-solicitud').classList.add('open');
   });
 });
