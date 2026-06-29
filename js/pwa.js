@@ -8,6 +8,8 @@
   const clickTelemetry = new Map();
   let commandPaletteActions = [];
   let commandPaletteSelection = 0;
+  const pendingButtonTimers = new WeakMap();
+  let pageProgressTimer = 0;
 
   const isStandalone = () =>
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -407,6 +409,118 @@
         font-size: .76rem;
         font-weight: 800;
       }
+      .cd10-page-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 2147482450;
+        width: 100%;
+        height: 3px;
+        transform: scaleX(0);
+        transform-origin: left center;
+        opacity: 0;
+        pointer-events: none;
+        background: linear-gradient(90deg, #e8a030, #1d7a6b, #0f1f3d);
+        box-shadow: 0 0 18px rgba(232,160,48,.45);
+        transition: transform .24s ease, opacity .16s ease;
+      }
+      .cd10-page-progress.is-active {
+        opacity: 1;
+        transform: scaleX(var(--cd10-page-progress, .64));
+      }
+      .cd10-page-progress.is-done {
+        opacity: 0;
+        transform: scaleX(1);
+      }
+      .cd10-live-region {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      .cd10-button-spinner {
+        display: inline-block;
+        width: 13px;
+        height: 13px;
+        margin-left: 8px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        border-radius: 999px;
+        vertical-align: -2px;
+        animation: cd10-spin .72s linear infinite;
+      }
+      .cd10-is-loading {
+        opacity: .78;
+        cursor: progress !important;
+      }
+      .cd10-smart-hint {
+        display: block;
+        margin-top: 6px;
+        color: #6f695f;
+        font-size: .75rem;
+        font-weight: 750;
+        line-height: 1.35;
+      }
+      input.cd10-field-complete,
+      select.cd10-field-complete,
+      textarea.cd10-field-complete {
+        border-color: rgba(29,122,107,.38) !important;
+        box-shadow: 0 0 0 3px rgba(29,122,107,.08);
+      }
+      input.cd10-field-issue,
+      select.cd10-field-issue,
+      textarea.cd10-field-issue {
+        border-color: rgba(185,28,28,.42) !important;
+        box-shadow: 0 0 0 3px rgba(185,28,28,.08);
+      }
+      .cd10-polish-target {
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background-color .18s ease;
+      }
+      @media (hover: hover) {
+        .cd10-polish-target:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 16px 38px rgba(15,31,61,.10);
+        }
+      }
+      .empty-state.cd10-empty-polished {
+        position: relative;
+        border: 1px dashed rgba(15,31,61,.14);
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.84), rgba(247,244,237,.58));
+      }
+      .empty-state.cd10-empty-polished::before {
+        content: '';
+        display: block;
+        width: 34px;
+        height: 34px;
+        margin: 0 auto 10px;
+        border-radius: 12px;
+        background:
+          radial-gradient(circle at 65% 35%, rgba(232,160,48,.95) 0 4px, transparent 5px),
+          linear-gradient(135deg, rgba(29,122,107,.16), rgba(15,31,61,.08));
+        box-shadow: inset 0 0 0 1px rgba(15,31,61,.08);
+      }
+      body.cd10-screen-ready main,
+      body.cd10-screen-ready .dash-content,
+      body.cd10-screen-ready .auth-card {
+        animation: cd10-screen-in .26s ease both;
+      }
+      :focus-visible {
+        outline: 3px solid rgba(232,160,48,.52);
+        outline-offset: 3px;
+      }
+      @keyframes cd10-spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes cd10-screen-in {
+        from { opacity: .88; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
       @media (max-width: 768px) {
         .cd10-command-trigger {
           min-width: 42px;
@@ -445,9 +559,16 @@
       }
       @media (prefers-reduced-motion: reduce) {
         .cd10-connection-banner,
-        .cd10-form-progress__bar span {
+        .cd10-form-progress__bar span,
+        .cd10-page-progress,
+        .cd10-polish-target,
+        body.cd10-screen-ready main,
+        body.cd10-screen-ready .dash-content,
+        body.cd10-screen-ready .auth-card {
+          animation: none !important;
           transition: none;
         }
+        .cd10-polish-target:hover { transform: none; }
       }
     `;
     document.head.appendChild(style);
@@ -470,6 +591,99 @@
     if (duration) {
       showConnectionBanner.timer = window.setTimeout(() => banner.classList.remove('is-visible'), duration);
     }
+  }
+
+  function ensureLiveRegion() {
+    let region = document.getElementById('cd10-live-region');
+    if (region) return region;
+    region = document.createElement('div');
+    region.id = 'cd10-live-region';
+    region.className = 'cd10-live-region';
+    region.setAttribute('role', 'status');
+    region.setAttribute('aria-live', 'polite');
+    region.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(region);
+    return region;
+  }
+
+  function announce(message) {
+    if (!message) return;
+    const region = ensureLiveRegion();
+    region.textContent = '';
+    window.setTimeout(() => {
+      region.textContent = message;
+    }, 20);
+  }
+
+  function ensurePageProgress() {
+    let bar = document.getElementById('cd10-page-progress');
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.id = 'cd10-page-progress';
+    bar.className = 'cd10-page-progress';
+    bar.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(bar);
+    return bar;
+  }
+
+  function startPageProgress(message = 'Cargando') {
+    const bar = ensurePageProgress();
+    clearTimeout(pageProgressTimer);
+    bar.classList.remove('is-done');
+    bar.classList.add('is-active');
+    bar.style.setProperty('--cd10-page-progress', '.54');
+    window.setTimeout(() => bar.style.setProperty('--cd10-page-progress', '.82'), 90);
+    announce(message);
+    pageProgressTimer = window.setTimeout(() => finishPageProgress(), 1800);
+  }
+
+  function finishPageProgress(message = '') {
+    const bar = document.getElementById('cd10-page-progress');
+    if (!bar) return;
+    clearTimeout(pageProgressTimer);
+    bar.style.setProperty('--cd10-page-progress', '1');
+    bar.classList.add('is-done');
+    window.setTimeout(() => {
+      bar.classList.remove('is-active', 'is-done');
+      bar.style.setProperty('--cd10-page-progress', '.54');
+    }, 180);
+    if (message) announce(message);
+  }
+
+  function initPageProgress() {
+    ensureLiveRegion();
+    ensurePageProgress();
+    document.body.classList.add('cd10-screen-ready');
+    finishPageProgress('Pantalla lista');
+
+    document.addEventListener('click', (event) => {
+      const link = event.target.closest?.('a[href]');
+      if (!link || link.target || link.hasAttribute('download')) return;
+      let url;
+      try {
+        url = new URL(link.getAttribute('href'), window.location.href);
+      } catch (_) {
+        return;
+      }
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname && url.hash) return;
+      startPageProgress('Abriendo pantalla');
+    }, true);
+
+    document.addEventListener('click', (event) => {
+      const sectionTrigger = event.target.closest?.('[data-section]');
+      if (!sectionTrigger?.dataset.section) return;
+      startPageProgress('Cambiando seccion');
+      window.setTimeout(() => finishPageProgress('Seccion lista'), 420);
+    }, true);
+
+    document.addEventListener('submit', (event) => {
+      if (event.target?.checkValidity?.() === false) return;
+      startPageProgress('Enviando formulario');
+    }, true);
+
+    window.addEventListener('pageshow', () => finishPageProgress());
+    window.addEventListener('beforeunload', () => startPageProgress('Cargando'));
   }
 
   function initConnectionAwareness() {
@@ -1165,8 +1379,175 @@
     });
   }
 
-  function initTooltips() {
-    document.querySelectorAll('[title], [aria-label]').forEach((node) => {
+  function clearButtonPending(button) {
+    if (!(button instanceof HTMLElement)) return;
+    const timer = pendingButtonTimers.get(button);
+    if (timer) clearTimeout(timer);
+    pendingButtonTimers.delete(button);
+    button.classList.remove('cd10-is-loading');
+    button.removeAttribute('aria-busy');
+    button.querySelector?.('.cd10-button-spinner')?.remove();
+  }
+
+  function setButtonPending(button, timeout = 1600) {
+    if (!(button instanceof HTMLElement) || button.disabled || button.dataset.cd10Ux === 'off') return;
+    button.classList.add('cd10-is-loading');
+    button.setAttribute('aria-busy', 'true');
+    if (button.tagName === 'BUTTON' && !button.querySelector('.cd10-button-spinner')) {
+      const spinner = document.createElement('span');
+      spinner.className = 'cd10-button-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      button.appendChild(spinner);
+    }
+    const previous = pendingButtonTimers.get(button);
+    if (previous) clearTimeout(previous);
+    pendingButtonTimers.set(button, window.setTimeout(() => clearButtonPending(button), timeout));
+  }
+
+  function isActionFeedbackTarget(node) {
+    if (!(node instanceof HTMLElement) || node.disabled) return false;
+    if (node.closest('.cd10-command-overlay, .sidebar, [data-close-modal], .modal-close')) return false;
+    if (node.matches('input[type="submit"], button[type="submit"]')) return true;
+    if (!node.matches('button, [role="button"], .btn')) return false;
+    const label = visibleText(node).toLowerCase();
+    return /\b(guardar|enviar|crear|actualizar|subir|aceptar|confirmar|asignar|programar|marcar|generar|aplicar|publicar|invitar|resolver|validar)\b/.test(label);
+  }
+
+  function initActionFeedback() {
+    document.addEventListener('click', (event) => {
+      const target = event.target.closest?.('button, [role="button"], .btn, input[type="submit"]');
+      if (!isActionFeedbackTarget(target)) return;
+      setButtonPending(target, target.matches?.('button[type="submit"], input[type="submit"]') ? 5200 : 1300);
+      announce(visibleText(target) ? `${visibleText(target)} en curso` : 'Accion en curso');
+    }, true);
+
+    document.addEventListener('submit', (event) => {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement)) return;
+      if (form.checkValidity?.() === false) {
+        announce('Revisa los campos marcados antes de continuar');
+        finishPageProgress();
+        return;
+      }
+      const submitter = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+      if (submitter instanceof HTMLElement) setButtonPending(submitter, 6500);
+    }, true);
+
+    document.addEventListener('invalid', () => {
+      announce('Hay un campo que necesita revision');
+      finishPageProgress();
+    }, true);
+
+    window.addEventListener('cd10:action-complete', (event) => {
+      const button = event.detail?.button;
+      if (button instanceof HTMLElement) clearButtonPending(button);
+      finishPageProgress(event.detail?.message || '');
+    });
+  }
+
+  function fieldContext(field) {
+    const label = field.labels?.[0]?.textContent || '';
+    return [
+      field.id,
+      field.name,
+      field.placeholder,
+      field.getAttribute('aria-label'),
+      label,
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function hintForField(field) {
+    if (!(field instanceof HTMLElement)) return '';
+    if (field.closest('.auth-card')) return '';
+    if (['hidden', 'password', 'submit', 'button', 'reset'].includes(field.type)) return '';
+    const context = fieldContext(field);
+    const rules = [
+      [/email|correo/, 'Este correo se usara para acceso y avisos importantes.'],
+      [/telefono|movil|phone/, 'Anade un telefono operativo para resolver incidencias rapido.'],
+      [/direccion|calle|zona|codigo postal|postal|cp\b/, 'Ayuda a calcular cercania y clases presenciales.'],
+      [/materia|asignatura|especialidad|subject/, 'Incluye materias escolares y extraescolares: padel, piano, guitarra o programacion.'],
+      [/disponibilidad|horario|franja|availability/, 'Usa franjas reales; el matching las tendra en cuenta.'],
+      [/bio|descripcion|experiencia|formacion|estudios|colegio|universidad/, 'Cuenta datos concretos y verificables para aumentar confianza.'],
+      [/foto|imagen|avatar|photo|file/, 'Sube una foto clara o documento en PDF, JPG o PNG.'],
+      [/document|dni|titulo|certificado|verificacion/, 'El documento quedara organizado y pendiente de revision.'],
+      [/bizum/, 'Marca Bizum solo si puedes recibir pagos por ese canal.'],
+      [/alumno|hijo|estudiante/, 'Estos datos ayudan a asignar el profesor mas adecuado.'],
+    ];
+    const found = rules.find(([pattern]) => pattern.test(context));
+    return found?.[1] || '';
+  }
+
+  function updateFieldFeedback(field) {
+    if (!(field instanceof HTMLElement) || ['hidden', 'password', 'submit', 'button', 'reset'].includes(field.type)) return;
+    const hasValue = field.type === 'checkbox'
+      ? field.checked
+      : String(field.value || '').trim().length > 0;
+    const valid = !hasValue || field.checkValidity?.() !== false;
+    field.classList.toggle('cd10-field-complete', Boolean(hasValue && valid));
+    field.classList.toggle('cd10-field-issue', Boolean(hasValue && !valid));
+  }
+
+  function bindFieldFeedback(field) {
+    if (!(field instanceof HTMLElement) || field.dataset.cd10FieldFeedback === 'true') return;
+    if (!field.matches('input, select, textarea')) return;
+    field.dataset.cd10FieldFeedback = 'true';
+    updateFieldFeedback(field);
+    field.addEventListener('input', () => updateFieldFeedback(field));
+    field.addEventListener('change', () => updateFieldFeedback(field));
+  }
+
+  function addSmartHint(field) {
+    if (!(field instanceof HTMLElement) || field.dataset.cd10HintBound === 'true') return;
+    const hint = hintForField(field);
+    if (!hint) return;
+    const id = `cd10-hint-${field.id || field.name || Math.random().toString(36).slice(2)}`.replace(/[^a-z0-9_-]/gi, '-');
+    if (document.getElementById(id)) return;
+    const node = document.createElement('small');
+    node.id = id;
+    node.className = 'cd10-smart-hint';
+    node.textContent = hint;
+    const describedBy = field.getAttribute('aria-describedby');
+    field.setAttribute('aria-describedby', describedBy ? `${describedBy} ${id}` : id);
+    const group = field.closest('.form-group, .cf-field, .field, .input-group');
+    if (group && !group.querySelector('.cd10-smart-hint')) {
+      group.appendChild(node);
+    } else {
+      field.insertAdjacentElement('afterend', node);
+    }
+    field.dataset.cd10HintBound = 'true';
+  }
+
+  function enhanceFieldDetails(root = document) {
+    root.querySelectorAll?.('input, select, textarea').forEach((field) => {
+      bindFieldFeedback(field);
+      addSmartHint(field);
+    });
+  }
+
+  function initMicroInteractions(root = document) {
+    const selector = [
+      '.card',
+      '.dash-card',
+      '.stat-card',
+      '.metric-card',
+      '.prof-card',
+      '.feature-card',
+      '.quick-action',
+      '.list-item',
+      '.payment-card',
+      '.class-card',
+      '.crm-card',
+      '.notification-card',
+    ].join(',');
+    root.querySelectorAll?.(selector).forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      if (node.closest('.cd10-command-overlay, .cd10-install-card')) return;
+      node.classList.add('cd10-polish-target');
+    });
+  }
+
+  function initTooltips(root = document) {
+    root.querySelectorAll?.('[title], [aria-label]').forEach((node) => {
       if (!(node instanceof HTMLElement) || node.dataset.cd10TooltipBound === 'true') return;
       const label = node.getAttribute('title') || node.getAttribute('aria-label');
       if (!label || label.length > 90) return;
@@ -1194,6 +1575,16 @@
 
   function enhanceEmptyStates(root = document) {
     root.querySelectorAll?.('.empty-state').forEach((empty) => {
+      if (empty.dataset.cd10Polished !== 'true') {
+        empty.classList.add('cd10-empty-polished');
+        empty.dataset.cd10Polished = 'true';
+        if (!visibleText(empty)) {
+          const description = document.createElement('p');
+          description.className = 'empty-desc';
+          description.textContent = 'No hay elementos todavia.';
+          empty.appendChild(description);
+        }
+      }
       if (empty.dataset.cd10Enhanced === 'true' || empty.querySelector('button, a')) return;
       const section = empty.closest('.dash-section');
       const action = contextActionFor(section?.id);
@@ -1211,13 +1602,20 @@
     });
   }
 
+  function polishDynamicNode(root = document) {
+    enhanceEmptyStates(root);
+    enhanceFieldDetails(root);
+    initMicroInteractions(root);
+    initTooltips(root);
+  }
+
   function initEmptyStateObserver() {
-    enhanceEmptyStates();
+    polishDynamicNode();
     if (typeof MutationObserver === 'undefined') return;
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
-          if (node instanceof HTMLElement) enhanceEmptyStates(node);
+          if (node instanceof HTMLElement) polishDynamicNode(node);
         });
       });
     });
@@ -1226,9 +1624,13 @@
 
   function initProductUxLayer() {
     injectProductUxStyles();
+    initPageProgress();
     initProductAnalyticsLayer();
     initConnectionAwareness();
     initSmartForms();
+    enhanceFieldDetails();
+    initActionFeedback();
+    initMicroInteractions();
     initDashboardCommandPalette();
     initDashboardSearchAssist();
     initTooltips();
@@ -1236,7 +1638,11 @@
     window.CD10ProductUX = {
       openCommandPalette,
       enhanceEmptyStates,
+      enhanceFieldDetails,
       initSmartForms,
+      startPageProgress,
+      finishPageProgress,
+      announce,
     };
   }
 

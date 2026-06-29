@@ -32,6 +32,12 @@ for (const [needle, message] of [
   ['command_palette.action', 'Command palette actions must be tracked analytically.'],
   ['Centro de acciones', 'Command palette must be framed as an action center, not just search.'],
   ['initDashboardSearchAssist', 'Dashboards must include contextual search assist.'],
+  ['initPageProgress', 'Product UX must expose screen and navigation progress feedback.'],
+  ['initActionFeedback', 'Product UX must expose action-level loading feedback.'],
+  ['enhanceFieldDetails', 'Product UX must add smart field feedback and hints.'],
+  ['initMicroInteractions', 'Product UX must add polished microinteractions.'],
+  ['cd10-live-region', 'Product UX must include an accessible live region.'],
+  ['cd10-empty-polished', 'Empty states must receive visual polish.'],
   ['initTooltips', 'Product UX must add accessible tooltips.'],
   ['enhanceEmptyStates', 'Product UX must enhance empty states with contextual actions.'],
   ['type === \'password\'', 'Autosave must skip password fields.'],
@@ -40,7 +46,7 @@ for (const [needle, message] of [
   assertIncludes(pwa, needle, message);
 }
 
-assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v27'", 'Service worker cache version must be bumped after data model changes.');
+assertIncludes(sw, "CACHE_VERSION = 'clasesde10-pwa-v28'", 'Service worker cache version must be bumped after product UX changes.');
 assertIncludes(pwa, 'platform-public-runtime.js', 'PWA must load public platform runtime configuration.');
 assertIncludes(packageJson.scripts['check:quality'], 'test:product-ux', 'check:quality must run product UX validation.');
 assertIncludes(packageJson.scripts['check:syntax'], 'scripts/product-ux-test.mjs', 'check:syntax must parse product UX validation.');
