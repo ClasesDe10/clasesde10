@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-availability">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-student-cards-2">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -190,10 +190,10 @@
 
       <!-- ══ MIS HIJOS ══ -->
       <section id="section-alumnos" class="dash-section" style="display:none">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
+        <div class="student-section-toolbar">
           <button class="btn btn-primary" id="btn-nuevo-hijo">+ Añadir hijo/a</button>
         </div>
-        <div id="grid-hijos" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px"></div>
+        <div id="grid-hijos" class="student-card-grid"></div>
       </section>
 
       <!-- ══ SOLICITUDES ══ -->
@@ -1319,16 +1319,16 @@ async function cargarHijos() {
   grid.innerHTML = data.map(h => {
     const slots = disponibilidadForStudent(h.id);
     return `
-    <div class="card">
+    <div class="card student-card">
       <div class="card-body">
-        <div style="display:flex;gap:14px;align-items:center;margin-bottom:16px">
+        <div class="student-card-header">
           <div class="avatar avatar-lg" style="background:var(--navy);color:white">${getIniciales(h.nombre, h.apellidos)}</div>
-          <div>
+          <div class="student-card-title">
             <div style="font-weight:700;font-size:1rem">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</div>
             <div style="font-size:.78rem;color:var(--gray-mid)">${sanitize(h.nivel_educativo||'—')} ${sanitize(h.curso||'')}</div>
           </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px;font-size:.85rem">
+        <div class="student-card-meta">
           <div><span style="color:var(--gray-mid)">Colegio:</span> ${sanitize(h.colegio||'—')}</div>
           <div><span style="color:var(--gray-mid)">Profesor:</span> ${h.asignaciones?.length
             ? sanitize(h.asignaciones[0].profesores?.usuarios?.nombre||'') + ' ' + sanitize(h.asignaciones[0].profesores?.usuarios?.apellidos||'')
@@ -1336,7 +1336,7 @@ async function cargarHijos() {
           ${h.asignaciones?.length ? `<div><span style="color:var(--gray-mid)">Materia:</span> ${sanitize(h.asignaciones[0].materia)}</div>` : ''}
           <div class="availability-mini"><span>Disponibilidad:</span> ${renderDisponibilidadMini(slots)}</div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:16px">
+        <div class="student-card-actions">
           <button class="btn btn-outline btn-sm"
                   data-action="editar-hijo"
                   data-id="${sanitize(h.id)}"

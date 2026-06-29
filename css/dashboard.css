@@ -895,6 +895,85 @@ textarea {
   color: var(--warning);
   font-weight: 700;
 }
+.student-section-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 20px;
+}
+.student-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.student-card {
+  min-width: 0;
+  overflow: hidden;
+}
+.student-card .card-body {
+  min-width: 0;
+}
+.student-card-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.student-card-title {
+  min-width: 0;
+}
+.student-card-title > div {
+  font-weight: 700;
+  font-size: 1rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.student-card-title > span {
+  display: block;
+  margin-top: 2px;
+  font-size: .78rem;
+  color: var(--gray-mid);
+}
+.student-card-meta {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-size: .85rem;
+}
+.student-card-meta > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.student-card-meta > div > span:first-child {
+  color: var(--gray-mid);
+}
+.student-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  max-width: 100%;
+  min-width: 0;
+}
+.student-card-actions .btn,
+.student-card-actions .badge {
+  flex: 0 1 auto;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+.student-card-actions .btn {
+  min-height: 38px;
+}
+.student-card-actions .btn-ghost {
+  background: var(--white);
+  border: 1.5px solid rgba(15, 31, 61, .28);
+  color: var(--navy);
+}
+.student-card-actions .btn-ghost:hover {
+  border-color: var(--navy);
+}
 .availability-slot-list {
   display: grid;
   gap: 8px;
