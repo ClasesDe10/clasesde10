@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-scheduling">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260629-teacher-journey">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -99,6 +99,7 @@
 
       <!-- ══ INICIO ══ -->
       <section id="section-inicio" class="dash-section">
+        <div id="teacher-journey-panel"></div>
         <div id="alerta-verificacion" style="display:none;margin-bottom:20px"></div>
 
         <div class="stats-grid">
@@ -564,6 +565,8 @@ import { buildTeacherPayoutPayload } from '../../js/payment-engine.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-relations';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
+import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260629-teacher-journey';
+import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -668,6 +671,36 @@ document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
   setTimeout(() => document.querySelector('[data-chat-tab="notificaciones"]')?.click(), 100);
 });
 
+function handleTeacherJourneyAction(action) {
+  const normalized = String(action || '').trim();
+  const routes = {
+    complete_profile: () => irA('perfil'),
+    open_profile: () => irA('perfil'),
+    upload_documents: () => irA('documentos'),
+    set_availability: () => irA('disponibilidad'),
+    open_chat: () => irA('chat'),
+    open_calendar: () => irA('calendario'),
+    confirm_class: () => irA('clases'),
+    open_income: () => irA('ingresos'),
+  };
+  (routes[normalized] || (() => irA('inicio')))();
+}
+
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-teacher-journey-action]');
+  if (!trigger) return;
+  e.preventDefault();
+  handleTeacherJourneyAction(trigger.dataset.teacherJourneyAction);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const trigger = e.target.closest?.('[data-teacher-journey-action]');
+  if (!trigger) return;
+  e.preventDefault();
+  handleTeacherJourneyAction(trigger.dataset.teacherJourneyAction);
+});
+
 // ── INICIO ───────────────────────────────────────────────────────
 async function cargarChatsUsuarioActual() {
   const uid = usuario.uid || usuario.firebase_uid || usuario.id;
@@ -719,12 +752,25 @@ function renderTeacherRelationshipDigest({ asignaciones = [], clases = [], pagos
   });
 }
 
+function renderTeacherJourney({ relationships = [], documentos = [], disponibilidad = [] } = {}) {
+  const container = document.getElementById('teacher-journey-panel');
+  if (!container) return;
+  const state = buildTeacherJourneyState({
+    teacher: perfil,
+    profileEvaluation: evaluateTeacherProfileProfessional(perfil || {}, documentos || []),
+    relationships,
+    documents: documentos || [],
+    availabilitySlots: disponibilidad || [],
+  });
+  container.innerHTML = renderTeacherJourneyPanel(state);
+}
+
 async function cargarInicio() {
   if (!profesorId) return;
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
 
-  const [{ data: clasesMes }, { data: alumnos }, { data: pendientesRaw }, { data: clasesRelacion }, { data: pagosRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
+  const [{ data: clasesMes }, { data: alumnos }, { data: pendientesRaw }, { data: clasesRelacion }, { data: pagosRelacion }, { data: documentosRelacion }, { data: disponibilidadRelacion }, chatsRelacion] = await Promise.all([
     db.from('clases').select('duracion_minutos, importe_profesor, estado')
       .eq('profesor_id', profesorId).gte('fecha', mesInicio),
     db.from('asignaciones').select('*').eq('profesor_id', profesorId).eq('activa', true),
@@ -733,6 +779,7 @@ async function cargarInicio() {
     cargarFirestoreWhere('clases', 'profesor_id', '==', profesorId),
     cargarFirestoreWhere('pagos', 'profesor_id', '==', profesorFirestoreId),
     cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
+    cargarFirestoreWhere('disponibilidad', 'profesor_id', '==', profesorId),
     cargarChatsUsuarioActual(),
   ]);
   const pendientes = (pendientesRaw || [])
@@ -745,6 +792,19 @@ async function cargarInicio() {
   document.getElementById('stat-ingresos-mes').textContent = formatEuros(realizadas.reduce((s,c) => s + (c.importe_profesor||0), 0));
   const horas = realizadas.reduce((s,c) => s + (c.duracion_minutos||0), 0);
   document.getElementById('stat-horas-mes').textContent = `${Math.floor(horas/60)}h ${horas%60}m`;
+  const relationships = buildRelationshipsFromCollections({
+    assignments: alumnos || [],
+    chats: chatsRelacion || [],
+    classes: clasesRelacion || [],
+    payments: pagosRelacion || [],
+    documents: documentosRelacion || [],
+    teachers: [{ id: profesorId, ...perfil, userUid: profesorFirestoreId }],
+  });
+  renderTeacherJourney({
+    relationships,
+    documentos: documentosRelacion || [],
+    disponibilidad: disponibilidadRelacion || [],
+  });
   renderTeacherRelationshipDigest({
     asignaciones: alumnos || [],
     clases: clasesRelacion || [],

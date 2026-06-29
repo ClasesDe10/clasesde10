@@ -233,6 +233,10 @@
   box-shadow: var(--shadow-sm);
 }
 
+.teacher-journey-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f1fbf8 100%);
+}
+
 .family-journey-main {
   min-width: 0;
   display: flex;

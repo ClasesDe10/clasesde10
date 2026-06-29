@@ -1078,6 +1078,7 @@
         { id: 'familia:profile', label: 'Completar perfil familiar', hint: 'Datos para asignaciones mas precisas', category: 'Confianza', section: 'perfil', priority: 15, keywords: 'direccion telefono zona perfil' },
       ],
       profesor: [
+        { id: 'profesor:next', label: 'Hacer mi siguiente paso', hint: 'La guia decide que toca ahora', category: 'Recomendado', section: 'inicio', selector: '.teacher-journey-card [data-teacher-journey-action]', priority: 1, recommended: true, keywords: 'siguiente paso profesor perfil documentos chat clase cobro' },
         { id: 'profesor:profile', label: 'Completar perfil profesional', hint: 'Foto, estudios, materias y confianza', category: 'Confianza', section: 'perfil', priority: 3, recommended: true, keywords: 'perfil foto estudios colegio notas materias idiomas' },
         { id: 'profesor:availability', label: 'Actualizar disponibilidad', hint: 'Franjas reales para matching', category: 'Matching', section: 'disponibilidad', selector: '#btn-add-disponibilidad', priority: 5, keywords: 'horario disponibilidad calendario' },
         { id: 'profesor:documents', label: 'Subir documentos', hint: 'Verificacion y certificaciones', category: 'Confianza', section: 'documentos', selector: '#btn-subir-doc', priority: 7, keywords: 'dni titulo certificado documentos verificacion' },
@@ -1108,6 +1109,20 @@
         priority: 0,
         recommended: true,
         keywords: 'siguiente recomendado familia',
+      });
+    }
+    const teacherPrimary = document.querySelector('.teacher-journey-card [data-teacher-journey-action]');
+    if (teacherPrimary) {
+      actions.push({
+        id: 'dynamic:teacher-primary',
+        label: visibleText(teacherPrimary) || 'Hacer siguiente paso',
+        hint: 'Recomendado por la guia de profesor',
+        category: 'Recomendado',
+        selector: '.teacher-journey-card [data-teacher-journey-action]',
+        section: 'inicio',
+        priority: 0,
+        recommended: true,
+        keywords: 'siguiente recomendado profesor',
       });
     }
     const badge = document.getElementById('notif-badge');
