@@ -35,6 +35,30 @@
       ]
     },
     {
+      "collectionGroup": "disponibilidad",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyUid", "order": "ASCENDING" },
+        { "fieldPath": "dia_semana", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disponibilidad",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "teacherUid", "order": "ASCENDING" },
+        { "fieldPath": "dia_semana", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "disponibilidad",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "dia_semana", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "asignaciones",
       "queryScope": "COLLECTION",
       "fields": [
@@ -81,6 +105,14 @@
       "collectionGroup": "clases",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "studentId", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clases",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "fecha", "order": "DESCENDING" }
       ]
@@ -91,6 +123,22 @@
       "fields": [
         { "fieldPath": "familyUid", "order": "ASCENDING" },
         { "fieldPath": "fecha", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "familyUid", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "clases",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "teacherUid", "order": "ASCENDING" },
+        { "fieldPath": "fecha", "order": "ASCENDING" }
       ]
     },
     {

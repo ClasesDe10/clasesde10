@@ -573,17 +573,17 @@ import {
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260628-calendar';
+} from '../../js/calendar-engine.js?v=20260629-attendance-direct';
 import { buildFamilyPaymentPayload, paymentStatusForBadge } from '../../js/payment-engine.js';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-chat-accept';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-chat-direct-create';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260629-family-journey';
 import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import { availabilitySlotLabel, summarizeAvailabilitySlots } from '../../js/availability-engine.js?v=20260629-availability';
-import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
@@ -887,25 +887,32 @@ async function cargarInicio() {
 
   if (hijos?.length) {
     const ids = hijos.map(h => h.id);
-    const [{ count: cm }, { data: asig }, { data: clasesRelacion }, { data: pagosRelacion }, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
-      db.from('clases').select('id',{count:'exact',head:true}).in('alumno_id', ids).gte('fecha', mesInicio),
+    const [{ data: clasesFamiliaRaw }, { data: asig }, { data: clasesRelacion }, { data: pagosRelacion }, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
+      db.from('clases').select('id,assignmentId,asignacion_id,familyUid,familia_id,fecha,date,estado,status,hora_inicio,hora_fin,materia,subject,alumno_id,studentId,profesor_id,teacherUid').in('alumno_id', ids).limit(120),
       db.from('asignaciones').select('*').in('alumno_id', ids).eq('activa', true),
-      cargarFirestoreIn('clases', 'alumno_id', ids),
-      cargarFirestoreWhere('pagos', 'familia_id', '==', familiaId),
-      cargarFirestoreWhere('solicitudes', 'familia_id', '==', familiaId),
+      cargarFirestoreIn('clases', 'studentId', ids),
+      cargarFirestoreWhere('pagos', 'familyUid', '==', familiaId),
+      cargarFirestoreWhere('solicitudes', 'familyUid', '==', familiaId),
       cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
       cargarChatsUsuarioActual(),
     ]);
-    document.getElementById('stat-clases-mes').textContent = cm || 0;
+    const clasesFamilia = (clasesFamiliaRaw || []).filter((clase) => ids.includes(clase.studentId || clase.alumno_id));
+    const clasesRelacionIntegradas = Array.from(new Map([
+      ...(clasesRelacion || []),
+      ...clasesFamilia,
+    ].filter(Boolean).map((clase) => [clase.id, clase])).values());
+    const clasesMes = clasesFamilia.filter((clase) => String(clase.fecha || clase.date || '') >= mesInicio);
+    document.getElementById('stat-clases-mes').textContent = clasesMes.length;
     const profUnicos = [...new Set((asig||[]).map(a => a.profesor_id))];
     document.getElementById('stat-profesores').textContent = profUnicos.length;
     let profesoresRelacion = [];
 
     // Próximas clases
     const { data: proximasRaw } = await db.from('v_clases_completas')
-      .select('*').in('alumno_id', ids).gte('fecha', hoy).order('fecha').limit(20);
+      .select('*').in('alumno_id', ids).limit(120);
     const proximas = (proximasRaw || [])
-      .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
+      .filter((clase) => String(clase.fecha || clase.date || '') >= hoy && isScheduledClassStatus(clase.estado || clase.status))
+      .sort((a, b) => String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || '')) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')))
       .slice(0, 5);
     const contP = document.getElementById('lista-proximas-inicio');
     contP.innerHTML = proximas?.length ? proximas.map(c => `
@@ -962,7 +969,7 @@ async function cargarInicio() {
     const relationships = renderFamilyRelationshipDigest({
       hijos,
       asignaciones: asig || [],
-      clases: clasesRelacion || [],
+      clases: clasesRelacionIntegradas,
       pagos: pagosRelacion || [],
       solicitudes: solicitudesRelacion || [],
       documentos: documentosRelacion || [],
@@ -1067,16 +1074,25 @@ async function cargarClases() {
   const estado  = document.getElementById('filtro-cl-estado').value;
   const mes     = document.getElementById('filtro-cl-mes').value;
   const ids     = hijoSel ? [hijoSel] : hijos.map(h => h.id);
+  const hijosPorId = new Map(hijos.map((hijo) => [
+    hijo.id,
+    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
+  ]));
 
-  let q = db.from('v_clases_completas').select('*').in('alumno_id', ids);
-  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
-  if (mes) q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31');
-  q = q.order('fecha', {ascending:false});
-
-  const { data } = await q;
+  const { data } = await db.from('v_clases_completas').select('*').in('alumno_id', ids).limit(180);
+  let filtered = (data || []).filter((clase) => ids.includes(clase.studentId || clase.alumno_id));
+  if (estado && estado !== 'confirmada') {
+    filtered = filtered.filter((clase) => classStatusForBadge(clase) === estado || clase.estado === estado || clase.status === estado);
+  }
+  if (mes) {
+    const desdeMes = `${mes}-01`;
+    const hastaMes = `${mes}-31`;
+    filtered = filtered.filter((clase) => String(clase.fecha || clase.date || '') >= desdeMes && String(clase.fecha || clase.date || '') <= hastaMes);
+  }
+  filtered.sort((a, b) => String(b.fecha || b.date || '').localeCompare(String(a.fecha || a.date || '')) || String(b.hora_inicio || b.startTime || '').localeCompare(String(a.hora_inicio || a.startTime || '')));
   const clases = estado === 'confirmada'
-    ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
-    : (data || []);
+    ? filtered.filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : filtered;
   if (!clases.length) {
     tbody.innerHTML = renderTableEmptyState(9, {
       icon: '📅',
@@ -1091,6 +1107,8 @@ async function cargarClases() {
   }
 
   tbody.innerHTML = clases.map(c => {
+    const alumnoNombre = c.alumno_nombre || c.studentName || hijosPorId.get(c.studentId || c.alumno_id) || 'Alumno/a';
+    const profesorNombre = c.profesor_nombre || c.teacherName || 'Profesor asignado';
     const puedeConfirmar = claseTerminada(c, 0)
       && !['cancelada', 'reprogramada'].includes(c.estado)
       && (isScheduledClassStatus(c.estado || c.status) || c.estado === 'realizada');
@@ -1102,8 +1120,8 @@ async function cargarClases() {
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
-    <td>${sanitize(c.alumno_nombre)}</td>
-    <td>${sanitize(c.profesor_nombre)}</td>
+    <td>${sanitize(alumnoNombre)}</td>
+    <td>${sanitize(profesorNombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
@@ -1125,11 +1143,13 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
     ? window.prompt('Cuéntanos brevemente qué pasó con la clase:') || ''
     : '';
 
-  const { data: claseActual } = await db.from('clases').select('*').eq('id', btn.dataset.id).single();
-  const payload = buildFamilyConfirmationPayload(status, notas, usuario.uid || usuario.id);
-  const { error } = await db.from('clases').update(payload).eq('id', btn.dataset.id);
-
-  if (error) {
+  const claseRef = firestoreDoc(firebaseDb, 'clases', btn.dataset.id);
+  const claseSnap = await getDoc(claseRef).catch(() => null);
+  const claseActual = claseSnap?.exists() ? { id: claseSnap.id, ...claseSnap.data() } : {};
+  const payload = buildFamilyConfirmationPayload(status, notas, usuario.uid || usuario.id, new Date().toISOString(), claseActual);
+  try {
+    await updateDoc(claseRef, payload);
+  } catch (error) {
     showToast('Error', error.message || 'No se pudo confirmar la clase.', 'error');
     return;
   }
@@ -1158,6 +1178,34 @@ function disponibilidadForStudent(studentId) {
   return disponibilidadHijosCache.get(studentId) || [];
 }
 
+function disponibilidadFamilyQueryIds() {
+  return Array.from(new Set([
+    familiaFirestoreId,
+    familiaId,
+    familiaData?.userUid,
+    familiaData?.usuario_id,
+    usuario.uid,
+    usuario.firebase_uid,
+    usuario.id,
+  ].filter(Boolean)));
+}
+
+function disponibilidadSlotKey(slot = {}) {
+  return slot.id || [
+    disponibilidadStudentId(slot),
+    slot.familyUid || slot.familia_id || '',
+    slot.dia_semana,
+    slot.hora_inicio,
+    slot.hora_fin,
+  ].join('|');
+}
+
+function disponibilidadSlotExists(studentId, dia, inicio, fin) {
+  return disponibilidadForStudent(studentId).some((slot) => Number(slot.dia_semana) === dia
+    && slot.hora_inicio === inicio
+    && slot.hora_fin === fin);
+}
+
 function renderDisponibilidadMini(slots = []) {
   const summary = summarizeAvailabilitySlots(slots, 3);
   if (!summary) return '<span class="availability-mini-empty">Sin franjas marcadas</span>';
@@ -1166,13 +1214,28 @@ function renderDisponibilidadMini(slots = []) {
 
 async function cargarDisponibilidadHijos() {
   if (!familiaId) return new Map();
-  const { data, error } = await db.from('disponibilidad').select('*').eq('familia_id', familiaId).order('dia_semana');
-  if (error) {
-    console.warn('No se pudo cargar disponibilidad de hijos', error);
+  const byKey = new Map();
+  const errors = [];
+  const familyIds = disponibilidadFamilyQueryIds();
+
+  for (const field of ['familyUid', 'familia_id']) {
+    for (const id of familyIds) {
+      const { data, error } = await db.from('disponibilidad').select('*').eq(field, id).order('dia_semana');
+      if (error) {
+        errors.push({ field, id, error });
+        continue;
+      }
+      (data || []).forEach((slot) => byKey.set(disponibilidadSlotKey(slot), slot));
+    }
+  }
+
+  if (!byKey.size && errors.length) {
+    console.warn('No se pudo cargar disponibilidad de hijos', errors[0].error);
     disponibilidadHijosCache = new Map();
     return disponibilidadHijosCache;
   }
-  disponibilidadHijosCache = (data || []).reduce((map, slot) => {
+
+  disponibilidadHijosCache = Array.from(byKey.values()).reduce((map, slot) => {
     const studentId = disponibilidadStudentId(slot);
     if (!studentId) return map;
     const current = map.get(studentId) || [];
@@ -1373,48 +1436,68 @@ document.addEventListener('click', (e) => {
 });
 
 document.getElementById('btn-guardar-disponibilidad-hijo').addEventListener('click', async () => {
+  const button = document.getElementById('btn-guardar-disponibilidad-hijo');
+  if (button.disabled) return;
   const studentId = document.getElementById('disp-hijo-id').value;
   const dia = Number(document.getElementById('disp-hijo-dia').value);
   const inicio = document.getElementById('disp-hijo-inicio').value;
   const fin = document.getElementById('disp-hijo-fin').value;
-  if (!studentId || !inicio || !fin || fin <= inicio) {
+  if (!studentId || !Number.isInteger(dia) || dia < 0 || dia > 6 || !inicio || !fin || fin <= inicio) {
     showToast('Horario no valido', 'Indica dia, hora de inicio y hora de fin coherentes.', 'warning');
     return;
   }
-
-  const { error } = await db.from('disponibilidad').insert({
-    familyUid: familiaId,
-    familia_id: familiaId,
-    studentId,
-    alumno_id: studentId,
-    dia_semana: dia,
-    hora_inicio: inicio,
-    hora_fin: fin,
-  });
-  if (error) {
-    showToast('Error', error.message || 'No se pudo guardar la franja.', 'error');
+  if (disponibilidadSlotExists(studentId, dia, inicio, fin)) {
+    showToast('Franja ya guardada', 'Ese horario ya esta marcado para este alumno.', 'info');
     return;
   }
-  await cargarDisponibilidadHijos();
-  renderDisponibilidadHijoActual();
-  await cargarHijos();
-  renderSolicitudDisponibilidadHint();
-  showToast('Disponibilidad guardada', 'El profesor solo podra proponer horarios compatibles.', 'success');
+
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Guardando...';
+  try {
+    const { error } = await db.from('disponibilidad').insert({
+      familyUid: familiaFirestoreId,
+      familia_id: familiaId,
+      studentId,
+      alumno_id: studentId,
+      dia_semana: dia,
+      hora_inicio: inicio,
+      hora_fin: fin,
+    });
+    if (error) {
+      showToast('Error', error.message || 'No se pudo guardar la franja.', 'error');
+      return;
+    }
+    await cargarDisponibilidadHijos();
+    renderDisponibilidadHijoActual();
+    await cargarHijos();
+    renderSolicitudDisponibilidadHint();
+    document.getElementById('disp-hijo-inicio').value = '';
+    document.getElementById('disp-hijo-fin').value = '';
+    showToast('Disponibilidad guardada', 'El profesor solo podra proponer horarios compatibles.', 'success');
+  } finally {
+    button.disabled = false;
+    button.textContent = previousText;
+  }
 });
 
 document.getElementById('disp-hijo-lista').addEventListener('click', async (event) => {
   const btn = event.target.closest('[data-action="eliminar-disponibilidad-hijo"]');
   if (!btn) return;
-  const { error } = await db.from('disponibilidad').delete().eq('id', btn.dataset.id);
-  if (error) {
-    showToast('Error', error.message || 'No se pudo eliminar la franja.', 'error');
-    return;
+  const previousText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Eliminando...';
+  try {
+    await deleteDoc(firestoreDoc(firebaseDb, 'disponibilidad', btn.dataset.id));
+    await cargarDisponibilidadHijos();
+    renderDisponibilidadHijoActual();
+    await cargarHijos();
+    renderSolicitudDisponibilidadHint();
+    showToast('Franja eliminada', 'Disponibilidad actualizada.', 'success');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = previousText;
   }
-  await cargarDisponibilidadHijos();
-  renderDisponibilidadHijoActual();
-  await cargarHijos();
-  renderSolicitudDisponibilidadHint();
-  showToast('Franja eliminada', 'Disponibilidad actualizada.', 'success');
 });
 
 document.getElementById('sol-alumno')?.addEventListener('change', renderSolicitudDisponibilidadHint);

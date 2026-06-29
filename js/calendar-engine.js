@@ -284,14 +284,21 @@ export function buildTeacherAttendancePayload(status, notes = '', reason = '', u
   };
 }
 
-export function buildFamilyConfirmationPayload(status, notes = '', userUid = '', nowIso = new Date().toISOString()) {
+export function buildFamilyConfirmationPayload(status, notes = '', userUid = '', nowIso = new Date().toISOString(), previous = {}) {
   const normalized = cleanCalendarText(status, 40).toLowerCase();
   const familyStatus = ATTENDANCE_STATUSES.includes(normalized) ? normalized : 'realizada';
+  const teacherStatus = cleanCalendarText(previous.teacherConfirmationStatus || previous.teacherAttendanceStatus || '', 40).toLowerCase();
+  const attendanceStatus = familyStatus === 'realizada' && teacherStatus === 'realizada'
+    ? 'confirmada_por_ambas_partes'
+    : familyStatus === 'realizada' ? 'pendiente_profesor' : 'incidencia';
   return {
     confirmacion_familia: familyStatus,
     familyConfirmationStatus: familyStatus,
     familyAttendanceStatus: familyStatus,
-    attendanceStatus: familyStatus === 'realizada' ? 'pendiente_profesor' : 'incidencia',
+    attendanceStatus,
+    lifecycleStatus: attendanceStatus === 'confirmada_por_ambas_partes'
+      ? 'pendiente_pago'
+      : attendanceStatus === 'pendiente_profesor' ? 'pendiente_confirmacion' : 'incidencia',
     incidentStatus: familyStatus === 'incidencia' || familyStatus === 'no_realizada' ? 'abierta' : null,
     familyConfirmedAt: nowIso,
     familyConfirmedByUid: userUid,

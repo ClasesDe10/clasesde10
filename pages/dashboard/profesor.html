@@ -564,15 +564,15 @@ import {
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260628-calendar';
+} from '../../js/calendar-engine.js?v=20260629-attendance-direct';
 import { buildTeacherPayoutPayload } from '../../js/payment-engine.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260629-chat-accept';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260629-chat-direct-create';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260629-teacher-journey';
 import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
-import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
@@ -781,10 +781,10 @@ async function cargarInicio() {
     db.from('asignaciones').select('*').eq('profesor_id', profesorId).eq('activa', true),
     db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId)
       .lte('fecha', hoy).order('fecha').limit(40),
-    cargarFirestoreWhere('clases', 'profesor_id', '==', profesorId),
-    cargarFirestoreWhere('pagos', 'profesor_id', '==', profesorFirestoreId),
+    cargarFirestoreWhere('clases', 'teacherUid', '==', profesorId),
+    cargarFirestoreWhere('pagos', 'teacherUid', '==', profesorFirestoreId),
     cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
-    cargarFirestoreWhere('disponibilidad', 'profesor_id', '==', profesorId),
+    cargarFirestoreWhere('disponibilidad', 'teacherUid', '==', profesorId),
     cargarChatsUsuarioActual(),
   ]);
   const pendientes = (pendientesRaw || [])
@@ -949,10 +949,15 @@ async function cargarMisClases() {
     return;
   }
 
-  tbody.innerHTML = clases.map(c => `<tr>
+  tbody.innerHTML = clases.map(c => {
+    const alumnoNombre = [c.alumnos?.nombre, c.alumnos?.apellidos].filter(Boolean).join(' ').trim()
+      || c.alumno_nombre
+      || c.studentName
+      || 'Alumno/a';
+    return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
-    <td>${sanitize(c.alumnos?.nombre||'—')} ${sanitize(c.alumnos?.apellidos||'')}</td>
+    <td>${sanitize(alumnoNombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
@@ -962,12 +967,13 @@ async function cargarMisClases() {
         ? `<button class="btn btn-primary btn-sm"
                    data-action="registrar-clase"
                    data-id="${sanitize(c.id)}"
-                   data-alumno="${sanitize(c.alumnos?.nombre||'')}"
+                   data-alumno="${sanitize(alumnoNombre)}"
                    data-materia="${sanitize(c.materia)}"
                    data-fecha="${formatFechaCorta(c.fecha)}">Registrar</button>`
         : ''}
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 ['filtro-cl-estado','filtro-cl-mes'].forEach(id => document.getElementById(id).addEventListener('change', cargarMisClases));
 
@@ -994,9 +1000,12 @@ document.getElementById('btn-confirmar-registro').addEventListener('click', asyn
   const motivo = document.getElementById('rc-motivo').value.trim();
 
   const payload = buildTeacherAttendancePayload(estado, notas, motivo, usuario.uid || usuario.id);
-  const { error } = await db.from('clases').update(payload).eq('id', id).eq('profesor_id', profesorId);
-
-  if (error) { showToast('Error', error.message, 'error'); return; }
+  try {
+    await updateDoc(firestoreDoc(firebaseDb, 'clases', id), payload);
+  } catch (error) {
+    showToast('Error', error.message, 'error');
+    return;
+  }
   document.getElementById('modal-registrar-clase').classList.remove('open');
   showToast('Registrado', 'Clase actualizada correctamente.', 'success');
   cargarInicio();

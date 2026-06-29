@@ -283,17 +283,22 @@ async function loadAvailabilityBy(field, value) {
 
 async function loadChatAvailability(chat = {}) {
   const teacherUid = clean(chat.teacherUid || chat.profesor_id, 180);
+  const familyUid = clean(chat.familyUid || chat.familia_id, 180);
   const studentId = clean(chat.studentId || chat.alumno_id, 180);
-  const [teacherCanonical, teacherLegacy, studentCanonical, studentLegacy] = await Promise.all([
+  const [teacherCanonical, teacherLegacy, studentCanonical, studentLegacy, familyStudentCanonical, familyStudentLegacy] = await Promise.all([
     loadAvailabilityBy('teacherUid', teacherUid).catch(() => []),
     loadAvailabilityBy('profesor_id', teacherUid).catch(() => []),
     loadAvailabilityBy('studentId', studentId).catch(() => []),
     loadAvailabilityBy('alumno_id', studentId).catch(() => []),
+    loadAvailabilityBy('familyUid', familyUid).catch(() => []),
+    loadAvailabilityBy('familia_id', familyUid).catch(() => []),
   ]);
+  const studentRows = [...studentCanonical, ...studentLegacy, ...familyStudentCanonical, ...familyStudentLegacy]
+    .filter((slot) => clean(slot.studentId || slot.alumno_id, 180) === studentId);
   return {
     loading: false,
     teacherSlots: uniqueAvailabilityRows([...teacherCanonical, ...teacherLegacy]),
-    studentSlots: uniqueAvailabilityRows([...studentCanonical, ...studentLegacy]),
+    studentSlots: uniqueAvailabilityRows(studentRows),
   };
 }
 
@@ -1020,14 +1025,19 @@ export async function initChatWidget({
       schedulingStatus: 'confirmed',
       modality: proposal.modalidad || 'por_acordar',
       modalidad: proposal.modalidad || 'por_acordar',
+      familyName: clean(state.selectedChat.familyName, 160),
+      teacherName: clean(state.selectedChat.teacherName, 160),
+      studentName: clean(state.selectedChat.studentName, 160),
+      familia_nombre: clean(state.selectedChat.familyName, 160),
+      profesor_nombre: clean(state.selectedChat.teacherName, 160),
+      alumno_nombre: clean(state.selectedChat.studentName, 160),
       createdByUid: currentUid,
       createdByRole: role,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
     const classRef = doc(firebaseDb, 'clases', classId);
-    const existingClass = await getDoc(classRef);
-    if (!existingClass.exists()) await setDoc(classRef, payload);
+    await setDoc(classRef, payload);
     await updateDoc(proposalRef, {
       status: 'aceptada',
       classId,
