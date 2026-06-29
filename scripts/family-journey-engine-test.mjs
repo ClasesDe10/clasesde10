@@ -78,7 +78,7 @@ assert.match(registerPage, /auth-next-steps/);
 assert.match(registerPage, /Despues de crear la cuenta/);
 
 const loginPage = readFileSync(new URL('../pages/login.html', import.meta.url), 'utf8');
-assert.match(loginPage, /auth-guide-note/);
-assert.match(loginPage, /siguiente paso exacto/);
+assert.doesNotMatch(loginPage, /auth-guide-note/);
+assert.doesNotMatch(loginPage, /siguiente paso exacto/);
 
 console.log('family journey engine and integration OK');
