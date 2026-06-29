@@ -6,6 +6,8 @@
   let installCard = null;
   let analyticsModulePromise = null;
   const clickTelemetry = new Map();
+  let commandPaletteActions = [];
+  let commandPaletteSelection = 0;
 
   const isStandalone = () =>
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -203,6 +205,18 @@
         padding: 6px 10px;
         font: 800 .78rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .cd10-command-trigger::before {
+        content: '';
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        border: 2px solid currentColor;
+        box-shadow: 6px 6px 0 -5px currentColor;
+        transform: rotate(-16deg);
       }
       .cd10-command-overlay {
         position: fixed;
@@ -225,27 +239,66 @@
         background: #ffffff;
         box-shadow: 0 30px 90px rgba(0,0,0,.28);
       }
+      .cd10-command-head {
+        display: grid;
+        gap: 10px;
+        padding: 14px 14px 0;
+      }
+      .cd10-command-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        color: #0f1f3d;
+        font: 900 .86rem/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      .cd10-command-kbd {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #6f695f;
+        font-size: .72rem;
+        font-weight: 800;
+      }
+      .cd10-command-kbd kbd {
+        min-width: 22px;
+        border: 1px solid rgba(15,31,61,.16);
+        border-bottom-width: 2px;
+        border-radius: 6px;
+        background: rgba(15,31,61,.035);
+        color: #0f1f3d;
+        padding: 3px 6px;
+        font: 800 .7rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        text-align: center;
+      }
       .cd10-command-input {
         width: 100%;
-        border: 0;
-        border-bottom: 1px solid rgba(15,31,61,.09);
+        border: 1px solid rgba(15,31,61,.10);
+        border-radius: 10px;
         outline: 0;
-        padding: 16px 18px;
+        padding: 13px 14px;
         color: #0f1f3d;
         font: 700 1rem system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
       .cd10-command-list {
         max-height: min(520px, calc(100vh - 190px));
         overflow-y: auto;
-        padding: 8px;
+        padding: 10px 8px 8px;
+      }
+      .cd10-command-group {
+        padding: 8px 8px 4px;
+        color: #8a5a00;
+        font: 900 .68rem/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        letter-spacing: .04em;
+        text-transform: uppercase;
       }
       .cd10-command-item {
         width: 100%;
         display: grid;
-        grid-template-columns: 1fr auto;
+        grid-template-columns: minmax(0, 1fr) auto;
         gap: 10px;
         align-items: center;
-        min-height: 48px;
+        min-height: 54px;
         border: 0;
         border-radius: 10px;
         background: transparent;
@@ -255,18 +308,56 @@
         cursor: pointer;
       }
       .cd10-command-item:hover,
-      .cd10-command-item:focus-visible {
+      .cd10-command-item:focus-visible,
+      .cd10-command-item.is-active {
         outline: 0;
         background: rgba(232,160,48,.14);
+      }
+      .cd10-command-item.is-recommended {
+        background: rgba(29,122,107,.08);
+      }
+      .cd10-command-copy {
+        min-width: 0;
       }
       .cd10-command-item strong {
         display: block;
         font-size: .9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
       .cd10-command-item span {
         color: #6f695f;
         font-size: .76rem;
         font-weight: 700;
+        display: block;
+        margin-top: 3px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .cd10-command-meta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 68px;
+        border-radius: 999px;
+        background: rgba(15,31,61,.06);
+        color: #0f1f3d;
+        padding: 5px 8px;
+        font-size: .68rem;
+        font-weight: 900;
+        text-align: center;
+      }
+      .cd10-command-foot {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        border-top: 1px solid rgba(15,31,61,.08);
+        padding: 9px 12px;
+        color: #6f695f;
+        font-size: .72rem;
+        font-weight: 800;
       }
       .cd10-command-empty {
         padding: 28px;
@@ -317,9 +408,32 @@
         font-weight: 800;
       }
       @media (max-width: 768px) {
-        .cd10-command-trigger { display: none; }
+        .cd10-command-trigger {
+          min-width: 42px;
+          min-height: 42px;
+          padding: 0 10px;
+          font-size: 0;
+        }
+        .cd10-command-trigger::before {
+          width: 16px;
+          height: 16px;
+        }
         .cd10-command-overlay { padding-top: 14px; }
         .cd10-command-panel { border-radius: 12px; }
+        .cd10-command-title {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        .cd10-command-item {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .cd10-command-meta {
+          justify-content: flex-start;
+          width: max-content;
+        }
+        .cd10-command-foot {
+          display: none;
+        }
         .cd10-form-progress { padding: 9px 10px; }
         .cd10-connection-banner {
           bottom: max(12px, env(safe-area-inset-bottom));
@@ -635,34 +749,211 @@
     return String(node?.textContent || '').replace(/\s+/g, ' ').trim();
   }
 
+  function dashboardRole() {
+    const user = window.CD10CurrentUser || {};
+    const role = String(user.role || user.rol || '').toLowerCase();
+    if (role) return role;
+    const path = window.location.pathname;
+    if (path.includes('/admin')) return 'admin';
+    if (path.includes('/profesor')) return 'profesor';
+    if (path.includes('/familia')) return 'familia';
+    if (path.includes('/alumno')) return 'alumno';
+    return 'dashboard';
+  }
+
+  function dashboardRoleLabel(role = dashboardRole()) {
+    return {
+      admin: 'Admin',
+      profesor: 'Profesor',
+      familia: 'Familia',
+      alumno: 'Alumno',
+    }[role] || 'Panel';
+  }
+
+  function isNodeActionable(node) {
+    if (!(node instanceof HTMLElement) || node.disabled) return false;
+    if (node.closest('.cd10-command-overlay')) return false;
+    if (node.matches('.sidebar-link[data-section], .topbar button, .topbar a')) return true;
+    if (node.offsetParent) return true;
+    return false;
+  }
+
+  function clickTarget(selector) {
+    if (!selector) return false;
+    const nodes = Array.from(document.querySelectorAll(selector)).filter((node) => node instanceof HTMLElement && !node.disabled);
+    const visible = nodes.find(isNodeActionable) || nodes[0];
+    if (!visible) return false;
+    visible.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    return true;
+  }
+
+  function goToSection(section) {
+    if (!section) return false;
+    const escaped = window.CSS?.escape ? CSS.escape(section) : section.replace(/"/g, '\\"');
+    return clickTarget(`.sidebar-link[data-section="${escaped}"], [data-section="${escaped}"]`);
+  }
+
+  function runStructuredCommand(action) {
+    if (!action) return;
+    closeCommandPalette();
+    trackProductEvent('command_palette.action', {
+      category: 'navigation',
+      feature: 'command_palette',
+      entityType: action.category || 'action',
+      entityId: action.id || action.label || '',
+      metadata: {
+        label: action.label || '',
+        role: dashboardRole(),
+        section: action.section || '',
+        source: action.source || '',
+      },
+    });
+    window.setTimeout(() => {
+      if (typeof action.run === 'function') {
+        action.run();
+        return;
+      }
+      if (action.section) goToSection(action.section);
+      if (action.selector) window.setTimeout(() => clickTarget(action.selector), action.section ? 120 : 0);
+    }, 20);
+  }
+
+  function addCommandAction(actions, seen, config = {}) {
+    const label = String(config.label || '').replace(/\s+/g, ' ').trim();
+    if (!label || label.length > 80) return;
+    const id = config.id || `${config.category || 'accion'}:${config.section || ''}:${config.selector || ''}:${label}`;
+    if (seen.has(id)) return;
+    seen.add(id);
+    actions.push({
+      id,
+      label,
+      hint: config.hint || 'Accion',
+      category: config.category || 'Acciones',
+      keywords: config.keywords || '',
+      selector: config.selector || '',
+      section: config.section || '',
+      priority: Number(config.priority || 50),
+      recommended: Boolean(config.recommended),
+      source: config.source || 'runtime',
+      run: config.run,
+    });
+  }
+
+  function rolePlaybookActions(role = dashboardRole()) {
+    const shared = [
+      { id: 'shared:inicio', label: 'Volver al inicio del panel', hint: 'Resumen y siguiente paso', category: 'Navegacion', section: role === 'admin' ? 'dashboard' : 'inicio', priority: 18, keywords: 'home resumen dashboard inicio' },
+    ];
+    const byRole = {
+      admin: [
+        { id: 'admin:solicitudes', label: 'Revisar solicitudes y matching', hint: 'Asignar profesores y desbloquear familias', category: 'Marketplace', section: 'solicitudes', priority: 4, recommended: true, keywords: 'matching profesor asignar leads familias' },
+        { id: 'admin:mission-control', label: 'Abrir centro de control', hint: 'Estado completo de la plataforma', category: 'Operacion', section: 'dashboard', priority: 6, keywords: 'mission control metricas alertas salud' },
+        { id: 'admin:ia', label: 'Preguntar a la IA admin', hint: 'Analisis operativo con datos estructurados', category: 'IA', section: 'ia', priority: 8, keywords: 'resumen semana churn pagos profesores' },
+        { id: 'admin:incidencias', label: 'Gestionar incidencias abiertas', hint: 'Tickets, prioridad y resolucion', category: 'Operacion', section: 'incidencias', priority: 10, keywords: 'problemas tickets soporte alerta' },
+        { id: 'admin:finanzas', label: 'Ver centro financiero', hint: 'Ingresos, pagos, comisiones y previsiones', category: 'Finanzas', section: 'finanzas', priority: 12, keywords: 'pagos bizum stripe comisiones dinero erp' },
+        { id: 'admin:profesores', label: 'Buscar profesores', hint: 'Perfiles, verificacion y confianza', category: 'CRM', section: 'profesores', priority: 14, keywords: 'profesor reputacion documentos disponibilidad' },
+        { id: 'admin:familias', label: 'Buscar familias', hint: 'CRM familiar, alumnos y actividad', category: 'CRM', section: 'familias', priority: 16, keywords: 'familia alumno pagos solicitudes' },
+        { id: 'admin:config', label: 'Configurar plataforma', hint: 'Reglas, feature flags y parametros', category: 'Sistema', section: 'configuracion', priority: 20, keywords: 'feature flags reglas precios matching ia' },
+      ],
+      familia: [
+        { id: 'familia:next', label: 'Hacer mi siguiente paso', hint: 'La guia decide que toca ahora', category: 'Recomendado', section: 'inicio', selector: '.family-journey-card [data-family-journey-action]', priority: 1, recommended: true, keywords: 'siguiente paso guia hijo solicitud profesor chat pago' },
+        { id: 'familia:add-student', label: 'Anadir hijo/a', hint: 'Registrar alumno y continuar con solicitud', category: 'Familia', section: 'alumnos', selector: '#btn-nuevo-hijo, [data-family-journey-action="add_student"]', priority: 5, keywords: 'alumno hijo estudiante' },
+        { id: 'familia:request', label: 'Solicitar profesor', hint: 'Materia, nivel y horario preferido', category: 'Familia', section: 'solicitudes', selector: '#btn-nueva-solicitud, #btn-nueva-solicitud-top, [data-family-journey-action="request_teacher"]', priority: 6, keywords: 'profesor matching materia solicitud' },
+        { id: 'familia:chat', label: 'Abrir chat y notificaciones', hint: 'Mensajes, horarios y avisos', category: 'Comunicacion', section: 'chat', priority: 8, keywords: 'mensaje notificacion profesor horario' },
+        { id: 'familia:calendar', label: 'Ver calendario de clases', hint: 'Fechas, asistencia y confirmaciones', category: 'Clases', section: 'calendario', priority: 11, keywords: 'clase fecha hora confirmar' },
+        { id: 'familia:payments', label: 'Revisar pagos', hint: 'Justificantes y pagos pendientes', category: 'Pagos', section: 'pagos', priority: 12, keywords: 'bizum justificante transferencia pendiente' },
+        { id: 'familia:profile', label: 'Completar perfil familiar', hint: 'Datos para asignaciones mas precisas', category: 'Confianza', section: 'perfil', priority: 15, keywords: 'direccion telefono zona perfil' },
+      ],
+      profesor: [
+        { id: 'profesor:profile', label: 'Completar perfil profesional', hint: 'Foto, estudios, materias y confianza', category: 'Confianza', section: 'perfil', priority: 3, recommended: true, keywords: 'perfil foto estudios colegio notas materias idiomas' },
+        { id: 'profesor:availability', label: 'Actualizar disponibilidad', hint: 'Franjas reales para matching', category: 'Matching', section: 'disponibilidad', selector: '#btn-add-disponibilidad', priority: 5, keywords: 'horario disponibilidad calendario' },
+        { id: 'profesor:documents', label: 'Subir documentos', hint: 'Verificacion y certificaciones', category: 'Confianza', section: 'documentos', selector: '#btn-subir-doc', priority: 7, keywords: 'dni titulo certificado documentos verificacion' },
+        { id: 'profesor:classes', label: 'Ver mis clases', hint: 'Registrar asistencia e incidencias', category: 'Clases', section: 'clases', priority: 9, keywords: 'clases asistencia realizada cancelar' },
+        { id: 'profesor:chat', label: 'Abrir chat y notificaciones', hint: 'Familias, horarios y avisos', category: 'Comunicacion', section: 'chat', priority: 10, keywords: 'mensaje familia alumno horario' },
+        { id: 'profesor:income', label: 'Revisar ingresos', hint: 'Cobros, Bizum y liquidaciones', category: 'Pagos', section: 'ingresos', priority: 12, keywords: 'dinero pagos bizum ingresos' },
+      ],
+      alumno: [
+        { id: 'alumno:next-class', label: 'Ver proxima clase', hint: 'Calendario y horario', category: 'Clases', section: 'calendario', priority: 5, recommended: true, keywords: 'proxima clase fecha hora' },
+        { id: 'alumno:classes', label: 'Ver mis clases', hint: 'Historial y estado', category: 'Clases', section: 'clases', priority: 8, keywords: 'historial asistencia' },
+        { id: 'alumno:teacher', label: 'Ver mi profesor', hint: 'Contacto y especialidades', category: 'Profesor', section: 'profesor', priority: 10, keywords: 'profesor contacto materia' },
+      ],
+    };
+    return [...shared, ...(byRole[role] || [])];
+  }
+
+  function dynamicRecommendedActions() {
+    const actions = [];
+    const familyPrimary = document.querySelector('.family-journey-card [data-family-journey-action]');
+    if (familyPrimary) {
+      actions.push({
+        id: 'dynamic:family-primary',
+        label: visibleText(familyPrimary) || 'Hacer siguiente paso',
+        hint: 'Recomendado por la guia de familia',
+        category: 'Recomendado',
+        selector: '.family-journey-card [data-family-journey-action]',
+        section: 'inicio',
+        priority: 0,
+        recommended: true,
+        keywords: 'siguiente recomendado familia',
+      });
+    }
+    const badge = document.getElementById('notif-badge');
+    if (badge && window.getComputedStyle(badge).display !== 'none' && visibleText(badge)) {
+      const chatSection = document.querySelector('[data-section="chat"]') ? 'chat' : 'chats';
+      actions.push({
+        id: 'dynamic:notifications',
+        label: `Ver ${visibleText(badge)} notificaciones`,
+        hint: 'Actividad nueva',
+        category: 'Recomendado',
+        section: chatSection,
+        selector: '[data-chat-tab="notificaciones"]',
+        priority: 2,
+        recommended: true,
+        keywords: 'notificaciones mensajes avisos inbox',
+      });
+    }
+    return actions;
+  }
+
   function dashboardActions() {
     const actions = [];
     const seen = new Set();
-    document.querySelectorAll('.sidebar-link[data-section], [data-section]').forEach((node) => {
+    [...dynamicRecommendedActions(), ...rolePlaybookActions()].forEach((action) => addCommandAction(actions, seen, { ...action, source: action.source || 'playbook' }));
+
+    document.querySelectorAll('.sidebar-link[data-section]').forEach((node) => {
       const section = node.dataset.section;
       const label = visibleText(node) || section;
-      const key = `section:${section}`;
-      if (!section || seen.has(key)) return;
-      seen.add(key);
-      actions.push({
+      addCommandAction(actions, seen, {
+        id: `section:${section}`,
         label,
         hint: 'Ir a seccion',
+        category: 'Navegacion',
+        section,
+        priority: 30,
+        keywords: section,
         run: () => node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })),
       });
     });
-    document.querySelectorAll('button[id], a[id], button[data-action], .btn').forEach((node) => {
+
+    document.querySelectorAll('.topbar button[id], .dash-section:not([style*="display:none"]) button[id], .dash-section:not([style*="display: none"]) button[data-action], .dash-section:not([style*="display:none"]) .btn').forEach((node) => {
+      if (!isNodeActionable(node)) return;
       const label = visibleText(node) || node.getAttribute('aria-label') || node.title;
-      if (!label || label.length > 60 || node.disabled) return;
       const key = `action:${node.id || node.dataset.action || label}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      actions.push({
+      addCommandAction(actions, seen, {
+        id: key,
         label,
-        hint: node.dataset.action ? 'Accion rapida' : 'Accion',
+        hint: node.dataset.action ? 'Accion de la pantalla actual' : 'Accion visible',
+        category: 'Acciones visibles',
+        priority: 40,
+        keywords: `${node.id || ''} ${node.dataset.action || ''}`,
         run: () => node.click(),
       });
     });
-    return actions;
+
+    return actions.sort((a, b) => {
+      if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return a.label.localeCompare(b.label, 'es');
+    });
   }
 
   function ensureCommandPalette() {
@@ -673,8 +964,18 @@
     overlay.className = 'cd10-command-overlay';
     overlay.innerHTML = `
       <div class="cd10-command-panel" role="dialog" aria-modal="true" aria-label="Acciones rapidas">
-        <input class="cd10-command-input" type="search" placeholder="Buscar secciones, acciones o flujos..." autocomplete="off">
+        <div class="cd10-command-head">
+          <div class="cd10-command-title">
+            <span>Centro de acciones ${escapeHtml(dashboardRoleLabel())}</span>
+            <span class="cd10-command-kbd"><kbd>Ctrl</kbd><kbd>K</kbd></span>
+          </div>
+          <input class="cd10-command-input" type="search" placeholder="Buscar secciones, acciones o flujos..." autocomplete="off" aria-label="Buscar acciones">
+        </div>
         <div class="cd10-command-list" role="listbox"></div>
+        <div class="cd10-command-foot">
+          <span>Arriba/abajo para moverte</span>
+          <span>Enter ejecuta · Esc cierra</span>
+        </div>
       </div>
     `;
     document.body.appendChild(overlay);
@@ -682,7 +983,41 @@
       if (event.target === overlay) closeCommandPalette();
     });
     overlay.querySelector('.cd10-command-input').addEventListener('input', () => renderCommandPalette());
+    overlay.querySelector('.cd10-command-input').addEventListener('keydown', handleCommandPaletteKeydown);
     return overlay;
+  }
+
+  function commandMatches(action, query) {
+    const tokens = String(query || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return true;
+    const haystack = [
+      action.label,
+      action.hint,
+      action.category,
+      action.keywords,
+      action.section,
+    ].join(' ').toLowerCase();
+    return tokens.every((token) => haystack.includes(token));
+  }
+
+  function groupedCommandHtml(actions) {
+    let lastCategory = '';
+    return actions.map((action, index) => {
+      const category = action.category || 'Acciones';
+      const group = category !== lastCategory
+        ? `<div class="cd10-command-group">${escapeHtml(category)}</div>`
+        : '';
+      lastCategory = category;
+      const meta = action.recommended ? 'Recomendado' : (action.section ? 'Ir' : 'Abrir');
+      return `${group}
+        <button type="button" class="cd10-command-item ${index === commandPaletteSelection ? 'is-active' : ''} ${action.recommended ? 'is-recommended' : ''}" data-command-index="${index}" role="option" aria-selected="${index === commandPaletteSelection ? 'true' : 'false'}">
+          <span class="cd10-command-copy">
+            <strong>${escapeHtml(action.label)}</strong>
+            <span>${escapeHtml(action.hint)}</span>
+          </span>
+          <span class="cd10-command-meta">${escapeHtml(meta)}</span>
+        </button>`;
+    }).join('');
   }
 
   function renderCommandPalette() {
@@ -690,26 +1025,37 @@
     const input = overlay.querySelector('.cd10-command-input');
     const list = overlay.querySelector('.cd10-command-list');
     const query = input.value.trim().toLowerCase();
-    const actions = dashboardActions().filter((action) => (
-      !query || `${action.label} ${action.hint}`.toLowerCase().includes(query)
-    )).slice(0, 12);
-    if (!actions.length) {
+    commandPaletteActions = dashboardActions().filter((action) => commandMatches(action, query)).slice(0, 14);
+    commandPaletteSelection = Math.max(0, Math.min(commandPaletteSelection, commandPaletteActions.length - 1));
+    if (!commandPaletteActions.length) {
       list.innerHTML = '<div class="cd10-command-empty">No hay acciones para esa busqueda.</div>';
       return;
     }
-    list.innerHTML = actions.map((action, index) => `
-      <button type="button" class="cd10-command-item" data-command-index="${index}">
-        <strong>${escapeHtml(action.label)}</strong>
-        <span>${escapeHtml(action.hint)}</span>
-      </button>
-    `).join('');
+    list.innerHTML = groupedCommandHtml(commandPaletteActions);
     list.querySelectorAll('[data-command-index]').forEach((button) => {
+      button.addEventListener('mouseenter', () => {
+        commandPaletteSelection = Number(button.dataset.commandIndex);
+        list.querySelectorAll('.cd10-command-item').forEach((item) => item.classList.toggle('is-active', item === button));
+      });
       button.addEventListener('click', () => {
-        const action = actions[Number(button.dataset.commandIndex)];
-        closeCommandPalette();
-        window.setTimeout(() => action?.run(), 20);
+        runStructuredCommand(commandPaletteActions[Number(button.dataset.commandIndex)]);
       });
     });
+  }
+
+  function handleCommandPaletteKeydown(event) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      if (commandPaletteActions.length) commandPaletteSelection = (commandPaletteSelection + 1) % commandPaletteActions.length;
+      renderCommandPalette();
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (commandPaletteActions.length) commandPaletteSelection = (commandPaletteSelection - 1 + commandPaletteActions.length) % commandPaletteActions.length;
+      renderCommandPalette();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      runStructuredCommand(commandPaletteActions[commandPaletteSelection]);
+    }
   }
 
   function openCommandPalette(seed = '') {
@@ -718,6 +1064,7 @@
     overlay.classList.add('open');
     const input = overlay.querySelector('.cd10-command-input');
     input.value = seed;
+    commandPaletteSelection = 0;
     renderCommandPalette();
     window.setTimeout(() => input.focus(), 20);
   }
@@ -737,13 +1084,22 @@
 
   function initDashboardCommandPalette() {
     if (!isDashboard()) return;
-    const topbarActions = document.querySelector('.topbar-actions');
+    let topbarActions = document.querySelector('.topbar-actions');
+    if (!topbarActions) {
+      const topbar = document.querySelector('.topbar');
+      if (topbar) {
+        topbarActions = document.createElement('div');
+        topbarActions.className = 'topbar-actions';
+        topbar.appendChild(topbarActions);
+      }
+    }
     if (topbarActions && !document.getElementById('cd10-command-trigger')) {
       const trigger = document.createElement('button');
       trigger.id = 'cd10-command-trigger';
       trigger.className = 'cd10-command-trigger';
       trigger.type = 'button';
-      trigger.textContent = 'Buscar / Ctrl K';
+      trigger.textContent = 'Acciones / Ctrl K';
+      trigger.setAttribute('aria-label', 'Abrir centro de acciones');
       trigger.addEventListener('click', () => openCommandPalette());
       topbarActions.prepend(trigger);
     }
