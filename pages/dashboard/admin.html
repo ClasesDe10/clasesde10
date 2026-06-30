@@ -3147,6 +3147,8 @@ function renderTrustPanel(trust) {
   const publicStats = trust.publicStats || {};
   const adminStats = trust.adminStats || {};
   const levelLabel = trust.publicLevelLabel || trust.trustLevelLabel || trust.level || trust.trustLevel || 'Bronce';
+  const evidenceItems = (trust.evidence || trust.trustEvidence || []).slice(0, 7);
+  const nextActions = (trust.nextActions || trust.trustNextActions || []).slice(0, 5);
   const components = (trust.components || []).map((item) => `
     <div class="trust-component-row">
       <div>
@@ -3155,6 +3157,21 @@ function renderTrustPanel(trust) {
       </div>
       <b>${Math.round(Number(item.points || 0))}/${Math.round(Number(item.max || 0))}</b>
     </div>`).join('');
+  const evidenceHtml = evidenceItems.length ? `
+    <div class="trust-evidence-list">
+      ${evidenceItems.map((item) => `
+        <div class="trust-evidence-item trust-evidence-${sanitize(item.state || 'neutral')}">
+          <strong>${sanitize(item.label)}</strong>
+          <span>${sanitize(item.detail || '')}</span>
+        </div>`).join('')}
+    </div>` : '';
+  const actionsHtml = nextActions.length ? `
+    <div class="trust-next-actions">
+      <strong>Acciones que suben confianza real</strong>
+      <div class="trust-next-action-buttons">
+        ${nextActions.map((item) => `<button class="btn btn-ghost btn-sm" type="button" data-section="${sanitize(item.section || 'operaciones')}" title="${sanitize(item.detail || '')}">${sanitize(item.label)}</button>`).join('')}
+      </div>
+    </div>` : '';
   const warnings = (trust.warnings || []).slice(0, 4);
 
   return `
@@ -3182,6 +3199,12 @@ function renderTrustPanel(trust) {
         <div><strong>${sanitize(metrics.openIncidents ?? adminStats.openIncidents ?? 0)}</strong><span>incidencias abiertas</span></div>
         <div><strong>${formatTrustPercent(adminStats.sampleConfidence)}</strong><span>confianza muestra</span></div>
       </div>
+      <div class="trust-explain">
+        <strong>Por que confiar</strong>
+        <span>Se calcula con documentos, revisiones, actividad real, pagos, incidencias, respuesta y consistencia del perfil. No depende solo de lo que el usuario escribe.</span>
+      </div>
+      ${evidenceHtml}
+      ${actionsHtml}
       ${components ? `<div class="trust-components">${components}</div>` : ''}
       ${warnings.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Senales a revisar</div>${warnings.map(sanitize).join(' · ')}</div></div>` : ''}
     </div>`;

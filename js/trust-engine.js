@@ -314,6 +314,30 @@ function signal(key, label, state, detail = '', publicVisible = true) {
   };
 }
 
+function evidence(key, label, state, detail = '', publicVisible = true, source = 'automatic') {
+  return {
+    key,
+    label,
+    state,
+    detail,
+    public: publicVisible,
+    visibility: publicVisible ? 'public' : 'admin',
+    source,
+  };
+}
+
+function trustAction(key, label, section, priority = 'normal', detail = '', publicVisible = true) {
+  return {
+    key,
+    label,
+    section,
+    priority,
+    detail,
+    public: publicVisible,
+    visibility: publicVisible ? 'public' : 'admin',
+  };
+}
+
 function docsSummary(docs = []) {
   const identityDocs = docs.filter((doc) => ['dni', 'identidad', 'pasaporte', 'tutor'].includes(documentType(doc)));
   const academicDocs = docs.filter((doc) => ['notas_curso_anterior', 'notas_universidad', 'titulo', 'certificado', 'certificado_formacion_especializada', 'certificacion', 'academic'].includes(documentType(doc)));
@@ -682,6 +706,61 @@ function familyRiskFlags(metrics, docs, flags) {
   ].filter(Boolean);
 }
 
+function buildTeacherEvidence(flags, docs, metrics, review, completion, hasPhoto, hasContact, availability) {
+  return [
+    evidence('admin_review', 'Revisión del equipo', flags.adminVerified ? 'positive' : 'warning', flags.adminVerified ? 'Perfil revisado por ClasesDe10' : 'Pendiente de revisión interna'),
+    evidence('identity', 'Identidad', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Documento validado' : docs.identityUploaded ? 'Documento recibido, pendiente de validar' : 'Documento no subido'),
+    evidence('academic', 'Formación y notas', docs.academicVerified ? 'positive' : docs.academicUploaded ? 'warning' : 'neutral', docs.academicVerified ? 'Expediente o formación validada' : docs.academicUploaded ? 'Documento académico pendiente' : 'Sin expediente académico subido'),
+    evidence('profile', 'Perfil profesional', completion >= 90 ? 'positive' : completion >= 70 ? 'warning' : 'neutral', `${round(completion)}% completado${hasPhoto ? ', con foto' : ''}${hasContact ? ', contacto operativo' : ''}`),
+    evidence('availability', 'Disponibilidad', availability ? 'positive' : 'warning', availability ? 'Franjas u horario declarados' : 'Falta disponibilidad real'),
+    evidence('track_record', 'Historial real', metrics.completedClasses > 0 ? 'positive' : 'neutral', `${metrics.completedClasses} clase(s), ${metrics.completedHours}h registradas`),
+    evidence('response', 'Respuesta', metrics.responseSamples >= 2 ? 'positive' : 'neutral', metrics.responseSamples >= 2 ? `${round(metrics.averageResponseHours, 1)}h de media con ${metrics.responseSamples} muestra(s)` : 'Sin muestras suficientes todavía'),
+    evidence('reviews', 'Valoraciones', review.count > 0 ? 'positive' : 'neutral', review.count ? `${round(review.rating, 1)}/5 con ${review.count} valoración(es)` : 'Sin valoraciones registradas'),
+    evidence('incidents', 'Riesgo operativo', metrics.openIncidents ? 'warning' : 'positive', metrics.openIncidents ? `${metrics.openIncidents} incidencia(s) abiertas` : 'Sin incidencias abiertas', false),
+  ];
+}
+
+function buildTeacherNextActions(flags, docs, metrics, completion, availability) {
+  return [
+    !flags.adminVerified ? trustAction('admin_review', 'Completar revisión interna antes de nuevas asignaciones', 'documentos', 'high', 'El admin debe validar que el perfil y los documentos son consistentes.', false) : null,
+    !docs.identityUploaded ? trustAction('upload_identity', 'Subir DNI / documento de identidad', 'documentos', 'high', 'Aumenta confianza y evita asignaciones sin identidad contrastada.') : null,
+    docs.identityUploaded && !docs.identityVerified ? trustAction('review_identity', 'Validar identidad subida', 'documentos', 'high', 'El documento ya está recibido y requiere revisión del admin.', false) : null,
+    !docs.academicUploaded ? trustAction('upload_academic', 'Subir notas, expediente o formación principal', 'documentos', 'high', 'Las familias necesitan evidencia académica verificable.') : null,
+    docs.academicUploaded && !docs.academicVerified ? trustAction('review_academic', 'Validar expediente académico', 'documentos', 'normal', 'Documento académico pendiente de revisión.', false) : null,
+    completion < 90 ? trustAction('complete_profile', 'Completar perfil profesional', 'perfil', 'normal', 'Foto, colegio, estudios, materias, niveles, movilidad y presentación reducen dudas.') : null,
+    !availability ? trustAction('set_availability', 'Marcar disponibilidad real', 'disponibilidad', 'normal', 'Sin disponibilidad, el matching no puede proponer horarios fiables.') : null,
+    metrics.openIncidents > 0 ? trustAction('resolve_incidents', 'Resolver incidencias abiertas', 'incidencias', 'high', 'Las incidencias abiertas frenan confianza y asignaciones.', false) : null,
+  ].filter(Boolean);
+}
+
+function buildFamilyEvidence(flags, docs, metrics, completion, hasContact, hasAddress) {
+  return [
+    evidence('admin_review', 'Revisión del equipo', flags.adminVerified ? 'positive' : 'warning', flags.adminVerified ? 'Familia revisada por ClasesDe10' : 'Pendiente de revisión interna', false),
+    evidence('contact', 'Contacto operativo', hasContact ? 'positive' : 'warning', hasContact ? 'Teléfono o email disponible' : 'Falta un contacto fiable'),
+    evidence('location', 'Ubicación para matching', hasAddress ? 'positive' : 'warning', hasAddress ? 'Dirección/código postal listos para calcular cercanía' : 'Falta dirección o código postal'),
+    evidence('students', 'Alumno registrado', metrics.activeStudents > 0 ? 'positive' : 'warning', `${metrics.activeStudents} alumno(s) activo(s)`),
+    evidence('payments', 'Justificantes y pagos', metrics.overdueClassPayments ? 'warning' : metrics.pendingPayments ? 'warning' : 'positive', metrics.overdueClassPayments ? `${metrics.overdueClassPayments} clase(s) con justificante vencido` : metrics.pendingPayments ? `${metrics.pendingPayments} justificante(s) pendiente(s)` : 'Sin justificantes pendientes'),
+    evidence('class_history', 'Historial de clases', metrics.completedClasses > 0 ? 'positive' : 'neutral', `${metrics.completedClasses} clase(s), ${metrics.completedHours}h registradas`),
+    evidence('optional_identity', 'Identidad del tutor', docs.identityVerified ? 'positive' : docs.identityUploaded ? 'warning' : 'neutral', docs.identityVerified ? 'Documento validado' : docs.identityUploaded ? 'Documento pendiente de revisar' : 'Opcional salvo revisión interna'),
+    evidence('incidents', 'Riesgo operativo', metrics.openIncidents ? 'warning' : 'positive', metrics.openIncidents ? `${metrics.openIncidents} incidencia(s) abiertas` : 'Sin incidencias abiertas', false),
+    evidence('profile', 'Perfil familiar', completion >= 90 ? 'positive' : completion >= 75 ? 'warning' : 'neutral', `${round(completion)}% completado`),
+  ];
+}
+
+function buildFamilyNextActions(flags, docs, metrics, completion, hasContact, hasAddress) {
+  return [
+    !hasContact ? trustAction('complete_contact', 'Añadir teléfono o email operativo', 'perfil', 'high', 'Sin contacto fiable no se puede resolver una incidencia rápido.') : null,
+    !hasAddress ? trustAction('complete_location', 'Completar dirección y código postal', 'perfil', 'high', 'La ubicación mejora el matching presencial y evita errores de zona.') : null,
+    metrics.activeStudents < 1 ? trustAction('add_student', 'Añadir al menos un alumno', 'alumnos', 'normal', 'Sin alumno activo no se puede asignar profesor.') : null,
+    metrics.overdueClassPayments > 0 ? trustAction('settle_overdue', 'Resolver justificantes vencidos', 'pagos', 'high', 'Los vencimientos reducen confianza y generan aviso al admin.') : null,
+    metrics.pendingPayments > 0 ? trustAction('review_payments', 'Revisar justificantes pendientes', 'pagos', 'normal', 'Mantener los justificantes al día evita bloqueos.') : null,
+    docs.identityUploaded && !docs.identityVerified ? trustAction('review_optional_identity', 'Validar documento del tutor', 'documentos', 'normal', 'Documento opcional recibido, pendiente de revisión.', false) : null,
+    completion < 85 ? trustAction('complete_family_profile', 'Completar perfil familiar', 'perfil', 'normal', 'Preferencias, zona y contacto alternativo reducen fricción.') : null,
+    !flags.adminVerified ? trustAction('admin_review', 'Revisión interna de la familia', 'familias', 'normal', 'Confirmar datos básicos antes de escalar volumen.', false) : null,
+    metrics.openIncidents > 0 ? trustAction('resolve_incidents', 'Resolver incidencias abiertas', 'incidencias', 'high', 'Las incidencias abiertas deben cerrarse con historial.', false) : null,
+  ].filter(Boolean);
+}
+
 function buildTrustVisibility(role) {
   return {
     role,
@@ -691,12 +770,16 @@ function buildTrustVisibility(role) {
       'trustLevelLabel',
       'trustBadges[public=true]',
       'publicTrustStats',
+      'trustEvidence[public=true]',
+      'trustNextActions[public=true]',
     ],
     adminOnly: [
       'trustWarnings',
       'trustComponents',
       'adminTrustStats',
       'trustRiskFlags',
+      'trustEvidence[public=false]',
+      'trustNextActions[public=false]',
       'pendingPayments',
       'openIncidents',
       'documentPendingCount',
@@ -790,6 +873,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
     metrics.inactiveDays !== null && metrics.inactiveDays > 45 ? 'Actividad reciente baja.' : '',
     (metrics.cancellationRate ?? 0) > 0.2 && metrics.evaluatedClasses >= 5 ? 'Tasa de cancelacion alta.' : '',
   ].filter(Boolean);
+  const evidenceList = buildTeacherEvidence(flags, docs, metrics, review, completion, hasPhoto, hasContact, availability);
+  const nextActions = buildTeacherNextActions(flags, docs, metrics, completion, availability);
 
   return {
     version: TRUST_VERSION,
@@ -806,6 +891,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
     badges,
     warnings,
     riskFlags,
+    evidence: evidenceList,
+    nextActions,
     signals: [
       signal('level', 'Nivel de reputacion', 'info', level.publicLabel),
       signal('admin_verified', 'Verificacion administrativa', flags.adminVerified ? 'positive' : 'warning', flags.adminVerified ? 'Validado' : 'Pendiente'),
@@ -942,6 +1029,8 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     metrics.openIncidents > 0 ? `${metrics.openIncidents} incidencia(s) abierta(s).` : '',
     completion < 80 ? 'Perfil familiar incompleto.' : '',
   ].filter(Boolean);
+  const evidenceList = buildFamilyEvidence(flags, docs, metrics, completion, hasContact, hasAddress);
+  const nextActions = buildFamilyNextActions(flags, docs, metrics, completion, hasContact, hasAddress);
 
   return {
     version: TRUST_VERSION,
@@ -958,6 +1047,8 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     badges,
     warnings,
     riskFlags,
+    evidence: evidenceList,
+    nextActions,
     signals: [
       signal('level', 'Nivel de reputacion', 'info', level.publicLabel),
       signal('contact', 'Contacto operativo', hasContact ? 'positive' : 'warning', hasContact ? 'Completo' : 'Pendiente'),
@@ -1035,6 +1126,8 @@ export function buildTrustSnapshotPatch(trustProfile) {
     trustComponents: trustProfile.components,
     trustSignals: trustProfile.signals,
     trustRiskFlags: trustProfile.riskFlags,
+    trustEvidence: trustProfile.evidence,
+    trustNextActions: trustProfile.nextActions,
     trustVisibility: trustProfile.visibility,
     reputationMetrics: trustProfile.metrics,
     publicTrustStats: trustProfile.publicStats,
@@ -1050,6 +1143,8 @@ export function summarizeTrustForDisplay(trustProfile) {
     levelLabel: trustProfile.publicLevelLabel,
     topBadges: trustProfile.badges.filter((item) => item.public !== false).slice(0, 6),
     publicStats: trustProfile.publicStats,
+    evidence: (trustProfile.evidence || []).filter((item) => item.public !== false).slice(0, 6),
+    nextActions: (trustProfile.nextActions || []).filter((item) => item.public !== false).slice(0, 4),
     warnings: trustProfile.warnings.slice(0, 4),
     riskFlags: trustProfile.riskFlags.slice(0, 6),
   };

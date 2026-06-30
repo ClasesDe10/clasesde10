@@ -2687,6 +2687,76 @@ tbody tr:hover { background: rgba(0,0,0,0.02); }
   gap: 7px;
 }
 
+.trust-explain {
+  border: 1px solid rgba(37,99,235,.14);
+  background: rgba(37,99,235,.06);
+  border-radius: 8px;
+  padding: 11px 12px;
+  color: var(--navy);
+  display: grid;
+  gap: 3px;
+}
+
+.trust-explain strong,
+.trust-next-actions strong {
+  font-size: .82rem;
+  color: var(--navy);
+}
+
+.trust-explain span,
+.trust-evidence-item span {
+  color: var(--gray-mid);
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
+.trust-evidence-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.trust-evidence-item {
+  border: 1px solid rgba(15,31,61,.08);
+  border-left: 4px solid var(--gray-mid);
+  background: rgba(255,255,255,.84);
+  border-radius: 8px;
+  padding: 9px 10px;
+  display: grid;
+  gap: 2px;
+}
+
+.trust-evidence-item strong {
+  color: var(--navy);
+  font-size: .82rem;
+}
+
+.trust-evidence-positive { border-left-color: var(--success); }
+.trust-evidence-warning { border-left-color: var(--warning); }
+.trust-evidence-neutral { border-left-color: var(--gray-mid); }
+
+.trust-next-actions {
+  margin-top: 10px;
+  border: 1px dashed rgba(15,31,61,.16);
+  background: rgba(15,31,61,.035);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.trust-next-action-buttons,
+.trust-next-actions {
+  min-width: 0;
+}
+
+.trust-next-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .trust-component-row {
   display: flex;
   align-items: center;
@@ -4420,8 +4490,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .chat-alias-toggle {
     width: auto;
-    min-height: 36px;
-    padding: 6px 10px;
+    min-height: 44px;
+    padding: 8px 12px;
     justify-content: center;
   }
   .chat-list {
@@ -4673,6 +4743,16 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .trust-public-stats-compact,
   .trust-detail-grid {
     grid-template-columns: 1fr 1fr;
+  }
+  .trust-evidence-list {
+    grid-template-columns: 1fr;
+  }
+  .trust-next-action-buttons {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .trust-next-actions .btn {
+    width: 100%;
   }
   .crm-profile textarea,
   .crm-profile input,

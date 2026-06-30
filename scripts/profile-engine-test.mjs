@@ -50,6 +50,8 @@ assert.ok(teacher.percent >= 90, `Teacher percent too low: ${teacher.percent}`);
 assert.ok(teacher.trustScore >= 60, `Teacher trust too low: ${teacher.trustScore}`);
 assert.equal(teacher.trustProfile.adminStats.reputationCanBeManipulatedByProfileOnly, false);
 assert.ok(teacher.trustProfile.riskFlags.includes('low_activity_sample'));
+assert.ok(teacher.trustEvidence.some((item) => item.key === 'identity'));
+assert.ok(teacher.trustNextActions.some((item) => item.section === 'documentos'));
 assert.deepEqual(teacher.normalized.subjects, ['Matematicas', 'Padel']);
 assert.equal(teacher.normalized.schoolName, 'Colegio El Prado');
 assert.equal(teacher.normalized.studyCenter, 'Universidad Complutense de Madrid');
@@ -77,6 +79,8 @@ const family = evaluateFamilyProfileProfessional({
 assert.equal(family.complete, true);
 assert.ok(family.percent >= 90, `Family percent too low: ${family.percent}`);
 assert.ok(family.trustScore >= 70, `Family trust too low: ${family.trustScore}`);
+assert.ok(family.trustEvidence.some((item) => item.key === 'payments'));
+assert.ok(Array.isArray(family.trustNextActions));
 
 const familyWithoutDocs = evaluateFamilyProfileProfessional({
   nombre: 'Familia',

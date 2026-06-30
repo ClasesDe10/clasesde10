@@ -745,6 +745,8 @@ function renderQualityPanel(targetId, evaluation) {
   const missing = evaluation.issueLabels.slice(0, 4);
   const recommendations = evaluation.recommendations.slice(0, 4);
   const trustBadges = (evaluation.trustBadges || []).filter((item) => item.public !== false).slice(0, 5);
+  const trustEvidence = (evaluation.trustEvidence || evaluation.trustProfile?.evidence || []).filter((item) => item.public !== false).slice(0, 5);
+  const trustNextActions = (evaluation.trustNextActions || evaluation.trustProfile?.nextActions || []).filter((item) => item.public !== false).slice(0, 3);
   const trustStats = evaluation.publicTrustStats || {};
   const fmtPercent = (value) => (value === null || value === undefined || value === '' || !Number.isFinite(Number(value)) ? '-' : `${Math.round(Number(value) * 100)}%`);
   const statText = (value, fallback = '0') => (value === null || value === undefined || value === '' ? fallback : sanitize(String(value)));
@@ -752,6 +754,19 @@ function renderQualityPanel(targetId, evaluation) {
     <span style="display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 10px;background:${indicator.complete ? 'rgba(22,163,74,.10)' : 'rgba(217,119,6,.10)'};color:${indicator.complete ? 'var(--success)' : 'var(--warning)'};font-size:.78rem;font-weight:700">
       ${indicator.complete ? 'OK' : '!'} ${sanitize(indicator.label)}
     </span>`).join('');
+  const evidenceHtml = trustEvidence.length ? `
+    <div class="trust-evidence-list">
+      ${trustEvidence.map((item) => `
+        <div class="trust-evidence-item trust-evidence-${sanitize(item.state || 'neutral')}">
+          <strong>${sanitize(item.label)}</strong>
+          <span>${sanitize(item.detail || '')}</span>
+        </div>`).join('')}
+    </div>` : '';
+  const actionsHtml = trustNextActions.length ? `
+    <div class="trust-next-actions">
+      <strong>Para generar mas confianza</strong>
+      ${trustNextActions.map((item) => `<button class="btn btn-ghost btn-sm" type="button" data-section="${sanitize(item.section || 'perfil')}">${sanitize(item.label)}</button>`).join('')}
+    </div>` : '';
 
   panel.innerHTML = `
     <div style="display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:18px;align-items:center">
@@ -778,6 +793,8 @@ function renderQualityPanel(targetId, evaluation) {
           <div><strong>${fmtPercent(trustStats.paymentReliability)}</strong><span>justificantes</span></div>
           <div><strong>${fmtPercent(trustStats.cancellationRate)}</strong><span>cancelacion</span></div>
         </div>
+        ${evidenceHtml}
+        ${actionsHtml}
         ${missing.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Datos necesarios para asignaciones mas precisas</div>${missing.map(sanitize).join(', ')}</div></div>` : ''}
         ${!missing.length && recommendations.length ? `<div style="margin-top:10px;color:var(--gray-mid);font-size:.84rem">Siguiente mejora: ${recommendations.map(sanitize).join(', ')}</div>` : ''}
       </div>
@@ -2264,9 +2281,10 @@ async function cargarPagos() {
   if (!pagos.length) {
     tbody.innerHTML = renderTableEmptyState(6, {
       icon: 'OK',
-      title: 'Aun no hay justificantes registrados',
+      title: 'Aún no hay justificantes registrados',
       description: 'Cuando confirmes un pago, aparecera aqui con su estado de revision.',
       actions: [
+        emptyAction('Enviar justificante a revisión', { 'data-action': 'abrir-modal-pago' }, 'primary'),
         emptyAction('Ver clases', { 'data-section': 'clases' }, 'ghost'),
       ],
     });

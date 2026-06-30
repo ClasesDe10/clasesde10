@@ -27,16 +27,26 @@ async (page) => {
   }
   const familyModalText = await page.locator('#familia-detalle-body').textContent().catch(() => '');
 
-  return {
+  const result = {
     professorRows,
     professorTrustBadges,
     professorHasTrustColumn: professorHeader.includes('Confianza'),
     professorModalHasTrust: professorRows ? professorModalText.includes('Confianza y reputacion') : true,
+    professorModalExplainsTrust: professorRows ? professorModalText.includes('Por que confiar') : true,
+    professorModalHasEvidence: professorRows ? /Identidad|Formaci.n|Historial real|Revisi.n del equipo/.test(professorModalText) : true,
     familyRows,
     familyDetailButtons,
     familyHasTrustColumn: familyHeader.includes('Confianza'),
     familyModalHasTrust: familyDetailButtons ? familyModalText.includes('Confianza y reputacion') : true,
+    familyModalExplainsTrust: familyDetailButtons ? familyModalText.includes('Por que confiar') : true,
+    familyModalHasEvidence: familyDetailButtons ? /Contacto operativo|Justificantes|Alumno registrado|Perfil familiar/.test(familyModalText) : true,
     firstProfessorModal: professorModalText.replace(/\s+/g, ' ').trim().slice(0, 220),
     firstFamilyModal: familyModalText.replace(/\s+/g, ' ').trim().slice(0, 220),
   };
+  const failures = Object.entries(result)
+    .filter(([key, value]) => key.endsWith('HasTrust') || key.endsWith('ExplainsTrust') || key.endsWith('HasEvidence') || key.endsWith('HasTrustColumn'))
+    .filter(([, value]) => value !== true)
+    .map(([key]) => key);
+  if (failures.length) throw new Error(`Trust smoke failed: ${failures.join(', ')}`);
+  return result;
 }

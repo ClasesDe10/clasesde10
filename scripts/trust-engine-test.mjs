@@ -90,6 +90,9 @@ assert.notEqual(teacherTrust.level, 'Platino', 'Three classes must not produce a
 assert.ok(teacherTrust.badges.some((item) => item.key === 'admin_verified'));
 assert.ok(teacherTrust.badges.some((item) => item.key === 'identity_verified'));
 assert.ok(teacherTrust.badges.some((item) => item.key === 'language_verified'));
+assert.ok(teacherTrust.evidence.some((item) => item.key === 'academic' && item.state === 'positive'));
+assert.ok(teacherTrust.evidence.some((item) => item.key === 'incidents' && item.visibility === 'admin'));
+assert.ok(Array.isArray(teacherTrust.nextActions));
 assert.ok(teacherTrust.signals.some((item) => item.key === 'languages' && item.state === 'positive'));
 assert.equal(teacherTrust.metrics.completedClasses, 3);
 assert.equal(teacherTrust.metrics.openIncidents, 0);
@@ -99,6 +102,7 @@ assert.ok(teacherTrust.adminStats.sampleConfidence < 0.5);
 const weakTrust = buildTeacherTrustProfile(weakTeacher, context);
 assert.ok(weakTrust.score < teacherTrust.score);
 assert.ok(weakTrust.warnings.length > 0);
+assert.ok(weakTrust.nextActions.some((item) => item.key === 'upload_academic'));
 
 const familyTrust = buildFamilyTrustProfile({
   id: 'family_1',
@@ -115,6 +119,7 @@ const familyTrust = buildFamilyTrustProfile({
 assert.ok(familyTrust.score >= 80, `Expected reliable family trust, got ${familyTrust.score}`);
 assert.equal(familyTrust.metrics.activeStudents, 1);
 assert.equal(familyTrust.metrics.pendingPayments, 0);
+assert.ok(familyTrust.evidence.some((item) => item.key === 'payments' && item.state === 'positive'));
 
 const overdueFamilyTrust = buildFamilyTrustProfile({
   id: 'family_overdue',
@@ -168,12 +173,15 @@ assert.equal(patch.trustLevelKey, teacherTrust.levelKey);
 assert.ok(Array.isArray(patch.trustBadges));
 assert.ok(patch.reputationMetrics.completedClasses >= 3);
 assert.ok(Array.isArray(patch.trustRiskFlags));
+assert.ok(Array.isArray(patch.trustEvidence));
+assert.ok(Array.isArray(patch.trustNextActions));
 assert.ok(patch.adminTrustStats.sourceCollections.includes('clases'));
 
 const display = summarizeTrustForDisplay(teacherTrust);
 assert.equal(display.score, teacherTrust.score);
 assert.ok(display.topBadges.length > 0);
 assert.equal(display.levelLabel, teacherTrust.publicLevelLabel);
+assert.ok(display.evidence.every((item) => item.public !== false));
 
 const request = {
   materia: 'Matematicas',
