@@ -641,6 +641,7 @@ import {
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260629-attendance-direct';
 import {
+  applyClassPaymentContext,
   buildFamilyClassPaymentConfirmationPayload,
   buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentPayload,
@@ -1210,6 +1211,7 @@ async function iniciarCalendario() {
       classDotClass: (clase) => familyPaymentStateForClass(clase).dotClass,
       legendItems: [
         { className: 'dot-gold', label: 'Sin justificar' },
+        { className: 'dot-blue', label: 'En revision' },
         { className: 'dot-teal', label: 'Validada' },
         { className: 'dot-red', label: 'Vencida +24h' },
       ],
@@ -1269,8 +1271,11 @@ async function cargarClasesCalendario(anio, mes) {
   ]));
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const data = await cargarClasesPorAlumnos(ids, { hijosPorId, desde, hasta, limit: 240 });
-  cal.setClases(data);
+  const [data, pagos] = await Promise.all([
+    cargarClasesPorAlumnos(ids, { hijosPorId, desde, hasta, limit: 240 }),
+    cargarPagosFamiliaFirestore(),
+  ]);
+  cal.setClases(applyClassPaymentContext(data, pagos));
 }
 
 // ── CLASES ───────────────────────────────────────────────────────
@@ -1539,7 +1544,13 @@ function renderPaymentStateBadge(clase = {}) {
   const dueText = state.dueAt
     ? ` · Limite ${formatPaymentDueAt(state.dueAt)}`
     : ' · Define un plan semanal';
-  return `<span class="badge badge-${state.tone === 'danger' ? 'danger' : state.tone === 'success' ? 'success' : 'warning'}">${sanitize(state.badge)}</span><span class="payment-due-hint">${sanitize(dueText)}</span>`;
+  const tone = {
+    danger: 'danger',
+    success: 'success',
+    info: 'info',
+    warning: 'warning',
+  }[state.tone] || 'warning';
+  return `<span class="badge badge-${tone}">${sanitize(state.badge)}</span><span class="payment-due-hint">${sanitize(dueText)}</span>`;
 }
 
 function renderPaymentScheduleMini(source = {}) {

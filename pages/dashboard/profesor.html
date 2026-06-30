@@ -727,7 +727,7 @@ import {
   classStatusForBadge,
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260629-attendance-direct';
-import { buildTeacherPayoutPayload } from '../../js/payment-engine.js';
+import { buildTeacherPayoutPayload, classEconomicState } from '../../js/payment-engine.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260629-weekly-chat';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
@@ -1149,6 +1149,13 @@ async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
+      classDotClass: (clase) => classEconomicState(clase).dotClass,
+      legendItems: [
+        { className: 'dot-gold', label: 'Familia pendiente' },
+        { className: 'dot-navy', label: 'Por cobrar' },
+        { className: 'dot-teal', label: 'Cobrado' },
+        { className: 'dot-red', label: 'Incidencia' },
+      ],
       onDiaClick: (fecha, clases) => {
         document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
         const cont = document.getElementById('cal-clases-dia');
@@ -1164,12 +1171,21 @@ async function iniciarCalendario() {
         }
         cont.innerHTML = clases.map(c => {
           const importe = importeProfesorClase(c);
+          const economic = classEconomicState(c);
+          const economicBadge = {
+            success: 'badge-success',
+            warning: 'badge-warning',
+            danger: 'badge-danger',
+            info: 'badge-info',
+            navy: 'badge-navy',
+          }[economic.tone] || 'badge-gray';
           return `
-          <div class="clase-item" style="padding:10px 16px">
+          <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia||'')}</div>
               <div class="clase-materia">${sanitize(c.materia||'')}${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
+              <div class="calendar-payment-state"><span class="badge ${economicBadge}">${sanitize(economic.badge)}</span><span class="payment-due-hint">${sanitize(economic.label)}</span></div>
             </div>
             ${badgeEstado(classStatusForBadge(c))}
           </div>`;

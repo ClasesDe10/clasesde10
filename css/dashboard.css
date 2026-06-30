@@ -3035,6 +3035,9 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 .dot-gold  { background: var(--gold); }
 .dot-teal  { background: var(--teal); }
 .dot-red   { background: var(--danger); }
+.dot-blue  { background: var(--info); }
+.dot-gray  { background: var(--gray-mid); }
+.dot-purple{ background: #7c3aed; }
 
 /* ── CLASE ITEMS ─────────────────────────────────────────────── */
 .clase-item {
@@ -3076,6 +3079,35 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   border-left-color: var(--danger);
   background: rgba(220, 38, 38, .06);
 }
+.calendar-class-item.payment-review,
+.calendar-class-item.economic-in_review {
+  border-left-color: var(--info);
+  background: rgba(37, 99, 235, .055);
+}
+.calendar-class-item.payment-rejected,
+.calendar-class-item.economic-rejected,
+.calendar-class-item.economic-overdue,
+.calendar-class-item.economic-missing_amount,
+.calendar-class-item.economic-missing_teacher_amount {
+  border-left-color: var(--danger);
+  background: rgba(220, 38, 38, .055);
+}
+.calendar-class-item.economic-pending {
+  border-left-color: var(--gold);
+  background: rgba(232, 160, 48, .055);
+}
+.calendar-class-item.economic-payout_pending {
+  border-left-color: var(--navy);
+  background: rgba(15, 31, 61, .045);
+}
+.calendar-class-item.economic-settled {
+  border-left-color: var(--success);
+  background: rgba(22, 163, 74, .055);
+}
+.calendar-class-item.economic-cancelled {
+  border-left-color: var(--gray-mid);
+  background: var(--gray-soft);
+}
 .calendar-payment-state {
   display: flex;
   gap: 6px;
@@ -3092,6 +3124,51 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 10px;
+}
+.admin-calendar-day-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(15,31,61,.08);
+  background: #fbfaf7;
+}
+.admin-calendar-kpi {
+  border: 1px solid rgba(15,31,61,.08);
+  border-radius: var(--radius-sm);
+  padding: 9px 10px;
+  background: var(--white);
+}
+.admin-calendar-kpi span {
+  display: block;
+  font-size: .72rem;
+  color: var(--gray-mid);
+}
+.admin-calendar-kpi strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--navy);
+  font-size: .95rem;
+}
+.admin-calendar-money-line {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  color: var(--gray-mid);
+  font-size: .76rem;
+}
+.admin-calendar-money-line span {
+  border: 1px solid rgba(15,31,61,.08);
+  border-radius: 999px;
+  padding: 3px 7px;
+  background: rgba(255,255,255,.75);
+}
+.admin-calendar-badges {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  min-width: 78px;
 }
 
 .family-payment-workbench {

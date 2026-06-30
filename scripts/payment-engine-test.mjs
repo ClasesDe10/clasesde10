@@ -1,4 +1,5 @@
 import {
+  applyClassPaymentContext,
   buildClassPaymentPatch,
   buildFamilyClassPaymentConfirmationPayload,
   buildFamilyPaymentConfirmationGroups,
@@ -9,6 +10,7 @@ import {
   buildGatewayPaymentUpdate,
   buildPaymentValidationPayload,
   buildTeacherPayoutPayload,
+  classEconomicState,
   isPaymentOverdue,
   isPaymentVerified,
   matchPaymentToClasses,
@@ -17,6 +19,7 @@ import {
   paymentScheduleForClass,
   paymentScheduleLabel,
   paymentStatusForBadge,
+  economicCalendarLegend,
   weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
 
@@ -98,6 +101,27 @@ assert(confirmationGroups.length === 1, 'Family payment confirmation must group 
 assert(confirmationGroups[0].amount === 50 && confirmationGroups[0].classCount === 2, 'Family confirmation group must total linked class amounts.');
 const blockedGroups = buildFamilyPaymentConfirmationGroups(classes, [{ paymentType: 'family_payment', estado: 'pendiente', classIds: ['c1', 'c2'] }], scheduleIndex);
 assert(blockedGroups.length === 0, 'Open payment proofs must block duplicate family confirmation for the same classes.');
+const reviewContextClasses = applyClassPaymentContext(classes, [{
+  id: 'pay_review',
+  paymentType: 'family_payment',
+  estado: 'pendiente',
+  monto: 20,
+  classIds: ['c1'],
+  created_at: '2026-06-28T10:00:00.000Z',
+}]);
+assert(reviewContextClasses[0].linkedFamilyPaymentId === 'pay_review', 'Linked payment proofs must enrich classes.');
+assert(classFamilyPaymentState(reviewContextClasses[0], weeklySchedule).state === 'review', 'Open linked proofs must render classes as in review.');
+assert(classEconomicState(reviewContextClasses[0], weeklySchedule).state === 'in_review', 'Admin economic state must surface payment review.');
+const payoutPendingClass = applyClassPaymentContext([{ ...classes[0], importe_profesor: 15, teacherPaymentStatus: 'pendiente' }], [{
+  id: 'pay_validated',
+  paymentType: 'family_payment',
+  estado: 'validado',
+  monto: 20,
+  classIds: ['c1'],
+  created_at: '2026-06-28T10:00:00.000Z',
+}])[0];
+assert(classEconomicState(payoutPendingClass, weeklySchedule).state === 'payout_pending', 'Family paid classes must show pending teacher payout until liquidated.');
+assert(economicCalendarLegend().some((item) => item.className === 'dot-blue'), 'Economic calendar legend must include payment review.');
 const confirmationPayload = buildFamilyClassPaymentConfirmationPayload(confirmationGroups[0], {
   familyUid: 'family_1',
   metodo: 'bizum',

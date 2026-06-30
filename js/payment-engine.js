@@ -290,6 +290,50 @@ export function classFamilyPaymentState(classData = {}, schedule = null, options
       overdue: false,
     };
   }
+  const linkedStatusSource = cleanPaymentText(
+    classData.linkedFamilyPaymentRawStatus
+    || classData.linkedFamilyPaymentStatus
+    || classData.familyPaymentReviewStatus
+    || classData.pendingFamilyPaymentStatus,
+    40,
+  );
+  const linkedRawStatus = linkedStatusSource ? normalizePaymentStatus(linkedStatusSource) : '';
+  if (PAID_PAYMENT_STATUSES.includes(linkedRawStatus)) {
+    return {
+      state: 'paid',
+      label: 'Justificante validado',
+      badge: 'Pagada',
+      dotClass: 'dot-teal',
+      tone: 'success',
+      dueAt: classData.linkedFamilyPaymentValidatedAt || classData.linkedFamilyPaymentUpdatedAt || '',
+      overdue: false,
+      paymentId: classData.linkedFamilyPaymentId || '',
+    };
+  }
+  if (OPEN_PAYMENT_STATUSES.includes(linkedRawStatus) || linkedRawStatus === 'vencido') {
+    return {
+      state: 'review',
+      label: linkedRawStatus === 'vencido' ? 'Justificante vencido en revision' : 'Justificante en revision',
+      badge: linkedRawStatus === 'vencido' ? 'Revision vencida' : 'En revision',
+      dotClass: linkedRawStatus === 'vencido' ? 'dot-red' : 'dot-blue',
+      tone: linkedRawStatus === 'vencido' ? 'danger' : 'info',
+      dueAt: classData.linkedFamilyPaymentDueAt || classData.familyPaymentDueAt || classData.dueAt || '',
+      overdue: linkedRawStatus === 'vencido',
+      paymentId: classData.linkedFamilyPaymentId || '',
+    };
+  }
+  if (['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(linkedRawStatus)) {
+    return {
+      state: 'rejected',
+      label: 'Justificante rechazado',
+      badge: 'Rechazada',
+      dotClass: 'dot-red',
+      tone: 'danger',
+      dueAt: classData.linkedFamilyPaymentDueAt || classData.familyPaymentDueAt || classData.dueAt || '',
+      overdue: true,
+      paymentId: classData.linkedFamilyPaymentId || '',
+    };
+  }
   const dueAt = weeklyPaymentDueAtForClass(classData, schedule, options);
   const graceHours = Number(schedule?.graceHours ?? schedule?.grace_hours ?? options.defaultGraceHours ?? 24);
   const safeGraceMs = (Number.isFinite(graceHours) ? Math.max(1, graceHours) : 24) * 3600000;
@@ -306,6 +350,203 @@ export function classFamilyPaymentState(classData = {}, schedule = null, options
     overdue,
     graceHours: Number.isFinite(graceHours) ? Math.max(1, graceHours) : 24,
   };
+}
+
+function comparableDateValue(value) {
+  if (!value) return 0;
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  if (Number.isFinite(value?.seconds)) return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function classIdForPaymentContext(classData = {}) {
+  return cleanPaymentText(classData.id || classData.classId || classData.calendarUid, 180);
+}
+
+function familyPaymentContextPriority(payment = {}) {
+  const status = normalizePaymentStatus(payment.estado || payment.status);
+  if (PAID_PAYMENT_STATUSES.includes(status)) return 50;
+  if (OPEN_PAYMENT_STATUSES.includes(status)) return 40;
+  if (status === 'vencido') return 35;
+  if (['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status)) return 10;
+  return 20;
+}
+
+function isDiscardedFamilyPayment(payment = {}) {
+  const status = normalizePaymentStatus(payment.estado || payment.status);
+  return ['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status);
+}
+
+export function applyClassPaymentContext(classes = [], payments = []) {
+  const byClassId = new Map();
+  for (const payment of payments || []) {
+    if (!isFamilyPayment(payment) || !Array.isArray(payment.classIds) || !payment.classIds.length) continue;
+    if (isDiscardedFamilyPayment(payment)) continue;
+    const rawStatus = normalizePaymentStatus(payment.estado || payment.status);
+    const priority = familyPaymentContextPriority(payment);
+    const updatedAtMs = comparableDateValue(payment.updated_at || payment.updatedAt || payment.created_at || payment.createdAt);
+    for (const classId of payment.classIds.map(String).filter(Boolean)) {
+      const current = byClassId.get(classId);
+      if (current && (current.priority > priority || (current.priority === priority && current.updatedAtMs >= updatedAtMs))) continue;
+      byClassId.set(classId, {
+        priority,
+        updatedAtMs,
+        payment,
+        rawStatus,
+        badgeStatus: paymentStatusForBadge(payment),
+      });
+    }
+  }
+
+  return (classes || []).map((classData) => {
+    const classId = classIdForPaymentContext(classData);
+    const context = classId ? byClassId.get(classId) : null;
+    if (!context) return classData;
+    const payment = context.payment;
+    return {
+      ...classData,
+      linkedFamilyPaymentId: payment.id || payment.paymentId || payment.documento_id || '',
+      linkedFamilyPaymentStatus: context.badgeStatus,
+      linkedFamilyPaymentRawStatus: context.rawStatus,
+      linkedFamilyPaymentAmount: paymentAmount(payment),
+      linkedFamilyPaymentCreatedAt: payment.created_at || payment.createdAt || '',
+      linkedFamilyPaymentUpdatedAt: payment.updated_at || payment.updatedAt || '',
+      linkedFamilyPaymentDueAt: payment.dueAt || payment.due_at || '',
+      linkedFamilyPaymentReference: payment.referencia || payment.reference || payment.concepto || '',
+    };
+  });
+}
+
+export function classTeacherPaymentAmount(classData = {}) {
+  return paymentAmount({ amount: classData.importe_profesor ?? classData.teacherAmount ?? classData.teacherPrice });
+}
+
+export function classPlatformFeeAmount(classData = {}) {
+  const explicit = paymentAmount({ amount: classData.comision_clasesde10 ?? classData.platformFee ?? classData.marginAmount });
+  if (explicit) return explicit;
+  return Math.round((classPaymentAmount(classData) - classTeacherPaymentAmount(classData)) * 100) / 100;
+}
+
+export function classEconomicState(classData = {}, schedule = null, options = {}) {
+  const familyState = classFamilyPaymentState(classData, schedule, options);
+  const familyAmount = classPaymentAmount(classData);
+  const teacherAmount = classTeacherPaymentAmount(classData);
+  const platformFee = classPlatformFeeAmount(classData);
+  const marginPct = familyAmount > 0 ? Math.round((platformFee / familyAmount) * 1000) / 10 : 0;
+  const classStatus = cleanPaymentText(classData.estado || classData.status, 40).toLowerCase();
+  const teacherStatus = normalizePaymentStatus(
+    classData.teacherPaymentStatus
+    || classData.estado_pago_profesor
+    || classData.teacherPayoutStatus
+    || classData.payoutStatus,
+  );
+  const teacherPaid = PAID_PAYMENT_STATUSES.includes(teacherStatus)
+    || teacherStatus === 'pagado'
+    || Boolean(classData.teacherPayoutPaidAt);
+
+  let state = 'pending';
+  let label = 'Pendiente de justificar';
+  let badge = 'Pendiente';
+  let dotClass = 'dot-gold';
+  let tone = 'warning';
+  let sortRank = 40;
+
+  if (['cancelada', 'cancelado', 'no_realizada'].includes(classStatus)) {
+    state = 'cancelled';
+    label = 'Sin cobro activo';
+    badge = 'Cancelada';
+    dotClass = 'dot-gray';
+    tone = 'gray';
+    sortRank = 90;
+  } else if (familyAmount <= 0) {
+    state = 'missing_amount';
+    label = 'Falta importe de familia';
+    badge = 'Sin importe';
+    dotClass = 'dot-purple';
+    tone = 'danger';
+    sortRank = 10;
+  } else if (familyState.state === 'rejected') {
+    state = 'rejected';
+    label = 'Justificante rechazado';
+    badge = 'Rechazada';
+    dotClass = 'dot-red';
+    tone = 'danger';
+    sortRank = 12;
+  } else if (familyState.state === 'overdue') {
+    state = 'overdue';
+    label = 'Pago familiar vencido';
+    badge = 'Vencida';
+    dotClass = 'dot-red';
+    tone = 'danger';
+    sortRank = 15;
+  } else if (familyState.state === 'review') {
+    state = 'in_review';
+    label = 'Justificante pendiente de validar';
+    badge = 'En revision';
+    dotClass = familyState.dotClass || 'dot-blue';
+    tone = familyState.tone || 'info';
+    sortRank = 20;
+  } else if (teacherAmount <= 0) {
+    state = 'missing_teacher_amount';
+    label = 'Falta importe del profesor';
+    badge = 'Sin importe prof.';
+    dotClass = 'dot-purple';
+    tone = 'danger';
+    sortRank = 21;
+  } else if (familyState.state === 'paid' && teacherAmount > 0 && !teacherPaid) {
+    state = 'payout_pending';
+    label = 'Familia cobrada, profesor pendiente';
+    badge = 'Liquidar profesor';
+    dotClass = 'dot-navy';
+    tone = 'navy';
+    sortRank = 25;
+  } else if (familyState.state === 'paid') {
+    state = 'settled';
+    label = 'Cobrada y liquidada';
+    badge = 'Liquidada';
+    dotClass = 'dot-teal';
+    tone = 'success';
+    sortRank = 80;
+  }
+
+  return {
+    state,
+    label,
+    badge,
+    dotClass,
+    tone,
+    sortRank,
+    calendarClass: `economic-${state}`,
+    familyState,
+    familyPaymentStatus: normalizePaymentStatus(
+      classData.familyPaymentStatus
+      || classData.estado_pago_familia
+      || classData.paymentStatus
+      || classData.estado_pago
+      || classData.status_pago_familia
+      || classData.linkedFamilyPaymentRawStatus,
+    ),
+    teacherPaymentStatus: teacherStatus,
+    teacherPaid,
+    familyAmount,
+    teacherAmount,
+    platformFee,
+    marginPct,
+    dueAt: familyState.dueAt || '',
+    linkedFamilyPaymentId: classData.linkedFamilyPaymentId || '',
+  };
+}
+
+export function economicCalendarLegend() {
+  return [
+    { className: 'dot-purple', label: 'Falta importe' },
+    { className: 'dot-red', label: 'Vencida/incidencia' },
+    { className: 'dot-blue', label: 'En revision' },
+    { className: 'dot-gold', label: 'Pendiente' },
+    { className: 'dot-navy', label: 'Liquidar profesor' },
+    { className: 'dot-teal', label: 'Liquidada' },
+  ];
 }
 
 export function paymentReference(payment = {}) {

@@ -1243,10 +1243,13 @@ import {
 import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calendar';
 import {
   PAID_PAYMENT_STATUSES,
+  applyClassPaymentContext,
   buildPaymentScheduleIndex,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
+  classEconomicState,
   classFamilyPaymentState,
+  economicCalendarLegend,
   isFamilyPayment,
   isPaymentOverdue,
   isPaymentVerified,
@@ -2127,6 +2130,60 @@ function classMarginPct(clase) {
   return total > 0 ? (classPlatformFee(clase) / total) * 100 : 0;
 }
 
+let adminPaymentContextCache = { expiresAt: 0, payments: [], scheduleIndex: new Map() };
+
+function invalidateAdminPaymentContext() {
+  adminPaymentContextCache = { expiresAt: 0, payments: [], scheduleIndex: new Map() };
+}
+
+async function loadAdminPaymentContext(options = {}) {
+  if (!options.force && adminPaymentContextCache.expiresAt > Date.now()) return adminPaymentContextCache;
+  const [paymentsResult, scheduleSnap] = await Promise.all([
+    db.from('pagos')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(0, adminReadLimit('pagos') - 1),
+    getDocs(firestoreQuery(collection(firebaseDb, 'paymentSchedules'))).catch(() => ({ docs: [] })),
+  ]);
+  const schedules = (scheduleSnap.docs || []).map((item) => ({ id: item.id, ...item.data() }));
+  adminPaymentContextCache = {
+    expiresAt: Date.now() + 20000,
+    payments: paymentsResult.data || [],
+    scheduleIndex: buildPaymentScheduleIndex(schedules),
+  };
+  return adminPaymentContextCache;
+}
+
+function paymentScheduleForAdminClass(clase = {}) {
+  return paymentScheduleForClass(clase, adminPaymentContextCache.scheduleIndex || new Map());
+}
+
+function economicStateForAdminClass(clase = {}) {
+  return classEconomicState(clase, paymentScheduleForAdminClass(clase));
+}
+
+function economicBadgeClass(tone) {
+  return {
+    success: 'badge-success',
+    warning: 'badge-warning',
+    danger: 'badge-danger',
+    info: 'badge-info',
+    navy: 'badge-navy',
+    gray: 'badge-gray',
+  }[tone] || 'badge-gray';
+}
+
+function renderEconomicBadge(state = {}) {
+  return `<span class="badge ${economicBadgeClass(state.tone)}">${sanitize(state.badge || state.label || 'Estado')}</span>`;
+}
+
+function formatDateTimeHint(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
+  return `${formatFechaCorta(date.toISOString().slice(0, 10))} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
 function updateClaseMoneyPreview() {
   const total = money(document.getElementById('clase-precio').value);
   const profesor = money(document.getElementById('clase-importe-profesor').value);
@@ -2154,17 +2211,23 @@ async function cargarClases() {
   if (busq) q = q.or(`alumno_nombre.ilike.%${busq}%,profesor_nombre.ilike.%${busq}%,materia.ilike.%${busq}%`);
   q = q.order('fecha', { ascending:false }).range(PAG_CLASES.offset(), PAG_CLASES.offset()+19);
 
-  const { data, count } = await q;
-  const clases = estado === 'confirmada'
+  const [{ data, count }, paymentContext] = await Promise.all([
+    q,
+    loadAdminPaymentContext(),
+  ]);
+  const clasesBase = estado === 'confirmada'
     ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
     : (data || []);
+  const clases = applyClassPaymentContext(clasesBase, paymentContext.payments);
   PAG_CLASES.setTotal(count||0);
   document.getElementById('clases-count').textContent = `${estado === 'confirmada' ? clases.length : count || 0} clases`;
 
   const tbody = document.getElementById('tbody-clases');
   if (!clases.length) { tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">No hay clases con estos filtros.</td></tr>'; return; }
 
-  tbody.innerHTML = clases.map(c => `<tr>
+  tbody.innerHTML = clases.map(c => {
+    const economic = economicStateForAdminClass(c);
+    return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td><strong>${sanitize(c.alumno_nombre)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(c.nivel_educativo||'')} ${sanitize(c.curso||'')}</span></td>
@@ -2175,11 +2238,12 @@ async function cargarClases() {
       <strong>${classTotal(c) ? formatEuros(classTotal(c)) : '—'}</strong>
       <br><span style="font-size:.75rem;color:var(--gray-mid)">Prof. ${classTeacherAmount(c) ? formatEuros(classTeacherAmount(c)) : '—'} · Margen ${formatEuros(classPlatformFee(c))}</span>
     </td>
-    <td>${badgeEstado(classStatusForBadge(c))}</td>
+    <td>${badgeEstado(classStatusForBadge(c))}<br>${renderEconomicBadge(economic)}</td>
     <td>
       <button class="btn btn-ghost btn-sm btn-icon" title="Editar" data-action="editar-clase" data-id="${sanitize(c.id)}">✏️</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 document.getElementById('tbody-clases')?.addEventListener('click', (e) => {
@@ -2769,7 +2833,9 @@ async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
-      onDiaClick: mostrarClasesDia,
+      classDotClass: (clase) => economicStateForAdminClass(clase).dotClass,
+      legendItems: economicCalendarLegend(),
+      onDiaClick: mostrarClasesDiaEconomico,
       onMesChange: cargarClasesCalendario,
     });
   }
@@ -2780,9 +2846,15 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('v_clases_completas').select('fecha,estado,status,hora_inicio,hora_fin,materia,alumno_nombre,profesor_nombre,familyPaymentStatus,estado_pago')
-    .gte('fecha',desde).lte('fecha',hasta);
-  cal.setClases(data||[]);
+  const [{ data }, paymentContext] = await Promise.all([
+    db.from('v_clases_completas').select('*').gte('fecha',desde).lte('fecha',hasta),
+    loadAdminPaymentContext(),
+  ]);
+  const clases = applyClassPaymentContext(data || [], paymentContext.payments);
+  cal.setClases(clases);
+  if (cal.diaSeleccionado) {
+    mostrarClasesDiaEconomico(cal.diaSeleccionado, cal.clasesPorFecha[cal.diaSeleccionado] || []);
+  }
 }
 
 function mostrarClasesDia(fecha, clases) {
@@ -2803,6 +2875,78 @@ function mostrarClasesDia(fecha, clases) {
 }
 
 // ── PROFESORES ───────────────────────────────────────────────────
+function mostrarClasesDiaEconomico(fecha, clases) {
+  document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
+  const cont = document.getElementById('cal-clases-dia');
+  if (!clases.length) {
+    cont.innerHTML = '<div class="empty-state"><div class="empty-icon">OK</div><div class="empty-title">Sin clases</div><div class="empty-desc">No hay actividad programada ni riesgo economico este dia.</div></div>';
+    return;
+  }
+  const enriched = clases
+    .map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }))
+    .sort((a, b) => a.economic.sortRank - b.economic.sortRank || String(a.clase.hora_inicio || '').localeCompare(String(b.clase.hora_inicio || '')));
+  const totals = enriched.reduce((acc, item) => {
+    acc.family += item.economic.familyAmount || 0;
+    acc.teacher += item.economic.teacherAmount || 0;
+    acc.margin += item.economic.platformFee || 0;
+    acc[item.economic.state] = (acc[item.economic.state] || 0) + 1;
+    return acc;
+  }, { family: 0, teacher: 0, margin: 0 });
+  const kpis = [
+    ['Facturacion', formatEuros(totals.family)],
+    ['Profesor', formatEuros(totals.teacher)],
+    ['Margen', formatEuros(totals.margin)],
+    ['Alertas', String((totals.missing_amount || 0) + (totals.missing_teacher_amount || 0) + (totals.overdue || 0) + (totals.rejected || 0) + (totals.in_review || 0))],
+  ].map(([label, value]) => `<div class="admin-calendar-kpi"><span>${sanitize(label)}</span><strong>${sanitize(value)}</strong></div>`).join('');
+
+  cont.innerHTML = `
+    <div class="admin-calendar-day-summary">${kpis}</div>
+    ${enriched.map(({ clase: c, economic }) => {
+      const dueText = economic.dueAt ? `Limite: ${formatDateTimeHint(economic.dueAt)}` : 'Sin limite semanal definido';
+      const paymentLink = economic.linkedFamilyPaymentId
+        ? `<button class="btn btn-ghost btn-sm" data-action="abrir-pago-admin" data-payment-id="${sanitize(economic.linkedFamilyPaymentId)}">Ver pago</button>`
+        : '';
+      return `
+    <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}">
+      <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div><div class="clase-time-fin">${formatHora(c.hora_fin||'')}</div></div>
+      <div class="clase-info">
+        <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia)}</div>
+        <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre || 'Profesor')}</div>
+        <div class="admin-calendar-money-line">
+          <span>Familia ${sanitize(formatEuros(economic.familyAmount))}</span>
+          <span>Profesor ${sanitize(formatEuros(economic.teacherAmount))}</span>
+          <span>Margen ${sanitize(formatEuros(economic.platformFee))}${economic.marginPct ? ` (${sanitize(String(economic.marginPct))}%)` : ''}</span>
+        </div>
+        <div class="calendar-payment-state">
+          ${renderEconomicBadge(economic)}
+          <span class="payment-due-hint">${sanitize(economic.label)} · ${sanitize(dueText)}</span>
+        </div>
+        <div class="calendar-class-actions">
+          <button class="btn btn-outline btn-sm" data-action="editar-clase" data-id="${sanitize(c.id || '')}">Editar clase</button>
+          ${paymentLink}
+        </div>
+      </div>
+      <div class="admin-calendar-badges">
+        ${badgeEstado(classStatusForBadge(c))}
+      </div>
+    </div>`;
+    }).join('')}`;
+}
+
+document.getElementById('cal-clases-dia')?.addEventListener('click', (event) => {
+  const editBtn = event.target.closest('[data-action="editar-clase"]');
+  if (editBtn?.dataset.id) {
+    window.editarClase(editBtn.dataset.id);
+    return;
+  }
+  const paymentBtn = event.target.closest('[data-action="abrir-pago-admin"]');
+  if (paymentBtn) {
+    document.getElementById('filtro-pago-busqueda').value = paymentBtn.dataset.paymentId || '';
+    irA('pagos');
+    cargarPagos();
+  }
+});
+
 const PAG_PROF = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-profesores'), onPageChange: cargarProfesores });
 
 function nombreProfesor(p) {
@@ -4778,15 +4922,29 @@ function accionesPago(pago, docButton) {
 
 async function cargarPagos() {
   const estado = document.getElementById('filtro-pago-estado').value;
+  const busq = document.getElementById('filtro-pago-busqueda').value.trim().toLowerCase();
   let q = db.from('pagos')
     .select('*, familias(usuarios(nombre,apellidos)), documentos(id,nombre,storage_path)', {count:'exact'});
   if (estado && estado !== 'vencido') q = q.eq('estado', estado);
   q = q.order('created_at',{ascending:false}).range(PAG_PAGO.offset(), PAG_PAGO.offset()+19);
 
   const { data, count, error } = await q;
-  const pagos = estado === 'vencido' ? (data || []).filter((p) => isPaymentOverdue(p)) : (data || []);
+  const pagosEstado = estado === 'vencido' ? (data || []).filter((p) => isPaymentOverdue(p)) : (data || []);
+  const pagos = busq
+    ? pagosEstado.filter((p) => [
+      p.id,
+      p.paymentId,
+      p.referencia,
+      p.reference,
+      p.concepto,
+      p.familia_nombre,
+      p.profesor_nombre,
+      p.estado,
+      p.status,
+    ].map((value) => String(value || '').toLowerCase()).some((value) => value.includes(busq)))
+    : pagosEstado;
   PAG_PAGO.setTotal(count||0);
-  document.getElementById('pago-count').textContent = `${estado === 'vencido' ? pagos.length : count || 0} pagos`;
+  document.getElementById('pago-count').textContent = `${busq || estado === 'vencido' ? pagos.length : count || 0} pagos`;
 
   const tbody = document.getElementById('tbody-pagos');
   if (error) {
@@ -4872,6 +5030,19 @@ document.getElementById('btn-export-pagos').addEventListener('click', async () =
   );
 });
 
+async function refreshPaymentRelatedAdminViews(options = {}) {
+  invalidateAdminPaymentContext();
+  const tasks = [
+    cargarPagosPendientesDash(),
+    cargarProximasClasesDash(),
+  ];
+  if (options.includePayments !== false) tasks.push(cargarPagos());
+  if (cal) tasks.push(cargarClasesCalendario(cal.anio, cal.mes));
+  if (document.getElementById('section-clases')?.style.display !== 'none') tasks.push(cargarClases());
+  if (document.getElementById('section-finanzas')?.style.display !== 'none') tasks.push(cargarFinanzas());
+  await Promise.allSettled(tasks);
+}
+
 window.validarPago = async (id, estado) => {
   const { data: pagoActual, error: pagoError } = await db.from('pagos').select('*').eq('id', id).single();
   if (pagoError) { showToast('Error', pagoError.message, 'error'); return; }
@@ -4908,8 +5079,7 @@ window.validarPago = async (id, estado) => {
     const failed = results.find((result) => result.error);
     if (failed) {
       showToast('Pago actualizado', 'El Bizum se marco como pagado, pero alguna clase no pudo actualizarse.', 'warning');
-      cargarPagos();
-      cargarPagosPendientesDash();
+      await refreshPaymentRelatedAdminViews();
       return;
     }
   }
@@ -4920,15 +5090,13 @@ window.validarPago = async (id, estado) => {
     const failed = results.find((result) => result.error);
     if (failed) {
       showToast('Pago actualizado', 'El pago se valido, pero alguna clase no pudo marcarse como cobrada.', 'warning');
-      cargarPagos();
-      cargarPagosPendientesDash();
+      await refreshPaymentRelatedAdminViews();
       return;
     }
   }
 
   showToast('Pago ' + estado, '', 'success');
-  cargarPagos();
-  cargarPagosPendientesDash();
+  await refreshPaymentRelatedAdminViews();
 };
 
 // ── DOCUMENTOS ───────────────────────────────────────────────────
