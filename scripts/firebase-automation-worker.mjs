@@ -10,6 +10,7 @@ import {
 import {
   AI_FEATURES_VERSION,
   MATCHING_VERSION,
+  buildActiveMatchingPlan,
   buildFamilyRequestBrief,
   buildMatchingAiPrompt,
   buildMatchingDecisionSupport,
@@ -1009,6 +1010,155 @@ async function loadMatchingContextForRequest(db) {
   return { assignments, classes, requestMatches, matches: requestMatches };
 }
 
+function activeMatchingOptions() {
+  return {
+    nowIso: isoNow(),
+    teacherResponseSlaHours: runtimeNumber('matching.teacherResponseSlaHours', 8, 1, 168),
+    staleRequestHours: runtimeNumber('matching.staleRequestHours', 12, 1, 720),
+    lowSupplyThreshold: runtimeNumber('matching.lowSupplyThreshold', 2, 1, 100),
+    minReadyScore: runtimeNumber('matching.minReadyScore', 70, 1, 100),
+  };
+}
+
+function matchesByRequestId(matches = []) {
+  const map = new Map();
+  for (const item of matches || []) {
+    const requestId = clean(item.requestId || item.solicitud_id || item.solicitudId, 180);
+    if (!requestId) continue;
+    if (!map.has(requestId)) map.set(requestId, []);
+    map.get(requestId).push(item);
+  }
+  for (const rows of map.values()) rows.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  return map;
+}
+
+async function materializeActiveMatchingPlan(db, requestId, request, plan, stats) {
+  if (!requestId || !plan) return;
+  stats.activeMatchingPlansCreated += 1;
+  const payload = {
+    requestId,
+    solicitud_id: requestId,
+    familyUid: request.familyUid || request.familia_id || '',
+    studentId: request.studentId || request.alumno_id || '',
+    subject: request.subject || request.materia || '',
+    status: plan.status,
+    priority: plan.priority,
+    priorityRank: plan.priorityRank,
+    summary: plan.summary,
+    publicSummary: plan.publicSummary,
+    fingerprint: plan.fingerprint,
+    plan,
+    matchingVersion: MATCHING_VERSION,
+    activeMatchingVersion: plan.version,
+    updatedAt: now(),
+    updated_at: isoNow(),
+  };
+  await writeDoc(db.collection('matchingInterventions'), requestId, {
+    ...payload,
+    createdAt: now(),
+    created_at: isoNow(),
+  });
+  await updateRef(db.collection('solicitudes').doc(requestId), {
+    activeMatchingPlan: plan,
+    activeMatchingStatus: plan.status,
+    activeMatchingPriority: plan.priority,
+    activeMatchingFingerprint: plan.fingerprint,
+    activeMatchingUpdatedAt: now(),
+    activeMatchingUpdated_at: isoNow(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+  });
+
+  if (['on_track', 'assigned', 'closed', 'ready_with_recommendation'].includes(plan.status)) return;
+  const notifyKey = `active_matching_${requestId}_${plan.fingerprint}`;
+  const createdNotifications = await notifyAdminsOnce(
+    db,
+    plan.priority === 'critical' ? 'Matching bloqueado' : 'Matching necesita ayuda',
+    plan.summary,
+    {
+      type: 'matching_active_intervention',
+      requestId,
+      activeMatchingStatus: plan.status,
+      priority: plan.priority,
+      url: '/pages/login.html',
+    },
+    notifyKey,
+  );
+  stats.activeMatchingNotificationsCreated += createdNotifications;
+
+  const taskId = notificationId('crm_active_matching', requestId, plan.fingerprint);
+  await writeDoc(db.collection('crmTasks'), taskId, {
+    title: plan.actions?.[0]?.title || 'Resolver matching',
+    description: plan.summary,
+    priority: plan.priority,
+    status: 'open',
+    estado: 'abierta',
+    entityType: 'solicitudes',
+    entityId: requestId,
+    requestId,
+    tags: ['matching', 'activo', plan.status],
+    dueAfterMinutes: runtimeNumber('automation.staleRequestReviewMinutes', 120, 5, 10080),
+    source: 'active_matching',
+    activeMatchingFingerprint: plan.fingerprint,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+  stats.activeMatchingTasksCreated += 1;
+
+  for (const job of plan.automationJobs || []) {
+    const created = await enqueueWorkerSystemJob(db, job, 'active_matching');
+    if (created) stats.activeMatchingJobsQueued += 1;
+  }
+
+  const familyAction = (plan.actions || []).find((item) => item.targetRole === 'familia');
+  const familyUid = clean(request.familyUid || request.familia_id || request.familyUserUid, 180);
+  if (familyAction && familyUid) {
+    const created = await notifyUserOnce(
+      db,
+      familyUid,
+      familyAction.title,
+      familyAction.body,
+      {
+        type: 'matching_active_intervention',
+        requestId,
+        action: familyAction.type,
+        url: '/pages/login.html',
+      },
+      `${notifyKey}_family`,
+    );
+    if (created) stats.activeMatchingNotificationsCreated += 1;
+  }
+
+  const teacherAction = (plan.actions || []).find((item) => item.targetRole === 'profesor' && item.payload?.teacherUid);
+  if (teacherAction?.payload?.teacherUid) {
+    const created = await notifyUserOnce(
+      db,
+      teacherAction.payload.teacherUid,
+      teacherAction.title,
+      teacherAction.body,
+      {
+        type: 'matching_active_intervention',
+        requestId,
+        action: teacherAction.type,
+        url: '/pages/login.html',
+      },
+      `${notifyKey}_teacher_${teacherAction.payload.teacherUid}`,
+    );
+    if (created) stats.activeMatchingNotificationsCreated += 1;
+  }
+
+  if (plan.priority === 'critical' || plan.status === 'blocked_no_candidates') {
+    await createOperationalIncidentOnce(db, 'matching_blocked', {
+      id: requestId,
+      requestId,
+      familyUid: request.familyUid || request.familia_id,
+      studentId: request.studentId || request.alumno_id,
+      descripcion: plan.summary,
+      suggestedActions: (plan.actions || []).slice(0, 4).map((item) => item.title),
+    }, stats);
+  }
+}
+
 async function loadTeachers(db) {
   const [teachersSnap, usersSnap, assignmentCounts, availabilitySlots] = await Promise.all([
     db.collection('profesores').limit(runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000)).get(),
@@ -1274,6 +1424,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
 
   const candidates = mergeProfessionalAiRanking(baseCandidates, aiResult).slice(0, 5);
   const decisionSupport = buildMatchingDecisionSupport(enrichedRequest, candidates);
+  const activeMatchingPlan = buildActiveMatchingPlan(enrichedRequest, candidates, matchingContext, activeMatchingOptions());
   const aiUsed = Boolean(aiResult?.matches?.length);
   const aiMode = process.env.GEMINI_API_KEY
     ? (aiUsed ? 'gemini_assisted' : 'gemini_attempted_fallback_deterministic')
@@ -1288,8 +1439,11 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       profile,
       requestBrief,
       decisionSupport,
+      activeMatchingPlan,
       matchQuality: decisionSupport.quality,
       matchConfidenceScore: decisionSupport.confidenceScore,
+      activeMatchingStatus: activeMatchingPlan.status,
+      activeMatchingPriority: activeMatchingPlan.priority,
       candidatesCount: candidates.length,
       matchingVersion: MATCHING_VERSION,
       aiUsed,
@@ -1346,6 +1500,11 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       matchQuality: decisionSupport.quality,
       matchConfidenceScore: decisionSupport.confidenceScore,
       matchNeedsReview: decisionSupport.quality !== 'listo_para_asignar',
+      activeMatchingPlan,
+      activeMatchingStatus: activeMatchingPlan.status,
+      activeMatchingPriority: activeMatchingPlan.priority,
+      activeMatchingFingerprint: activeMatchingPlan.fingerprint,
+      activeMatchingUpdatedAt: now(),
       aiBrief: requestBrief,
       aiVersion: AI_FEATURES_VERSION,
       updatedAt: now(),
@@ -1367,7 +1526,11 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     aiMode,
     aiError,
     matchingVersion: MATCHING_VERSION,
+    activeMatchingStatus: activeMatchingPlan.status,
+    activeMatchingPriority: activeMatchingPlan.priority,
   });
+
+  await materializeActiveMatchingPlan(db, requestId, enrichedRequest, activeMatchingPlan, stats);
 
   if (!candidates.length) {
     await notifyAdmins(db, 'Solicitud sin match automatico', `No hay candidatos claros para ${profile.subject || 'la solicitud'} (${profile.level || 'nivel sin indicar'}).`, {
@@ -1390,6 +1553,45 @@ async function processPendingRequests(db, stats) {
     stats.requestsSeen += 1;
     if (!shouldRegenerateMatching(data)) continue;
     await generateMatchesForRequest(db, doc.id, data, stats);
+  }
+}
+
+async function processActiveMatchingInterventions(db, stats) {
+  const requests = await listCollection(db, 'solicitudes', limit * 2);
+  const openRequests = requests.filter((item) => {
+    const status = lower(item.status || item.estado || 'nueva');
+    if (item.assignedTeacherUid || item.profesor_asignado_id) return false;
+    if (/(asign|cancel|cerrad|archiv|finaliz|complet)/.test(status)) return false;
+    return ['nueva', 'pendiente', 'pending', ''].includes(status) || item.matchStatus;
+  }).slice(0, limit);
+  if (!openRequests.length) return;
+
+  const [teachers, matchingContext] = await Promise.all([
+    loadTeachers(db),
+    loadMatchingContextForRequest(db),
+  ]);
+  const matchesMap = matchesByRequestId(matchingContext.requestMatches || []);
+
+  for (const request of openRequests) {
+    stats.activeMatchingRequestsChecked += 1;
+    const requestId = clean(request.id || request.requestId || request.solicitud_id, 180);
+    if (!requestId) continue;
+    const enrichedRequest = await enrichRequestForMatching(db, requestId, request);
+    const existingMatches = matchesMap.get(requestId) || [];
+    let candidates = existingMatches;
+    if (!candidates.length || request.matchingVersion !== MATCHING_VERSION) {
+      const teachersWithSignals = teachers.map((teacher) => ({
+        ...teacher,
+        ...buildTeacherMatchingSignals(teacher, enrichedRequest, matchingContext),
+      }));
+      candidates = rankTeachersForRequest(enrichedRequest, teachersWithSignals, {
+        limit: 5,
+        minScore: runtimeNumber('matching.minScore', 25, 0, 100),
+        includeZeroScore: true,
+      });
+    }
+    const plan = buildActiveMatchingPlan(enrichedRequest, candidates, matchingContext, activeMatchingOptions());
+    await materializeActiveMatchingPlan(db, requestId, enrichedRequest, plan, stats);
   }
 }
 
@@ -3022,6 +3224,11 @@ async function main() {
     contactLeadsProcessed: 0,
     requestsSeen: 0,
     matchesGenerated: 0,
+    activeMatchingRequestsChecked: 0,
+    activeMatchingPlansCreated: 0,
+    activeMatchingNotificationsCreated: 0,
+    activeMatchingTasksCreated: 0,
+    activeMatchingJobsQueued: 0,
     assignmentsCreated: 0,
     classesChecked: 0,
     classRemindersCreated: 0,
@@ -3098,6 +3305,7 @@ async function main() {
   await processQueuedSystemJobs(db, stats);
   await processPublicLeads(db, stats);
   await processPendingRequests(db, stats);
+  await processActiveMatchingInterventions(db, stats);
   await processAssignedRequests(db, stats);
   await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);

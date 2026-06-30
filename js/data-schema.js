@@ -81,6 +81,7 @@ export const CANONICAL_FIELDS = Object.freeze({
     'familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference',
     'availabilitySlots', 'notes', 'status', 'matchStatus', 'matchingVersion', 'matchRunId',
     'matchComputedAt', 'matchDecision', 'matchQuality', 'matchConfidenceScore', 'matchNeedsReview',
+    'activeMatchingPlan', 'activeMatchingStatus', 'activeMatchingPriority', 'activeMatchingFingerprint', 'activeMatchingUpdatedAt',
     'bestTeacherUid', 'bestScore', 'assignedTeacherUid', 'month', 'partitionKey', 'scaleShard',
     'createdAt', 'updatedAt',
   ],

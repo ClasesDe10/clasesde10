@@ -14,6 +14,7 @@ import { buildTeacherTrustProfile } from './trust-engine.js';
 
 export const MATCHING_VERSION = 'professional_matching_v4';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
+export const ACTIVE_MATCHING_VERSION = 'active_matching_v1';
 
 export const MATCHING_WEIGHTS = Object.freeze({
   subject: 22,
@@ -1316,6 +1317,344 @@ export function buildMatchingDecisionSupport(request, candidates = []) {
     topScore: bestScore,
     assignableCount: assignable.length,
     candidatesCount: matches.length,
+  };
+}
+
+function matchingHoursSince(value, nowMs) {
+  const when = matchingDateMillis(value);
+  if (!when) return null;
+  return Math.max(0, (nowMs - when) / 36e5);
+}
+
+function requestCreatedValue(request = {}) {
+  return request.createdAt || request.created_at || request.fecha || request.importedAt || request.updatedAt || request.updated_at;
+}
+
+function matchCreatedValue(match = {}) {
+  return match.createdAt || match.created_at || match.proposedAt || match.updatedAt || match.updated_at;
+}
+
+function isOpenMatchingRequest(request = {}) {
+  if (request.assignedTeacherUid || request.profesor_asignado_id) return false;
+  const status = normalizeText(request.status || request.estado || 'nueva');
+  if (/(asign|cancel|cerrad|archiv|finaliz|complet)/.test(status)) return false;
+  return true;
+}
+
+function actionItem({ id, type, title, body, priority = 'normal', targetRole = 'admin', actionLabel = '', payload = {}, automation = '' }) {
+  return {
+    id: clean(id || type, 120),
+    type: clean(type, 80),
+    title: clean(title, 180),
+    body: clean(body, 700),
+    priority,
+    targetRole,
+    actionLabel: clean(actionLabel, 120),
+    automation: clean(automation, 220),
+    payload,
+  };
+}
+
+function priorityRank(priority) {
+  const value = normalizeText(priority);
+  if (value === 'critical' || value === 'critica' || value === 'urgente') return 100;
+  if (value === 'high' || value === 'alta') return 75;
+  if (value === 'low' || value === 'baja') return 25;
+  return 50;
+}
+
+function highestPriority(actions = []) {
+  return actions.reduce((best, item) => (
+    priorityRank(item.priority) > priorityRank(best) ? item.priority : best
+  ), 'normal');
+}
+
+function componentRatio(candidate = {}, key = '') {
+  const item = candidate.scoreBreakdown?.[key];
+  const max = Number(item?.max || 0);
+  if (!max) return null;
+  return clamp(Number(item.points || 0) / max, 0, 1);
+}
+
+function requestMatchIsWaiting(match = {}, responseSlaHours = 8, nowMs = Date.now()) {
+  const status = normalizeText(match.estado || match.status || '');
+  if (/(acept|asign|rechaz|cancel|cerrad)/.test(status)) return false;
+  if (!/(propuest|enviado|pendient|offered|sent|pending)/.test(status || 'pendiente')) return false;
+  const age = matchingHoursSince(matchCreatedValue(match), nowMs);
+  return age !== null && age >= responseSlaHours;
+}
+
+function matchingSubjectSupply(candidates = []) {
+  return (candidates || []).filter((candidate) => componentRatio(candidate, 'subject') >= 0.5).length;
+}
+
+export function buildActiveMatchingPlan(request = {}, candidates = [], context = {}, options = {}) {
+  const nowMs = Date.parse(options.nowIso || '') || Date.now();
+  const profile = getRequestProfile(request);
+  const requestId = clean(profile.id || request.id || request.requestId || request.solicitud_id, 180);
+  const matches = (candidates || []).filter(Boolean)
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+  const best = matches[0] || null;
+  const assignable = matches.filter((match) => match.assignable);
+  const missing = [];
+  const actions = [];
+  const blockers = [];
+  const diagnostics = [];
+  const teacherResponseSlaHours = Number(options.teacherResponseSlaHours || 8);
+  const staleRequestHours = Number(options.staleRequestHours || 12);
+  const lowSupplyThreshold = Number(options.lowSupplyThreshold || 2);
+  const minReadyScore = Number(options.minReadyScore || 70);
+  const ageHours = matchingHoursSince(requestCreatedValue(request), nowMs);
+  const waitingMatches = [
+    ...(Array.isArray(context.requestMatches) ? context.requestMatches : []),
+    ...(Array.isArray(context.matches) ? context.matches : []),
+    ...(Array.isArray(context.solicitudMatches) ? context.solicitudMatches : []),
+  ].filter((match) => {
+    const matchRequestId = clean(match.requestId || match.solicitud_id || match.solicitudId, 180);
+    return matchRequestId === requestId && requestMatchIsWaiting(match, teacherResponseSlaHours, nowMs);
+  });
+
+  if (!isOpenMatchingRequest(request)) {
+    return {
+      version: ACTIVE_MATCHING_VERSION,
+      status: request.assignedTeacherUid || request.profesor_asignado_id ? 'assigned' : 'closed',
+      priority: 'low',
+      priorityRank: 25,
+      summary: 'La solicitud no requiere intervencion activa de matching.',
+      publicSummary: 'La solicitud ya no esta en busqueda activa.',
+      requestId,
+      actions: [],
+      blockers: [],
+      diagnostics: [],
+      automationJobs: [],
+      recommendedTeacherUid: best?.teacherUid || '',
+      fingerprint: stableHash({ requestId, status: 'closed' }),
+    };
+  }
+
+  if (!profile.subject) missing.push('materia');
+  if (!profile.level) missing.push('nivel');
+  if (!profile.modality) missing.push('modalidad');
+  if (!profile.schedule && !profile.availabilitySlots.length) missing.push('horario/franjas');
+  if (!profile.zone && !profile.postalCode && !profile.address && !modalitySet(profile.modality).has('online')) missing.push('zona o direccion');
+
+  if (missing.length) {
+    blockers.push({ type: 'missing_request_data', detail: `Faltan ${joinNatural(missing)}.` });
+    actions.push(actionItem({
+      id: 'request_family_data',
+      type: 'request_family_data',
+      title: 'Pedir datos para desbloquear matching',
+      body: `Faltan ${joinNatural(missing)} para recomendar profesor con seguridad.`,
+      priority: missing.length >= 3 ? 'high' : 'normal',
+      targetRole: 'familia',
+      actionLabel: 'Completar solicitud',
+      automation: 'Enviar aviso interno a la familia y dejar tarea al admin si no responde.',
+      payload: { requestId, missing },
+    }));
+  }
+
+  if (!matches.length) {
+    blockers.push({ type: 'no_candidates', detail: 'No hay candidatos calculados para la solicitud.' });
+    actions.push(actionItem({
+      id: 'retry_matching',
+      type: 'retry_matching',
+      title: 'Reintentar matching automaticamente',
+      body: 'Volver a calcular candidatos y ampliar revision de profesores disponibles.',
+      priority: 'high',
+      targetRole: 'system',
+      actionLabel: 'Recalcular',
+      automation: 'Encolar matching.request con reintento automatico.',
+      payload: { requestId, force: true, reason: 'active_matching_no_candidates' },
+    }));
+    actions.push(actionItem({
+      id: 'broaden_search',
+      type: 'broaden_search',
+      title: 'Ampliar criterios de busqueda',
+      body: 'Revisar modalidad online, zonas cercanas y profesores con perfil revisable.',
+      priority: 'high',
+      targetRole: 'admin',
+      actionLabel: 'Revisar criterios',
+      automation: 'Crear tarea CRM con candidatos y campos faltantes.',
+      payload: { requestId },
+    }));
+  } else {
+    const subjectSupply = matchingSubjectSupply(matches);
+    diagnostics.push({ type: 'candidate_supply', value: matches.length, detail: `${matches.length} candidato(s) calculados.` });
+    diagnostics.push({ type: 'subject_supply', value: subjectSupply, detail: `${subjectSupply} candidato(s) cubren la materia.` });
+
+    if (!assignable.length) {
+      blockers.push({ type: 'no_assignable_candidates', detail: 'Hay candidatos, pero ninguno es asignable sin revisar.' });
+      actions.push(actionItem({
+        id: 'fix_teacher_profiles',
+        type: 'fix_teacher_profiles',
+        title: 'Completar perfiles de profesores candidatos',
+        body: 'Los mejores candidatos tienen bloqueos de perfil, verificacion o disponibilidad.',
+        priority: 'high',
+        targetRole: 'admin',
+        actionLabel: 'Completar perfil',
+        automation: 'Crear tarea para validar perfil/documentos o seleccionar alternativa.',
+        payload: { requestId, candidateCount: matches.length },
+      }));
+    }
+
+    if (best && best.assignable && Number(best.score || 0) >= minReadyScore) {
+      actions.push(actionItem({
+        id: 'assign_recommended_teacher',
+        type: 'assign_recommended_teacher',
+        title: 'Asignar candidato recomendado',
+        body: `${best.teacherName || 'El primer candidato'} es asignable con score ${Math.round(Number(best.score || 0))}%.`,
+        priority: ageHours !== null && ageHours >= staleRequestHours ? 'high' : 'normal',
+        targetRole: 'admin',
+        actionLabel: 'Usar recomendado',
+        automation: 'Mostrar candidato y razones en el modal de asignacion.',
+        payload: { requestId, teacherUid: best.teacherUid, score: best.score },
+      }));
+    } else if (best) {
+      actions.push(actionItem({
+        id: 'review_low_score',
+        type: 'review_low_score',
+        title: 'Revisar score bajo antes de asignar',
+        body: `El mejor candidato solo alcanza ${Math.round(Number(best.score || 0))}%. Conviene ajustar criterios o pedir mas datos.`,
+        priority: 'high',
+        targetRole: 'admin',
+        actionLabel: 'Revisar match',
+        automation: 'Generar recomendacion con riesgos y alternativa de reintento.',
+        payload: { requestId, teacherUid: best.teacherUid, score: best.score },
+      }));
+    }
+
+    if (best && componentRatio(best, 'availability') !== null && componentRatio(best, 'availability') < 0.45) {
+      blockers.push({ type: 'availability_mismatch', detail: 'La disponibilidad real no encaja lo suficiente.' });
+      actions.push(actionItem({
+        id: 'request_availability',
+        type: 'request_availability',
+        title: 'Pedir franjas horarias claras',
+        body: 'El bloqueo principal parece ser horario. Pedir o ajustar franjas antes de asignar.',
+        priority: 'high',
+        targetRole: 'familia',
+        actionLabel: 'Actualizar franjas',
+        automation: 'Avisar a la familia y recordar al profesor si faltan franjas.',
+        payload: { requestId },
+      }));
+    }
+
+    const lowResponseRisk = (best?.risks || []).some((risk) => /respuesta|acept/i.test(risk));
+    if (lowResponseRisk || waitingMatches.length) {
+      blockers.push({ type: 'teacher_response_risk', detail: waitingMatches.length ? `${waitingMatches.length} propuesta(s) sin respuesta dentro del SLA.` : 'Riesgo de respuesta o aceptacion baja.' });
+      actions.push(actionItem({
+        id: 'remind_teacher_response',
+        type: 'remind_teacher_response',
+        title: 'Recordar respuesta al profesor',
+        body: waitingMatches.length
+          ? 'Hay una propuesta enviada sin respuesta. Recordar antes de buscar alternativa.'
+          : 'El historico sugiere riesgo de respuesta lenta o rechazo.',
+        priority: waitingMatches.length ? 'high' : 'normal',
+        targetRole: 'profesor',
+        actionLabel: 'Recordar respuesta',
+        automation: 'Enviar notificacion interna al profesor y reintentar matching si no responde.',
+        payload: {
+          requestId,
+          teacherUid: waitingMatches[0]?.teacherUid || waitingMatches[0]?.profesor_id || best?.teacherUid || '',
+          waitingMatches: waitingMatches.length,
+        },
+      }));
+    }
+
+    if (subjectSupply < lowSupplyThreshold) {
+      blockers.push({ type: 'low_subject_supply', detail: `Poca oferta para ${profile.subject || 'la materia'} (${subjectSupply} candidato/s).` });
+      actions.push(actionItem({
+        id: 'supply_gap',
+        type: 'supply_gap',
+        title: 'Detectar falta de oferta',
+        body: `Hay poca oferta para ${profile.subject || 'esta materia'}. Conviene activar profesores compatibles o aceptar online.`,
+        priority: 'high',
+        targetRole: 'admin',
+        actionLabel: 'Cubrir oferta',
+        automation: 'Crear tarea de oferta y dejar alerta operacional.',
+        payload: { requestId, subject: profile.subject, subjectSupply },
+      }));
+    }
+  }
+
+  if (ageHours !== null && ageHours >= staleRequestHours) {
+    blockers.push({ type: 'family_waiting', detail: `La familia lleva ${Math.round(ageHours)}h esperando profesor.` });
+    actions.push(actionItem({
+      id: 'stale_followup',
+      type: 'stale_followup',
+      title: 'Resolver solicitud atascada',
+      body: `La solicitud lleva ${Math.round(ageHours)}h sin profesor asignado.`,
+      priority: ageHours >= staleRequestHours * 2 ? 'critical' : 'high',
+      targetRole: 'admin',
+      actionLabel: 'Resolver hoy',
+      automation: 'Notificar al admin, crear tarea y reintentar matching.',
+      payload: { requestId, ageHours: Math.round(ageHours) },
+    }));
+  }
+
+  const uniqueActions = [...new Map(actions.map((item) => [item.id, item])).values()];
+  const priority = highestPriority(uniqueActions);
+  const automationJobs = uniqueActions
+    .filter((item) => ['retry_matching', 'stale_followup'].includes(item.type))
+    .map((item, index) => ({
+      type: 'matching.request',
+      priority: item.priority,
+      runAfterMinutes: item.type === 'stale_followup' ? 15 : 60 + index * 30,
+      idempotencyKey: `active_matching_${requestId}_${item.type}`,
+      payload: {
+        requestId,
+        force: item.type !== 'stale_followup',
+        reason: item.type,
+      },
+    }));
+  const status = !uniqueActions.length
+    ? 'on_track'
+    : blockers.some((item) => item.type === 'no_candidates')
+      ? 'blocked_no_candidates'
+      : blockers.some((item) => item.type === 'missing_request_data')
+        ? 'needs_family_data'
+        : priorityRank(priority) >= 75
+          ? 'needs_intervention'
+          : 'ready_with_recommendation';
+  const summary = status === 'on_track'
+    ? 'La solicitud tiene matching en marcha sin bloqueos relevantes.'
+    : `${uniqueActions[0]?.title || 'Matching activo'}: ${uniqueActions[0]?.body || 'Hay acciones recomendadas para avanzar.'}`;
+  const publicSummary = status === 'needs_family_data'
+    ? 'Necesitamos algun dato mas para recomendar profesor con seguridad.'
+    : status === 'blocked_no_candidates'
+      ? 'Estamos ampliando la busqueda para encontrar profesor adecuado.'
+      : status === 'needs_intervention'
+        ? 'Estamos revisando opciones para acelerar la asignacion.'
+        : best
+          ? 'Tenemos candidatos y estamos validando el mejor encaje.'
+          : 'Estamos revisando alternativas para encontrar profesor.';
+
+  return {
+    version: ACTIVE_MATCHING_VERSION,
+    status,
+    priority,
+    priorityRank: priorityRank(priority),
+    requestId,
+    ageHours: ageHours === null ? null : round(ageHours, 1),
+    summary,
+    publicSummary,
+    actions: uniqueActions,
+    blockers: [...new Map(blockers.map((item) => [item.type, item])).values()],
+    diagnostics,
+    automationJobs,
+    recommendedTeacherUid: best?.teacherUid || '',
+    recommendedTeacherName: best?.teacherName || '',
+    recommendedScore: Number(best?.score || 0),
+    assignableCount: assignable.length,
+    candidatesCount: matches.length,
+    fingerprint: stableHash({
+      requestId,
+      status,
+      priority,
+      blockers: blockers.map((item) => item.type).sort(),
+      actions: uniqueActions.map((item) => item.type).sort(),
+      teacherUid: best?.teacherUid || '',
+      scoreBucket: Math.floor(Number(best?.score || 0) / 10),
+    }),
   };
 }
 

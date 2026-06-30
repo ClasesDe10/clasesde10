@@ -24,8 +24,12 @@ async (page) => {
       aiMatchCards: await page.locator('[data-ai-match="teacher"]').count().catch(() => 0),
       disabledAiMatchButtons: await page.locator('[data-ai-match="teacher"] button[disabled]').count().catch(() => 0),
       hasAiScoring: /IA|\d+%|compatibilidad|Perfil/i.test(modalText),
+      hasActiveMatchingPlan: /Matching activo/i.test(modalText),
       recommendationText: modalText.replace(/\s+/g, ' ').trim().slice(0, 220),
     };
+    if (!modal.hasActiveMatchingPlan) {
+      throw new Error(`No aparece el bloque de Matching activo en el modal: ${modal.recommendationText}`);
+    }
   }
 
   return {

@@ -27,6 +27,7 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   REQUEST_CREATED: 'request_created',
   MATCHING_READY: 'matching_ready',
   MATCHING_NO_MATCH: 'matching_no_match',
+  MATCHING_ACTIVE_INTERVENTION: 'matching_active_intervention',
   ASSIGNMENT_CREATED: 'assignment_created',
   VERIFICATION_PENDING: 'verification_pending',
   DOCUMENT_REVIEW_PENDING: 'document_review_pending',
@@ -119,6 +120,12 @@ export const NOTIFICATION_EVENT_DEFINITIONS = Object.freeze({
   },
   [NOTIFICATION_EVENTS.MATCHING_NO_MATCH]: {
     label: 'Sin match',
+    category: 'matching',
+    priority: 'high',
+    channels: ['internal', 'browser', 'push'],
+  },
+  [NOTIFICATION_EVENTS.MATCHING_ACTIVE_INTERVENTION]: {
+    label: 'Matching activo',
     category: 'matching',
     priority: 'high',
     channels: ['internal', 'browser', 'push'],

@@ -2,7 +2,9 @@
 import assert from 'node:assert/strict';
 import {
   AI_FEATURES_VERSION,
+  ACTIVE_MATCHING_VERSION,
   MATCHING_VERSION,
+  buildActiveMatchingPlan,
   buildFamilyRequestBrief,
   buildMatchingAiPrompt,
   buildMatchingDecisionSupport,
@@ -296,6 +298,28 @@ assert.equal(decisionSupport.version, MATCHING_VERSION);
 assert.equal(decisionSupport.quality, 'listo_para_asignar');
 assert.ok(decisionSupport.confidenceScore >= 80);
 assert.equal(decisionSupport.topTeacherUid, 'teacher_structured_fit');
+
+const blockedActivePlan = buildActiveMatchingPlan({
+  id: 'req_blocked',
+  materia: 'Latin',
+  nivel: 'Bachillerato',
+  modalidad: 'presencial',
+  created_at: new Date(Date.now() - 16 * 60 * 60 * 1000).toISOString(),
+  status: 'nueva',
+}, [], {}, { staleRequestHours: 12, nowIso: new Date().toISOString() });
+assert.equal(blockedActivePlan.version, ACTIVE_MATCHING_VERSION);
+assert.equal(blockedActivePlan.status, 'blocked_no_candidates');
+assert.ok(blockedActivePlan.actions.some((item) => item.type === 'retry_matching'));
+assert.ok(blockedActivePlan.automationJobs.length > 0);
+
+const readyActivePlan = buildActiveMatchingPlan(
+  { ...structuredRequest, id: 'req_ready', status: 'nueva', created_at: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString() },
+  structuredRanking,
+  {},
+  { staleRequestHours: 12, minReadyScore: 70, nowIso: new Date().toISOString() },
+);
+assert.ok(['needs_intervention', 'ready_with_recommendation'].includes(readyActivePlan.status));
+assert.ok(readyActivePlan.actions.some((item) => item.type === 'assign_recommended_teacher'));
 
 const profileAssistant = buildTeacherProfileRecommendations(completeTeacher);
 assert.equal(profileAssistant.version, AI_FEATURES_VERSION);

@@ -1228,7 +1228,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260630-matching-v4';
+import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260630-matching-active-v1';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -4662,7 +4662,13 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
         includeZeroScore,
       });
     const decisionSupport = buildMatchingDecisionSupport(requestForMatching, aiMatches);
-    renderAsignarMatches(aiMatches, null, decisionSupport);
+    const activeMatchingPlan = buildActiveMatchingPlan(requestForMatching, aiMatches, matchingContext, {
+      teacherResponseSlaHours: Number(getConfigValue(platformConfig, 'matching.teacherResponseSlaHours', 8)),
+      staleRequestHours: Number(getConfigValue(platformConfig, 'matching.staleRequestHours', 12)),
+      lowSupplyThreshold: Number(getConfigValue(platformConfig, 'matching.lowSupplyThreshold', 2)),
+      minReadyScore: Number(getConfigValue(platformConfig, 'matching.minReadyScore', 70)),
+    });
+    renderAsignarMatches(aiMatches, null, decisionSupport, activeMatchingPlan);
     openModal('modal-asignar');
     return;
   } catch (error) {
@@ -4704,7 +4710,36 @@ function renderMatchingDecisionSupport(decision = {}) {
     </div>`;
 }
 
-function renderAsignarMatches(matches, error, decisionSupport = null) {
+function renderActiveMatchingPlan(plan = {}) {
+  if (!plan?.status) return '';
+  const needsHelp = !['on_track', 'assigned', 'closed'].includes(plan.status);
+  const tone = plan.priority === 'critical' ? 'danger'
+    : plan.priority === 'high' ? 'warning'
+      : needsHelp ? 'info' : 'success';
+  const actions = (plan.actions || []).slice(0, 4).map((item) => `
+    <div style="border:1px solid rgba(15,31,61,.12);border-radius:8px;padding:8px;background:#fff">
+      <div style="display:flex;gap:6px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap">
+        <strong>${sanitize(item.title)}</strong>
+        <span class="badge badge-gray">${sanitize(item.targetRole || 'admin')}</span>
+      </div>
+      <div style="margin-top:4px;color:var(--gray-mid);font-size:.84rem">${sanitize(item.body)}</div>
+      ${item.automation ? `<div style="margin-top:4px;font-size:.76rem;color:var(--navy)">${sanitize(item.automation)}</div>` : ''}
+    </div>
+  `).join('');
+  const blockers = (plan.blockers || []).slice(0, 3).map((item) => `<li>${sanitize(item.detail || item.type)}</li>`).join('');
+  return `
+    <div class="alert alert-${tone}" style="margin:0 0 10px">
+      <span class="alert-icon">${tone === 'success' ? '✓' : '!'}</span>
+      <div class="alert-body">
+        <div class="alert-title">Matching activo · ${sanitize(plan.status)} · ${sanitize(plan.priority)}</div>
+        <div>${sanitize(plan.summary || '')}</div>
+        ${blockers ? `<ul style="margin:6px 0 0 16px;padding:0">${blockers}</ul>` : ''}
+        ${actions ? `<div style="display:grid;gap:8px;margin-top:10px">${actions}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderAsignarMatches(matches, error, decisionSupport = null, activeMatchingPlan = null) {
   const box = document.getElementById('asignar-match-recomendaciones');
   if (!box) return;
   if (error) {
@@ -4712,10 +4747,10 @@ function renderAsignarMatches(matches, error, decisionSupport = null) {
     return;
   }
   if (!matches.length) {
-    box.innerHTML = `${renderMatchingDecisionSupport(decisionSupport)}No hay datos suficientes para calcular recomendaciones. Puedes asignar manualmente solo profesores activos/verificados con perfil completo.`;
+    box.innerHTML = `${renderMatchingDecisionSupport(decisionSupport)}${renderActiveMatchingPlan(activeMatchingPlan)}No hay datos suficientes para calcular recomendaciones. Puedes asignar manualmente solo profesores activos/verificados con perfil completo.`;
     return;
   }
-  box.innerHTML = renderMatchingDecisionSupport(decisionSupport) + matches.map((m) => {
+  box.innerHTML = renderMatchingDecisionSupport(decisionSupport) + renderActiveMatchingPlan(activeMatchingPlan) + matches.map((m) => {
     const teacherId = String(m.profesor_id || m.teacherUid || '');
     const profesor = profesoresCache.get(teacherId);
     const profileQuality = profesor ? evaluateTeacherProfile(profesor) : null;

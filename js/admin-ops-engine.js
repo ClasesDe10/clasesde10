@@ -189,24 +189,27 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     const age = hoursSince(first(request.createdAt, request.created_at, request.fecha), now);
     const requestId = clean(first(request.id, request.requestId, request.solicitud_id));
     const matches = matchesByRequest.get(requestId) || [];
+    const activePlan = request.activeMatchingPlan || {};
+    const activeAction = Array.isArray(activePlan.actions) ? activePlan.actions[0] : null;
+    const activePriority = Number(activePlan.priorityRank || 0);
     if (!assignedTeacher && (!status || OPEN_STATUSES.has(status) || ['nueva', 'nuevo'].includes(status))) {
       items.push(makeItem({
         id: itemId('request.assign', request),
         type: 'matching',
-        title: age >= 24 ? 'Solicitud sin profesor desde ayer' : 'Nueva solicitud para asignar',
-        detail: `${clean(first(request.subject, request.materia, 'Materia'))} - ${clean(first(request.level, request.nivel, 'nivel sin indicar'))}. ${matches.length ? `${matches.length} candidato(s) calculados.` : 'Sin candidatos guardados todavia.'}`,
+        title: activeAction?.title || (age >= 24 ? 'Solicitud sin profesor desde ayer' : 'Nueva solicitud para asignar'),
+        detail: activePlan.summary || `${clean(first(request.subject, request.materia, 'Materia'))} - ${clean(first(request.level, request.nivel, 'nivel sin indicar'))}. ${matches.length ? `${matches.length} candidato(s) calculados.` : 'Sin candidatos guardados todavia.'}`,
         section: 'solicitudes',
-        priority: age >= 24 ? 96 : 86,
-        tone: age >= 24 ? 'danger' : 'warning',
+        priority: activePriority || (age >= 24 ? 96 : 86),
+        tone: activePlan.priority === 'critical' ? 'danger' : activePlan.priority === 'high' ? 'warning' : age >= 24 ? 'danger' : 'warning',
         entityType: 'solicitud',
         entityId: requestId,
         entityName: clean(first(request.familyName, request.familia_nombre, request.familias?.usuarios?.nombre, 'Familia')),
-        actionLabel: 'Asignar profesor',
-        automation: matches.length ? 'Usar ranking de matching' : 'Lanzar matching automatico',
-        minutesSaved: matches.length ? 12 : 18,
+        actionLabel: activeAction?.actionLabel || 'Asignar profesor',
+        automation: activeAction?.automation || (matches.length ? 'Usar ranking de matching' : 'Lanzar matching automatico'),
+        minutesSaved: activeAction ? 18 : matches.length ? 12 : 18,
         createdAt: first(request.createdAt, request.created_at),
         source: 'solicitudes',
-        metadata: { matches: matches.length, ageHours: Math.round(age) },
+        metadata: { matches: matches.length, ageHours: Math.round(age), activeMatchingStatus: activePlan.status || '' },
       }));
     }
   }
