@@ -2538,6 +2538,49 @@ tbody tr:hover { background: rgba(0,0,0,0.02); }
 .badge-gold    { background: rgba(232,160,48,.15); color: #92620a; }
 .badge-gray    { background: var(--gray-soft); color: var(--gray-mid); }
 
+.payment-ai-review {
+  display: grid;
+  gap: 2px;
+  margin-top: 7px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 31, 61, .1);
+  background: #fff;
+  max-width: 260px;
+}
+
+.payment-ai-review span {
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.payment-ai-review small {
+  color: var(--gray-mid);
+  line-height: 1.35;
+}
+
+.payment-ai-review-success {
+  border-color: rgba(22, 163, 74, .25);
+  background: rgba(22, 163, 74, .06);
+}
+
+.payment-ai-review-warning {
+  border-color: rgba(232, 160, 48, .35);
+  background: rgba(232, 160, 48, .08);
+}
+
+.payment-ai-review-danger {
+  border-color: rgba(220, 38, 38, .22);
+  background: rgba(220, 38, 38, .06);
+}
+
+.payment-ai-review-info {
+  border-color: rgba(37, 99, 235, .22);
+  background: rgba(37, 99, 235, .06);
+}
+
 .trust-panel {
   border: 1px solid rgba(15,31,61,.08);
   background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(248,250,252,.96));

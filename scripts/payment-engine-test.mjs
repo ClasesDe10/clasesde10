@@ -5,6 +5,7 @@ import {
   buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentPayload,
   buildPaymentScheduleIndex,
+  buildPaymentAiReviewPatch,
   buildWeeklyPaymentSchedulePayload,
   classFamilyPaymentState,
   buildGatewayPaymentUpdate,
@@ -19,6 +20,8 @@ import {
   paymentScheduleForClass,
   paymentScheduleLabel,
   paymentStatusForBadge,
+  reviewPaymentWithAssistant,
+  shouldAutoValidatePaymentReview,
   economicCalendarLegend,
   weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
@@ -130,6 +133,70 @@ const confirmationPayload = buildFamilyClassPaymentConfirmationPayload(confirmat
 assert(confirmationPayload.classIds.length === 2, 'Family confirmation payload must keep explicit class ids.');
 assert(confirmationPayload.reconciliationStatus === 'matched', 'Family confirmation payload must be reconciled from creation.');
 assert(confirmationPayload.verificationSource === 'family_dashboard_confirmation', 'Family confirmation payload must expose its source.');
+const automaticReview = reviewPaymentWithAssistant({
+  id: 'pay_auto',
+  paymentType: 'family_payment',
+  familyUid: 'family_1',
+  estado: 'validado',
+  status: 'validado',
+  gateway: 'bank_import',
+  verified: true,
+  monto: 50,
+  classIds: ['c1', 'c2'],
+  referencia: 'BANK-1',
+}, classes, []);
+assert(automaticReview.recommendation === 'ignore', 'Already validated payments must not be processed twice.');
+const pendingGatewayReview = reviewPaymentWithAssistant({
+  id: 'pay_gateway',
+  paymentType: 'family_payment',
+  familyUid: 'family_1',
+  estado: 'procesando',
+  status: 'validado',
+  gateway: 'bank_import',
+  verified: true,
+  monto: 50,
+  classIds: ['c1', 'c2'],
+  referencia: 'BANK-2',
+}, classes, []);
+assert(pendingGatewayReview.recommendation === 'auto_validate', 'Verified bank/gateway payments with exact class match must be auto-validatable.');
+assert(shouldAutoValidatePaymentReview(pendingGatewayReview, {
+  gateway: 'bank_import',
+  estado: 'validado',
+  status: 'validado',
+  verified: true,
+}), 'High-confidence verified gateway reviews must be eligible for automation.');
+const manualReview = reviewPaymentWithAssistant({
+  id: 'pay_manual',
+  paymentType: 'family_payment',
+  familyUid: 'family_1',
+  estado: 'pendiente',
+  gateway: 'manual',
+  monto: 50,
+  classIds: ['c1', 'c2'],
+  referencia: 'BIZUM-1',
+}, classes, []);
+assert(manualReview.recommendation === 'admin_review', 'Manual Bizum proofs must remain assisted admin reviews.');
+assert(!shouldAutoValidatePaymentReview(manualReview, { gateway: 'manual', estado: 'pendiente' }), 'Manual proofs must not auto-validate.');
+const duplicateReview = reviewPaymentWithAssistant({
+  id: 'pay_duplicate_new',
+  paymentType: 'family_payment',
+  familyUid: 'family_1',
+  estado: 'pendiente',
+  gateway: 'manual',
+  monto: 20,
+  classIds: ['c1'],
+  referencia: 'DUP-1',
+}, classes, [{
+  id: 'pay_duplicate_old',
+  paymentType: 'family_payment',
+  familyUid: 'family_1',
+  estado: 'pendiente',
+  monto: 20,
+  classIds: ['c1'],
+  referencia: 'DUP-2',
+}]);
+assert(duplicateReview.duplicatePaymentIds.includes('pay_duplicate_old'), 'Payment assistant must detect overlapping class duplicates.');
+assert(buildPaymentAiReviewPatch(manualReview, 'admin_1').requiresAdminReview === true, 'AI review patch must flag manual review payments.');
 const scheduledDueAt = weeklyPaymentDueAtForClass(
   { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
   weeklySchedule,

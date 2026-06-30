@@ -1244,6 +1244,7 @@ import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calen
 import {
   PAID_PAYMENT_STATUSES,
   applyClassPaymentContext,
+  buildPaymentAiReviewPatch,
   buildPaymentScheduleIndex,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
@@ -1259,7 +1260,9 @@ import {
   paymentAmount,
   paymentScheduleForClass,
   paymentStatusForBadge,
-} from '../../js/payment-engine.js?v=20260629-overdue-admin';
+  reviewPaymentWithAssistant,
+  shouldAutoValidatePaymentReview,
+} from '../../js/payment-engine.js?v=20260630-payment-ai';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -2131,9 +2134,11 @@ function classMarginPct(clase) {
 }
 
 let adminPaymentContextCache = { expiresAt: 0, payments: [], scheduleIndex: new Map() };
+let adminPaymentReviewContextCache = { expiresAt: 0, payments: [], classes: [] };
 
 function invalidateAdminPaymentContext() {
   adminPaymentContextCache = { expiresAt: 0, payments: [], scheduleIndex: new Map() };
+  adminPaymentReviewContextCache = { expiresAt: 0, payments: [], classes: [] };
 }
 
 async function loadAdminPaymentContext(options = {}) {
@@ -2152,6 +2157,23 @@ async function loadAdminPaymentContext(options = {}) {
     scheduleIndex: buildPaymentScheduleIndex(schedules),
   };
   return adminPaymentContextCache;
+}
+
+async function loadAdminPaymentReviewContext(options = {}) {
+  if (!options.force && adminPaymentReviewContextCache.expiresAt > Date.now()) return adminPaymentReviewContextCache;
+  const [paymentContext, classesResult] = await Promise.all([
+    loadAdminPaymentContext(options),
+    db.from('clases')
+      .select('*')
+      .order('fecha', { ascending: false })
+      .range(0, adminReadLimit('clases') - 1),
+  ]);
+  adminPaymentReviewContextCache = {
+    expiresAt: Date.now() + 20000,
+    payments: paymentContext.payments || [],
+    classes: classesResult.data || [],
+  };
+  return adminPaymentReviewContextCache;
 }
 
 function paymentScheduleForAdminClass(clase = {}) {
@@ -4903,7 +4925,132 @@ function nombreOrigenPago(pago) {
   return familia || pago.familia_nombre || 'Familia';
 }
 
-function accionesPago(pago, docButton) {
+function paymentAiTone(review = {}) {
+  if (review.recommendation === 'auto_validate') return 'success';
+  if (Array.isArray(review.risks) && review.risks.length) return 'danger';
+  if (Number(review.confidence || 0) >= 0.75) return 'warning';
+  return 'info';
+}
+
+function renderPaymentAiReview(review = {}) {
+  if (!review || !review.summary) return '';
+  const confidence = Math.round(Number(review.confidence || 0) * 100);
+  const tone = paymentAiTone(review);
+  const label = review.recommendation === 'auto_validate'
+    ? 'IA auto'
+    : (review.recommendation === 'ignore' ? 'IA ok' : 'IA revision');
+  return `
+    <div class="payment-ai-review payment-ai-review-${tone}">
+      <span>${sanitize(label)} · ${confidence}%</span>
+      <small>${sanitize(review.summary)}</small>
+    </div>
+  `;
+}
+
+function paymentAiNotificationBody(payment = {}, review = {}) {
+  const amount = formatEuros(paymentAmount(payment));
+  const source = payment.gateway || payment.provider || payment.metodo || 'manual';
+  const risks = Array.isArray(review.risks) && review.risks.length
+    ? ` Motivo principal: ${review.risks[0]}`
+    : '';
+  const duplicates = Array.isArray(review.duplicatePaymentIds) && review.duplicatePaymentIds.length
+    ? ` Posibles duplicados: ${review.duplicatePaymentIds.join(', ')}.`
+    : '';
+  return `Pago de ${nombreOrigenPago(payment)} por ${amount} (${source}) necesita revision. Confianza IA: ${Math.round(Number(review.confidence || 0) * 100)}%. ${review.summary || ''}${risks}${duplicates}`;
+}
+
+async function notifyPaymentAiReview(payment = {}, review = {}) {
+  if (review.recommendation !== 'admin_review') return false;
+  const adminUid = cleanAdminNotificationText(usuario.uid || usuario.id, 180);
+  const paymentId = cleanAdminNotificationText(payment.id, 180);
+  const fingerprint = cleanAdminNotificationText(review.fingerprint, 120);
+  if (!adminUid || !paymentId || !fingerprint) return false;
+  const id = ['payment_ai_review', paymentId, fingerprint.slice(0, 40), adminUid]
+    .map((part) => cleanAdminNotificationText(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__')
+    .slice(0, 900);
+  const ref = firestoreDoc(firebaseDb, 'notificaciones', id);
+  const existing = await getDoc(ref).catch(() => null);
+  if (existing?.exists()) return false;
+  const nowIso = new Date().toISOString();
+  await setDoc(ref, {
+    ...buildNotificationDocument({
+      userUid: adminUid,
+      role: 'admin',
+      title: 'Revision inteligente de pago',
+      body: paymentAiNotificationBody(payment, review),
+      type: NOTIFICATION_EVENTS.FAMILY_PAYMENT_PENDING,
+      priority: Array.isArray(review.risks) && review.risks.length ? 'high' : 'normal',
+      category: 'pagos',
+      source: 'system',
+      payload: {
+        paymentId,
+        pago_id: paymentId,
+        aiReviewFingerprint: review.fingerprint,
+        aiConfidence: review.confidence,
+        recommendation: review.recommendation,
+        url: '/pages/dashboard/admin.html#pagos',
+      },
+    }),
+    idempotencyKey: id,
+    notificationKey: id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    created_at: nowIso,
+    updated_at: nowIso,
+  }, { merge: false });
+  return true;
+}
+
+async function persistPaymentAiReview(payment = {}, review = {}) {
+  if (!payment?.id || !review?.fingerprint || payment.aiReviewFingerprint === review.fingerprint) return false;
+  const patch = buildPaymentAiReviewPatch(review, usuario.uid || usuario.id);
+  const { error } = await db.from('pagos').update(patch).eq('id', payment.id);
+  if (error) throw error;
+  await notifyPaymentAiReview(payment, review);
+  return true;
+}
+
+async function applyPaymentAiAutomation(payments = [], context = {}) {
+  const reviews = new Map();
+  let automated = 0;
+  let queued = 0;
+  const openPayments = (payments || []).filter((payment) => {
+    const status = statusPago(payment);
+    return isFamilyPayment(payment) && ['pendiente', 'vencido', 'procesando', 'requiere_accion'].includes(status);
+  });
+
+  for (const payment of openPayments) {
+    const review = reviewPaymentWithAssistant(payment, context.classes || [], context.payments || []);
+    reviews.set(String(payment.id), review);
+    try {
+      if (shouldAutoValidatePaymentReview(review, payment)) {
+        await window.validarPago(payment.id, 'validado', {
+          source: 'ai_auto_reconciliation',
+          automationReview: review,
+          silent: true,
+          refresh: false,
+        });
+        automated += 1;
+      } else if (review.recommendation === 'admin_review') {
+        const persisted = await persistPaymentAiReview(payment, review);
+        if (persisted) queued += 1;
+      }
+    } catch (error) {
+      console.warn('Payment AI automation failed', error);
+    }
+  }
+
+  if (automated || queued) {
+    invalidateAdminPaymentContext();
+    if (automated) showToast('Pagos automatizados', `${automated} pago(s) validados automaticamente por IA segura.`, 'success');
+    if (queued) showToast('Revision de pagos', `${queued} pago(s) priorizados para revision administrativa.`, 'info');
+  }
+  return { reviews, automated, queued };
+}
+
+function accionesPago(pago, docButton, review = null) {
   const estado = statusPago(pago);
   if (esPagoProfesor(pago)) {
     return estado === 'solicitado' ? `
@@ -4928,7 +5075,10 @@ async function cargarPagos() {
   if (estado && estado !== 'vencido') q = q.eq('estado', estado);
   q = q.order('created_at',{ascending:false}).range(PAG_PAGO.offset(), PAG_PAGO.offset()+19);
 
-  const { data, count, error } = await q;
+  const [{ data, count, error }, reviewContext] = await Promise.all([
+    q,
+    loadAdminPaymentReviewContext(),
+  ]);
   const pagosEstado = estado === 'vencido' ? (data || []).filter((p) => isPaymentOverdue(p)) : (data || []);
   const pagos = busq
     ? pagosEstado.filter((p) => [
@@ -4953,7 +5103,15 @@ async function cargarPagos() {
   }
   if (!pagos.length) { tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin pagos.</td></tr>'; return; }
 
+  const automationResult = await applyPaymentAiAutomation(pagos, reviewContext);
+  if (automationResult.automated) {
+    await cargarPagos();
+    return;
+  }
+  const aiReviews = automationResult.reviews || new Map();
+
   tbody.innerHTML = pagos.map(p => {
+    const review = aiReviews.get(String(p.id)) || reviewPaymentWithAssistant(p, reviewContext.classes || [], reviewContext.payments || []);
     const doc = Array.isArray(p.documentos) ? p.documentos[0] : p.documentos;
     const docButton = doc?.storage_path ? `
       <button class="btn btn-ghost btn-sm"
@@ -4973,8 +5131,8 @@ async function cargarPagos() {
     <td><strong>${formatEuros(paymentAmount(p))}</strong></td>
     <td>${sanitize(p.metodo)}</td>
     <td style="font-family:monospace;font-size:.8rem">${sanitize(referencia)}</td>
-    <td>${badgeEstado(paymentStatusForBadge(p))}</td>
-    <td>${accionesPago(p, docButton)}</td>
+    <td>${badgeEstado(paymentStatusForBadge(p))}${renderPaymentAiReview(review)}</td>
+    <td>${accionesPago(p, docButton, review)}</td>
   </tr>`;
   }).join('');
 }
@@ -5043,9 +5201,9 @@ async function refreshPaymentRelatedAdminViews(options = {}) {
   await Promise.allSettled(tasks);
 }
 
-window.validarPago = async (id, estado) => {
+window.validarPago = async (id, estado, options = {}) => {
   const { data: pagoActual, error: pagoError } = await db.from('pagos').select('*').eq('id', id).single();
-  if (pagoError) { showToast('Error', pagoError.message, 'error'); return; }
+  if (pagoError) { if (!options.silent) showToast('Error', pagoError.message, 'error'); return; }
 
   const fechaValidacion = new Date().toISOString();
   let linkedClassIds = Array.isArray(pagoActual.classIds) ? pagoActual.classIds.map(String).filter(Boolean) : [];
@@ -5064,22 +5222,26 @@ window.validarPago = async (id, estado) => {
   }
 
   const payload = {
-    ...buildPaymentValidationPayload({ ...pagoActual, id }, estado, usuario.uid || usuario.id, { nowIso: fechaValidacion }),
+    ...buildPaymentValidationPayload({ ...pagoActual, id }, estado, usuario.uid || usuario.id, {
+      nowIso: fechaValidacion,
+      source: options.source,
+    }),
+    ...(options.automationReview ? buildPaymentAiReviewPatch(options.automationReview, usuario.uid || usuario.id, { nowIso: fechaValidacion }) : {}),
     classIds: linkedClassIds,
     classCount: linkedClassIds.length,
     reconciliationStatus,
     reconciliationReason,
   };
   const { error } = await db.from('pagos').update(payload).eq('id', id);
-  if (error) { showToast('Error', error.message, 'error'); return; }
+  if (error) { if (!options.silent) showToast('Error', error.message, 'error'); return; }
 
   if (esPagoProfesor(pagoActual) && estado === 'pagado' && Array.isArray(pagoActual.classIds)) {
     const updates = pagoActual.classIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id }, classId, { nowIso: fechaValidacion })).eq('id', classId));
     const results = await Promise.all(updates);
     const failed = results.find((result) => result.error);
     if (failed) {
-      showToast('Pago actualizado', 'El Bizum se marco como pagado, pero alguna clase no pudo actualizarse.', 'warning');
-      await refreshPaymentRelatedAdminViews();
+      if (!options.silent) showToast('Pago actualizado', 'El Bizum se marco como pagado, pero alguna clase no pudo actualizarse.', 'warning');
+      if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
       return;
     }
   }
@@ -5089,14 +5251,34 @@ window.validarPago = async (id, estado) => {
     const results = await Promise.all(updates);
     const failed = results.find((result) => result.error);
     if (failed) {
-      showToast('Pago actualizado', 'El pago se valido, pero alguna clase no pudo marcarse como cobrada.', 'warning');
-      await refreshPaymentRelatedAdminViews();
+      if (!options.silent) showToast('Pago actualizado', 'El pago se valido, pero alguna clase no pudo marcarse como cobrada.', 'warning');
+      if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
       return;
     }
   }
 
-  showToast('Pago ' + estado, '', 'success');
-  await refreshPaymentRelatedAdminViews();
+  await recordAdminAudit(options.automationReview ? 'payment.ai_auto_validated' : 'payment.status_updated', {
+    module: 'payments',
+    entityType: 'pagos',
+    entityId: id,
+    description: options.automationReview
+      ? `Pago validado automaticamente por IA con confianza ${Math.round(Number(options.automationReview.confidence || 0) * 100)}%.`
+      : `Pago actualizado a ${estado}.`,
+    actor: {
+      uid: usuario.uid || usuario.id,
+      role: 'admin',
+      source: options.automationReview ? 'payment_ai_assistant' : 'admin_panel',
+    },
+    metadata: {
+      status: estado,
+      aiReviewFingerprint: options.automationReview?.fingerprint || '',
+      aiConfidence: options.automationReview?.confidence || null,
+      linkedClassIds,
+    },
+  }).catch(() => null);
+
+  if (!options.silent) showToast('Pago ' + estado, '', 'success');
+  if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
 };
 
 // ── DOCUMENTOS ───────────────────────────────────────────────────

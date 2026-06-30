@@ -858,6 +858,349 @@ export function matchPaymentToClasses(payment = {}, classes = []) {
   return { status: 'unmatched', classIds: [], confidence: 0, reason: 'no_exact_amount_match' };
 }
 
+export const PAYMENT_AI_REVIEW_VERSION = 'payment_ai_review_v1';
+
+function clampPaymentConfidence(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(0.99, Math.round(number * 100) / 100));
+}
+
+function paymentId(payment = {}) {
+  return cleanPaymentText(payment.id || payment.paymentId || payment.uid, 180);
+}
+
+function paymentFamilyKey(payment = {}) {
+  return cleanPaymentText(payment.familyUid || payment.familia_id || payment.usuario_id || payment.userUid, 180).toLowerCase();
+}
+
+function paymentClassIds(payment = {}) {
+  return Array.isArray(payment.classIds) ? payment.classIds.map(String).filter(Boolean) : [];
+}
+
+function classByIds(classes = [], classIds = []) {
+  const wanted = new Set((classIds || []).map(String));
+  return (classes || []).filter((classData) => wanted.has(String(classData.id || classData.classId || '')));
+}
+
+function hasPaymentProof(payment = {}) {
+  return Boolean(
+    payment.documentId
+    || payment.documento_id
+    || payment.storage_path
+    || payment.proofUrl
+    || payment.receiptUrl
+    || paymentReference(payment),
+  );
+}
+
+function paymentDuplicateCandidates(payment = {}, payments = []) {
+  const id = paymentId(payment);
+  const currentFamily = paymentFamilyKey(payment);
+  const currentReference = paymentReference(payment).toLowerCase();
+  const currentIdempotency = cleanPaymentText(payment.idempotencyKey, 240).toLowerCase();
+  const currentAmount = paymentAmount(payment);
+  const currentClasses = new Set(paymentClassIds(payment));
+
+  return (payments || []).filter((candidate) => {
+    const candidateId = paymentId(candidate);
+    if (!candidate || !candidateId || candidateId === id) return false;
+    if (!isFamilyPayment(candidate)) return false;
+    const status = normalizePaymentStatus(candidate.estado || candidate.status);
+    if (['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status)) return false;
+    const candidateFamily = paymentFamilyKey(candidate);
+    if (currentFamily && candidateFamily && currentFamily !== candidateFamily) return false;
+
+    const candidateIdempotency = cleanPaymentText(candidate.idempotencyKey, 240).toLowerCase();
+    if (currentIdempotency && candidateIdempotency && currentIdempotency === candidateIdempotency) return true;
+
+    const candidateReference = paymentReference(candidate).toLowerCase();
+    if (currentReference && candidateReference && currentReference === candidateReference && paymentAmount(candidate) === currentAmount) return true;
+
+    const candidateClasses = paymentClassIds(candidate);
+    return currentClasses.size > 0 && candidateClasses.some((classId) => currentClasses.has(String(classId)));
+  });
+}
+
+function paymentReviewFingerprint(payment = {}, reviewBits = {}) {
+  return [
+    PAYMENT_AI_REVIEW_VERSION,
+    paymentId(payment),
+    normalizePaymentStatus(payment.estado || payment.status),
+    paymentAmount(payment).toFixed(2),
+    paymentReference(payment).toLowerCase(),
+    paymentClassIds(payment).sort().join(','),
+    (reviewBits.matchedClassIds || []).map(String).sort().join(','),
+    (reviewBits.duplicatePaymentIds || []).map(String).sort().join(','),
+    Number(reviewBits.amountDelta || 0).toFixed(2),
+  ].join('|').slice(0, 900);
+}
+
+function confidenceLabel(confidence) {
+  if (confidence >= 0.9) return 'alta';
+  if (confidence >= 0.65) return 'media';
+  return 'baja';
+}
+
+export function reviewPaymentWithAssistant(payment = {}, classes = [], payments = [], options = {}) {
+  const nowIso = options.nowIso || new Date().toISOString();
+  const status = normalizePaymentStatus(payment.estado || payment.status);
+  const paidAmount = paymentAmount(payment);
+  const familyPayment = isFamilyPayment(payment);
+  const teacherPayout = isTeacherPayout(payment);
+  const automaticGateway = isAutomaticGateway(payment);
+  const verifiedGateway = automaticGateway && isPaymentVerified(payment);
+  const checks = [];
+  const reasons = [];
+  const risks = [];
+
+  function addCheck(id, label, state, detail = '') {
+    checks.push({ id, label, state, detail: cleanPaymentText(detail, 300) });
+  }
+
+  if (teacherPayout) {
+    addCheck('payment_type', 'Tipo de pago', 'manual_review', 'Los Bizum a profesores requieren confirmacion administrativa.');
+    const confidence = status === 'solicitado' ? 0.74 : 0.82;
+    const review = {
+      version: PAYMENT_AI_REVIEW_VERSION,
+      recommendation: PAID_PAYMENT_STATUSES.includes(status) ? 'ignore' : 'admin_review',
+      autoAction: 'none',
+      confidence,
+      confidenceLabel: confidenceLabel(confidence),
+      status: 'teacher_payout_manual',
+      summary: PAID_PAYMENT_STATUSES.includes(status)
+        ? 'Pago a profesor ya marcado como pagado.'
+        : 'Solicitud de Bizum a profesor pendiente de confirmacion por el administrador.',
+      reasons: ['Pago de profesor: se mantiene supervision humana para evitar liquidaciones indebidas.'],
+      risks: PAID_PAYMENT_STATUSES.includes(status) ? [] : ['No existe confirmacion bancaria automatica del Bizum saliente.'],
+      checks,
+      paidAmount,
+      expectedAmount: paidAmount,
+      amountDelta: 0,
+      matchedClassIds: paymentClassIds(payment),
+      duplicatePaymentIds: [],
+      reconciliationStatus: payment.reconciliationStatus || 'manual_payout',
+      reviewedAt: nowIso,
+    };
+    return { ...review, fingerprint: paymentReviewFingerprint(payment, review) };
+  }
+
+  if (!familyPayment) {
+    addCheck('payment_type', 'Tipo de pago', 'warning', 'Tipo de pago no reconocido por el flujo familiar.');
+    const review = {
+      version: PAYMENT_AI_REVIEW_VERSION,
+      recommendation: 'admin_review',
+      autoAction: 'none',
+      confidence: 0.35,
+      confidenceLabel: 'baja',
+      status: 'unknown_payment_type',
+      summary: 'Pago con tipo no reconocido: necesita revision manual.',
+      reasons: ['El sistema no puede asegurar si este pago corresponde a una familia.'],
+      risks: ['Validarlo automaticamente podria asociar dinero al flujo incorrecto.'],
+      checks,
+      paidAmount,
+      expectedAmount: 0,
+      amountDelta: paidAmount,
+      matchedClassIds: [],
+      duplicatePaymentIds: [],
+      reconciliationStatus: 'unknown_type',
+      reviewedAt: nowIso,
+    };
+    return { ...review, fingerprint: paymentReviewFingerprint(payment, review) };
+  }
+
+  if (['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status)) {
+    addCheck('payment_status', 'Estado', 'ignored', `El pago esta ${status}.`);
+    const review = {
+      version: PAYMENT_AI_REVIEW_VERSION,
+      recommendation: 'ignore',
+      autoAction: 'none',
+      confidence: 0.98,
+      confidenceLabel: 'alta',
+      status: 'closed_payment',
+      summary: 'Pago cerrado; no requiere automatizacion.',
+      reasons: [`Estado cerrado: ${status}.`],
+      risks: [],
+      checks,
+      paidAmount,
+      expectedAmount: paidAmount,
+      amountDelta: 0,
+      matchedClassIds: paymentClassIds(payment),
+      duplicatePaymentIds: [],
+      reconciliationStatus: payment.reconciliationStatus || 'closed',
+      reviewedAt: nowIso,
+    };
+    return { ...review, fingerprint: paymentReviewFingerprint(payment, review) };
+  }
+
+  if (PAID_PAYMENT_STATUSES.includes(status)) {
+    addCheck('payment_status', 'Estado', 'ok', 'El pago ya esta validado.');
+    const review = {
+      version: PAYMENT_AI_REVIEW_VERSION,
+      recommendation: 'ignore',
+      autoAction: 'none',
+      confidence: 0.99,
+      confidenceLabel: 'alta',
+      status: 'already_validated',
+      summary: 'Pago ya validado; no se aplica ninguna accion.',
+      reasons: ['El estado actual ya consta como pagado/validado.'],
+      risks: [],
+      checks,
+      paidAmount,
+      expectedAmount: paidAmount,
+      amountDelta: 0,
+      matchedClassIds: paymentClassIds(payment),
+      duplicatePaymentIds: [],
+      reconciliationStatus: payment.reconciliationStatus || 'already_validated',
+      reviewedAt: nowIso,
+    };
+    return { ...review, fingerprint: paymentReviewFingerprint(payment, review) };
+  }
+
+  const familyUid = payment.familyUid || payment.familia_id;
+  const familyClasses = familyUid
+    ? (classes || []).filter((classData) => {
+      const classFamily = cleanPaymentText(classData.familyUid || classData.familia_id || classData.usuario_id, 180);
+      return !classFamily || classFamily === familyUid;
+    })
+    : classes;
+  const match = matchPaymentToClasses(payment, familyClasses);
+  const matchedClassIds = match.classIds || [];
+  const matchedClasses = classByIds(familyClasses, matchedClassIds);
+  const expectedAmount = Math.round(matchedClasses.reduce((sum, classData) => sum + classPaymentAmount(classData), 0) * 100) / 100;
+  const amountDelta = Math.round((paidAmount - expectedAmount) * 100) / 100;
+  const duplicates = paymentDuplicateCandidates(payment, payments);
+  const duplicatePaymentIds = duplicates.map((item) => paymentId(item)).filter(Boolean);
+  const proofPresent = hasPaymentProof(payment);
+
+  addCheck(
+    'classes',
+    'Clases enlazadas',
+    matchedClassIds.length ? 'ok' : 'warning',
+    matchedClassIds.length
+      ? `${matchedClassIds.length} clase(s) reconciliada(s): ${match.reason}.`
+      : 'No se ha encontrado una combinacion exacta de clases pendientes.',
+  );
+  addCheck(
+    'amount',
+    'Importe',
+    expectedAmount > 0 && Math.abs(amountDelta) <= 0.01 ? 'ok' : 'warning',
+    expectedAmount > 0
+      ? `Pagado ${paidAmount.toFixed(2)} EUR; esperado ${expectedAmount.toFixed(2)} EUR.`
+      : `Pagado ${paidAmount.toFixed(2)} EUR; no hay importe esperado calculable.`,
+  );
+  addCheck(
+    'duplicate',
+    'Duplicados',
+    duplicatePaymentIds.length ? 'danger' : 'ok',
+    duplicatePaymentIds.length ? `Posibles duplicados: ${duplicatePaymentIds.join(', ')}.` : 'No se detectan pagos solapados.',
+  );
+  addCheck(
+    'source',
+    'Origen',
+    verifiedGateway ? 'ok' : (automaticGateway ? 'warning' : 'manual_review'),
+    verifiedGateway
+      ? `Pasarela ${payment.gateway || payment.provider} verificada.`
+      : (automaticGateway ? `Pasarela ${payment.gateway || payment.provider} aun sin confirmacion final.` : 'Justificante manual/Bizum: requiere prudencia.'),
+  );
+  addCheck(
+    'proof',
+    'Justificante',
+    proofPresent ? 'ok' : 'warning',
+    proofPresent ? 'Existe referencia o documento asociado.' : 'No hay documento ni referencia suficiente.',
+  );
+
+  if (!matchedClassIds.length) risks.push('No hay clases reconciliadas para aplicar el pago.');
+  if (expectedAmount <= 0) risks.push('No se puede calcular importe esperado.');
+  if (paidAmount <= 0) risks.push('El importe pagado no es valido.');
+  if (Math.abs(amountDelta) > 0.01) risks.push(`El importe no cuadra: diferencia ${amountDelta.toFixed(2)} EUR.`);
+  if (duplicatePaymentIds.length) risks.push('Hay pagos duplicados o solapados que deben revisarse.');
+  if (!proofPresent) risks.push('Falta justificante o referencia rastreable.');
+
+  if (matchedClassIds.length) reasons.push(`Reconciliado con ${matchedClassIds.length} clase(s).`);
+  if (expectedAmount > 0 && Math.abs(amountDelta) <= 0.01) reasons.push('Importe exacto frente a las clases pendientes.');
+  if (verifiedGateway) reasons.push('Confirmacion recibida desde pasarela/banco.');
+  if (!automaticGateway) reasons.push('Bizum/manual: se prepara revision asistida para el administrador.');
+
+  let confidence = 0.35;
+  if (matchedClassIds.length) confidence += match.confidence >= 1 ? 0.28 : 0.22;
+  if (expectedAmount > 0 && Math.abs(amountDelta) <= 0.01) confidence += 0.25;
+  if (!duplicatePaymentIds.length) confidence += 0.1;
+  if (verifiedGateway) confidence += 0.18;
+  else if (isPaymentVerified(payment)) confidence += 0.14;
+  else if (proofPresent) confidence += 0.06;
+  if (risks.length) confidence -= Math.min(0.45, risks.length * 0.11);
+  confidence = clampPaymentConfidence(confidence);
+
+  const canAutoValidate = verifiedGateway
+    && matchedClassIds.length > 0
+    && expectedAmount > 0
+    && Math.abs(amountDelta) <= 0.01
+    && duplicatePaymentIds.length === 0
+    && paidAmount > 0
+    && confidence >= 0.9;
+  const recommendation = canAutoValidate ? 'auto_validate' : 'admin_review';
+  const review = {
+    version: PAYMENT_AI_REVIEW_VERSION,
+    recommendation,
+    autoAction: canAutoValidate ? 'validate_payment' : 'none',
+    confidence,
+    confidenceLabel: confidenceLabel(confidence),
+    status: canAutoValidate ? 'ready_for_auto_validation' : 'requires_admin_review',
+    summary: canAutoValidate
+      ? 'Pago verificado automaticamente: importe, clases y origen cuadran.'
+      : (risks.length ? `Revision necesaria: ${risks[0]}` : 'Revision asistida lista para validar manualmente.'),
+    reasons,
+    risks,
+    checks,
+    paidAmount,
+    expectedAmount,
+    amountDelta,
+    matchedClassIds,
+    duplicatePaymentIds,
+    reconciliationStatus: match.status,
+    reconciliationReason: match.reason,
+    reviewedAt: nowIso,
+  };
+  return { ...review, fingerprint: paymentReviewFingerprint(payment, review) };
+}
+
+export function shouldAutoValidatePaymentReview(review = {}, payment = {}) {
+  return review.recommendation === 'auto_validate'
+    && review.confidence >= 0.9
+    && review.autoAction === 'validate_payment'
+    && isAutomaticGateway(payment)
+    && isPaymentVerified(payment)
+    && Array.isArray(review.matchedClassIds)
+    && review.matchedClassIds.length > 0
+    && (!Array.isArray(review.risks) || review.risks.length === 0);
+}
+
+export function buildPaymentAiReviewPatch(review = {}, reviewerUid = '', options = {}) {
+  const nowIso = options.nowIso || review.reviewedAt || new Date().toISOString();
+  return {
+    aiReviewVersion: review.version || PAYMENT_AI_REVIEW_VERSION,
+    aiReviewStatus: review.status || '',
+    aiRecommendation: review.recommendation || '',
+    aiConfidence: Number(review.confidence || 0),
+    aiConfidenceLabel: review.confidenceLabel || confidenceLabel(review.confidence || 0),
+    aiReviewSummary: cleanPaymentText(review.summary, 500),
+    aiReviewReasons: Array.isArray(review.reasons) ? review.reasons.map((item) => cleanPaymentText(item, 300)).filter(Boolean).slice(0, 8) : [],
+    aiReviewRisks: Array.isArray(review.risks) ? review.risks.map((item) => cleanPaymentText(item, 300)).filter(Boolean).slice(0, 8) : [],
+    aiReviewChecks: Array.isArray(review.checks) ? review.checks.slice(0, 8) : [],
+    aiReviewFingerprint: cleanPaymentText(review.fingerprint, 900),
+    aiReviewedAt: nowIso,
+    aiReviewedByUid: reviewerUid || 'system',
+    requiresAdminReview: review.recommendation === 'admin_review',
+    automationEligible: review.recommendation === 'auto_validate',
+    matchedClassIds: Array.isArray(review.matchedClassIds) ? review.matchedClassIds.map(String).filter(Boolean) : [],
+    duplicatePaymentIds: Array.isArray(review.duplicatePaymentIds) ? review.duplicatePaymentIds.map(String).filter(Boolean) : [],
+    expectedAmount: Number(review.expectedAmount || 0),
+    amountDelta: Number(review.amountDelta || 0),
+    updated_at: nowIso,
+  };
+}
+
 export function buildClassPaymentPatch(payment = {}, classId = '', options = {}) {
   const status = isTeacherPayout(payment) ? 'pagado' : 'validado';
   const nowIso = options.nowIso || new Date().toISOString();
