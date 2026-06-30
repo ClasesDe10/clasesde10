@@ -103,6 +103,8 @@ assert(automationWorker.includes('notifyUserOnce'), 'Automation notifications mu
 assert(automationWorker.includes('processClassLifecycle'), 'Automation worker must process lifecycle transitions.');
 assert(automationWorker.includes('classLifecycleEvents'), 'Automation worker must write lifecycle history events.');
 assert(automationWorker.includes('class_lifecycle_transition'), 'Automation worker must audit lifecycle transitions.');
+assert(automationWorker.includes('classId: data.id'), 'Lifecycle automation events must use the class row id from listCollection.');
+assert(!automationWorker.includes('classId: doc.id,\n      from: transition.from'), 'Lifecycle automation must not reference an undefined doc variable.');
 
 assert(rules.includes('validTeacherClassUpdate'), 'Firestore rules must validate teacher class updates.');
 assert(rules.includes('validFamilyClassConfirmationUpdate'), 'Firestore rules must validate family class confirmations.');

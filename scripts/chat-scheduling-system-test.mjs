@@ -51,6 +51,8 @@ assert(chat.includes('participantUids'), 'Accepted proposal classes must store p
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
 assert(chat.includes('data-chat-name-form'), 'Chat widget must let each participant save a private chat display name.');
 assert(chat.includes('data-open-schedule-planner'), 'Chat widget must keep schedule planning collapsed behind explicit actions.');
+assert(chat.includes('data-chat-open-panel="chats"'), 'Secondary notification actions must switch panels without duplicating chat tab selectors.');
+assert(!chat.includes('data-chat-tab="chats">Ver chats'), 'Only real tabs should use data-chat-tab to avoid ambiguous chat controls.');
 assert(chat.includes('weekly_recurring'), 'Chat widget must support fixed weekly class schedules.');
 assert(chat.includes('one_off'), 'Chat widget must support one-off class exceptions.');
 assert(chat.includes('recurrenceLabelFromFields'), 'Weekly schedules must render a compact recurring label.');

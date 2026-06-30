@@ -1925,7 +1925,7 @@ async function processClassLifecycle(db, stats) {
 
     await addAutomationEvent(db, {
       type: 'class_lifecycle_transition',
-      classId: doc.id,
+      classId: data.id,
       from: transition.from || null,
       to: transition.to,
       target: transition.target,

@@ -855,7 +855,7 @@ function renderShell(container, role) {
             <div class="chat-thread-subtitle">Avisos de Admin y Sistema. En movil/PWA activa avisos para recibirlos fuera de la app.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="btn btn-ghost btn-sm" type="button" data-chat-tab="chats">Ver chats</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-chat-open-panel="chats">Ver chats</button>
             <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos en este dispositivo</button>
             <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar revisadas</button>
           </div>
@@ -1486,6 +1486,12 @@ export async function initChatWidget({
     const tab = event.target.closest('[data-chat-tab]');
     if (tab) {
       setPanel(tab.dataset.chatTab);
+      return;
+    }
+
+    const openPanel = event.target.closest('[data-chat-open-panel]');
+    if (openPanel) {
+      setPanel(openPanel.dataset.chatOpenPanel);
       return;
     }
 
