@@ -34,6 +34,7 @@ const LIVE_SIGNAL_COLLECTIONS = [
   { name: 'alertDecisions', orderField: 'lastSeenAt', limit: 20 },
   { name: 'platformSupervisionFindings', orderField: 'lastSeenAt', limit: 20 },
   { name: 'relationshipFollowups', orderField: 'lastSeenAt', limit: 20 },
+  { name: 'proactiveAssistSignals', orderField: 'lastSeenAt', limit: 20 },
 ];
 
 function clean(value, max = 4000) {
@@ -334,6 +335,7 @@ async function loadData(db, leadsAdapter) {
     alertDecisions,
     platformSupervisionFindings,
     relationshipFollowups,
+    proactiveAssistSignals,
     healthChecks,
   ] = await Promise.all([
     safeRead('users', () => loadRows(db, 'usuarios'), [], loadErrors),
@@ -374,6 +376,7 @@ async function loadData(db, leadsAdapter) {
     safeRead('alertDecisions', () => loadRows(db, 'alertDecisions'), [], loadErrors),
     safeRead('platformSupervisionFindings', () => loadRows(db, 'platformSupervisionFindings'), [], loadErrors),
     safeRead('relationshipFollowups', () => loadRows(db, 'relationshipFollowups'), [], loadErrors),
+    safeRead('proactiveAssistSignals', () => loadRows(db, 'proactiveAssistSignals'), [], loadErrors),
     safeRead('platformHealthChecks', () => loadRows(db, 'platformHealthChecks'), [], loadErrors),
   ]);
 
@@ -410,6 +413,7 @@ async function loadData(db, leadsAdapter) {
     alertDecisions,
     platformSupervisionFindings,
     relationshipFollowups,
+    proactiveAssistSignals,
     healthChecks,
     loadErrors,
   };
@@ -851,6 +855,8 @@ function computeMissionControl(data, metrics) {
   const severeSupervisionFindings = activeSupervisionFindings.filter((item) => ['critical', 'high', 'urgente', 'alta'].includes(clean(first(item.severity, item.priority)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const activeRelationshipFollowups = (data.relationshipFollowups || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
   const severeRelationshipFollowups = activeRelationshipFollowups.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
+  const activeProactiveSignals = (data.proactiveAssistSignals || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
+  const severeProactiveSignals = activeProactiveSignals.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const latestMetricSnapshot = latestItem(data.metricSnapshots || []);
   const latestHealthSnapshot = latestItem(data.healthChecks || []);
   const latestAutomation = latestItem(data.automationEvents || []);
@@ -1031,8 +1037,19 @@ function computeMissionControl(data, metrics) {
           signals: severeSupervisionFindings.map((item) => `${first(item.title, item.type)} (${item.severity})`),
           section: 'auditoria',
         })] : []),
+        ...(severeProactiveSignals.length ? [issue({
+          status: severeProactiveSignals.some((item) => clean(item.priority).toLowerCase() === 'critical') ? 'degraded' : 'attention',
+          what: `${severeProactiveSignals.length} senal(es) proactivas prioritarias`,
+          impact: 'La plataforma ha detectado ayudas anticipadas antes de que el usuario se bloquee.',
+          affectedUsers: affectedUniqueUsers(severeProactiveSignals, ['familyUid', 'teacherUid', 'userUid', 'studentId', 'entityId']),
+          cause: severeProactiveSignals.slice(0, 3).map((item) => first(item.title, item.signalId)).join(', '),
+          fix: severeProactiveSignals[0]?.recommendedAction || 'Abrir Operaciones y resolver la ayuda proactiva.',
+          startedAt: oldestDate(severeProactiveSignals, (item) => first(item.generatedAt, item.firstSeenAt, item.createdAt)),
+          signals: severeProactiveSignals.map((item) => `${first(item.signalId, item.category, item.id)} (${item.priorityScore || 0})`),
+          section: 'operaciones',
+        })] : []),
       ],
-      okSignals: [`${queuedJobs.length} jobs en cola`, `${data.automationEvents?.length || 0} eventos`, `${openOpsAlerts.length} alertas abiertas`, `${openPreventiveRisks.length} riesgos preventivos`, `${activeAlertDecisions.length} decisiones`, `${activeSupervisionFindings.length} hallazgos autosupervision`],
+      okSignals: [`${queuedJobs.length} jobs en cola`, `${data.automationEvents?.length || 0} eventos`, `${openOpsAlerts.length} alertas abiertas`, `${openPreventiveRisks.length} riesgos preventivos`, `${activeAlertDecisions.length} decisiones`, `${activeSupervisionFindings.length} hallazgos autosupervision`, `${activeProactiveSignals.length} senales proactivas`],
     }),
     subsystem({
       id: 'apis',
@@ -1468,6 +1485,8 @@ function computeControlCenter(data) {
   const severeSupervisionFindings = platformSupervisionFindings.filter((item) => ['critical', 'high', 'urgente', 'alta'].includes(clean(first(item.severity, item.priority)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const relationshipFollowups = (data.relationshipFollowups || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
   const severeRelationshipFollowups = relationshipFollowups.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
+  const proactiveAssistSignals = (data.proactiveAssistSignals || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
+  const severeProactiveSignals = proactiveAssistSignals.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const pendingPaymentAmount = pendingPayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const overduePaymentAmount = overduePayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const averageTicket = completedMonth.length ? revenueMonth / completedMonth.length : 0;
@@ -1489,6 +1508,7 @@ function computeControlCenter(data) {
     - Math.min(18, severeAlertDecisions.length * 3)
     - Math.min(20, severeSupervisionFindings.length * 5)
     - Math.min(16, severeRelationshipFollowups.length * 4)
+    - Math.min(14, severeProactiveSignals.length * 3)
     - Math.max(0, 90 - completionHealth) * 0.25
     - Math.min(18, Math.max(0, timing.avgTimeToAssignHours - 24) * 0.6)
     - Math.min(12, riskyClasses.length * 2)
@@ -1537,6 +1557,8 @@ function computeControlCenter(data) {
     severeSupervisionFindings,
     relationshipFollowups,
     severeRelationshipFollowups,
+    proactiveAssistSignals,
+    severeProactiveSignals,
     pendingPaymentAmount,
     overduePaymentAmount,
     averageTicket,
@@ -1580,6 +1602,12 @@ function computeControlCenter(data) {
       title: first(item.title, 'Seguimiento post-match'),
       body: `${first(item.expectedOutcome, item.description, 'Hay un siguiente paso pendiente.')} Accion: ${first(item.recommendedAction, 'Abrir chat')}`,
       section: first(item.section, 'chat'),
+    })),
+    ...severeProactiveSignals.slice(0, 5).map((item) => ({
+      tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
+      title: first(item.title, 'Ayuda proactiva'),
+      body: `${first(item.expectedOutcome, item.description, 'La plataforma detecto una accion util.')} Accion: ${first(item.recommendedAction, 'Abrir Operaciones')}`,
+      section: first(item.section, 'operaciones'),
     })),
     ...severePreventiveRisks.slice(0, 4).map((item) => ({
       tone: clean(item.severity).toLowerCase() === 'critical' ? 'danger' : 'warning',
@@ -1694,6 +1722,13 @@ function computeControlCenter(data) {
       section: first(item.section, 'chat'),
       tone: ['critical', 'high'].includes(clean(item.priority).toLowerCase()) ? 'warning' : 'info',
     })),
+    ...proactiveAssistSignals.map((item) => ({
+      date: first(item.generatedAt, item.lastSeenAt, item.createdAt),
+      title: `Proactivo ${first(item.category, item.signalId, '')}`.trim(),
+      body: first(item.title, item.description, item.recommendedAction, 'Ayuda proactiva'),
+      section: first(item.section, 'operaciones'),
+      tone: ['critical', 'high'].includes(clean(item.priority).toLowerCase()) ? 'warning' : 'info',
+    })),
     ...data.documents.map((item) => ({
       date: createdDate(item),
       title: `Documento ${statusOf(item) || 'pendiente'}`,
@@ -1743,6 +1778,12 @@ function computeControlCenter(data) {
       section: first(item.section, 'chat'),
       tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
     })),
+    ...severeProactiveSignals.slice(0, 4).map((item) => ({
+      title: first(item.title, 'Ayuda proactiva'),
+      body: first(item.recommendedAction, item.description, 'Actuar antes de que el usuario se bloquee'),
+      section: first(item.section, 'operaciones'),
+      tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
+    })),
   ].slice(0, 10);
 
   const dataQuality = [
@@ -1754,6 +1795,7 @@ function computeControlCenter(data) {
     { label: 'Alertas priorizadas por score', value: alertDecisions.length, section: 'incidencias' },
     { label: 'Hallazgos de autosupervision', value: platformSupervisionFindings.length, section: 'auditoria' },
     { label: 'Seguimientos post-match activos', value: relationshipFollowups.length, section: 'chat' },
+    { label: 'Ayudas proactivas activas', value: proactiveAssistSignals.length, section: 'operaciones' },
     { label: 'Solicitudes antiguas sin asignar', value: staleUnassigned.length, section: 'solicitudes' },
     { label: 'Pagos vencidos', value: overduePayments.length, section: 'pagos' },
     { label: 'Documentos pendientes', value: pendingDocs.length, section: 'documentos' },
@@ -1802,6 +1844,8 @@ function computeControlCenter(data) {
     severeSupervisionFindings,
     relationshipFollowups,
     severeRelationshipFollowups,
+    proactiveAssistSignals,
+    severeProactiveSignals,
     pendingPaymentAmount,
     overduePaymentAmount,
     averageTicket,

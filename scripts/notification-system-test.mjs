@@ -41,6 +41,7 @@ assert(engine.includes('class_unmarked_after_1h'), 'Notification engine must inc
 assert(engine.includes('weekly_payment_due'), 'Notification engine must include weekly payment event.');
 assert(engine.includes('alert_priority'), 'Notification engine must include prioritized alert event.');
 assert(engine.includes('relationship_followup'), 'Notification engine must include relationship follow-up events.');
+assert(engine.includes('proactive_assist'), 'Notification engine must include proactive assistance events.');
 assert(engine.includes('chat_message'), 'Notification engine must include chat message event.');
 assert(engine.includes('buildNotificationDocument'), 'Notification engine must build normalized documents.');
 assert(engine.includes('isNotificationEnabled'), 'Notification engine must expose settings checks.');

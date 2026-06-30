@@ -173,6 +173,25 @@ const dataset = {
       lastSeenAt: '2026-06-29T09:40:00.000Z',
     },
   ],
+  proactiveAssistSignals: [
+    {
+      id: 'proactive_1',
+      signalId: 'teacher_profile_help',
+      category: 'profile',
+      title: 'Perfil de Ana incompleto',
+      description: 'Faltan datos verificables antes de asignar.',
+      expectedOutcome: 'La profesora completa su perfil y se reduce trabajo manual.',
+      recommendedAction: 'Pedir completar perfil.',
+      priority: 'high',
+      priorityScore: 84,
+      section: 'profesores',
+      entityType: 'profesor',
+      entityId: 'teacher_1',
+      entityName: 'Ana Ruiz',
+      status: 'active',
+      lastSeenAt: '2026-06-29T09:45:00.000Z',
+    },
+  ],
   chats: [
     {
       id: 'chat_1',
@@ -192,14 +211,17 @@ assert(model.summary.revenueAtRisk === 120, 'Ops model must calculate revenue at
 assert(model.summary.preventiveRisks === 1, 'Ops model must count preventive risks.');
 assert(model.summary.selfSupervisionFindings === 1, 'Ops model must count self-supervision findings.');
 assert(model.summary.relationshipFollowups === 1, 'Ops model must count relationship follow-ups.');
+assert(model.summary.proactiveAssistSignals === 1, 'Ops model must count proactive assistance signals.');
 assert(model.items.some((item) => item.type === 'risk' && item.source === 'preventiveRisks'), 'Ops model must expose preventive risks as actionable items.');
 assert(model.items.some((item) => item.type === 'supervision' && item.source === 'platformSupervisionFindings'), 'Ops model must expose self-supervision findings as actionable items.');
 assert(model.items.some((item) => item.type === 'followup' && item.source === 'relationshipFollowups'), 'Ops model must expose relationship follow-ups as actionable items.');
+assert(model.items.some((item) => item.type === 'proactive' && item.source === 'proactiveAssistSignals'), 'Ops model must expose proactive assistance signals as actionable items.');
 assert(model.items.some((item) => item.source === 'incidencias' && item.priority === 96), 'Ops model must use alert priority scores for incidents.');
 assert(model.items.some((item) => item.source === 'preventiveRisks' && item.automation.includes('Resolver antes')), 'Ops model must expose recommended alert actions.');
 assert(model.automationGroups.some((group) => group.type === 'self_supervision'), 'Ops model must suggest self-supervision automation groups.');
 assert(model.automationGroups.some((group) => group.type === 'matching_followup'), 'Ops model must suggest matching automation groups.');
 assert(model.automationGroups.some((group) => group.type === 'relationship_followup'), 'Ops model must suggest relationship follow-up automation groups.');
+assert(model.automationGroups.some((group) => group.type === 'proactive_assist'), 'Ops model must suggest proactive assistance automation groups.');
 assert(model.items[0].priority >= model.items.at(-1).priority, 'Ops items must be sorted by priority.');
 
 const search = searchOpsIndex(model.searchIndex, 'matematicas');
@@ -225,6 +247,7 @@ assert(workbench.includes('crmTasks'), 'Ops workbench must create CRM follow-up 
 assert(workbench.includes('preventiveRisks'), 'Ops workbench must load preventive risk signals.');
 assert(workbench.includes('platformSupervisionFindings'), 'Ops workbench must load self-supervision signals.');
 assert(workbench.includes('relationshipFollowups'), 'Ops workbench must load relationship follow-up signals.');
+assert(workbench.includes('proactiveAssistSignals'), 'Ops workbench must load proactive assistance signals.');
 assert(workbench.includes('recordAdminAudit'), 'Ops workbench must audit operational actions.');
 assert(workbench.includes('data-ops-review'), 'Ops workbench must allow marking queue items as reviewed.');
 assert(workbench.includes('admin-global-search-panel'), 'Ops workbench must render global search results.');

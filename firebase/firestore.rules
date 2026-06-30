@@ -2201,6 +2201,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /proactiveAssistSignals/{signalId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /proactiveAssistSnapshots/{snapshotId} {
+      allow read, write: if isAdmin();
+    }
+
     match /resumenMensual/{summaryId} {
       allow read, write: if isAdmin();
     }

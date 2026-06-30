@@ -33,6 +33,10 @@ import {
   buildRelationshipFollowupPlan,
 } from '../js/relationship-followup-engine.js';
 import {
+  PROACTIVE_ASSIST_VERSION,
+  buildProactiveAssistPlan,
+} from '../js/proactive-assist-engine.js';
+import {
   SCHEDULED_CLASS_STATUSES,
   buildClassIncidentPayload,
   classEnded,
@@ -3979,6 +3983,228 @@ async function processRelationshipFollowups(db, stats) {
   await closeResolvedRelationshipFollowups(db, activeIds, stats, scanLimit);
 }
 
+function proactiveAssistOptions() {
+  return {
+    nowIso: isoNow(),
+    scanLimit: runtimeNumber('proactiveAssist.scanLimit', limit, 10, 5000),
+    onboardingNudgeHours: runtimeNumber('proactiveAssist.onboardingNudgeHours', 24, 1, 720),
+    profileNudgeMinCompletion: runtimeNumber('proactiveAssist.profileNudgeMinCompletion', 85, 1, 100),
+    profileNudgeCooldownHours: runtimeNumber('proactiveAssist.profileNudgeCooldownHours', 72, 1, 1440),
+    missingAvailabilityHours: runtimeNumber('proactiveAssist.missingAvailabilityHours', 24, 1, 1440),
+    upcomingClassReadinessHours: runtimeNumber('proactiveAssist.upcomingClassReadinessHours', 36, 1, 720),
+    unreadCriticalNotificationHours: runtimeNumber('proactiveAssist.unreadCriticalNotificationHours', 12, 1, 720),
+    lowSupplyRequestHours: runtimeNumber('proactiveAssist.lowSupplyRequestHours', 24, 1, 1440),
+    lowSupplyMinCandidates: runtimeNumber('proactiveAssist.lowSupplyMinCandidates', 2, 1, 50),
+    lowSupplyMinScore: runtimeNumber('proactiveAssist.lowSupplyMinScore', 55, 0, 100),
+    staleAdminTaskHours: runtimeNumber('proactiveAssist.staleAdminTaskHours', 48, 1, 1440),
+    userNotificationCooldownHours: runtimeNumber('proactiveAssist.userNotificationCooldownHours', 72, 1, 1440),
+    adminCooldownHours: runtimeNumber('proactiveAssist.adminCooldownHours', 24, 1, 1440),
+    adminEscalationHours: runtimeNumber('proactiveAssist.adminEscalationHours', 48, 1, 1440),
+    maxUserNotifications: runtimeNumber('proactiveAssist.maxUserNotifications', 30, 0, 500),
+  };
+}
+
+async function materializeProactiveAssistSignal(db, signal, stats) {
+  const ref = db.collection('proactiveAssistSignals').doc(signal.id);
+  const existing = await ref.get();
+  const existingData = existing.exists ? existing.data() : {};
+  const fingerprint = JSON.stringify([
+    signal.signalId,
+    signal.entityType,
+    signal.entityId,
+    signal.priority,
+    signal.description,
+    signal.recommendedAction,
+    signal.recipients.map((item) => `${item.role}:${item.userUid}`).join('|'),
+  ]);
+  const changed = !existing.exists || existingData.fingerprint !== fingerprint;
+
+  await writeDoc(db.collection('proactiveAssistSignals'), signal.id, {
+    ...signal,
+    status: signal.recipients.length ? 'sent' : 'active',
+    estado: signal.recipients.length ? 'enviada' : 'activa',
+    fingerprint,
+    firstSeenAt: existing.exists ? (existingData.firstSeenAt || now()) : now(),
+    lastSeenAt: now(),
+    sentAt: signal.recipients.length ? now() : (existingData.sentAt || null),
+    createdAt: existing.exists ? (existingData.createdAt || now()) : now(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+  });
+  stats.proactiveAssistSignalsEvaluated += 1;
+  if (!existing.exists) stats.proactiveAssistSignalsCreated += 1;
+
+  for (const recipient of signal.recipients) {
+    const created = await notifyUserOnce(
+      db,
+      recipient.userUid,
+      recipient.title,
+      recipient.body,
+      {
+        type: 'proactive_assist',
+        signalId: signal.id,
+        proactiveSignalId: signal.signalId,
+        category: signal.category,
+        entityType: signal.entityType,
+        entityId: signal.entityId,
+        section: recipient.section || signal.section,
+        url: '/pages/login.html',
+      },
+      `proactive_assist_${signal.id}_${recipient.role}_${recipient.userUid}`,
+    );
+    if (created) stats.proactiveAssistNotificationsCreated += 1;
+  }
+
+  if (signal.createAdminTask && runtimeBoolean('proactiveAssist.autoCreateAdminTasks', true)) {
+    const taskId = notificationId('crm_proactive_assist', signal.dedupeKey);
+    const taskRef = db.collection('crmTasks').doc(taskId);
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+      const dueMinutes = signal.priority === 'critical' ? 30 : signal.priority === 'high' ? 180 : 720;
+      await writeDoc(db.collection('crmTasks'), taskId, {
+        title: signal.title,
+        description: `${signal.description} Accion recomendada: ${signal.recommendedAction}`,
+        priority: signal.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: signal.entityType || 'proactiveAssist',
+        entityId: signal.entityId,
+        proactiveAssistSignalId: signal.id,
+        familyUid: signal.familyUid || '',
+        teacherUid: signal.teacherUid || '',
+        studentId: signal.studentId || '',
+        tags: ['asistencia_proactiva', signal.category, signal.signalId],
+        dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueMinutes * 60 * 1000)),
+        source: 'proactive_assist_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.proactiveAssistTasksCreated += 1;
+    }
+  }
+
+  if (signal.createOpsAlert && changed) {
+    const alertId = notificationId('ops_proactive_assist', signal.id);
+    const alertRef = db.collection('opsAlerts').doc(alertId);
+    const alertSnap = await alertRef.get();
+    if (!alertSnap.exists) {
+      await writeDoc(db.collection('opsAlerts'), alertId, {
+        alertType: 'proactive_assist',
+        type: 'proactive_assist',
+        title: signal.title,
+        message: `${signal.description} Accion: ${signal.recommendedAction}`,
+        severity: signal.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: signal.entityType || 'proactiveAssist',
+        entityId: signal.entityId,
+        proactiveAssistSignalId: signal.id,
+        source: 'proactive_assist_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.proactiveAssistOpsAlertsCreated += 1;
+    }
+  }
+}
+
+async function closeResolvedProactiveAssistSignals(db, activeIds, stats, scanLimit) {
+  const snap = await db.collection('proactiveAssistSignals')
+    .limit(scanLimit)
+    .get()
+    .catch(() => null);
+  if (!snap) return;
+  for (const doc of snap.docs) {
+    if (activeIds.has(doc.id)) continue;
+    const status = normalizeStatus(doc.data());
+    if (['resolved', 'resuelta', 'cerrada', 'archived', 'archivada'].includes(status)) continue;
+    await updateRef(doc.ref, {
+      status: 'resolved',
+      estado: 'resuelta',
+      resolvedAt: now(),
+      resolved_at: isoNow(),
+      resolution: 'La ayuda proactiva dejo de ser necesaria en el ultimo barrido.',
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    stats.proactiveAssistSignalsResolved += 1;
+  }
+}
+
+async function processProactiveAssist(db, stats) {
+  if (!runtimeBoolean('proactiveAssist.enabled', true)) return;
+  const options = proactiveAssistOptions();
+  const scanLimit = options.scanLimit;
+  const [
+    users,
+    legacyUsers,
+    teachers,
+    families,
+    students,
+    requests,
+    matches,
+    assignments,
+    classes,
+    notifications,
+    crmTasks,
+    previousSignals,
+  ] = await Promise.all([
+    listCollection(db, 'users', scanLimit).catch(() => []),
+    listCollection(db, 'usuarios', scanLimit).catch(() => []),
+    listCollection(db, 'profesores', scanLimit),
+    listCollection(db, 'familias', scanLimit),
+    listCollection(db, 'alumnos', scanLimit),
+    listCollection(db, 'solicitudes', scanLimit),
+    listCollection(db, 'solicitudMatches', scanLimit).catch(() => []),
+    listCollection(db, 'asignaciones', scanLimit),
+    listCollection(db, 'clases', scanLimit),
+    listCollection(db, 'notificaciones', scanLimit),
+    listCollection(db, 'crmTasks', scanLimit).catch(() => []),
+    listCollection(db, 'proactiveAssistSignals', scanLimit).catch(() => []),
+  ]);
+
+  const plan = buildProactiveAssistPlan({
+    users,
+    usuarios: legacyUsers,
+    profesores: teachers,
+    familias: families,
+    alumnos: students,
+    solicitudes: requests,
+    solicitudMatches: matches,
+    asignaciones: assignments,
+    clases: classes,
+    notificaciones: notifications,
+    crmTasks,
+    previousSignals,
+  }, options);
+
+  stats.proactiveAssistVersion = plan.version;
+  stats.proactiveAssistSignalsDetected = plan.total;
+  stats.proactiveAssistUserNotifications = plan.summary.userNotifications;
+  stats.proactiveAssistAdminTasks = plan.summary.adminTasks;
+  stats.proactiveAssistOpsAlerts = plan.summary.opsAlerts;
+  stats.proactiveAssistProfileHelp = plan.summary.profileHelp;
+  stats.proactiveAssistSchedulingHelp = plan.summary.schedulingHelp;
+  stats.proactiveAssistMatchingHelp = plan.summary.matchingHelp;
+  stats.proactiveAssistReadinessChecks = plan.summary.readinessChecks;
+  stats.proactiveAssistAttentionChecks = plan.summary.attentionChecks;
+
+  await writeDoc(db.collection('proactiveAssistSnapshots'), notificationId('proactive_assist_snapshot', plan.generatedAt.slice(0, 16)), {
+    ...plan.summary,
+    version: plan.version,
+    thresholds: plan.thresholds,
+    generatedAt: plan.generatedAt,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+
+  const activeIds = new Set(plan.signals.map((signal) => signal.id));
+  for (const signal of plan.signals.slice(0, scanLimit)) {
+    await materializeProactiveAssistSignal(db, signal, stats);
+  }
+  await closeResolvedProactiveAssistSignals(db, activeIds, stats, scanLimit);
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -4295,6 +4521,22 @@ async function main() {
     relationshipFollowupScheduleBlocked: 0,
     relationshipFollowupQualityChecks: 0,
     relationshipFollowupCancellationRisks: 0,
+    proactiveAssistVersion: PROACTIVE_ASSIST_VERSION,
+    proactiveAssistSignalsDetected: 0,
+    proactiveAssistSignalsEvaluated: 0,
+    proactiveAssistSignalsCreated: 0,
+    proactiveAssistSignalsResolved: 0,
+    proactiveAssistNotificationsCreated: 0,
+    proactiveAssistTasksCreated: 0,
+    proactiveAssistOpsAlertsCreated: 0,
+    proactiveAssistUserNotifications: 0,
+    proactiveAssistAdminTasks: 0,
+    proactiveAssistOpsAlerts: 0,
+    proactiveAssistProfileHelp: 0,
+    proactiveAssistSchedulingHelp: 0,
+    proactiveAssistMatchingHelp: 0,
+    proactiveAssistReadinessChecks: 0,
+    proactiveAssistAttentionChecks: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
@@ -4328,6 +4570,7 @@ async function main() {
   await processPaymentReminders(db, stats);
   await processPlatformSelfSupervision(db, stats);
   await processRelationshipFollowups(db, stats);
+  await processProactiveAssist(db, stats);
 
   if (criticalOnly) {
     console.log(JSON.stringify(stats, null, 2));

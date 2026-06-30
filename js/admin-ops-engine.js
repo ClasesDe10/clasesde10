@@ -564,6 +564,41 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     }));
   }
 
+  for (const signal of dataset.proactiveAssistSignals || []) {
+    const status = statusOf(signal);
+    if (CLOSED_STATUSES.has(status)) continue;
+    const priority = asNumber(signal.priorityScore) || (clean(signal.priority).toLowerCase() === 'critical'
+      ? 96
+      : clean(signal.priority).toLowerCase() === 'high'
+        ? 84
+        : clean(signal.priority).toLowerCase() === 'low'
+          ? 34
+          : 58);
+    items.push(makeItem({
+      id: itemId('proactive-assist', signal),
+      type: 'proactive',
+      title: clean(first(signal.title, 'Ayuda proactiva')),
+      detail: clean(first(signal.expectedOutcome, signal.description, signal.reason, 'La plataforma detecto una accion util antes de que sea incidencia.')),
+      section: clean(first(signal.section, signal.category, 'operaciones'), 80),
+      priority,
+      tone: priority >= 90 ? 'danger' : priority >= 75 ? 'warning' : priority <= 40 ? 'info' : 'gold',
+      entityType: clean(first(signal.entityType, 'proactiveAssistSignal')),
+      entityId: clean(first(signal.entityId, signal.id)),
+      entityName: clean(first(signal.entityName, signal.familyUid, signal.teacherUid, signal.studentId, 'Asistencia proactiva')),
+      actionLabel: 'Actuar ahora',
+      automation: clean(first(signal.recommendedAction, 'Resolver antes de que el usuario se bloquee'), 180),
+      minutesSaved: priority >= 80 ? 12 : 7,
+      createdAt: first(signal.lastSeenAt, signal.generatedAt, signal.createdAt),
+      source: 'proactiveAssistSignals',
+      metadata: {
+        signalId: signal.id,
+        signalType: signal.signalId,
+        category: signal.category,
+        recipients: Array.isArray(signal.recipients) ? signal.recipients.length : 0,
+      },
+    }));
+  }
+
   for (const chat of dataset.chats || []) {
     const schedulingStatus = clean(first(chat.schedulingStatus, chat.estado_programacion, chat.relationshipStage)).toLowerCase();
     const stale = hoursSince(first(chat.updatedAt, chat.updated_at, chat.createdAt, chat.created_at), now) >= 48;
@@ -601,6 +636,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     preventiveRisks: visibleItems.filter((item) => item.type === 'risk').length,
     selfSupervisionFindings: visibleItems.filter((item) => item.type === 'supervision').length,
     relationshipFollowups: visibleItems.filter((item) => item.type === 'followup').length,
+    proactiveAssistSignals: visibleItems.filter((item) => item.type === 'proactive').length,
     overdueTasks: visibleItems.filter((item) => item.type === 'task').length,
     estimatedMinutesSaved: visibleItems.reduce((sum, item) => sum + asNumber(item.minutesSaved), 0),
   };
@@ -613,6 +649,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     { type: 'crm_followup', label: 'Seguimientos CRM', section: 'profesores', count: visibleItems.filter((item) => ['teacher', 'family', 'task'].includes(item.type)).length },
     { type: 'self_supervision', label: 'Autosupervision', section: 'auditoria', count: visibleItems.filter((item) => item.type === 'supervision').length },
     { type: 'relationship_followup', label: 'Acompanamiento post-match', section: 'chat', count: visibleItems.filter((item) => item.type === 'followup').length },
+    { type: 'proactive_assist', label: 'Asistencia proactiva', section: 'operaciones', count: visibleItems.filter((item) => item.type === 'proactive').length },
   ].filter((item) => item.count > 0);
 
   return {
