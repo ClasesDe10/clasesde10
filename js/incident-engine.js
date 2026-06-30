@@ -7,6 +7,7 @@
  */
 
 export const INCIDENT_ENGINE_VERSION = 'incident-engine-2026-06-28';
+export const PREVENTIVE_INCIDENT_VERSION = 'preventive-incident-radar-2026-06-30';
 
 export const INCIDENT_STATUSES = Object.freeze([
   'abierta',
@@ -417,6 +418,7 @@ export function buildAutomaticIncidentPayload(kind, source = {}, options = {}) {
     document_stale: ['Documento pendiente atascado', 'documentacion', 'media'],
     document_expired: ['Documento caducado', 'documentacion', 'alta'],
     matching_blocked: ['Matching bloqueado', 'matching', 'alta'],
+    preventive_risk: ['Riesgo preventivo detectado', 'operativa', 'media'],
     ai_error: ['Error de IA detectado', 'ia', 'media'],
     sync_error: ['Problema de sincronizacion', 'sincronizacion', 'media'],
     system_error: ['Error tecnico del sistema', 'tecnica', 'alta'],
@@ -449,6 +451,793 @@ export function buildAutomaticIncidentPayload(kind, source = {}, options = {}) {
     createdAt: nowIso,
     updatedAt: nowIso,
   }, { uid: 'automation', email: '', role: 'system' }, options);
+}
+
+const PREVENTIVE_SEVERITY_META = Object.freeze({
+  critical: { priorityRank: 1, prioridad: 'urgente', label: 'Critico' },
+  high: { priorityRank: 2, prioridad: 'alta', label: 'Alto' },
+  medium: { priorityRank: 3, prioridad: 'media', label: 'Medio' },
+  low: { priorityRank: 4, prioridad: 'baja', label: 'Bajo' },
+});
+
+const PREVENTIVE_OPEN_STATUSES = new Set([
+  '',
+  'nueva',
+  'nuevo',
+  'pendiente',
+  'pending',
+  'open',
+  'abierta',
+  'en_proceso',
+  'revision',
+  'en_revision',
+  'activa',
+  'active',
+  'programada',
+  'confirmada',
+  'solicitado',
+  'propuesto',
+  'enviado',
+]);
+
+const PREVENTIVE_CLOSED_STATUSES = new Set([
+  'cerrada',
+  'cerrado',
+  'resuelta',
+  'resolved',
+  'done',
+  'completada',
+  'completado',
+  'archivada',
+  'archived',
+  'cancelada',
+  'cancelado',
+  'cancelled',
+  'rechazada',
+  'rechazado',
+  'rejected',
+]);
+
+const PREVENTIVE_PAID_STATUSES = new Set([
+  'pagado',
+  'paid',
+  'validado',
+  'validated',
+  'succeeded',
+  'cobrado',
+  'confirmado',
+  'comision_liquidada',
+]);
+
+function preventiveNumber(value, fallback, min = 0, max = Number.MAX_SAFE_INTEGER) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function preventiveList(value) {
+  if (!value) return [];
+  return Array.isArray(value) ? value.filter(Boolean) : [value].filter(Boolean);
+}
+
+function preventiveStatus(item = {}) {
+  return lower(firstPresent(
+    item.status,
+    item.estado,
+    item.lifecycleStatus,
+    item.estado_verificacion,
+    item.verificationStatus,
+    item.matchStatus,
+  ));
+}
+
+function preventiveDate(value) {
+  const iso = dateToIso(value);
+  if (!iso) return null;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function preventiveReferenceDate(item = {}) {
+  return preventiveDate(firstPresent(
+    item.lastActivityAt,
+    item.lastMessageAt,
+    item.lastLoginAt,
+    item.updatedAt,
+    item.updated_at,
+    item.fecha_actualizacion,
+    item.createdAt,
+    item.created_at,
+    item.fecha,
+  ));
+}
+
+function preventiveHoursSince(value, nowMs) {
+  const date = preventiveDate(value);
+  if (!date) return 0;
+  return Math.max(0, (nowMs - date.getTime()) / 36e5);
+}
+
+function preventiveDaysSince(value, nowMs) {
+  return preventiveHoursSince(value, nowMs) / 24;
+}
+
+function preventiveIsOpen(item = {}) {
+  const status = preventiveStatus(item);
+  if (PREVENTIVE_CLOSED_STATUSES.has(status)) return false;
+  return PREVENTIVE_OPEN_STATUSES.has(status) || !status;
+}
+
+function preventiveIsPaymentOpen(item = {}) {
+  const status = lower(firstPresent(
+    item.familyPaymentStatus,
+    item.estado_pago_familia,
+    item.paymentStatus,
+    item.estado,
+    item.status,
+  ));
+  return !PREVENTIVE_PAID_STATUSES.has(status) && !PREVENTIVE_CLOSED_STATUSES.has(status);
+}
+
+function preventiveId(item = {}, ...fields) {
+  return clean(firstPresent(...fields.map((field) => item[field]), item.id, item.uid, item.userUid, item.email), 180);
+}
+
+function preventiveUserUid(item = {}, role = '') {
+  if (role === 'teacher') return clean(firstPresent(item.teacherUid, item.profesor_id, item.profesorUid, item.userUid, item.usuario_id, item.id), 180);
+  if (role === 'family') return clean(firstPresent(item.familyUid, item.familia_id, item.familyUserUid, item.userUid, item.usuario_id, item.id), 180);
+  if (role === 'student') return clean(firstPresent(item.studentId, item.alumno_id, item.studentUid, item.id), 180);
+  return clean(firstPresent(item.userUid, item.usuario_id, item.ownerUid, item.id), 180);
+}
+
+function preventiveSafeId(...parts) {
+  return clean(parts
+    .map((part) => clean(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__'), 180);
+}
+
+function preventiveSeverity(value = 'medium') {
+  const severity = lower(value);
+  if (['critical', 'critico', 'urgente'].includes(severity)) return 'critical';
+  if (['high', 'alto', 'alta'].includes(severity)) return 'high';
+  if (['low', 'bajo', 'baja'].includes(severity)) return 'low';
+  return 'medium';
+}
+
+function preventiveRisk(input = {}) {
+  const severity = preventiveSeverity(input.severity);
+  const meta = PREVENTIVE_SEVERITY_META[severity] || PREVENTIVE_SEVERITY_META.medium;
+  const entityType = clean(input.entityType || 'platform', 80);
+  const entityId = clean(input.entityId || input.id || input.type || 'general', 180);
+  const type = clean(input.type || 'preventive_risk', 100);
+  const id = preventiveSafeId('preventive', type, entityType, entityId, input.fingerprint || '');
+  return {
+    id,
+    type,
+    severity,
+    severityLabel: meta.label,
+    prioridad: input.prioridad || meta.prioridad,
+    priorityRank: meta.priorityRank,
+    entityType,
+    entityId,
+    title: clean(input.title || 'Riesgo preventivo detectado', 180),
+    description: clean(input.description || input.title || 'El sistema ha detectado una situacion que requiere seguimiento.', 1200),
+    metric: clean(input.metric || '', 160),
+    value: input.value ?? null,
+    threshold: input.threshold ?? null,
+    familyUid: clean(input.familyUid || '', 180),
+    teacherUid: clean(input.teacherUid || '', 180),
+    studentId: clean(input.studentId || '', 180),
+    classId: clean(input.classId || '', 180),
+    paymentId: clean(input.paymentId || '', 180),
+    requestId: clean(input.requestId || '', 180),
+    assignmentId: clean(input.assignmentId || '', 180),
+    chatId: clean(input.chatId || '', 180),
+    incidentId: clean(input.incidentId || '', 180),
+    notificationId: clean(input.notificationId || '', 180),
+    impactedRoles: preventiveList(input.impactedRoles).map((item) => clean(item, 80)).slice(0, 6),
+    suggestedActions: preventiveList(input.suggestedActions).map((item) => clean(item, 220)).slice(0, 8),
+    evidence: preventiveList(input.evidence).map((item) => clean(item, 260)).slice(0, 8),
+    related: input.related && typeof input.related === 'object' ? input.related : {},
+    shouldCreateIncident: input.shouldCreateIncident !== false && ['critical', 'high'].includes(severity),
+    shouldNotifyAdmin: input.shouldNotifyAdmin !== false && ['critical', 'high'].includes(severity),
+    shouldCreateTask: input.shouldCreateTask !== false && severity !== 'low',
+    detectedAt: input.detectedAt || new Date().toISOString(),
+    version: PREVENTIVE_INCIDENT_VERSION,
+  };
+}
+
+function preventivePushRisk(risks, seen, input) {
+  const risk = preventiveRisk(input);
+  if (!risk.entityId || seen.has(risk.id)) return;
+  seen.add(risk.id);
+  risks.push(risk);
+}
+
+function preventiveIsCancelledClass(item = {}) {
+  return ['cancelada', 'cancelado', 'cancelled', 'rechazada', 'rechazado'].includes(preventiveStatus(item));
+}
+
+function preventiveIsClassActive(item = {}) {
+  return !PREVENTIVE_CLOSED_STATUSES.has(preventiveStatus(item));
+}
+
+function preventiveClassDate(item = {}) {
+  return preventiveDate(firstPresent(
+    item.endAtIso,
+    item.fecha_fin,
+    item.endsAt,
+    item.startAtIso,
+    item.fecha,
+    item.date,
+    item.createdAt,
+    item.created_at,
+  ));
+}
+
+function preventivePaymentDueDate(item = {}) {
+  return preventiveDate(firstPresent(
+    item.dueAt,
+    item.fecha_vencimiento,
+    item.familyPaymentDueAt,
+    item.paymentDueAt,
+    item.vencimiento,
+  ));
+}
+
+function preventiveGroupCount(groups, key, item) {
+  if (!key) return;
+  const group = groups.get(key) || { key, count: 0, items: [] };
+  group.count += 1;
+  group.items.push(item);
+  groups.set(key, group);
+}
+
+function preventiveArrayField(item = {}, ...fields) {
+  return fields.flatMap((field) => {
+    const value = item[field];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return value.split(',').map((part) => part.trim()).filter(Boolean);
+    return [];
+  }).filter(Boolean);
+}
+
+function preventiveTeacherProfileAudit(teacher = {}, minPercent = 85) {
+  const checks = [
+    ['nombre', clean(firstPresent(teacher.nombre, teacher.name, teacher.displayName))],
+    ['telefono', clean(firstPresent(teacher.telefono, teacher.phone, teacher.whatsapp))],
+    ['foto', clean(firstPresent(teacher.foto_url, teacher.photoUrl, teacher.profilePhotoUrl, teacher.avatarUrl))],
+    ['direccion', clean(firstPresent(teacher.direccion, teacher.calle, teacher.address, teacher.zona, teacher.ciudad))],
+    ['materias', preventiveArrayField(teacher, 'materias', 'subjects').length],
+    ['niveles', preventiveArrayField(teacher, 'niveles_educativos', 'niveles', 'levels').length],
+    ['disponibilidad', clean(firstPresent(teacher.disponibilidad_resumen, teacher.availabilitySummary, teacher.preferencia_horario))],
+    ['experiencia', clean(firstPresent(teacher.experiencia, teacher.bio, teacher.descripcion))],
+    ['colegio', clean(firstPresent(teacher.colegio, teacher.schoolName, teacher.centro_escolar))],
+    ['universidad', clean(firstPresent(teacher.universidad, teacher.centro_estudios, teacher.universityName))],
+    ['estudios', clean(firstPresent(teacher.estudio_exacto, teacher.titulacion, teacher.nivel_estudios))],
+    ['bizum', teacher.acepta_bizum === true || teacher.bizumEnabled === true || teacher.tieneBizum === true],
+  ];
+  const missing = checks.filter(([, ok]) => !ok).map(([field]) => field);
+  const percent = Math.round(((checks.length - missing.length) / checks.length) * 100);
+  return {
+    percent: Number.isFinite(Number(teacher.profileCompletionPercent))
+      ? Math.round(Number(teacher.profileCompletionPercent))
+      : percent,
+    missing,
+    belowThreshold: percent < minPercent || Number(teacher.profileCompletionPercent || percent) < minPercent,
+  };
+}
+
+function preventiveRecent(item = {}, windowDays, nowMs) {
+  const date = preventiveReferenceDate(item);
+  if (!date) return false;
+  return nowMs - date.getTime() <= windowDays * 24 * 60 * 60 * 1000;
+}
+
+export function buildPreventiveIncidentPlan(dataset = {}, options = {}) {
+  const nowIso = options.nowIso || new Date().toISOString();
+  const nowDate = new Date(nowIso);
+  const nowMs = Number.isNaN(nowDate.getTime()) ? Date.now() : nowDate.getTime();
+  const thresholds = {
+    teacherNonResponseHours: preventiveNumber(options.teacherNonResponseHours, 8, 1, 720),
+    staleRequestHours: preventiveNumber(options.staleRequestHours, 24, 1, 1440),
+    unscheduledAssignmentHours: preventiveNumber(options.unscheduledAssignmentHours, 48, 1, 1440),
+    chatStalledHours: preventiveNumber(options.chatStalledHours, 48, 1, 1440),
+    paymentGraceHours: preventiveNumber(options.paymentGraceHours, 24, 0, 720),
+    repeatedCancellationWindowDays: preventiveNumber(options.repeatedCancellationWindowDays, 30, 1, 365),
+    repeatedCancellationThreshold: preventiveNumber(options.repeatedCancellationThreshold, 3, 2, 50),
+    recurrentIncidentWindowDays: preventiveNumber(options.recurrentIncidentWindowDays, 30, 1, 365),
+    recurrentIncidentThreshold: preventiveNumber(options.recurrentIncidentThreshold, 3, 2, 50),
+    incompleteProfilePercent: preventiveNumber(options.incompleteProfilePercent, 85, 1, 100),
+    familyInactiveDays: preventiveNumber(options.familyInactiveDays, 14, 1, 365),
+    unreadHighNotificationHours: preventiveNumber(options.unreadHighNotificationHours, 24, 1, 720),
+  };
+
+  const classes = preventiveList(dataset.classes || dataset.clases);
+  const payments = preventiveList(dataset.payments || dataset.pagos);
+  const requests = preventiveList(dataset.requests || dataset.solicitudes);
+  const requestMatches = preventiveList(dataset.requestMatches || dataset.solicitudMatches || dataset.matches);
+  const assignments = preventiveList(dataset.assignments || dataset.asignaciones);
+  const incidents = preventiveList(dataset.incidents || dataset.incidencias);
+  const teachers = preventiveList(dataset.teachers || dataset.profesores);
+  const families = preventiveList(dataset.families || dataset.familias);
+  const chats = preventiveList(dataset.chats || dataset.conversaciones || dataset.threads);
+  const notifications = preventiveList(dataset.notifications || dataset.notificaciones);
+  const deadLetters = preventiveList(dataset.deadLetters);
+  const opsAlerts = preventiveList(dataset.opsAlerts);
+  const automationEvents = preventiveList(dataset.automationEvents);
+
+  const risks = [];
+  const seen = new Set();
+  const activeClassesByAssignment = new Map();
+  const activeClassesByRequest = new Map();
+  const assignmentsByRequest = new Map();
+
+  for (const klass of classes) {
+    if (!preventiveIsClassActive(klass)) continue;
+    const assignmentId = clean(firstPresent(klass.assignmentId, klass.asignacion_id), 180);
+    const requestId = clean(firstPresent(klass.requestId, klass.solicitud_id), 180);
+    if (assignmentId) preventiveGroupCount(activeClassesByAssignment, assignmentId, klass);
+    if (requestId) preventiveGroupCount(activeClassesByRequest, requestId, klass);
+  }
+
+  for (const assignment of assignments) {
+    const requestId = clean(firstPresent(assignment.requestId, assignment.solicitud_id), 180);
+    if (requestId) preventiveGroupCount(assignmentsByRequest, requestId, assignment);
+  }
+
+  for (const match of requestMatches) {
+    const status = lower(firstPresent(match.status, match.estado, match.responseStatus, match.teacherResponseStatus));
+    if (PREVENTIVE_CLOSED_STATUSES.has(status) || ['aceptada', 'aceptado', 'accepted'].includes(status)) continue;
+    const requestId = clean(firstPresent(match.requestId, match.solicitud_id, match.solicitudId), 180);
+    const teacherUid = clean(firstPresent(match.teacherUid, match.profesor_id, match.profesorUid), 180);
+    const reference = firstPresent(match.sentAt, match.createdAt, match.created_at, match.updatedAt);
+    const age = preventiveHoursSince(reference, nowMs);
+    if (!requestId || !teacherUid || age < thresholds.teacherNonResponseHours) continue;
+    preventivePushRisk(risks, seen, {
+      type: 'teacher_non_response',
+      severity: age >= thresholds.teacherNonResponseHours * 2 ? 'high' : 'medium',
+      entityType: 'solicitudMatches',
+      entityId: clean(firstPresent(match.id, `${requestId}_${teacherUid}`), 180),
+      requestId,
+      teacherUid,
+      title: 'Profesor sin respuesta a una propuesta',
+      description: `El profesor lleva ${Math.round(age)}h sin responder una propuesta de matching.`,
+      metric: 'horas_sin_respuesta',
+      value: Math.round(age),
+      threshold: thresholds.teacherNonResponseHours,
+      impactedRoles: ['admin', 'profesor', 'familia'],
+      suggestedActions: [
+        'Recordar al profesor que acepte o rechace la propuesta.',
+        'Preparar un profesor alternativo si no responde dentro del siguiente SLA.',
+        'Evitar que la familia quede esperando sin explicacion.',
+      ],
+      evidence: [`Solicitud ${requestId}`, `Profesor ${teacherUid}`, `Estado ${status || 'pendiente'}`],
+    });
+  }
+
+  for (const request of requests) {
+    if (!preventiveIsOpen(request)) continue;
+    const requestId = preventiveId(request, 'requestId', 'solicitud_id');
+    const assignedTeacher = clean(firstPresent(request.assignedTeacherUid, request.profesor_asignado_id, request.teacherUid, request.profesor_id), 180);
+    const age = preventiveHoursSince(firstPresent(request.createdAt, request.created_at, request.fecha), nowMs);
+    if (!assignedTeacher && age >= thresholds.staleRequestHours) {
+      const activePlan = request.activeMatchingPlan || {};
+      const blocked = ['blocked_no_candidates', 'stale_waiting_teacher', 'needs_admin_attention'].includes(lower(activePlan.status));
+      preventivePushRisk(risks, seen, {
+        type: 'request_without_teacher',
+        severity: blocked || age >= thresholds.staleRequestHours * 2 ? 'high' : 'medium',
+        entityType: 'solicitudes',
+        entityId: requestId,
+        requestId,
+        familyUid: preventiveUserUid(request, 'family'),
+        studentId: preventiveUserUid(request, 'student'),
+        title: 'Familia esperando profesor',
+        description: `La solicitud lleva ${Math.round(age)}h abierta sin profesor asignado.`,
+        metric: 'horas_sin_asignacion',
+        value: Math.round(age),
+        threshold: thresholds.staleRequestHours,
+        impactedRoles: ['admin', 'familia'],
+        suggestedActions: [
+          'Abrir la solicitud y usar el ranking de matching.',
+          'Si no hay candidatos, ampliar modalidad, zona o materia.',
+          'Avisar a la familia si el sistema detecta baja oferta.',
+        ],
+        evidence: [
+          `Materia ${clean(firstPresent(request.subject, request.materia, 'sin materia'), 120)}`,
+          `Estado matching ${clean(firstPresent(request.matchStatus, activePlan.status, 'sin estado'), 120)}`,
+        ],
+      });
+    }
+
+    if (assignedTeacher && !assignmentsByRequest.has(requestId) && !activeClassesByRequest.has(requestId)) {
+      preventivePushRisk(risks, seen, {
+        type: 'request_assigned_without_relationship',
+        severity: 'high',
+        entityType: 'solicitudes',
+        entityId: requestId,
+        requestId,
+        teacherUid: assignedTeacher,
+        familyUid: preventiveUserUid(request, 'family'),
+        title: 'Solicitud asignada sin relacion operativa',
+        description: 'La solicitud tiene profesor asignado, pero no aparece asignacion ni clase activa relacionada.',
+        metric: 'sin_asignacion_ni_clase',
+        impactedRoles: ['admin'],
+        suggestedActions: [
+          'Crear o reparar la asignacion profesor-familia.',
+          'Verificar que exista chat y que el calendario pueda programar clases.',
+        ],
+      });
+    }
+  }
+
+  for (const assignment of assignments) {
+    if (!preventiveIsOpen(assignment)) continue;
+    const assignmentId = preventiveId(assignment, 'assignmentId', 'asignacion_id');
+    const requestId = clean(firstPresent(assignment.requestId, assignment.solicitud_id), 180);
+    const teacherUid = preventiveUserUid(assignment, 'teacher');
+    const familyUid = preventiveUserUid(assignment, 'family');
+    const age = preventiveHoursSince(firstPresent(assignment.acceptedAt, assignment.createdAt, assignment.created_at, assignment.updatedAt), nowMs);
+    const hasClass = activeClassesByAssignment.has(assignmentId) || (requestId && activeClassesByRequest.has(requestId));
+    if (!hasClass && age >= thresholds.unscheduledAssignmentHours) {
+      preventivePushRisk(risks, seen, {
+        type: 'assignment_without_scheduled_class',
+        severity: age >= thresholds.unscheduledAssignmentHours * 2 ? 'high' : 'medium',
+        entityType: 'asignaciones',
+        entityId: assignmentId,
+        assignmentId,
+        requestId,
+        teacherUid,
+        familyUid,
+        title: 'Relacion aceptada sin primera clase',
+        description: `Profesor y familia estan relacionados, pero no hay clase programada despues de ${Math.round(age)}h.`,
+        metric: 'horas_sin_primera_clase',
+        value: Math.round(age),
+        threshold: thresholds.unscheduledAssignmentHours,
+        impactedRoles: ['admin', 'profesor', 'familia'],
+        suggestedActions: [
+          'Recordar a ambas partes que acuerden horario fijo.',
+          'Crear una tarea para que administracion proponga franjas compatibles.',
+          'Comprobar que el chat existe y esta visible para ambos usuarios.',
+        ],
+      });
+    }
+    if (!clean(firstPresent(assignment.chatId, assignment.threadId, assignment.conversationId), 180)) {
+      preventivePushRisk(risks, seen, {
+        type: 'assignment_without_chat',
+        severity: 'high',
+        entityType: 'asignaciones',
+        entityId: assignmentId,
+        assignmentId,
+        requestId,
+        teacherUid,
+        familyUid,
+        title: 'Relacion sin chat disponible',
+        description: 'Hay una asignacion activa sin identificador de chat, lo que puede bloquear la coordinacion de horarios.',
+        metric: 'chat_faltante',
+        impactedRoles: ['admin', 'profesor', 'familia'],
+        suggestedActions: ['Recrear el chat de la relacion.', 'Enviar mensaje de bienvenida cuando el chat quede disponible.'],
+      });
+    }
+  }
+
+  for (const chat of chats) {
+    const chatId = preventiveId(chat, 'chatId', 'threadId', 'conversationId');
+    const status = preventiveStatus(chat);
+    if (PREVENTIVE_CLOSED_STATUSES.has(status)) continue;
+    const age = preventiveHoursSince(firstPresent(chat.lastMessageAt, chat.updatedAt, chat.updated_at, chat.createdAt), nowMs);
+    if (age < thresholds.chatStalledHours) continue;
+    const requestId = clean(firstPresent(chat.requestId, chat.solicitud_id), 180);
+    const assignmentId = clean(firstPresent(chat.assignmentId, chat.asignacion_id), 180);
+    const hasClass = (assignmentId && activeClassesByAssignment.has(assignmentId)) || (requestId && activeClassesByRequest.has(requestId));
+    if (hasClass) continue;
+    preventivePushRisk(risks, seen, {
+      type: 'chat_stalled_before_scheduling',
+      severity: age >= thresholds.chatStalledHours * 2 ? 'high' : 'medium',
+      entityType: 'chats',
+      entityId: chatId,
+      chatId,
+      requestId,
+      assignmentId,
+      teacherUid: preventiveUserUid(chat, 'teacher'),
+      familyUid: preventiveUserUid(chat, 'family'),
+      title: 'Chat parado antes de programar clase',
+      description: `El chat lleva ${Math.round(age)}h sin actividad y no existe una clase activa relacionada.`,
+      metric: 'horas_chat_inactivo',
+      value: Math.round(age),
+      threshold: thresholds.chatStalledHours,
+      impactedRoles: ['admin', 'profesor', 'familia'],
+      suggestedActions: [
+        'Enviar recordatorio contextual a la parte que debe proponer horario.',
+        'Sugerir franjas compatibles si ambos tienen disponibilidad cargada.',
+      ],
+    });
+  }
+
+  for (const payment of payments) {
+    if (!preventiveIsPaymentOpen(payment)) continue;
+    const dueAt = preventivePaymentDueDate(payment);
+    if (!dueAt) continue;
+    const overdueHours = Math.max(0, (nowMs - dueAt.getTime()) / 36e5);
+    if (overdueHours < thresholds.paymentGraceHours) continue;
+    const paymentId = preventiveId(payment, 'paymentId', 'pago_id');
+    preventivePushRisk(risks, seen, {
+      type: 'payment_overdue_preventive',
+      severity: overdueHours >= thresholds.paymentGraceHours + 24 ? 'critical' : 'high',
+      entityType: 'pagos',
+      entityId: paymentId,
+      paymentId,
+      classId: clean(firstPresent(payment.classId, payment.clase_id, preventiveList(payment.classIds)[0]), 180),
+      teacherUid: preventiveUserUid(payment, 'teacher'),
+      familyUid: preventiveUserUid(payment, 'family'),
+      title: 'Pago vencido con impacto operativo',
+      description: `Pago pendiente desde hace ${Math.round(overdueHours)}h tras su vencimiento.`,
+      metric: 'horas_pago_vencido',
+      value: Math.round(overdueHours),
+      threshold: thresholds.paymentGraceHours,
+      impactedRoles: ['admin', 'familia'],
+      suggestedActions: [
+        'Recordar a la familia que suba justificante o confirme Bizum.',
+        'Bloquear nuevas clases si se acumulan impagos.',
+        'Revisar si existe justificante pendiente de validacion.',
+      ],
+    });
+  }
+
+  const cancelledByEntity = new Map();
+  for (const klass of classes) {
+    if (!preventiveIsCancelledClass(klass)) continue;
+    const date = preventiveClassDate(klass);
+    if (!date || nowMs - date.getTime() > thresholds.repeatedCancellationWindowDays * 24 * 60 * 60 * 1000) continue;
+    const teacherUid = preventiveUserUid(klass, 'teacher');
+    const familyUid = preventiveUserUid(klass, 'family');
+    if (teacherUid) preventiveGroupCount(cancelledByEntity, `teacher:${teacherUid}`, klass);
+    if (familyUid) preventiveGroupCount(cancelledByEntity, `family:${familyUid}`, klass);
+  }
+  for (const group of cancelledByEntity.values()) {
+    if (group.count < thresholds.repeatedCancellationThreshold) continue;
+    const [role, id] = group.key.split(':');
+    preventivePushRisk(risks, seen, {
+      type: 'repeated_cancellations',
+      severity: group.count >= thresholds.repeatedCancellationThreshold + 2 ? 'high' : 'medium',
+      entityType: role === 'teacher' ? 'profesores' : 'familias',
+      entityId: id,
+      teacherUid: role === 'teacher' ? id : '',
+      familyUid: role === 'family' ? id : '',
+      title: role === 'teacher' ? 'Profesor con cancelaciones repetidas' : 'Familia con cancelaciones repetidas',
+      description: `${group.count} cancelaciones en los ultimos ${thresholds.repeatedCancellationWindowDays} dias.`,
+      metric: 'cancelaciones_periodo',
+      value: group.count,
+      threshold: thresholds.repeatedCancellationThreshold,
+      impactedRoles: ['admin', role === 'teacher' ? 'profesor' : 'familia'],
+      suggestedActions: [
+        'Revisar si existe un problema de disponibilidad real.',
+        'Actualizar reputacion y registrar seguimiento operativo.',
+        'Ajustar horarios recurrentes para evitar nuevas cancelaciones.',
+      ],
+    });
+  }
+
+  const incidentGroups = new Map();
+  for (const incident of incidents) {
+    if (!preventiveIsOpen(incident) && !preventiveRecent(incident, thresholds.recurrentIncidentWindowDays, nowMs)) continue;
+    const category = normalizeIncidentCategory(firstPresent(incident.categoria, incident.category), `${incident.titulo || ''} ${incident.descripcion || ''}`);
+    const teacherUid = preventiveUserUid(incident, 'teacher');
+    const familyUid = preventiveUserUid(incident, 'family');
+    const relatedUserUid = clean(firstPresent(incident.relatedUserUid, incident.userUid, incident.reportado_por), 180);
+    if (teacherUid) preventiveGroupCount(incidentGroups, `teacher:${teacherUid}:${category}`, incident);
+    if (familyUid) preventiveGroupCount(incidentGroups, `family:${familyUid}:${category}`, incident);
+    if (relatedUserUid) preventiveGroupCount(incidentGroups, `user:${relatedUserUid}:${category}`, incident);
+  }
+  for (const group of incidentGroups.values()) {
+    if (group.count < thresholds.recurrentIncidentThreshold) continue;
+    const [role, id, category] = group.key.split(':');
+    preventivePushRisk(risks, seen, {
+      type: 'recurrent_incident_pattern',
+      severity: group.count >= thresholds.recurrentIncidentThreshold + 2 ? 'high' : 'medium',
+      entityType: role === 'teacher' ? 'profesores' : role === 'family' ? 'familias' : 'users',
+      entityId: id,
+      teacherUid: role === 'teacher' ? id : '',
+      familyUid: role === 'family' ? id : '',
+      title: 'Patron de incidencias recurrentes',
+      description: `${group.count} incidencias de ${category} relacionadas con el mismo usuario.`,
+      metric: 'incidencias_recurrentes',
+      value: group.count,
+      threshold: thresholds.recurrentIncidentThreshold,
+      impactedRoles: ['admin'],
+      suggestedActions: [
+        'Abrir la ficha CRM del usuario y revisar el historial completo.',
+        'Definir causa raiz para evitar que se repita.',
+      ],
+    });
+  }
+
+  for (const teacher of teachers) {
+    const status = preventiveStatus(teacher);
+    if (teacher.active === false || teacher.activo === false || ['rechazado', 'rejected', 'inactivo', 'inactive'].includes(status)) continue;
+    const audit = preventiveTeacherProfileAudit(teacher, thresholds.incompleteProfilePercent);
+    if (!audit.belowThreshold) continue;
+    const teacherUid = preventiveUserUid(teacher, 'teacher');
+    preventivePushRisk(risks, seen, {
+      type: 'incomplete_teacher_profile',
+      severity: audit.percent < 60 ? 'high' : 'medium',
+      entityType: 'profesores',
+      entityId: teacherUid,
+      teacherUid,
+      title: 'Perfil de profesor incompleto',
+      description: `El perfil esta al ${audit.percent}% y puede perjudicar confianza, verificacion o matching.`,
+      metric: 'perfil_completado',
+      value: audit.percent,
+      threshold: thresholds.incompleteProfilePercent,
+      impactedRoles: ['admin', 'profesor'],
+      suggestedActions: [
+        'Pedir al profesor que complete los campos obligatorios.',
+        'Priorizar colegio, estudios, materias, niveles, foto, disponibilidad y Bizum.',
+      ],
+      evidence: audit.missing.slice(0, 8).map((field) => `Falta ${field}`),
+    });
+  }
+
+  for (const family of families) {
+    const familyUid = preventiveUserUid(family, 'family');
+    if (!familyUid) continue;
+    const hasOpenRequest = requests.some((request) => preventiveUserUid(request, 'family') === familyUid && preventiveIsOpen(request));
+    if (!hasOpenRequest) continue;
+    const inactiveDays = preventiveDaysSince(firstPresent(family.lastActivityAt, family.lastLoginAt, family.updatedAt, family.createdAt), nowMs);
+    if (inactiveDays < thresholds.familyInactiveDays) continue;
+    preventivePushRisk(risks, seen, {
+      type: 'inactive_family_with_open_request',
+      severity: inactiveDays >= thresholds.familyInactiveDays * 2 ? 'high' : 'medium',
+      entityType: 'familias',
+      entityId: familyUid,
+      familyUid,
+      title: 'Familia inactiva con solicitud abierta',
+      description: `La familia tiene una solicitud abierta y lleva ${Math.round(inactiveDays)} dias sin actividad detectada.`,
+      metric: 'dias_inactividad',
+      value: Math.round(inactiveDays),
+      threshold: thresholds.familyInactiveDays,
+      impactedRoles: ['admin', 'familia'],
+      suggestedActions: [
+        'Enviar recordatorio claro con el siguiente paso.',
+        'Cerrar o archivar la solicitud si ya no hay interes tras seguimiento.',
+      ],
+    });
+  }
+
+  for (const notification of notifications) {
+    const read = notification.readAt || notification.leida === true || notification.read === true;
+    if (read) continue;
+    const severity = preventiveSeverity(firstPresent(notification.severity, notification.priority));
+    if (!['critical', 'high'].includes(severity)) continue;
+    const age = preventiveHoursSince(firstPresent(notification.createdAt, notification.created_at), nowMs);
+    if (age < thresholds.unreadHighNotificationHours) continue;
+    const notificationId = preventiveId(notification, 'notificationId');
+    preventivePushRisk(risks, seen, {
+      type: 'unread_priority_notification',
+      severity: 'medium',
+      entityType: 'notificaciones',
+      entityId: notificationId,
+      notificationId,
+      familyUid: preventiveUserUid(notification, 'family'),
+      teacherUid: preventiveUserUid(notification, 'teacher'),
+      title: 'Aviso prioritario sin leer',
+      description: `Una notificacion prioritaria lleva ${Math.round(age)}h sin leerse.`,
+      metric: 'horas_notificacion_sin_leer',
+      value: Math.round(age),
+      threshold: thresholds.unreadHighNotificationHours,
+      impactedRoles: ['admin'],
+      suggestedActions: ['Revisar si hace falta escalar por correo interno o tarea CRM.'],
+    });
+  }
+
+  for (const klass of classes) {
+    if (!preventiveIsClassActive(klass)) continue;
+    const classId = preventiveId(klass, 'classId', 'clase_id');
+    const classTeacherUid = clean(firstPresent(klass.teacherUid, klass.profesor_id, klass.profesorUid), 180);
+    const classFamilyUid = clean(firstPresent(klass.familyUid, klass.familia_id, klass.familyUserUid), 180);
+    const classStudentId = clean(firstPresent(klass.studentId, klass.alumno_id, klass.studentUid), 180);
+    const missing = [
+      classTeacherUid ? '' : 'profesor',
+      classFamilyUid ? '' : 'familia',
+      classStudentId ? '' : 'alumno',
+    ].filter(Boolean);
+    if (!missing.length) continue;
+    preventivePushRisk(risks, seen, {
+      type: 'class_missing_core_relation',
+      severity: 'high',
+      entityType: 'clases',
+      entityId: classId,
+      classId,
+      title: 'Clase con relacion incompleta',
+      description: `La clase no tiene ${missing.join(', ')} asociado correctamente.`,
+      metric: 'relaciones_faltantes',
+      value: missing.length,
+      threshold: 0,
+      impactedRoles: ['admin'],
+      suggestedActions: ['Reparar la clase antes de que afecte a calendario, pagos o chat.'],
+      evidence: missing.map((field) => `Falta ${field}`),
+    });
+  }
+
+  for (const item of deadLetters) {
+    const status = preventiveStatus(item);
+    if (PREVENTIVE_CLOSED_STATUSES.has(status)) continue;
+    const id = preventiveId(item, 'jobId', 'id');
+    preventivePushRisk(risks, seen, {
+      type: 'automation_dead_letter',
+      severity: 'critical',
+      entityType: 'deadLetters',
+      entityId: id,
+      title: 'Automatizacion en dead letter',
+      description: clean(firstPresent(item.error, item.message, item.type, 'Hay un job que no ha podido recuperarse.'), 900),
+      metric: 'dead_letter_abierta',
+      impactedRoles: ['admin'],
+      suggestedActions: [
+        'Revisar el error exacto del job.',
+        'Reprocesar cuando el dato o permiso bloqueante este corregido.',
+      ],
+    });
+  }
+
+  for (const alert of opsAlerts) {
+    const status = preventiveStatus(alert);
+    if (PREVENTIVE_CLOSED_STATUSES.has(status)) continue;
+    const id = preventiveId(alert, 'alertId', 'id');
+    preventivePushRisk(risks, seen, {
+      type: lower(firstPresent(alert.alertType, alert.type)).includes('ai') ? 'ai_operational_alert' : 'open_ops_alert',
+      severity: preventiveSeverity(firstPresent(alert.severity, alert.priority, 'high')),
+      entityType: 'opsAlerts',
+      entityId: id,
+      title: clean(firstPresent(alert.title, alert.alertType, alert.type, 'Alerta operativa abierta'), 180),
+      description: clean(firstPresent(alert.message, alert.description, 'Hay una alerta operativa sin cerrar.'), 900),
+      metric: 'alerta_ops_abierta',
+      impactedRoles: ['admin'],
+      suggestedActions: ['Abrir Mission Control y resolver la causa antes de que llegue al usuario.'],
+    });
+  }
+
+  for (const event of automationEvents) {
+    const type = lower(firstPresent(event.type, event.action, event.name));
+    const errorText = lower(firstPresent(event.error, event.message, event.status));
+    if (!/(error|failed|fallo|quota|permission|denied|ai)/.test(`${type} ${errorText}`)) continue;
+    if (!preventiveRecent(event, 7, nowMs)) continue;
+    const id = preventiveId(event, 'eventId', 'id');
+    preventivePushRisk(risks, seen, {
+      type: type.includes('ai') || errorText.includes('ai') ? 'ai_recent_error' : 'automation_recent_error',
+      severity: /(permission|denied|quota|failed)/.test(errorText) ? 'high' : 'medium',
+      entityType: 'automationEvents',
+      entityId: id,
+      title: 'Error reciente en automatizacion',
+      description: clean(firstPresent(event.error, event.message, event.type, 'Evento automatico con error reciente.'), 900),
+      metric: 'error_automatizacion_reciente',
+      impactedRoles: ['admin'],
+      suggestedActions: ['Revisar si el error se esta repitiendo y convertirlo en incidencia si afecta a usuarios.'],
+    });
+  }
+
+  risks.sort((a, b) => (a.priorityRank - b.priorityRank) || String(a.type).localeCompare(String(b.type)));
+  const byType = countBy(risks, 'type');
+  const bySeverity = countBy(risks, 'severity');
+  return {
+    version: PREVENTIVE_INCIDENT_VERSION,
+    generatedAt: nowIso,
+    thresholds,
+    total: risks.length,
+    risks,
+    summary: {
+      total: risks.length,
+      critical: bySeverity.critical || 0,
+      high: bySeverity.high || 0,
+      medium: bySeverity.medium || 0,
+      low: bySeverity.low || 0,
+      byType,
+      bySeverity,
+      actionable: risks.filter((risk) => risk.shouldCreateTask).length,
+      incidentsToCreate: risks.filter((risk) => risk.shouldCreateIncident).length,
+      adminNotifications: risks.filter((risk) => risk.shouldNotifyAdmin).length,
+    },
+  };
 }
 
 export function buildIncidentStats(items = [], options = {}) {

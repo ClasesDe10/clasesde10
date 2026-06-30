@@ -428,6 +428,46 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     }));
   }
 
+  for (const risk of dataset.preventiveRisks || []) {
+    const status = statusOf(risk);
+    if (CLOSED_STATUSES.has(status)) continue;
+    const severity = clean(first(risk.severity, risk.priority, risk.prioridad)).toLowerCase();
+    const priority = severity === 'critical' || severity === 'urgente'
+      ? 98
+      : severity === 'high' || severity === 'alta'
+        ? 90
+        : severity === 'medium' || severity === 'media'
+          ? 76
+          : 58;
+    const action = Array.isArray(risk.suggestedActions) && risk.suggestedActions.length
+      ? risk.suggestedActions[0]
+      : 'Resolver preventivamente antes de que afecte al usuario';
+    items.push(makeItem({
+      id: itemId('preventive-risk', risk),
+      type: 'risk',
+      title: clean(first(risk.title, 'Riesgo preventivo')),
+      detail: clean(first(risk.description, risk.metric, 'Riesgo operativo detectado automaticamente.')),
+      section: 'incidencias',
+      priority,
+      tone: priority >= 90 ? 'danger' : priority >= 76 ? 'warning' : 'info',
+      entityType: clean(first(risk.entityType, 'preventiveRisk')),
+      entityId: clean(first(risk.entityId, risk.id)),
+      entityName: clean(first(risk.familyUid, risk.teacherUid, risk.studentId, risk.entityId, 'Radar preventivo')),
+      actionLabel: 'Resolver riesgo',
+      automation: clean(action, 160),
+      minutesSaved: priority >= 90 ? 18 : 10,
+      value: asNumber(risk.value),
+      createdAt: first(risk.detectedAt, risk.lastSeenAt, risk.createdAt),
+      source: 'preventiveRisks',
+      metadata: {
+        riskId: risk.id,
+        riskType: risk.type,
+        severity,
+        suggestedActions: risk.suggestedActions || [],
+      },
+    }));
+  }
+
   for (const chat of dataset.chats || []) {
     const schedulingStatus = clean(first(chat.schedulingStatus, chat.estado_programacion, chat.relationshipStage)).toLowerCase();
     const stale = hoursSince(first(chat.updatedAt, chat.updated_at, chat.createdAt, chat.created_at), now) >= 48;
@@ -462,6 +502,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     waitingMatching: visibleItems.filter((item) => item.type === 'matching').length,
     pendingDocuments: visibleItems.filter((item) => item.type === 'document').length,
     openIncidents: visibleItems.filter((item) => item.type === 'incident').length,
+    preventiveRisks: visibleItems.filter((item) => item.type === 'risk').length,
     overdueTasks: visibleItems.filter((item) => item.type === 'task').length,
     estimatedMinutesSaved: visibleItems.reduce((sum, item) => sum + asNumber(item.minutesSaved), 0),
   };

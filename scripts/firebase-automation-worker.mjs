@@ -38,6 +38,7 @@ import {
 } from '../js/calendar-engine.js';
 import {
   buildAutomaticIncidentPayload,
+  buildPreventiveIncidentPlan,
   normalizeIncidentPriority,
   incidentPriorityMeta,
 } from '../js/incident-engine.js';
@@ -2279,7 +2280,7 @@ async function createOperationalIncidentOnce(db, kind, sourceData = {}, stats) {
     source: kind,
     ...sourceData,
   });
-  const prioridad = normalizeIncidentPriority(aiClassification.priority, aiClassification.category);
+  const prioridad = normalizeIncidentPriority(payload.prioridad || payload.priority || aiClassification.priority, aiClassification.category);
   const meta = incidentPriorityMeta(prioridad);
   await writeDoc(db.collection('incidencias'), id, {
     ...payload,
@@ -3022,6 +3023,232 @@ async function processPlatformAutomationSweep(db, stats) {
   }
 }
 
+function preventiveIncidentOptions() {
+  return {
+    nowIso: isoNow(),
+    teacherNonResponseHours: runtimeNumber('incidents.teacherNonResponseHours', runtimeNumber('matching.teacherResponseSlaHours', 8, 1, 168), 1, 720),
+    staleRequestHours: runtimeNumber('incidents.staleRequestHours', runtimeNumber('matching.staleRequestHours', 12, 1, 720), 1, 1440),
+    unscheduledAssignmentHours: runtimeNumber('incidents.unscheduledAssignmentHours', 48, 1, 1440),
+    chatStalledHours: runtimeNumber('incidents.chatStalledHours', 48, 1, 1440),
+    paymentGraceHours: runtimeNumber('payments.overdueGraceHours', 24, 0, 720),
+    repeatedCancellationWindowDays: runtimeNumber('incidents.repeatedCancellationWindowDays', 30, 1, 365),
+    repeatedCancellationThreshold: runtimeNumber('incidents.repeatedCancellationThreshold', 3, 2, 50),
+    recurrentIncidentWindowDays: runtimeNumber('incidents.recurrentIncidentWindowDays', 30, 1, 365),
+    recurrentIncidentThreshold: runtimeNumber('incidents.recurrentIncidentThreshold', 3, 2, 50),
+    incompleteProfilePercent: runtimeNumber('profiles.minTeacherProfilePercent', 85, 1, 100),
+    familyInactiveDays: runtimeNumber('incidents.familyInactiveDays', 14, 1, 365),
+    unreadHighNotificationHours: runtimeNumber('incidents.unreadHighNotificationHours', 24, 1, 720),
+  };
+}
+
+async function materializePreventiveRisk(db, risk, stats) {
+  if (!risk?.id) return;
+
+  const riskRef = db.collection('preventiveRisks').doc(risk.id);
+  const existingRisk = await riskRef.get();
+  const existingData = existingRisk.exists ? existingRisk.data() : {};
+  const riskChanged = !existingRisk.exists
+    || existingData.severity !== risk.severity
+    || existingData.type !== risk.type
+    || existingData.description !== risk.description;
+  await writeDoc(db.collection('preventiveRisks'), risk.id, {
+    ...risk,
+    status: 'active',
+    estado: 'activa',
+    firstSeenAt: existingRisk.exists ? (existingRisk.data().firstSeenAt || now()) : now(),
+    lastSeenAt: now(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+    createdAt: existingRisk.exists ? (existingRisk.data().createdAt || now()) : now(),
+    created_at: existingRisk.exists ? (existingRisk.data().created_at || isoNow()) : isoNow(),
+  });
+  stats.preventiveRisksDetected += existingRisk.exists ? 0 : 1;
+  stats.preventiveRisksActive += 1;
+
+  if (riskChanged) {
+    await addAutomationEvent(db, {
+      type: 'preventive.risk_detected',
+      riskId: risk.id,
+      riskType: risk.type,
+      severity: risk.severity,
+      entityType: risk.entityType,
+      entityId: risk.entityId,
+      preventiveVersion: risk.version,
+    });
+    stats.preventiveAutomationEventsCreated += 1;
+
+    await materializeWorkerAutomationPlan(db, {
+      type: 'preventive.risk_detected',
+      entityType: risk.entityType,
+      entityId: risk.entityId,
+      data: risk,
+      source: 'preventiveIncidentRadar',
+    }, stats);
+  }
+
+  if (risk.shouldCreateTask) {
+    const taskId = notificationId('crm_preventive', risk.id);
+    const taskRef = db.collection('crmTasks').doc(taskId);
+    const existingTask = await taskRef.get();
+    if (!existingTask.exists) {
+      const dueMinutes = risk.severity === 'critical' ? 30 : risk.severity === 'high' ? 90 : 240;
+      await writeDoc(db.collection('crmTasks'), taskId, {
+        title: risk.title,
+        description: risk.description,
+        priority: risk.severity,
+        status: 'open',
+        estado: 'abierta',
+        entityType: risk.entityType,
+        entityId: risk.entityId,
+        riskId: risk.id,
+        riskType: risk.type,
+        familyUid: risk.familyUid || '',
+        teacherUid: risk.teacherUid || '',
+        requestId: risk.requestId || '',
+        assignmentId: risk.assignmentId || '',
+        classId: risk.classId || '',
+        paymentId: risk.paymentId || '',
+        tags: ['preventivo', risk.type, risk.severity],
+        suggestedActions: risk.suggestedActions || [],
+        dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueMinutes * 60 * 1000)),
+        source: 'preventive_incident_radar',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.preventiveTasksCreated += 1;
+    }
+  }
+
+  if (risk.shouldNotifyAdmin) {
+    const created = await notifyAdminsOnce(
+      db,
+      risk.severity === 'critical' ? 'Riesgo critico detectado' : 'Riesgo operativo detectado',
+      `${risk.title}: ${risk.description}`,
+      {
+        type: 'preventive_risk',
+        riskId: risk.id,
+        riskType: risk.type,
+        severity: risk.severity,
+        entityType: risk.entityType,
+        entityId: risk.entityId,
+        url: '/pages/login.html',
+      },
+      `preventive_risk_${risk.id}`,
+    );
+    stats.preventiveNotificationsCreated += created;
+  }
+
+  if (risk.shouldCreateIncident) {
+    const created = await createOperationalIncidentOnce(db, 'preventive_risk', {
+      id: risk.id,
+      eventId: risk.id,
+      classId: risk.classId,
+      paymentId: risk.paymentId,
+      teacherUid: risk.teacherUid,
+      familyUid: risk.familyUid,
+      relatedUserUid: risk.teacherUid || risk.familyUid || '',
+      titulo: risk.title,
+      descripcion: risk.description,
+      priority: risk.prioridad,
+      suggestedActions: risk.suggestedActions || [],
+    }, stats);
+    if (created) stats.preventiveIncidentsCreated += 1;
+  }
+
+  if (['critical', 'high'].includes(risk.severity)) {
+    const alertId = notificationId('ops_preventive', risk.id);
+    const alertRef = db.collection('opsAlerts').doc(alertId);
+    const existingAlert = await alertRef.get();
+    if (!existingAlert.exists) {
+      await writeDoc(db.collection('opsAlerts'), alertId, {
+        alertType: 'preventive_risk',
+        type: 'preventive_risk',
+        title: risk.title,
+        message: risk.description,
+        severity: risk.severity,
+        status: 'open',
+        estado: 'abierta',
+        entityType: risk.entityType,
+        entityId: risk.entityId,
+        riskId: risk.id,
+        suggestedActions: risk.suggestedActions || [],
+        source: 'preventive_incident_radar',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.preventiveOpsAlertsCreated += 1;
+    }
+  }
+}
+
+async function processPreventiveIncidentRadar(db, stats) {
+  if (!runtimeBoolean('incidents.preventiveRadarEnabled', true)) return;
+  const scanLimit = runtimeNumber('incidents.preventiveScanLimit', limit, 10, 5000);
+  const [
+    classes,
+    payments,
+    requests,
+    requestMatches,
+    assignments,
+    incidents,
+    teachers,
+    families,
+    chats,
+    notifications,
+    deadLetters,
+    opsAlerts,
+    automationEvents,
+  ] = await Promise.all([
+    listCollection(db, 'clases', scanLimit),
+    listCollection(db, 'pagos', scanLimit),
+    listCollection(db, 'solicitudes', scanLimit),
+    listCollection(db, 'solicitudMatches', scanLimit),
+    listCollection(db, 'asignaciones', scanLimit),
+    listCollection(db, 'incidencias', scanLimit),
+    listCollection(db, 'profesores', scanLimit),
+    listCollection(db, 'familias', scanLimit),
+    listCollection(db, 'chats', scanLimit).catch(() => []),
+    listCollection(db, 'notificaciones', scanLimit),
+    listCollection(db, 'deadLetters', scanLimit),
+    listCollection(db, 'opsAlerts', scanLimit),
+    listCollection(db, 'automationEvents', scanLimit),
+  ]);
+
+  const plan = buildPreventiveIncidentPlan({
+    classes,
+    payments,
+    requests,
+    requestMatches,
+    assignments,
+    incidents,
+    teachers,
+    families,
+    chats,
+    notifications,
+    deadLetters,
+    opsAlerts,
+    automationEvents,
+  }, preventiveIncidentOptions());
+
+  stats.preventiveRadarVersion = plan.version;
+  stats.preventiveRisksEvaluated = plan.total;
+  stats.preventiveCriticalRisks = plan.summary.critical;
+  stats.preventiveHighRisks = plan.summary.high;
+
+  await writeDoc(db.collection('preventiveRiskSnapshots'), notificationId('preventive_snapshot', plan.generatedAt.slice(0, 16)), {
+    ...plan.summary,
+    thresholds: plan.thresholds,
+    version: plan.version,
+    generatedAt: plan.generatedAt,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+
+  for (const risk of plan.risks.slice(0, scanLimit)) {
+    await materializePreventiveRisk(db, risk, stats);
+  }
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -3287,6 +3514,17 @@ async function main() {
     financeAnomaliesDetected: 0,
     financeIncidentsCreated: 0,
     financeErpVersion: FINANCE_ERP_VERSION,
+    preventiveRisksEvaluated: 0,
+    preventiveRisksDetected: 0,
+    preventiveRisksActive: 0,
+    preventiveCriticalRisks: 0,
+    preventiveHighRisks: 0,
+    preventiveTasksCreated: 0,
+    preventiveNotificationsCreated: 0,
+    preventiveIncidentsCreated: 0,
+    preventiveOpsAlertsCreated: 0,
+    preventiveAutomationEventsCreated: 0,
+    preventiveRadarVersion: '',
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
@@ -3325,6 +3563,7 @@ async function main() {
   }
 
   await processPlatformAutomationSweep(db, stats);
+  await processPreventiveIncidentRadar(db, stats);
   await processTrustReputation(db, stats);
   await writeAnalyticsRollup(db, stats);
   const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');

@@ -4,6 +4,7 @@ import {
   buildAutomaticIncidentPayload,
   buildIncidentStats,
   buildIncidentUpdatePatch,
+  buildPreventiveIncidentPlan,
   incidentPriorityMeta,
   normalizeIncident,
 } from '../js/incident-engine.js';
@@ -72,6 +73,126 @@ assert.equal(stats.resolved, 1);
 assert.equal(stats.overdue >= 1, true);
 assert.ok(stats.patterns.length >= 1);
 
+const preventive = buildPreventiveIncidentPlan({
+  requestMatches: [{
+    id: 'match_1',
+    requestId: 'req_1',
+    teacherUid: 'teacher_1',
+    status: 'propuesto',
+    createdAt: '2026-06-29T22:00:00.000Z',
+  }],
+  solicitudes: [{
+    id: 'req_2',
+    familyUid: 'fam_1',
+    studentId: 'student_1',
+    status: 'pendiente',
+    materia: 'Matematicas',
+    createdAt: '2026-06-28T09:00:00.000Z',
+  }, {
+    id: 'req_3',
+    familyUid: 'fam_2',
+    studentId: 'student_2',
+    status: 'pendiente',
+    assignedTeacherUid: 'teacher_2',
+    createdAt: '2026-06-29T09:00:00.000Z',
+  }],
+  asignaciones: [{
+    id: 'assign_1',
+    requestId: 'req_4',
+    familyUid: 'fam_3',
+    teacherUid: 'teacher_3',
+    status: 'activa',
+    createdAt: '2026-06-27T09:00:00.000Z',
+  }],
+  clases: [{
+    id: 'class_broken',
+    status: 'programada',
+    fecha: '2026-06-30T18:00:00.000Z',
+    teacherUid: 'teacher_1',
+  }, {
+    id: 'class_cancel_1',
+    status: 'cancelada',
+    teacherUid: 'teacher_4',
+    familyUid: 'fam_4',
+    fecha: '2026-06-25T18:00:00.000Z',
+  }, {
+    id: 'class_cancel_2',
+    status: 'cancelada',
+    teacherUid: 'teacher_4',
+    familyUid: 'fam_4',
+    fecha: '2026-06-26T18:00:00.000Z',
+  }, {
+    id: 'class_cancel_3',
+    status: 'cancelada',
+    teacherUid: 'teacher_4',
+    familyUid: 'fam_4',
+    fecha: '2026-06-27T18:00:00.000Z',
+  }],
+  pagos: [{
+    id: 'pay_1',
+    familyUid: 'fam_5',
+    status: 'pendiente',
+    amount: 30,
+    dueAt: '2026-06-28T10:00:00.000Z',
+  }],
+  profesores: [{
+    id: 'teacher_5',
+    status: 'verificado',
+    nombre: 'Profesor incompleto',
+    materias: ['Matematicas'],
+  }],
+  familias: [{
+    id: 'fam_1',
+    status: 'active',
+    lastActivityAt: '2026-06-01T10:00:00.000Z',
+  }],
+  incidencias: [{
+    id: 'inc_a',
+    familyUid: 'fam_6',
+    categoria: 'pago',
+    status: 'abierta',
+    createdAt: '2026-06-20T10:00:00.000Z',
+  }, {
+    id: 'inc_b',
+    familyUid: 'fam_6',
+    categoria: 'pago',
+    status: 'abierta',
+    createdAt: '2026-06-21T10:00:00.000Z',
+  }, {
+    id: 'inc_c',
+    familyUid: 'fam_6',
+    categoria: 'pago',
+    status: 'abierta',
+    createdAt: '2026-06-22T10:00:00.000Z',
+  }],
+  deadLetters: [{
+    id: 'job_dead',
+    status: 'open',
+    error: 'permission denied',
+  }],
+}, {
+  nowIso: '2026-06-30T10:00:00.000Z',
+  teacherNonResponseHours: 8,
+  staleRequestHours: 24,
+  unscheduledAssignmentHours: 48,
+  paymentGraceHours: 24,
+  repeatedCancellationThreshold: 3,
+  recurrentIncidentThreshold: 3,
+  incompleteProfilePercent: 85,
+});
+const preventiveTypes = new Set(preventive.risks.map((item) => item.type));
+assert.ok(preventiveTypes.has('teacher_non_response'));
+assert.ok(preventiveTypes.has('request_without_teacher'));
+assert.ok(preventiveTypes.has('request_assigned_without_relationship'));
+assert.ok(preventiveTypes.has('assignment_without_scheduled_class'));
+assert.ok(preventiveTypes.has('payment_overdue_preventive'));
+assert.ok(preventiveTypes.has('repeated_cancellations'));
+assert.ok(preventiveTypes.has('recurrent_incident_pattern'));
+assert.ok(preventiveTypes.has('incomplete_teacher_profile'));
+assert.ok(preventiveTypes.has('class_missing_core_relation'));
+assert.ok(preventiveTypes.has('automation_dead_letter'));
+assert.equal(preventive.summary.critical >= 1, true);
+
 const adminHtml = fs.readFileSync('pages/dashboard/admin.html', 'utf8');
 const adminModule = fs.readFileSync('js/admin-incidents.js', 'utf8');
 const worker = fs.readFileSync('scripts/firebase-automation-worker.mjs', 'utf8');
@@ -86,11 +207,15 @@ assert.match(worker, /createOperationalIncidentOnce/);
 assert.match(worker, /payment_overdue/);
 assert.match(worker, /document_stale/);
 assert.match(worker, /class_unconfirmed/);
+assert.match(worker, /processPreventiveIncidentRadar/);
+assert.match(worker, /preventiveRisks/);
 assert.match(rules, /ticketId/);
 assert.match(rules, /history/);
+assert.match(rules, /preventiveRisks/);
 assert.match(indexes, /priorityRank/);
 assert.match(indexes, /assignedAdminEmail/);
 assert.match(platformConfig, /incidents\.urgentSlaHours/);
+assert.match(platformConfig, /incidents\.preventiveRadarEnabled/);
 
 console.log(JSON.stringify({
   ok: true,

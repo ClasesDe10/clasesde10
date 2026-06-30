@@ -30,6 +30,7 @@ const LIVE_SIGNAL_COLLECTIONS = [
   { name: 'systemJobs', orderField: 'updatedAt', limit: 20 },
   { name: 'automationEvents', orderField: 'createdAt', limit: 20 },
   { name: 'incidencias', orderField: 'updatedAt', limit: 20 },
+  { name: 'preventiveRisks', orderField: 'lastSeenAt', limit: 20 },
 ];
 
 function clean(value, max = 4000) {
@@ -326,6 +327,7 @@ async function loadData(db, leadsAdapter) {
     deadLetters,
     metricSnapshots,
     opsAlerts,
+    preventiveRisks,
     healthChecks,
   ] = await Promise.all([
     safeRead('users', () => loadRows(db, 'usuarios'), [], loadErrors),
@@ -362,6 +364,7 @@ async function loadData(db, leadsAdapter) {
     safeRead('deadLetters', () => loadRows(db, 'deadLetters'), [], loadErrors),
     safeRead('metricSnapshots', () => loadRows(db, 'metricSnapshots'), [], loadErrors),
     safeRead('opsAlerts', () => loadRows(db, 'opsAlerts'), [], loadErrors),
+    safeRead('preventiveRisks', () => loadRows(db, 'preventiveRisks'), [], loadErrors),
     safeRead('platformHealthChecks', () => loadRows(db, 'platformHealthChecks'), [], loadErrors),
   ]);
 
@@ -394,6 +397,7 @@ async function loadData(db, leadsAdapter) {
     deadLetters,
     metricSnapshots,
     opsAlerts,
+    preventiveRisks,
     healthChecks,
     loadErrors,
   };
@@ -827,6 +831,8 @@ function computeMissionControl(data, metrics) {
   const staleQueuedJobs = queuedJobs.filter((item) => hoursAgo(first(item.runAt, item.createdAt, item.created_at)) > 1);
   const stuckProcessingJobs = (data.systemJobs || []).filter((item) => statusOf(item) === 'processing' && hoursAgo(first(item.startedAt, item.updatedAt, item.updated_at)) > 0.5);
   const openOpsAlerts = (data.opsAlerts || []).filter((item) => ['open', 'abierta', 'active'].includes(statusOf(item)));
+  const openPreventiveRisks = (data.preventiveRisks || []).filter((item) => ['active', 'activa', 'open', 'abierta', ''].includes(statusOf(item)));
+  const severePreventiveRisks = openPreventiveRisks.filter((item) => ['critical', 'high', 'urgente', 'alta'].includes(clean(first(item.severity, item.priority, item.prioridad)).toLowerCase()));
   const latestMetricSnapshot = latestItem(data.metricSnapshots || []);
   const latestHealthSnapshot = latestItem(data.healthChecks || []);
   const latestAutomation = latestItem(data.automationEvents || []);
@@ -974,8 +980,19 @@ function computeMissionControl(data, metrics) {
           signals: ['automationEvents', 'scheduled worker'],
           section: 'auditoria',
         })] : []),
+        ...(severePreventiveRisks.length ? [issue({
+          status: severePreventiveRisks.some((item) => clean(item.severity).toLowerCase() === 'critical') ? 'degraded' : 'attention',
+          what: `${severePreventiveRisks.length} riesgo(s) preventivos altos`,
+          impact: 'Hay situaciones detectadas antes de que el usuario tenga que avisar.',
+          affectedUsers: affectedUniqueUsers(severePreventiveRisks, ['familyUid', 'teacherUid', 'studentId']),
+          cause: 'Radar preventivo encontro patrones de espera, pagos, chat, perfiles o sincronizacion.',
+          fix: 'Abrir Operaciones o Incidencias y resolver las tareas preventivas priorizadas.',
+          startedAt: oldestDate(severePreventiveRisks, (item) => first(item.detectedAt, item.firstSeenAt, item.createdAt)),
+          signals: severePreventiveRisks.map((item) => first(item.title, item.type)),
+          section: 'incidencias',
+        })] : []),
       ],
-      okSignals: [`${queuedJobs.length} jobs en cola`, `${data.automationEvents?.length || 0} eventos`, `${openOpsAlerts.length} alertas abiertas`],
+      okSignals: [`${queuedJobs.length} jobs en cola`, `${data.automationEvents?.length || 0} eventos`, `${openOpsAlerts.length} alertas abiertas`, `${openPreventiveRisks.length} riesgos preventivos`],
     }),
     subsystem({
       id: 'apis',
@@ -1392,6 +1409,8 @@ function computeControlCenter(data) {
     const text = clean([item.type, item.status, item.error, item.message].join(' ')).toLowerCase();
     return /(error|failed|fallo|exception|missing|unavailable)/.test(text) && daysAgo(createdDate(item)) <= 14;
   });
+  const preventiveRisks = (data.preventiveRisks || []).filter((item) => ['active', 'activa', 'open', 'abierta', ''].includes(statusOf(item)));
+  const severePreventiveRisks = preventiveRisks.filter((item) => ['critical', 'high', 'urgente', 'alta'].includes(clean(first(item.severity, item.priority, item.prioridad)).toLowerCase()));
   const pendingPaymentAmount = pendingPayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const overduePaymentAmount = overduePayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const averageTicket = completedMonth.length ? revenueMonth / completedMonth.length : 0;
@@ -1409,6 +1428,7 @@ function computeControlCenter(data) {
     - Math.min(25, overduePayments.length * 5)
     - Math.min(18, staleUnassigned.length * 4)
     - Math.min(18, openIncidents.length * 4)
+    - Math.min(18, severePreventiveRisks.length * 4)
     - Math.max(0, 90 - completionHealth) * 0.25
     - Math.min(18, Math.max(0, timing.avgTimeToAssignHours - 24) * 0.6)
     - Math.min(12, riskyClasses.length * 2)
@@ -1449,6 +1469,8 @@ function computeControlCenter(data) {
     classesWithoutConfirmation,
     lifecycleBlocked,
     automationErrors,
+    preventiveRisks,
+    severePreventiveRisks,
     pendingPaymentAmount,
     overduePaymentAmount,
     averageTicket,
@@ -1475,6 +1497,12 @@ function computeControlCenter(data) {
       section: item.nextActions?.admin?.[0]?.section || 'chat',
     })),
     ...anomalies,
+    ...severePreventiveRisks.slice(0, 4).map((item) => ({
+      tone: clean(item.severity).toLowerCase() === 'critical' ? 'danger' : 'warning',
+      title: first(item.title, 'Riesgo preventivo'),
+      body: first(item.description, item.metric, 'Revisar antes de que afecte al usuario.'),
+      section: 'incidencias',
+    })),
     ...overduePayments.map((item) => ({
       tone: 'danger',
       title: 'Pago vencido',
@@ -1554,6 +1582,13 @@ function computeControlCenter(data) {
       section: 'incidencias',
       tone: 'danger',
     })),
+    ...preventiveRisks.map((item) => ({
+      date: first(item.detectedAt, item.lastSeenAt, item.createdAt),
+      title: `Riesgo ${first(item.severityLabel, item.severity, 'preventivo')}`,
+      body: first(item.title, item.description, item.type, 'Riesgo preventivo'),
+      section: 'incidencias',
+      tone: ['critical', 'high'].includes(clean(item.severity).toLowerCase()) ? 'danger' : 'warning',
+    })),
     ...data.documents.map((item) => ({
       date: createdDate(item),
       title: `Documento ${statusOf(item) || 'pendiente'}`,
@@ -1585,6 +1620,12 @@ function computeControlCenter(data) {
       section: 'incidencias',
       tone: ['alta', 'urgente'].includes(clean(first(item.prioridad, item.priority)).toLowerCase()) ? 'danger' : 'warning',
     })),
+    ...severePreventiveRisks.slice(0, 4).map((item) => ({
+      title: first(item.title, 'Riesgo preventivo'),
+      body: first(item.description, 'Resolver preventivamente'),
+      section: 'incidencias',
+      tone: clean(item.severity).toLowerCase() === 'critical' ? 'danger' : 'warning',
+    })),
   ].slice(0, 10);
 
   const dataQuality = [
@@ -1592,6 +1633,7 @@ function computeControlCenter(data) {
     { label: 'Relaciones sin chat operativo', value: relationshipSummary.withMissingChat.length, section: 'chat' },
     { label: 'Relaciones pendientes de horario', value: relationshipSummary.pendingSchedule.length, section: 'chat' },
     { label: 'Clases con precio/margen incompleto', value: riskyClasses.length, section: 'finanzas' },
+    { label: 'Riesgos preventivos activos', value: preventiveRisks.length, section: 'incidencias' },
     { label: 'Solicitudes antiguas sin asignar', value: staleUnassigned.length, section: 'solicitudes' },
     { label: 'Pagos vencidos', value: overduePayments.length, section: 'pagos' },
     { label: 'Documentos pendientes', value: pendingDocs.length, section: 'documentos' },

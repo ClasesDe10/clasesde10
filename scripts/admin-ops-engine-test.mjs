@@ -112,6 +112,22 @@ const dataset = {
       dueAt: '2026-06-28',
     },
   ],
+  preventiveRisks: [
+    {
+      id: 'preventive_payment_1',
+      type: 'payment_overdue_preventive',
+      severity: 'high',
+      title: 'Pago vencido con impacto operativo',
+      description: 'Pago pendiente despues del margen operativo.',
+      entityType: 'pagos',
+      entityId: 'pay_1',
+      familyUid: 'family_1',
+      value: 36,
+      suggestedActions: ['Avisar a la familia y revisar justificante.'],
+      lastSeenAt: '2026-06-29T09:00:00.000Z',
+      status: 'active',
+    },
+  ],
   chats: [
     {
       id: 'chat_1',
@@ -128,6 +144,8 @@ assert(model.items.length >= 8, 'Ops model must create a cross-module operationa
 assert(model.summary.urgent >= 2, 'Ops model must detect urgent work.');
 assert(model.summary.waitingMatching === 1, 'Ops model must count requests waiting for matching.');
 assert(model.summary.revenueAtRisk === 120, 'Ops model must calculate revenue at risk.');
+assert(model.summary.preventiveRisks === 1, 'Ops model must count preventive risks.');
+assert(model.items.some((item) => item.type === 'risk' && item.source === 'preventiveRisks'), 'Ops model must expose preventive risks as actionable items.');
 assert(model.automationGroups.some((group) => group.type === 'matching_followup'), 'Ops model must suggest matching automation groups.');
 assert(model.items[0].priority >= model.items.at(-1).priority, 'Ops items must be sorted by priority.');
 
@@ -151,6 +169,7 @@ assert(admin.includes('data-admin-ops-workbench'), 'Admin dashboard must expose 
 assert(admin.includes('initAdminOpsWorkbench'), 'Admin dashboard must initialize the ops workbench.');
 assert(admin.includes('busqueda-global'), 'Admin dashboard must keep the global search input.');
 assert(workbench.includes('crmTasks'), 'Ops workbench must create CRM follow-up tasks.');
+assert(workbench.includes('preventiveRisks'), 'Ops workbench must load preventive risk signals.');
 assert(workbench.includes('recordAdminAudit'), 'Ops workbench must audit operational actions.');
 assert(workbench.includes('data-ops-review'), 'Ops workbench must allow marking queue items as reviewed.');
 assert(workbench.includes('admin-global-search-panel'), 'Ops workbench must render global search results.');
