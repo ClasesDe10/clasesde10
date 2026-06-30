@@ -44,6 +44,10 @@ import {
   incidentPriorityMeta,
 } from '../js/incident-engine.js';
 import {
+  buildPlatformSupervisionPlan,
+  PLATFORM_SUPERVISION_VERSION,
+} from '../js/platform-supervision-engine.js';
+import {
   OPEN_PAYMENT_STATUSES,
   PAID_PAYMENT_STATUSES,
   buildClassPaymentPatch,
@@ -3434,6 +3438,319 @@ async function processAlertPriorityEngine(db, stats) {
   }
 }
 
+function platformSupervisionOptions() {
+  return {
+    nowIso: isoNow(),
+    scanLimit: runtimeNumber('supervision.scanLimit', limit, 10, 5000),
+    automationHeartbeatHours: runtimeNumber('supervision.automationHeartbeatHours', 12, 1, 168),
+    queuedJobStuckHours: runtimeNumber('supervision.queuedJobStuckHours', 2, 1, 168),
+    processingJobStuckMinutes: runtimeNumber('supervision.processingJobStuckMinutes', 45, 5, 1440),
+    staleIncidentHours: runtimeNumber('supervision.staleIncidentHours', 24, 1, 720),
+    staleRiskHours: runtimeNumber('supervision.staleRiskHours', 12, 1, 720),
+  };
+}
+
+function platformSupervisionIncidentKind(finding = {}) {
+  if (finding.category === 'automation') return 'system_error';
+  if (finding.category === 'blocked_process' && finding.type?.includes('payment')) return 'payment_overdue';
+  if (finding.category === 'blocked_process' && finding.type?.includes('matching')) return 'matching_blocked';
+  return 'sync_error';
+}
+
+async function applyPlatformSupervisionAutoAction(db, finding, stats) {
+  if (!finding.autoRepairable || !runtimeBoolean('supervision.autoRepairSafeIssues', true)) return false;
+  if (finding.autoAction === 'enqueue_relationship_ensure_chat' && finding.assignmentId) {
+    const created = await enqueueWorkerSystemJob(db, {
+      type: 'relationship.ensure_chat',
+      payload: {
+        assignmentId: finding.assignmentId,
+        reason: 'platform_self_supervision',
+      },
+      priority: finding.severity === 'critical' ? 'critical' : 'high',
+      idempotencyKey: `supervision_ensure_chat_${finding.assignmentId}`,
+      maxAttempts: 5,
+    }, 'platform_self_supervision');
+    if (created) {
+      stats.selfSupervisionJobsQueued += 1;
+      stats.selfSupervisionAutoRepairsApplied += 1;
+    }
+    return created;
+  }
+
+  if (finding.autoAction === 'enqueue_payment_request_for_class' && finding.classId) {
+    const created = await enqueueWorkerSystemJob(db, {
+      type: 'payment.request_for_class',
+      payload: {
+        classId: finding.classId,
+        reason: 'platform_self_supervision',
+      },
+      priority: finding.severity === 'critical' ? 'critical' : 'high',
+      idempotencyKey: `supervision_payment_request_${finding.classId}`,
+      maxAttempts: 5,
+    }, 'platform_self_supervision');
+    if (created) {
+      stats.selfSupervisionJobsQueued += 1;
+      stats.selfSupervisionAutoRepairsApplied += 1;
+    }
+    return created;
+  }
+
+  if (finding.autoAction === 'mark_notification_orphaned' && finding.entityId) {
+    await writeDoc(db.collection('notificaciones'), finding.entityId, {
+      deliveryStatus: 'orphaned',
+      estado_entrega: 'huerfana',
+      suppressedBySupervision: true,
+      supervisionFindingId: finding.id,
+      supervisionMarkedAt: now(),
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    stats.selfSupervisionAutoRepairsApplied += 1;
+    return true;
+  }
+
+  return false;
+}
+
+async function materializePlatformSupervisionFinding(db, finding, stats) {
+  const ref = db.collection('platformSupervisionFindings').doc(finding.id);
+  const existing = await ref.get();
+  const existingData = existing.exists ? existing.data() : {};
+  const changed = !existing.exists || existingData.fingerprint !== JSON.stringify([
+    finding.severity,
+    finding.type,
+    finding.entityType,
+    finding.entityId,
+    finding.description,
+    finding.recommendedAction,
+  ]);
+
+  await writeDoc(db.collection('platformSupervisionFindings'), finding.id, {
+    ...finding,
+    status: 'active',
+    estado: 'activa',
+    fingerprint: JSON.stringify([
+      finding.severity,
+      finding.type,
+      finding.entityType,
+      finding.entityId,
+      finding.description,
+      finding.recommendedAction,
+    ]),
+    firstSeenAt: existing.exists ? (existingData.firstSeenAt || now()) : now(),
+    lastSeenAt: now(),
+    createdAt: existing.exists ? (existingData.createdAt || now()) : now(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+  });
+
+  stats.selfSupervisionFindingsEvaluated += 1;
+  if (!existing.exists) stats.selfSupervisionFindingsCreated += 1;
+
+  if (finding.autoRepairable) {
+    await applyPlatformSupervisionAutoAction(db, finding, stats);
+  }
+
+  if (finding.severity === 'critical' || finding.severity === 'high') {
+    const alertId = notificationId('ops_supervision', finding.id);
+    const alertRef = db.collection('opsAlerts').doc(alertId);
+    const alertSnap = await alertRef.get();
+    if (!alertSnap.exists) {
+      await writeDoc(db.collection('opsAlerts'), alertId, {
+        alertType: 'platform_self_supervision',
+        type: 'platform_self_supervision',
+        title: finding.title,
+        message: `${finding.description} Accion: ${finding.recommendedAction}`,
+        severity: finding.severity,
+        status: 'open',
+        estado: 'abierta',
+        entityType: finding.entityType,
+        entityId: finding.entityId,
+        findingId: finding.id,
+        source: 'platform_self_supervision',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.selfSupervisionOpsAlertsCreated += 1;
+    }
+  }
+
+  if (['critical', 'high', 'medium'].includes(finding.severity) && runtimeBoolean('supervision.autoCreateTasks', true)) {
+    const taskId = notificationId('crm_self_supervision', finding.id);
+    const taskRef = db.collection('crmTasks').doc(taskId);
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+      const dueMinutes = finding.severity === 'critical' ? 20 : finding.severity === 'high' ? 90 : 360;
+      await writeDoc(db.collection('crmTasks'), taskId, {
+        title: finding.title,
+        description: `${finding.description} Accion recomendada: ${finding.recommendedAction}`,
+        priority: finding.severity,
+        status: 'open',
+        estado: 'abierta',
+        entityType: finding.entityType,
+        entityId: finding.entityId,
+        familyUid: finding.familyUid || '',
+        teacherUid: finding.teacherUid || '',
+        studentId: finding.studentId || '',
+        classId: finding.classId || '',
+        paymentId: finding.paymentId || '',
+        requestId: finding.requestId || '',
+        assignmentId: finding.assignmentId || '',
+        platformSupervisionFindingId: finding.id,
+        tags: ['autosupervision', finding.category, finding.type],
+        dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueMinutes * 60 * 1000)),
+        source: 'platform_self_supervision',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.selfSupervisionTasksCreated += 1;
+    }
+  }
+
+  if (runtimeBoolean('supervision.autoCreateIncidents', true) && ['critical', 'high'].includes(finding.severity)) {
+    const created = await createOperationalIncidentOnce(db, platformSupervisionIncidentKind(finding), {
+      id: finding.id,
+      title: finding.title,
+      description: `${finding.description} Accion recomendada: ${finding.recommendedAction}`,
+      reason: finding.consequence,
+      classId: finding.classId,
+      paymentId: finding.paymentId,
+      teacherUid: finding.teacherUid,
+      familyUid: finding.familyUid,
+      userUid: finding.familyUid || finding.teacherUid,
+      priority: finding.severity === 'critical' ? 'urgente' : 'alta',
+      platformSupervisionFindingId: finding.id,
+    }, stats);
+    if (created) stats.selfSupervisionIncidentsCreated += 1;
+  }
+
+  if (changed && ['critical', 'high'].includes(finding.severity)) {
+    const created = await notifyAdminsOnce(
+      db,
+      finding.severity === 'critical' ? 'Autosupervision critica' : 'Autosupervision requiere atencion',
+      `${finding.title}. ${finding.consequence} Accion: ${finding.recommendedAction}`,
+      {
+        type: 'platform_self_supervision',
+        findingId: finding.id,
+        entityType: finding.entityType,
+        entityId: finding.entityId,
+        url: '/pages/login.html',
+      },
+      `platform_self_supervision_${finding.id}`,
+    );
+    stats.selfSupervisionNotificationsCreated += created;
+  }
+}
+
+async function closeResolvedPlatformSupervisionFindings(db, activeIds, stats, scanLimit) {
+  const snap = await db.collection('platformSupervisionFindings')
+    .where('status', '==', 'active')
+    .limit(scanLimit)
+    .get()
+    .catch(() => null);
+  if (!snap) return;
+  for (const doc of snap.docs) {
+    if (activeIds.has(doc.id)) continue;
+    await updateRef(doc.ref, {
+      status: 'resolved',
+      estado: 'resuelta',
+      resolvedAt: now(),
+      resolved_at: isoNow(),
+      resolution: 'La autosupervision dejo de detectar este problema en el ultimo barrido.',
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    stats.selfSupervisionResolvedFindings += 1;
+  }
+}
+
+async function processPlatformSelfSupervision(db, stats) {
+  if (!runtimeBoolean('supervision.enabled', true)) return;
+  const options = platformSupervisionOptions();
+  const scanLimit = options.scanLimit;
+  const [
+    classes,
+    payments,
+    requests,
+    assignments,
+    chats,
+    notifications,
+    systemJobs,
+    automationEvents,
+    deadLetters,
+    incidents,
+    preventiveRisks,
+    alertDecisions,
+    teachers,
+    families,
+    students,
+    documents,
+    users,
+    legacyUsers,
+  ] = await Promise.all([
+    listCollection(db, 'clases', scanLimit),
+    listCollection(db, 'pagos', scanLimit),
+    listCollection(db, 'solicitudes', scanLimit),
+    listCollection(db, 'asignaciones', scanLimit),
+    listCollection(db, 'chats', scanLimit).catch(() => []),
+    listCollection(db, 'notificaciones', scanLimit),
+    listCollection(db, 'systemJobs', scanLimit),
+    listCollection(db, 'automationEvents', scanLimit),
+    listCollection(db, 'deadLetters', scanLimit),
+    listCollection(db, 'incidencias', scanLimit),
+    listCollection(db, 'preventiveRisks', scanLimit).catch(() => []),
+    listCollection(db, 'alertDecisions', scanLimit).catch(() => []),
+    listCollection(db, 'profesores', scanLimit),
+    listCollection(db, 'familias', scanLimit),
+    listCollection(db, 'alumnos', scanLimit),
+    listCollection(db, 'documentos', scanLimit),
+    listCollection(db, 'users', scanLimit).catch(() => []),
+    listCollection(db, 'usuarios', scanLimit).catch(() => []),
+  ]);
+
+  const plan = buildPlatformSupervisionPlan({
+    clases: classes,
+    pagos: payments,
+    solicitudes: requests,
+    asignaciones: assignments,
+    chats,
+    notificaciones: notifications,
+    systemJobs,
+    automationEvents,
+    deadLetters,
+    incidencias: incidents,
+    preventiveRisks,
+    alertDecisions,
+    profesores: teachers,
+    familias: families,
+    alumnos: students,
+    documentos: documents,
+    users,
+    usuarios: legacyUsers,
+  }, options);
+
+  stats.selfSupervisionVersion = plan.version;
+  stats.selfSupervisionFindingsDetected = plan.total;
+  stats.selfSupervisionCriticalFindings = plan.summary.critical;
+  stats.selfSupervisionHighFindings = plan.summary.high;
+  stats.selfSupervisionAutoRepairable = plan.summary.autoRepairable;
+
+  await writeDoc(db.collection('platformSupervisionSnapshots'), notificationId('platform_supervision_snapshot', plan.generatedAt.slice(0, 16)), {
+    ...plan.summary,
+    version: plan.version,
+    thresholds: plan.thresholds,
+    generatedAt: plan.generatedAt,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+
+  const activeIds = new Set(plan.findings.map((finding) => finding.id));
+  for (const finding of plan.findings.slice(0, scanLimit)) {
+    await materializePlatformSupervisionFinding(db, finding, stats);
+  }
+  await closeResolvedPlatformSupervisionFindings(db, activeIds, stats, scanLimit);
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -3723,6 +4040,20 @@ async function main() {
     alertNotificationsSuppressed: 0,
     alertNotificationsCreated: 0,
     alertTasksCreated: 0,
+    selfSupervisionVersion: PLATFORM_SUPERVISION_VERSION,
+    selfSupervisionFindingsDetected: 0,
+    selfSupervisionFindingsEvaluated: 0,
+    selfSupervisionFindingsCreated: 0,
+    selfSupervisionResolvedFindings: 0,
+    selfSupervisionCriticalFindings: 0,
+    selfSupervisionHighFindings: 0,
+    selfSupervisionAutoRepairable: 0,
+    selfSupervisionAutoRepairsApplied: 0,
+    selfSupervisionJobsQueued: 0,
+    selfSupervisionTasksCreated: 0,
+    selfSupervisionIncidentsCreated: 0,
+    selfSupervisionOpsAlertsCreated: 0,
+    selfSupervisionNotificationsCreated: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
@@ -3754,6 +4085,7 @@ async function main() {
   await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
+  await processPlatformSelfSupervision(db, stats);
 
   if (criticalOnly) {
     console.log(JSON.stringify(stats, null, 2));

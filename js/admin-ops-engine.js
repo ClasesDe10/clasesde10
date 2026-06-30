@@ -481,6 +481,54 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     }));
   }
 
+  for (const finding of dataset.platformSupervisionFindings || []) {
+    const status = statusOf(finding);
+    if (CLOSED_STATUSES.has(status)) continue;
+    const severity = clean(first(finding.severity, finding.priority)).toLowerCase();
+    const priority = asNumber(finding.priorityScore) || (severity === 'critical'
+      ? 97
+      : severity === 'high'
+        ? 88
+        : severity === 'medium'
+          ? 70
+          : 52);
+    const category = clean(first(finding.category, finding.type)).toLowerCase();
+    const section = category.includes('payment') || clean(finding.type).includes('payment')
+      ? 'pagos'
+      : clean(finding.type).includes('class')
+        ? 'clases'
+        : clean(finding.type).includes('chat') || clean(finding.type).includes('assignment')
+          ? 'chat'
+          : clean(finding.type).includes('request') || clean(finding.type).includes('matching')
+            ? 'solicitudes'
+            : category.includes('automation')
+              ? 'auditoria'
+              : 'incidencias';
+    items.push(makeItem({
+      id: itemId('self-supervision', finding),
+      type: 'supervision',
+      title: clean(first(finding.title, 'Hallazgo de autosupervision')),
+      detail: clean(first(finding.consequence, finding.description, 'La plataforma detecto una incoherencia entre modulos.')),
+      section,
+      priority,
+      tone: priority >= 90 ? 'danger' : priority >= 70 ? 'warning' : 'info',
+      entityType: clean(first(finding.entityType, 'platformSupervisionFinding')),
+      entityId: clean(first(finding.entityId, finding.id)),
+      entityName: clean(first(finding.familyUid, finding.teacherUid, finding.studentId, finding.entityId, 'Autosupervision')),
+      actionLabel: 'Resolver hallazgo',
+      automation: clean(first(finding.recommendedAction, finding.autoAction, 'Revisar y corregir la relacion afectada'), 180),
+      minutesSaved: priority >= 90 ? 20 : 12,
+      createdAt: first(finding.detectedAt, finding.lastSeenAt, finding.createdAt),
+      source: 'platformSupervisionFindings',
+      metadata: {
+        findingId: finding.id,
+        findingType: finding.type,
+        severity,
+        autoRepairable: Boolean(finding.autoRepairable),
+      },
+    }));
+  }
+
   for (const chat of dataset.chats || []) {
     const schedulingStatus = clean(first(chat.schedulingStatus, chat.estado_programacion, chat.relationshipStage)).toLowerCase();
     const stale = hoursSince(first(chat.updatedAt, chat.updated_at, chat.createdAt, chat.created_at), now) >= 48;
@@ -516,6 +564,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     pendingDocuments: visibleItems.filter((item) => item.type === 'document').length,
     openIncidents: visibleItems.filter((item) => item.type === 'incident').length,
     preventiveRisks: visibleItems.filter((item) => item.type === 'risk').length,
+    selfSupervisionFindings: visibleItems.filter((item) => item.type === 'supervision').length,
     overdueTasks: visibleItems.filter((item) => item.type === 'task').length,
     estimatedMinutesSaved: visibleItems.reduce((sum, item) => sum + asNumber(item.minutesSaved), 0),
   };
@@ -526,6 +575,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     { type: 'class_confirmation', label: 'Confirmacion de clases', section: 'clases', count: visibleItems.filter((item) => item.type === 'class').length },
     { type: 'document_review', label: 'Revision documental', section: 'documentos', count: visibleItems.filter((item) => item.type === 'document').length },
     { type: 'crm_followup', label: 'Seguimientos CRM', section: 'profesores', count: visibleItems.filter((item) => ['teacher', 'family', 'task'].includes(item.type)).length },
+    { type: 'self_supervision', label: 'Autosupervision', section: 'auditoria', count: visibleItems.filter((item) => item.type === 'supervision').length },
   ].filter((item) => item.count > 0);
 
   return {

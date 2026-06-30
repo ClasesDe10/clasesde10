@@ -30,6 +30,7 @@ const COLLECTIONS = Object.freeze({
   documentos: { orderField: 'updatedAt', max: 1000 },
   incidencias: { orderField: 'updatedAt', max: 1000 },
   preventiveRisks: { orderField: 'lastSeenAt', max: 1000, includeUnordered: true },
+  platformSupervisionFindings: { orderField: 'lastSeenAt', max: 1000, includeUnordered: true },
   crmTasks: { orderField: 'dueAt', max: 800, includeUnordered: true },
   leadsPublicos: { orderField: 'createdAt', max: 600 },
   chats: { orderField: 'updatedAt', max: 800 },

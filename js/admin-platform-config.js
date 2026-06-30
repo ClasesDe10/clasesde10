@@ -20,7 +20,7 @@ import {
   savePlatformConfig,
   setConfigValue,
   validatePlatformConfig,
-} from './platform-config.js?v=20260628-config';
+} from './platform-config.js?v=20260630-supervision';
 
 const instances = new WeakMap();
 

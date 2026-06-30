@@ -136,6 +136,26 @@ const dataset = {
       status: 'active',
     },
   ],
+  platformSupervisionFindings: [
+    {
+      id: 'supervision_chat_1',
+      type: 'assignment_without_chat',
+      category: 'consistency',
+      severity: 'high',
+      priorityScore: 88,
+      title: 'Asignacion activa sin chat',
+      description: 'La relacion no tiene chat operativo.',
+      consequence: 'Familia y profesor no pueden acordar horario.',
+      recommendedAction: 'Encolar reparacion de chat.',
+      entityType: 'asignaciones',
+      entityId: 'assignment_1',
+      assignmentId: 'assignment_1',
+      familyUid: 'family_1',
+      teacherUid: 'teacher_1',
+      status: 'active',
+      lastSeenAt: '2026-06-29T09:30:00.000Z',
+    },
+  ],
   chats: [
     {
       id: 'chat_1',
@@ -153,9 +173,12 @@ assert(model.summary.urgent >= 2, 'Ops model must detect urgent work.');
 assert(model.summary.waitingMatching === 1, 'Ops model must count requests waiting for matching.');
 assert(model.summary.revenueAtRisk === 120, 'Ops model must calculate revenue at risk.');
 assert(model.summary.preventiveRisks === 1, 'Ops model must count preventive risks.');
+assert(model.summary.selfSupervisionFindings === 1, 'Ops model must count self-supervision findings.');
 assert(model.items.some((item) => item.type === 'risk' && item.source === 'preventiveRisks'), 'Ops model must expose preventive risks as actionable items.');
+assert(model.items.some((item) => item.type === 'supervision' && item.source === 'platformSupervisionFindings'), 'Ops model must expose self-supervision findings as actionable items.');
 assert(model.items.some((item) => item.source === 'incidencias' && item.priority === 96), 'Ops model must use alert priority scores for incidents.');
 assert(model.items.some((item) => item.source === 'preventiveRisks' && item.automation.includes('Resolver antes')), 'Ops model must expose recommended alert actions.');
+assert(model.automationGroups.some((group) => group.type === 'self_supervision'), 'Ops model must suggest self-supervision automation groups.');
 assert(model.automationGroups.some((group) => group.type === 'matching_followup'), 'Ops model must suggest matching automation groups.');
 assert(model.items[0].priority >= model.items.at(-1).priority, 'Ops items must be sorted by priority.');
 
@@ -180,6 +203,7 @@ assert(admin.includes('initAdminOpsWorkbench'), 'Admin dashboard must initialize
 assert(admin.includes('busqueda-global'), 'Admin dashboard must keep the global search input.');
 assert(workbench.includes('crmTasks'), 'Ops workbench must create CRM follow-up tasks.');
 assert(workbench.includes('preventiveRisks'), 'Ops workbench must load preventive risk signals.');
+assert(workbench.includes('platformSupervisionFindings'), 'Ops workbench must load self-supervision signals.');
 assert(workbench.includes('recordAdminAudit'), 'Ops workbench must audit operational actions.');
 assert(workbench.includes('data-ops-review'), 'Ops workbench must allow marking queue items as reviewed.');
 assert(workbench.includes('admin-global-search-panel'), 'Ops workbench must render global search results.');
