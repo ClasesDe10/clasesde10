@@ -12,19 +12,20 @@ import {
 } from './availability-engine.js';
 import { buildTeacherTrustProfile } from './trust-engine.js';
 
-export const MATCHING_VERSION = 'professional_matching_v3';
+export const MATCHING_VERSION = 'professional_matching_v4';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
 
 export const MATCHING_WEIGHTS = Object.freeze({
-  subject: 24,
-  level: 12,
-  modality: 12,
-  location: 12,
-  availability: 12,
+  subject: 22,
+  level: 10,
+  modality: 10,
+  location: 11,
+  availability: 13,
   experience: 8,
   reputation: 10,
   capacity: 6,
-  profileQuality: 4,
+  fitConfidence: 7,
+  profileQuality: 3,
 });
 
 const DAY_ALIASES = [
@@ -406,6 +407,57 @@ function overlapCount(a, b) {
   return [...a].filter((item) => b.has(item)).length;
 }
 
+function idSet(...values) {
+  return new Set(values
+    .flatMap((value) => (Array.isArray(value) ? value : [value]))
+    .map((value) => clean(value, 180))
+    .filter(Boolean));
+}
+
+function itemMatchesAnyId(item = {}, fields = [], ids = new Set()) {
+  if (!ids.size) return false;
+  return fields.some((field) => ids.has(clean(item[field], 180)));
+}
+
+function statusText(item = {}) {
+  return normalizeText(item.estado || item.status || item.state || item.lifecycleState || item.relationshipStatus);
+}
+
+function isCanceledStatus(item = {}) {
+  return /(cancel|rechaz|archiv|baja|inactivo|elimin)/.test(statusText(item));
+}
+
+function isActiveAssignment(item = {}) {
+  const status = statusText(item);
+  if (!status) return true;
+  return !isCanceledStatus(item) && !/(finaliz|cerrad|terminad|completad)/.test(status);
+}
+
+function isCompletedClass(item = {}) {
+  const status = statusText(item);
+  return /(realiz|complet|confirmad|finaliz|pagad|paid)/.test(status);
+}
+
+function isAcceptedMatchStatus(item = {}) {
+  return /(acept|asign|seleccion|confirm|accepted|assigned|selected)/.test(statusText(item));
+}
+
+function matchingDateMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  if (typeof value?.seconds === 'number') return value.seconds * 1000;
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sameSubjectContext(item = {}, requestSubject = '') {
+  const requestTags = subjectTags(requestSubject);
+  if (!requestTags.size) return false;
+  const itemTags = subjectTags(textFromValues(item.materia, item.subject, item.asignatura, item.subjectMatch));
+  return overlapCount(requestTags, itemTags) > 0;
+}
+
 export function getTeacherProfile(teacher = {}) {
   const subjects = asArray(teacher.materias || teacher.subjects || teacher.materia || teacher.materiasTexto);
   const levels = asArray(teacher.niveles_educativos || teacher.levels || teacher.niveles || teacher.nivel);
@@ -422,6 +474,7 @@ export function getTeacherProfile(teacher = {}) {
   );
   const accepted = firstNumber(teacher.acceptedRequests, teacher.solicitudesAceptadas, teacher.acceptedAssignments);
   const offered = firstNumber(teacher.offeredRequests, teacher.solicitudesOfrecidas, teacher.totalRequests);
+  const signals = teacher.matchingSignals || {};
   return {
     id: teacher.id || teacher.teacherUid || teacher.userUid || '',
     teacherUid: teacher.teacherUid || teacher.id || teacher.userUid || '',
@@ -463,14 +516,24 @@ export function getTeacherProfile(teacher = {}) {
     status: lower(teacher.estado_verificacion || teacher.verificationStatus || teacher.status || teacher.estado),
     active: teacher.active !== false && teacher.activo !== false,
     maxStudents: Number(teacher.maxStudents || teacher.max_alumnos || 5),
-    activeAssignments: Number(teacher.activeAssignments || teacher.active_assignments || 0),
+    activeAssignments: Number(firstNumber(teacher.activeAssignments, teacher.active_assignments, signals.activeAssignments) || 0),
     rating: firstNumber(teacher.valoracion_media, teacher.averageRating, teacher.rating, teacher.scoreValoracion),
     reviewsCount: Number(firstNumber(teacher.reviewsCount, teacher.valoraciones_count, teacher.totalReviews) || 0),
     responseTimeHours: responseHours,
-    acceptanceRate: rate01(teacher.acceptanceRate ?? teacher.ratio_aceptacion)
+    acceptanceRate: rate01(teacher.acceptanceRate ?? teacher.ratio_aceptacion ?? signals.acceptanceRate)
       ?? (accepted !== null && offered ? clamp(accepted / offered, 0, 1) : null),
     completionRate: rate01(teacher.completionRate ?? teacher.classCompletionRate ?? teacher.ratio_clases_realizadas),
     cancellationRate: rate01(teacher.cancellationRate ?? teacher.cancelRate ?? teacher.ratio_cancelacion),
+    acceptedRequests: Number(firstNumber(teacher.acceptedRequests, teacher.solicitudesAceptadas, signals.acceptedRequests) || 0),
+    offeredRequests: Number(firstNumber(teacher.offeredRequests, teacher.solicitudesOfrecidas, signals.offeredRequests) || 0),
+    completedClasses: Number(firstNumber(teacher.completedClasses, signals.completedClasses, teacher.reputationMetrics?.completedClasses, teacher.publicTrustStats?.completedClasses) || 0),
+    completedClassesForSubject: Number(firstNumber(teacher.completedClassesForSubject, signals.completedClassesForSubject) || 0),
+    completedClassesWithFamily: Number(firstNumber(teacher.completedClassesWithFamily, signals.completedClassesWithFamily) || 0),
+    completedClassesWithStudent: Number(firstNumber(teacher.completedClassesWithStudent, signals.completedClassesWithStudent) || 0),
+    recentCompletedClasses: Number(firstNumber(teacher.recentCompletedClasses, signals.recentCompletedClasses) || 0),
+    priorFamilyAssignments: Number(firstNumber(teacher.priorFamilyAssignments, signals.priorFamilyAssignments) || 0),
+    priorStudentAssignments: Number(firstNumber(teacher.priorStudentAssignments, signals.priorStudentAssignments) || 0),
+    priorSubjectAssignments: Number(firstNumber(teacher.priorSubjectAssignments, signals.priorSubjectAssignments) || 0),
     trustScore: firstNumber(teacher.reputationScore, teacher.publicTrustScore, teacher.trustScore, teacher.trust_profile_score),
     trustLevel: clean(teacher.trustLevel || teacher.trust_level, 80),
     trustBadges: Array.isArray(teacher.trustBadges) ? teacher.trustBadges : [],
@@ -503,6 +566,8 @@ export function getRequestProfile(request = {}) {
   );
   return {
     id: request.id || request.requestId || '',
+    familyUid: clean(request.familyUid || request.familia_id || request.familyId || metadata.familyUid || family.id || family.userUid || family.usuario_id, 180),
+    studentId: clean(request.studentId || request.alumno_id || request.studentUid || metadata.studentId || student.id || student.studentId || student.alumno_id, 180),
     subject: clean(request.materia || request.subject || metadata.materia || metadata.materias || request.asunto, 180),
     level: clean(request.nivel || request.nivel_educativo || request.curso || student.nivel || student.nivel_educativo || metadata.nivel || metadata.niveles, 120),
     modality: clean(request.modalidad || request.modality || metadata.modalidad || metadata.formato, 120),
@@ -516,6 +581,110 @@ export function getRequestProfile(request = {}) {
     availabilitySlots,
     studentName: clean(student.nombre || request.alumno_nombre || metadata.alumno, 160),
     familyName: clean([family.nombre, family.apellidos].filter(Boolean).join(' ') || request.familia_nombre, 160),
+  };
+}
+
+export function buildTeacherMatchingSignals(teacher = {}, request = {}, context = {}) {
+  const profile = getRequestProfile(request || {});
+  const teacherIds = idSet(
+    teacher.id,
+    teacher.teacherUid,
+    teacher.profesor_id,
+    teacher.profesorId,
+    teacher.userUid,
+    teacher.usuario_id,
+    teacher.teacherUserUid,
+  );
+  const familyIds = idSet(
+    profile.familyUid,
+    request.familyUid,
+    request.familia_id,
+    request.familyId,
+    request.familias?.id,
+    request.familias?.userUid,
+    request.familias?.usuario_id,
+  );
+  const studentIds = idSet(
+    profile.studentId,
+    request.studentId,
+    request.alumno_id,
+    request.studentUid,
+    request.alumnos?.id,
+  );
+
+  const assignments = Array.isArray(context.assignments) ? context.assignments : [];
+  const classes = Array.isArray(context.classes) ? context.classes : [];
+  const rawRequestMatches = [
+    ...(Array.isArray(context.requestMatches) ? context.requestMatches : []),
+    ...(Array.isArray(context.matches) ? context.matches : []),
+    ...(Array.isArray(context.solicitudMatches) ? context.solicitudMatches : []),
+  ];
+  const requestMatches = [...new Map(rawRequestMatches.map((item, index) => [
+    clean(item?.id || item?.requestMatchId || item?.solicitudMatchId || `${item?.requestId || item?.solicitud_id || 'match'}_${item?.teacherUid || item?.profesor_id || index}`, 260),
+    item,
+  ])).values()];
+
+  const teacherFieldNames = ['teacherUid', 'profesor_id', 'profesorId', 'teacherUserUid', 'userUid', 'usuario_id'];
+  const familyFieldNames = ['familyUid', 'familia_id', 'familyId'];
+  const studentFieldNames = ['studentId', 'alumno_id', 'studentUid', 'alumnoId'];
+
+  const teacherAssignments = assignments.filter((item) => itemMatchesAnyId(item, teacherFieldNames, teacherIds));
+  const activeAssignments = teacherAssignments.filter(isActiveAssignment).length;
+  const priorFamilyAssignments = familyIds.size
+    ? teacherAssignments.filter((item) => !isCanceledStatus(item) && itemMatchesAnyId(item, familyFieldNames, familyIds)).length
+    : 0;
+  const priorStudentAssignments = studentIds.size
+    ? teacherAssignments.filter((item) => !isCanceledStatus(item) && itemMatchesAnyId(item, studentFieldNames, studentIds)).length
+    : 0;
+  const priorSubjectAssignments = teacherAssignments.filter((item) => !isCanceledStatus(item) && sameSubjectContext(item, profile.subject)).length;
+
+  const teacherClasses = classes.filter((item) => itemMatchesAnyId(item, teacherFieldNames, teacherIds));
+  const completedClasses = teacherClasses.filter(isCompletedClass);
+  const completedClassesForSubject = completedClasses.filter((item) => sameSubjectContext(item, profile.subject)).length;
+  const completedClassesWithFamily = familyIds.size
+    ? completedClasses.filter((item) => itemMatchesAnyId(item, familyFieldNames, familyIds)).length
+    : 0;
+  const completedClassesWithStudent = studentIds.size
+    ? completedClasses.filter((item) => itemMatchesAnyId(item, studentFieldNames, studentIds)).length
+    : 0;
+  const recentCutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+  const recentCompletedClasses = completedClasses.filter((item) => {
+    const when = matchingDateMillis(item.fecha || item.date || item.startAt || item.startsAt || item.createdAt);
+    return when >= recentCutoff;
+  }).length;
+
+  const teacherMatches = requestMatches.filter((item) => itemMatchesAnyId(item, teacherFieldNames, teacherIds));
+  const offeredRequests = teacherMatches.length;
+  const acceptedRequests = teacherMatches.filter(isAcceptedMatchStatus).length;
+  const acceptanceRate = offeredRequests ? clamp(acceptedRequests / offeredRequests, 0, 1) : null;
+
+  return {
+    matchingSignals: {
+      activeAssignments,
+      priorFamilyAssignments,
+      priorStudentAssignments,
+      priorSubjectAssignments,
+      completedClasses: completedClasses.length,
+      completedClassesForSubject,
+      completedClassesWithFamily,
+      completedClassesWithStudent,
+      recentCompletedClasses,
+      offeredRequests,
+      acceptedRequests,
+      acceptanceRate,
+    },
+    activeAssignments,
+    priorFamilyAssignments,
+    priorStudentAssignments,
+    priorSubjectAssignments,
+    completedClasses: completedClasses.length,
+    completedClassesForSubject,
+    completedClassesWithFamily,
+    completedClassesWithStudent,
+    recentCompletedClasses,
+    offeredRequests,
+    acceptedRequests,
+    ...(acceptanceRate !== null ? { acceptanceRate } : {}),
   };
 }
 
@@ -865,6 +1034,85 @@ function scoreReputation(teacherProfile) {
   return component('reputation', ratio, 'Historico operativo', reasons, risks);
 }
 
+function scoreFitConfidence(requestProfile, teacherProfile) {
+  const parts = [];
+  const reasons = [];
+  const risks = [];
+
+  const priorStudent = Number(teacherProfile.priorStudentAssignments || teacherProfile.completedClassesWithStudent || 0);
+  const priorFamily = Number(teacherProfile.priorFamilyAssignments || teacherProfile.completedClassesWithFamily || 0);
+  if (priorStudent > 0) {
+    parts.push(1);
+    reasons.push('Continuidad: ya ha trabajado con este alumno.');
+  } else if (priorFamily > 0) {
+    parts.push(0.88);
+    reasons.push('Continuidad: ya ha trabajado con esta familia.');
+  } else {
+    parts.push(0.56);
+    reasons.push('Sin continuidad previa: se usa valor neutro.');
+  }
+
+  const completedForSubject = Number(teacherProfile.completedClassesForSubject || teacherProfile.priorSubjectAssignments || 0);
+  if (completedForSubject > 0) {
+    parts.push(Math.min(1, 0.58 + completedForSubject / 14));
+    reasons.push(`${completedForSubject} clase(s) o asignacion(es) previas en ${requestProfile.subject || 'esta materia'}.`);
+  } else if (Number(teacherProfile.completedClasses || 0) > 0) {
+    parts.push(0.55);
+    reasons.push('Tiene historico general, sin muestra especifica de esta materia.');
+  } else {
+    parts.push(0.56);
+  }
+
+  if (teacherProfile.acceptanceRate !== null) {
+    const ratio = clamp(teacherProfile.acceptanceRate, 0, 1);
+    parts.push(ratio);
+    reasons.push(`Probabilidad historica de aceptacion ${Math.round(ratio * 100)}%.`);
+    if (ratio < 0.45) risks.push('Baja probabilidad historica de aceptar nuevas solicitudes.');
+  } else {
+    parts.push(0.58);
+    reasons.push('Sin historico de aceptacion: probabilidad neutra.');
+  }
+
+  if (teacherProfile.responseTimeHours !== null) {
+    const responseRatio = teacherProfile.responseTimeHours <= 2
+      ? 1
+      : teacherProfile.responseTimeHours <= 8
+        ? 0.82
+        : teacherProfile.responseTimeHours <= 24
+          ? 0.55
+          : 0.24;
+    parts.push(responseRatio);
+    reasons.push(`Respuesta media ${round(teacherProfile.responseTimeHours, 1)}h.`);
+    if (teacherProfile.responseTimeHours > 24) risks.push('Respuesta lenta: puede retrasar la asignacion.');
+  } else {
+    parts.push(0.58);
+  }
+
+  const maxStudents = Math.max(1, Number(teacherProfile.maxStudents || 5));
+  const activeAssignments = Math.max(0, Number(teacherProfile.activeAssignments || 0));
+  const remaining = maxStudents - activeAssignments;
+  const workloadRatio = remaining <= 0 ? 0 : Math.min(1, remaining / Math.max(2, maxStudents * 0.5));
+  parts.push(workloadRatio);
+  if (remaining > 0) reasons.push(`Carga asumible: ${remaining} plaza(s) estimadas.`);
+  else risks.push('Carga completa: riesgo alto de rechazo o saturacion.');
+
+  const recentCompleted = Number(teacherProfile.recentCompletedClasses || 0);
+  if (recentCompleted > 0) {
+    parts.push(Math.min(1, 0.6 + recentCompleted / 10));
+    reasons.push(`${recentCompleted} clase(s) completadas recientemente.`);
+  } else {
+    parts.push(0.55);
+  }
+
+  const ratio = parts.reduce((sum, value) => sum + value, 0) / parts.length;
+  const detail = ratio >= 0.78
+    ? 'Alta probabilidad de encaje operativo'
+    : ratio >= 0.58
+      ? 'Probabilidad media de encaje'
+      : 'Encaje operativo debil';
+  return component('fitConfidence', ratio, detail, reasons, risks);
+}
+
 function scoreCapacity(teacherProfile) {
   const max = Math.max(1, Number(teacherProfile.maxStudents || 5));
   const active = Math.max(0, Number(teacherProfile.activeAssignments || 0));
@@ -888,6 +1136,7 @@ export function scoreTeacherForRequest(request, teacher) {
     scoreModality(requestProfile, teacherProfile),
     scoreLocation(requestProfile, teacherProfile),
     scoreAvailability(requestProfile, teacherProfile),
+    scoreFitConfidence(requestProfile, teacherProfile),
     scoreExperience(requestProfile, teacherProfile),
     scoreReputation(teacherProfile),
     scoreCapacity(teacherProfile),
@@ -965,8 +1214,42 @@ export function rankTeachersForRequest(request, teachers = [], options = {}) {
     .sort((a, b) => {
       if (Number(b.assignable) !== Number(a.assignable)) return Number(b.assignable) - Number(a.assignable);
       if (b.score !== a.score) return b.score - a.score;
+      const bFit = Number(b.scoreBreakdown?.fitConfidence?.points || 0);
+      const aFit = Number(a.scoreBreakdown?.fitConfidence?.points || 0);
+      if (bFit !== aFit) return bFit - aFit;
       if (b.profileScore !== a.profileScore) return b.profileScore - a.profileScore;
       return String(a.teacherName).localeCompare(String(b.teacherName));
+    })
+    .slice(0, limit);
+}
+
+const MATCHING_FACTOR_LABELS = Object.freeze({
+  subject: 'materia',
+  level: 'nivel',
+  modality: 'modalidad',
+  location: 'cercania',
+  availability: 'horario',
+  experience: 'experiencia',
+  reputation: 'fiabilidad',
+  capacity: 'carga',
+  fitConfidence: 'probabilidad de aceptacion',
+  profileQuality: 'perfil',
+});
+
+function matchingDecisionFactors(match = {}, limit = 4) {
+  return Object.entries(match.scoreBreakdown || {})
+    .filter(([, value]) => value && Number.isFinite(Number(value.points)) && Number(value.max) > 0)
+    .map(([key, value]) => ({
+      key,
+      label: MATCHING_FACTOR_LABELS[key] || key,
+      points: Number(value.points || 0),
+      max: Number(value.max || 0),
+      ratio: Number(value.max) ? Number(value.points || 0) / Number(value.max) : 0,
+      detail: clean(value.detail, 220),
+    }))
+    .sort((a, b) => {
+      if (b.ratio !== a.ratio) return b.ratio - a.ratio;
+      return b.points - a.points;
     })
     .slice(0, limit);
 }
@@ -988,6 +1271,7 @@ export function buildMatchingDecisionSupport(request, candidates = []) {
   if (matches.length && !assignable.length) warnings.push('Hay candidatos, pero ninguno es asignable sin revisar perfil/verificacion.');
   if (best?.hardBlocks?.length) warnings.push(`El primer candidato tiene bloqueo: ${best.hardBlocks.join(', ')}.`);
   if (best?.risks?.length) warnings.push(...best.risks.slice(0, 2));
+  const decisionFactors = best ? matchingDecisionFactors(best, 4) : [];
 
   const bestScore = Number(best?.score || 0);
   const confidenceScore = Math.round(Math.min(100,
@@ -1018,6 +1302,13 @@ export function buildMatchingDecisionSupport(request, candidates = []) {
     summary: best
       ? `${best.teacherName || 'Profesor'} encaja con ${bestScore}% y ${assignable.length} candidato(s) asignable(s).`
       : 'Sin candidato claro para la solicitud.',
+    thinkingSummary: best
+      ? `Decision basada sobre todo en ${joinNatural(decisionFactors.map((factor) => factor.label), 'las senales disponibles')}.`
+      : 'No hay suficientes profesores compatibles para razonar una recomendacion fiable.',
+    publicSummary: best
+      ? `Estamos priorizando horario, cercania, experiencia y fiabilidad para proponerte el mejor profesor disponible.`
+      : 'Estamos revisando alternativas para encontrar un profesor adecuado.',
+    decisionFactors,
     nextAction,
     warnings: unique(warnings).slice(0, 6),
     missing,
@@ -1085,7 +1376,8 @@ export function mergeAiRanking(baseCandidates, aiResult) {
 
   return ranked.sort((a, b) => {
     if (Number(b.assignable) !== Number(a.assignable)) return Number(b.assignable) - Number(a.assignable);
-    return b.score - a.score;
+    if (b.score !== a.score) return b.score - a.score;
+    return Number(b.scoreBreakdown?.fitConfidence?.points || 0) - Number(a.scoreBreakdown?.fitConfidence?.points || 0);
   });
 }
 

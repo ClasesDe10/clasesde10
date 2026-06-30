@@ -13,6 +13,7 @@ import {
   buildFamilyRequestBrief,
   buildMatchingAiPrompt,
   buildMatchingDecisionSupport,
+  buildTeacherMatchingSignals,
   buildTeacherProfileRecommendations,
   classifyIncident,
   getRequestProfile as getMatchingRequestProfile,
@@ -998,6 +999,16 @@ async function loadAvailabilityByTeacher(db) {
   }
 }
 
+async function loadMatchingContextForRequest(db) {
+  const limit = runtimeNumber('matching.assignmentScanLimit', matchingAssignmentScanLimit, 1, 50000);
+  const [assignments, classes, requestMatches] = await Promise.all([
+    listCollection(db, 'asignaciones', limit),
+    listCollection(db, 'clases', limit),
+    listCollection(db, 'solicitudMatches', limit),
+  ]);
+  return { assignments, classes, requestMatches, matches: requestMatches };
+}
+
 async function loadTeachers(db) {
   const [teachersSnap, usersSnap, assignmentCounts, availabilitySlots] = await Promise.all([
     db.collection('profesores').limit(runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000)).get(),
@@ -1240,8 +1251,15 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
   const enrichedRequest = await enrichRequestForMatching(db, requestId, request);
   const profile = getMatchingRequestProfile(enrichedRequest);
   const requestBrief = buildFamilyRequestBrief(enrichedRequest);
-  const teachers = await loadTeachers(db);
-  const baseCandidates = rankTeachersForRequest(enrichedRequest, teachers, {
+  const [teachers, matchingContext] = await Promise.all([
+    loadTeachers(db),
+    loadMatchingContextForRequest(db),
+  ]);
+  const teachersWithSignals = teachers.map((teacher) => ({
+    ...teacher,
+    ...buildTeacherMatchingSignals(teacher, enrichedRequest, matchingContext),
+  }));
+  const baseCandidates = rankTeachersForRequest(enrichedRequest, teachersWithSignals, {
     limit: 10,
     minScore: 25,
   });

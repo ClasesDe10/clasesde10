@@ -6,6 +6,7 @@ import {
   buildFamilyRequestBrief,
   buildMatchingAiPrompt,
   buildMatchingDecisionSupport,
+  buildTeacherMatchingSignals,
   buildTeacherProfileRecommendations,
   classifyIncident,
   evaluateTeacherProfile,
@@ -204,6 +205,48 @@ const slowTeacher = {
 const reliabilityRanking = rankTeachersForRequest(request, [slowTeacher, reliableTeacher], { limit: 2, includeZeroScore: true });
 assert.equal(reliabilityRanking[0].teacherUid, 'teacher_reliable');
 assert.ok(reliabilityRanking[0].scoreBreakdown.reputation.points > reliabilityRanking[1].scoreBreakdown.reputation.points);
+
+const continuityRequest = {
+  ...request,
+  familyUid: 'family_1',
+  studentId: 'student_1',
+};
+const continuityTeacher = {
+  ...completeTeacher,
+  id: 'teacher_continuity',
+  teacherUid: 'teacher_continuity',
+  responseTimeHours: 1,
+  acceptanceRate: 0.95,
+};
+const freshTeacher = {
+  ...completeTeacher,
+  id: 'teacher_fresh',
+  teacherUid: 'teacher_fresh',
+  responseTimeHours: 8,
+  acceptanceRate: 0.65,
+};
+const matchingContext = {
+  assignments: [
+    { teacherUid: 'teacher_continuity', familyUid: 'family_1', studentId: 'student_1', materia: 'Matematicas', estado: 'active' },
+  ],
+  classes: [
+    { teacherUid: 'teacher_continuity', familyUid: 'family_1', studentId: 'student_1', materia: 'Matematicas', estado: 'realizada', fecha: new Date().toISOString() },
+    { teacherUid: 'teacher_continuity', familyUid: 'family_1', studentId: 'student_1', materia: 'Matematicas', estado: 'realizada', fecha: new Date().toISOString() },
+  ],
+  requestMatches: [
+    { teacherUid: 'teacher_continuity', requestId: 'old_1', estado: 'aceptado' },
+    { teacherUid: 'teacher_continuity', requestId: 'old_2', estado: 'asignado' },
+    { teacherUid: 'teacher_continuity', requestId: 'old_3', estado: 'aceptado' },
+  ],
+};
+const continuityTeachers = [freshTeacher, continuityTeacher].map((teacher) => ({
+  ...teacher,
+  ...buildTeacherMatchingSignals(teacher, continuityRequest, matchingContext),
+}));
+const continuityRanking = rankTeachersForRequest(continuityRequest, continuityTeachers, { limit: 2, includeZeroScore: true });
+assert.equal(continuityRanking[0].teacherUid, 'teacher_continuity');
+assert.ok(continuityRanking[0].scoreBreakdown.fitConfidence.points > continuityRanking[1].scoreBreakdown.fitConfidence.points);
+assert.ok(continuityRanking[0].reasons.some((reason) => reason.toLowerCase().includes('continuidad')));
 
 const padelRequest = {
   materia: 'Padel',

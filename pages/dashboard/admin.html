@@ -1228,7 +1228,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { buildMatchingDecisionSupport, evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260630-matching-v3';
+import { buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260630-matching-v4';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -4620,8 +4620,14 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
       `;
     }
 
-    (profs || []).forEach((p) => profesoresCache.set(p.id, p));
-    const profesoresElegibles = (profs || []).filter(profesorPuedeAparecerAsignacion);
+    const matchingContext = trustContextCache || {};
+    const requestForMatching = solicitud || { materia, subject: materia };
+    const profsConSenales = (profs || []).map((p) => ({
+      ...p,
+      ...buildTeacherMatchingSignals(p, requestForMatching, matchingContext),
+    }));
+    profsConSenales.forEach((p) => profesoresCache.set(p.id, p));
+    const profesoresElegibles = profsConSenales.filter(profesorPuedeAparecerAsignacion);
     document.getElementById('asignar-profesor').innerHTML = '<option value="">Seleccionar...</option>' +
       (profesoresElegibles.length ? profesoresElegibles.map((p) => {
         const completo = perfilProfesorCompleto(p);
@@ -4646,14 +4652,16 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     const matchingLimit = Number(getConfigValue(platformConfig, 'matching.maxCandidates', 5));
     const matchingMinScore = Number(getConfigValue(platformConfig, 'matching.minScore', 25));
     const includeZeroScore = getConfigValue(platformConfig, 'matching.includeZeroScoreForAdmin', true) === true;
-    const aiMatches = (matches || []).length
+    const needsFreshReasoning = !(matches || []).length
+      || (matches || []).some((match) => !match.scoreBreakdown?.fitConfidence);
+    const aiMatches = !needsFreshReasoning
       ? matches
-      : rankTeachersForRequest(solicitud || { materia, subject: materia }, profs || [], {
+      : rankTeachersForRequest(requestForMatching, profsConSenales, {
         limit: matchingLimit,
         minScore: matchingMinScore,
         includeZeroScore,
       });
-    const decisionSupport = buildMatchingDecisionSupport(solicitud || { materia, subject: materia }, aiMatches);
+    const decisionSupport = buildMatchingDecisionSupport(requestForMatching, aiMatches);
     renderAsignarMatches(aiMatches, null, decisionSupport);
     openModal('modal-asignar');
     return;
@@ -4679,12 +4687,17 @@ function renderMatchingDecisionSupport(decision = {}) {
     sin_match: 'Sin match claro',
   }[decision.quality] || decision.quality;
   const warnings = (decision.warnings || []).slice(0, 3).map((item) => `<li>${sanitize(item)}</li>`).join('');
+  const factors = (decision.decisionFactors || []).slice(0, 4).map((factor) => (
+    `<span class="badge badge-gray" title="${sanitize(factor.detail || '')}">${sanitize(factor.label)} ${Math.round(Number(factor.points || 0))}/${Math.round(Number(factor.max || 0))}</span>`
+  )).join(' ');
   return `
     <div class="alert alert-${tone}" style="margin:0 0 10px">
       <span class="alert-icon">${tone === 'success' ? '✓' : '!'}</span>
       <div class="alert-body">
         <div class="alert-title">${sanitize(qualityLabel)} · ${Math.round(Number(decision.confidenceScore || 0))}% confianza</div>
         <div>${sanitize(decision.summary || '')}</div>
+        ${decision.thinkingSummary ? `<div style="margin-top:4px">${sanitize(decision.thinkingSummary)}</div>` : ''}
+        ${factors ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${factors}</div>` : ''}
         <div style="margin-top:4px"><strong>Siguiente paso:</strong> ${sanitize(decision.nextAction || '')}</div>
         ${warnings ? `<ul style="margin:6px 0 0 16px;padding:0">${warnings}</ul>` : ''}
       </div>
@@ -4732,6 +4745,7 @@ function renderAsignarMatches(matches, error, decisionSupport = null) {
           experience: 'Experiencia',
           reputation: 'Fiabilidad',
           capacity: 'Carga',
+          fitConfidence: 'Decision',
           profileQuality: 'Perfil',
         };
         return `<span class="badge badge-gray" title="${sanitize(value.detail || '')}">${labels[key] || key}: ${Math.round(Number(value.points))}/${Math.round(Number(value.max || 0))}</span>`;

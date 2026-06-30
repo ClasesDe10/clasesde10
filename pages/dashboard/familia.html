@@ -212,9 +212,9 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Hijo/a</th><th>Materia</th><th>Nivel</th><th>Horario pref.</th><th>Estado</th><th>Profesor asignado</th></tr>
+                <tr><th>Fecha</th><th>Hijo/a</th><th>Materia</th><th>Nivel</th><th>Horario pref.</th><th>Matching</th><th>Estado</th><th>Profesor asignado</th></tr>
               </thead>
-              <tbody id="tbody-solicitudes"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-solicitudes"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -2004,6 +2004,36 @@ document.getElementById('btn-guardar-hijo').addEventListener('click', async () =
 });
 
 // ── SOLICITUDES ──────────────────────────────────────────────────
+function renderFamilyMatchingStatus(solicitud = {}) {
+  const estado = String(solicitud.estado || solicitud.status || '').toLowerCase();
+  const decision = solicitud.matchDecision || {};
+  const quality = solicitud.matchQuality || decision.quality || '';
+  const confidence = Number(solicitud.matchConfidenceScore || decision.confidenceScore || 0);
+  const assigned = Boolean(solicitud.profesor_asignado_id || solicitud.assignedTeacherUid);
+  const copy = assigned
+    ? { label: 'Profesor asignado', tone: 'success', desc: 'Ya puedes coordinar el horario desde el chat.' }
+    : quality === 'listo_para_asignar'
+      ? { label: 'Candidato claro', tone: 'success', desc: 'Estamos validando el mejor profesor disponible.' }
+      : quality === 'revisar_antes_de_asignar'
+        ? { label: 'En revision', tone: 'info', desc: 'Estamos comparando horario, cercania y fiabilidad.' }
+        : quality === 'datos_insuficientes'
+          ? { label: 'Faltan datos', tone: 'warning', desc: 'Completa horario o zona para acelerar la asignacion.' }
+          : estado === 'nueva' || estado === 'pendiente'
+            ? { label: 'Buscando profesor', tone: 'info', desc: 'Revisaremos candidatos y te avisaremos.' }
+            : { label: 'En seguimiento', tone: 'gray', desc: 'Te avisaremos cuando haya novedades.' };
+  const badgeClass = copy.tone === 'success' ? 'badge-success'
+    : copy.tone === 'warning' ? 'badge-warning'
+      : copy.tone === 'info' ? 'badge-info'
+        : 'badge-gray';
+  const confidenceText = confidence > 0 && !assigned ? ` - ${Math.round(confidence)}%` : '';
+  const publicSummary = decision.publicSummary || copy.desc;
+  return `
+    <div style="display:flex;flex-direction:column;gap:4px;min-width:150px">
+      <span class="badge ${badgeClass}" style="width:max-content">${sanitize(copy.label)}${confidenceText}</span>
+      <span style="font-size:.76rem;color:var(--gray-mid);line-height:1.35">${sanitize(publicSummary)}</span>
+    </div>`;
+}
+
 async function cargarSolicitudes() {
   if (!familiaId) return;
   await cargarDisponibilidadHijos();
@@ -2020,7 +2050,7 @@ async function cargarSolicitudes() {
 
   const tbody = document.getElementById('tbody-solicitudes');
   if (!data?.length) {
-    tbody.innerHTML = renderTableEmptyState(7, {
+    tbody.innerHTML = renderTableEmptyState(8, {
       icon: '📝',
       title: 'Todavía no has enviado solicitudes',
       description: hijos?.length
@@ -2039,6 +2069,7 @@ async function cargarSolicitudes() {
     <td><strong>${sanitize(s.materia)}</strong></td>
     <td>${sanitize(s.nivel||'—')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'—')}</td>
+    <td>${renderFamilyMatchingStatus(s)}</td>
     <td>${badgeEstado(s.estado)}</td>
     <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+' '+sanitize(s.profesores?.usuarios?.apellidos||'') : '—'}</td>
   </tr>`).join('');
