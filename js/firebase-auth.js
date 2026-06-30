@@ -218,6 +218,21 @@ export async function requireAuth(rolesPermitidos = []) {
   }
 
   if (rolesPermitidos.length > 0 && !rolesPermitidos.includes(usuario.rol)) {
+    if (rolesPermitidos.includes('admin')) {
+      try {
+        const roleLabel = usuario.rol || usuario.role || 'otro rol';
+        sessionStorage.setItem(
+          'cd10-auth-notice',
+          `Estabas conectado con una cuenta de ${roleLabel}. Para entrar al panel de administrador, inicia sesion con una cuenta administradora.`
+        );
+      } catch (_) {}
+      try {
+        await signOut(firebaseAuth);
+      } catch (_) {}
+      window.location.href = '/pages/login.html?admin=1';
+      return new Promise(() => {});
+    }
+
     const rutaPropia = ROLES_RUTAS[usuario.rol];
     if (rutaPropia) window.location.href = rutaPropia;
     return new Promise(() => {});
@@ -558,7 +573,7 @@ export async function register({
   }
 }
 
-export async function logout() {
+export async function logout(options = {}) {
   const user = firebaseAuth.currentUser;
   await recordAuthAudit('auth.logout', {
     entityId: user?.uid || 'current_user',
@@ -566,7 +581,8 @@ export async function logout() {
     description: 'Cierre de sesion.',
   });
   await signOut(firebaseAuth);
-  window.location.href = '/';
+  if (options.redirect === false) return;
+  window.location.href = options.redirectTo || '/';
 }
 
 export async function resetPassword(email) {

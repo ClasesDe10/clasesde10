@@ -229,7 +229,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 </div>
 
 <script type="module">
-import { login, loginWithGoogle, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260628-audit';
+import { login, loginWithGoogle, logout, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260630-admin-switch';
 import { focusFirstInvalidField, showToast, validarEmail } from '../js/utils.js';
 import { trackLogin } from '../js/analytics.js';
 
@@ -239,6 +239,8 @@ const formForgot  = document.getElementById('form-forgot');
 const tabLogin    = document.getElementById('tab-login');
 const tabForgot   = document.getElementById('tab-forgot');
 const goForgot    = document.getElementById('go-forgot');
+const loginParams = new URLSearchParams(window.location.search);
+const adminAccessRequested = loginParams.get('admin') === '1' || loginParams.get('reason') === 'admin-required';
 
 function showError(msg) {
   errorBanner.textContent = msg;
@@ -250,6 +252,21 @@ function showError(msg) {
 function hideError() {
   errorBanner.style.display = 'none';
 }
+
+function adminAccessMessage(role = '') {
+  const roleText = role ? ` de ${role}` : '';
+  return `Estabas conectado con una cuenta${roleText}. Para entrar al panel de administrador, inicia sesion con una cuenta administradora.`;
+}
+
+const storedAuthNotice = (() => {
+  try {
+    const value = sessionStorage.getItem('cd10-auth-notice') || '';
+    sessionStorage.removeItem('cd10-auth-notice');
+    return value;
+  } catch (_) {
+    return '';
+  }
+})();
 
 function setTab(tab) {
   if (tab === 'login') {
@@ -316,6 +333,16 @@ formLogin.addEventListener('submit', async (e) => {
     return;
   }
 
+  if (adminAccessRequested && usuario.rol !== 'admin') {
+    await logout({ redirect: false });
+    showError(adminAccessMessage(usuario.rol));
+    btnText.style.display = '';
+    btnLoad.style.display = 'none';
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    return;
+  }
+
   trackLogin(usuario.rol);
   redirectByRole(usuario.rol);
 });
@@ -333,6 +360,15 @@ document.getElementById('btn-google-login').addEventListener('click', async () =
 
   if (error) {
     showError(error.message);
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+    text.textContent = defaultText;
+    return;
+  }
+
+  if (adminAccessRequested && usuario.rol !== 'admin') {
+    await logout({ redirect: false });
+    showError(adminAccessMessage(usuario.rol));
     btn.disabled = false;
     btn.removeAttribute('aria-busy');
     text.textContent = defaultText;
@@ -372,13 +408,30 @@ formForgot.addEventListener('submit', async (e) => {
 const _sesionActual = await getSession();
 if (_sesionActual) {
   const _usuarioActual = await getUsuarioActual();
-  if (_usuarioActual?.activo) redirectByRole(_usuarioActual.rol);
+  if (_usuarioActual?.activo) {
+    if (adminAccessRequested && _usuarioActual.rol !== 'admin') {
+      await logout({ redirect: false });
+      showError(storedAuthNotice || adminAccessMessage(_usuarioActual.rol));
+    } else {
+      redirectByRole(_usuarioActual.rol);
+    }
+  } else if (storedAuthNotice) {
+    showError(storedAuthNotice);
+  }
+} else if (storedAuthNotice) {
+  showError(storedAuthNotice);
 }
 
 onAuthChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
     const u = await getUsuarioActual();
-    if (u?.activo) redirectByRole(u.rol);
+    if (!u?.activo) return;
+    if (adminAccessRequested && u.rol !== 'admin') {
+      await logout({ redirect: false });
+      showError(adminAccessMessage(u.rol));
+      return;
+    }
+    redirectByRole(u.rol);
   }
 });
 </script>

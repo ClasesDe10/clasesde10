@@ -16,4 +16,4 @@ export {
   register,
   requireAuth,
   resetPassword,
-} from './auth.js?v=20260628-audit';
+} from './auth.js?v=20260630-admin-switch';

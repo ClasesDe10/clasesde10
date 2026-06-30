@@ -6,7 +6,7 @@
  * adapter.
  */
 
-import authAdapter from './adapters/firebase-auth-adapter.js?v=20260628-audit';
+import authAdapter from './adapters/firebase-auth-adapter.js?v=20260630-admin-switch';
 import { trackAuthEvent } from './analytics-client.js?v=20260628-analytics';
 
 export const getSession = authAdapter.getSession;
@@ -53,9 +53,9 @@ export async function loginWithGoogle() {
   }
 }
 
-export async function logout() {
+export async function logout(options = {}) {
   await trackAuthEvent('auth.logout', { method: 'firebase' });
-  return authAdapter.logout();
+  return authAdapter.logout(options);
 }
 
 export async function register(...args) {
