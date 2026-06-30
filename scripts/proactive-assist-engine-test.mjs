@@ -26,6 +26,17 @@ const dataset = {
       createdAt: '2026-06-27T08:00:00.000Z',
       materias: ['Fisica'],
     },
+    {
+      id: 'teacher_3',
+      userUid: 'teacher_3',
+      nombre: 'Carlos',
+      profileCompletionPercent: 100,
+      status: 'verified',
+      hasBizum: true,
+      availabilitySlots: [{ day: 'monday', start: '17:00', end: '19:00' }],
+      createdAt: '2026-06-10T08:00:00.000Z',
+      materias: ['Ingles'],
+    },
   ],
   familias: [
     {
@@ -93,6 +104,17 @@ const dataset = {
       fecha: '2026-07-01',
       hora_inicio: '10:00',
     },
+    {
+      id: 'class_payout',
+      assignmentId: 'assignment_1',
+      familyUid: 'family_2',
+      teacherUid: 'teacher_2',
+      studentId: 'student_2',
+      subject: 'Fisica',
+      status: 'realizada',
+      teacherAmount: 80,
+      endAtIso: '2026-06-30T08:00:00.000Z',
+    },
   ],
   notificaciones: [
     {
@@ -120,11 +142,14 @@ const plan = buildProactiveAssistPlan(dataset, {
   profileNudgeMinCompletion: 85,
   profileNudgeCooldownHours: 72,
   missingAvailabilityHours: 24,
+  requestAvailabilityNudgeHours: 12,
   upcomingClassReadinessHours: 36,
+  teacherPayoutReadinessHours: 1,
   unreadCriticalNotificationHours: 12,
   lowSupplyRequestHours: 24,
   lowSupplyMinCandidates: 2,
   lowSupplyMinScore: 55,
+  verifiedTeacherIdleDays: 7,
   staleAdminTaskHours: 48,
   userNotificationCooldownHours: 72,
   adminCooldownHours: 24,
@@ -137,16 +162,22 @@ assert.equal(plan.version, PROACTIVE_ASSIST_VERSION);
 assert.equal(signalIds.has('teacher_profile_help'), true, 'Teacher profile help must be detected.');
 assert.equal(signalIds.has('family_add_first_student'), true, 'Family onboarding must be detected before the user gets stuck.');
 assert.equal(signalIds.has('missing_availability_before_schedule'), true, 'Missing availability must be detected before scheduling.');
+assert.equal(signalIds.has('request_missing_student_availability'), true, 'Request readiness must ask for student availability before matching stalls.');
 assert.equal(signalIds.has('request_low_supply'), true, 'Low supply matching requests must be detected.');
+assert.equal(signalIds.has('teacher_missing_bizum_before_payout'), true, 'Teacher payout readiness must be detected before payment day.');
 assert.equal(signalIds.has('upcoming_class_missing_financials'), true, 'Upcoming class financial readiness must be detected.');
+assert.equal(signalIds.has('verified_teacher_without_students'), true, 'Verified teachers without students must be surfaced for activation.');
 assert.equal(signalIds.has('unread_priority_notification'), true, 'Unread priority notifications must be escalated.');
 assert.equal(signalIds.has('stale_admin_task'), true, 'Stale admin tasks must be detected.');
 assert.equal(plan.summary.profileHelp >= 1, true);
 assert.equal(plan.summary.schedulingHelp, 1);
+assert.equal(plan.summary.requestReadiness, 1);
 assert.equal(plan.summary.matchingHelp, 1);
+assert.equal(plan.summary.paymentReadiness, 1);
 assert.equal(plan.summary.readinessChecks, 1);
-assert.equal(plan.summary.userNotifications >= 4, true);
-assert.equal(plan.summary.adminTasks >= 3, true);
+assert.equal(plan.summary.supplyActivation, 1);
+assert.equal(plan.summary.userNotifications >= 6, true);
+assert.equal(plan.summary.adminTasks >= 6, true);
 assert.equal(plan.summary.opsAlerts >= 2, true);
 assert.equal(plan.signals[0].priorityScore >= plan.signals.at(-1).priorityScore, true, 'Signals must be sorted by urgency.');
 

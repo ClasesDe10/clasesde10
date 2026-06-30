@@ -3991,11 +3991,14 @@ function proactiveAssistOptions() {
     profileNudgeMinCompletion: runtimeNumber('proactiveAssist.profileNudgeMinCompletion', 85, 1, 100),
     profileNudgeCooldownHours: runtimeNumber('proactiveAssist.profileNudgeCooldownHours', 72, 1, 1440),
     missingAvailabilityHours: runtimeNumber('proactiveAssist.missingAvailabilityHours', 24, 1, 1440),
+    requestAvailabilityNudgeHours: runtimeNumber('proactiveAssist.requestAvailabilityNudgeHours', 12, 1, 1440),
     upcomingClassReadinessHours: runtimeNumber('proactiveAssist.upcomingClassReadinessHours', 36, 1, 720),
+    teacherPayoutReadinessHours: runtimeNumber('proactiveAssist.teacherPayoutReadinessHours', 1, 1, 720),
     unreadCriticalNotificationHours: runtimeNumber('proactiveAssist.unreadCriticalNotificationHours', 12, 1, 720),
     lowSupplyRequestHours: runtimeNumber('proactiveAssist.lowSupplyRequestHours', 24, 1, 1440),
     lowSupplyMinCandidates: runtimeNumber('proactiveAssist.lowSupplyMinCandidates', 2, 1, 50),
     lowSupplyMinScore: runtimeNumber('proactiveAssist.lowSupplyMinScore', 55, 0, 100),
+    verifiedTeacherIdleDays: runtimeNumber('proactiveAssist.verifiedTeacherIdleDays', 7, 1, 365),
     staleAdminTaskHours: runtimeNumber('proactiveAssist.staleAdminTaskHours', 48, 1, 1440),
     userNotificationCooldownHours: runtimeNumber('proactiveAssist.userNotificationCooldownHours', 72, 1, 1440),
     adminCooldownHours: runtimeNumber('proactiveAssist.adminCooldownHours', 24, 1, 1440),
@@ -4185,8 +4188,11 @@ async function processProactiveAssist(db, stats) {
   stats.proactiveAssistOpsAlerts = plan.summary.opsAlerts;
   stats.proactiveAssistProfileHelp = plan.summary.profileHelp;
   stats.proactiveAssistSchedulingHelp = plan.summary.schedulingHelp;
+  stats.proactiveAssistRequestReadiness = plan.summary.requestReadiness;
   stats.proactiveAssistMatchingHelp = plan.summary.matchingHelp;
+  stats.proactiveAssistPaymentReadiness = plan.summary.paymentReadiness;
   stats.proactiveAssistReadinessChecks = plan.summary.readinessChecks;
+  stats.proactiveAssistSupplyActivation = plan.summary.supplyActivation;
   stats.proactiveAssistAttentionChecks = plan.summary.attentionChecks;
 
   await writeDoc(db.collection('proactiveAssistSnapshots'), notificationId('proactive_assist_snapshot', plan.generatedAt.slice(0, 16)), {
@@ -4534,8 +4540,11 @@ async function main() {
     proactiveAssistOpsAlerts: 0,
     proactiveAssistProfileHelp: 0,
     proactiveAssistSchedulingHelp: 0,
+    proactiveAssistRequestReadiness: 0,
     proactiveAssistMatchingHelp: 0,
+    proactiveAssistPaymentReadiness: 0,
     proactiveAssistReadinessChecks: 0,
+    proactiveAssistSupplyActivation: 0,
     proactiveAssistAttentionChecks: 0,
     scaleLimits: {
       trustContextLimit,

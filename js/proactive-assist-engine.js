@@ -4,6 +4,7 @@ const CLOSED_STATUSES = new Set(['resolved', 'resuelta', 'cerrada', 'closed', 'd
 const ACTIVE_ASSIGNMENT_STATUSES = new Set(['', 'activa', 'active', 'accepted', 'aceptada', 'asignada', 'assigned', 'confirmada', 'confirmed']);
 const SCHEDULED_CLASS_STATUSES = new Set(['programada', 'scheduled', 'confirmada', 'confirmed', 'pendiente', 'pending']);
 const PAID_CLASS_STATUSES = new Set(['pagada', 'paid', 'realizada_pagada']);
+const PAID_PAYOUT_STATUSES = new Set(['pagado', 'paid', 'validado', 'validated', 'liquidado', 'settled', 'succeeded']);
 const DAY_MS = 86400000;
 
 function clean(value, max = 800) {
@@ -189,6 +190,14 @@ function openRequest(request = {}) {
   return !assigned && !CLOSED_STATUSES.has(status) && !['asignada', 'assigned', 'aceptada', 'accepted'].includes(status);
 }
 
+function verifiedTeacher(teacher = {}) {
+  const status = statusOf(teacher);
+  return teacher.verified === true
+    || teacher.verificado === true
+    || teacher.isVerified === true
+    || ['verificado', 'verified', 'activo', 'activa', 'active'].includes(status);
+}
+
 function matchesByRequest(matches = []) {
   const map = new Map();
   for (const match of matches || []) {
@@ -227,10 +236,31 @@ function scheduledUpcomingClass(klass = {}, nowMs, horizonHours) {
   return until >= 0 && until <= horizonHours;
 }
 
+function completedClass(klass = {}) {
+  const status = statusOf(klass);
+  return ['realizada', 'completed', 'completada', 'done', 'pagada', 'paid'].includes(status)
+    || Boolean(first(klass.completedAt, klass.completed_at, klass.confirmedAt, klass.confirmadaAt));
+}
+
 function hasClassFinancials(klass = {}) {
   const familyAmount = number(first(klass.familyAmount, klass.totalFamilia, klass.precioFamilia, klass.amount, klass.monto), 0);
   const teacherAmount = number(first(klass.teacherAmount, klass.importeProfesor, klass.profesorAmount, klass.teacherPayoutAmount), 0);
   return familyAmount > 0 && teacherAmount > 0;
+}
+
+function teacherAmountOf(klass = {}) {
+  return number(first(klass.teacherAmount, klass.importeProfesor, klass.profesorAmount, klass.teacherPayoutAmount), 0);
+}
+
+function teacherPayoutPending(klass = {}) {
+  if (!completedClass(klass)) return false;
+  if (teacherAmountOf(klass) <= 0) return false;
+  const status = lower(first(klass.teacherPayoutStatus, klass.payoutStatus, klass.estadoPagoProfesor, klass.professorPaymentStatus), 120);
+  return !PAID_PAYOUT_STATUSES.has(status);
+}
+
+function teacherHasBizum(teacher = {}) {
+  return hasValue(teacher, ['hasBizum', 'bizumEnabled', 'bizumPhone', 'bizum', 'telefonoBizum']);
 }
 
 function notificationUnread(item = {}) {
@@ -482,6 +512,58 @@ function buildAvailabilitySignals(dataset, options, nowMs, push) {
   }
 }
 
+function buildRequestReadinessSignals(dataset, options, nowMs, push) {
+  const families = buildAliasMap(dataset.familias || [], ['familia_id']);
+  const students = buildAliasMap(dataset.alumnos || [], ['alumno_id']);
+  const studentsByFamily = new Map();
+  for (const student of dataset.alumnos || []) {
+    const familyId = clean(first(student.familyUid, student.familia_id, student.parentUid, student.parentId), 220);
+    if (!familyId) continue;
+    if (!studentsByFamily.has(familyId)) studentsByFamily.set(familyId, []);
+    studentsByFamily.get(familyId).push(student);
+  }
+
+  for (const request of dataset.solicitudes || []) {
+    if (!openRequest(request)) continue;
+    const age = hoursSince(first(request.createdAt, request.created_at, request.fecha), nowMs);
+    if (age < options.requestAvailabilityNudgeHours) continue;
+    const id = requestId(request);
+    const familyKey = clean(first(request.familyUid, request.familia_id), 220);
+    const studentKey = clean(first(request.studentId, request.alumno_id, request.studentUid), 220);
+    const family = families.get(familyKey) || {};
+    const candidates = [
+      students.get(studentKey),
+      ...(studentsByFamily.get(familyKey) || []),
+    ].filter(Boolean);
+    const student = candidates[0] || {};
+    if (studentKey && hasAvailability(student)) continue;
+    if (!studentKey && candidates.some(hasAvailability)) continue;
+    push(proactiveSignal({
+      nowMs,
+      signalId: 'request_missing_student_availability',
+      category: 'request_readiness',
+      priority: age >= options.adminEscalationHours ? 'high' : 'normal',
+      title: 'Solicitud sin disponibilidad del alumno',
+      description: `${clean(first(request.materia, request.subject, 'Solicitud'))} puede tardar mas porque no hay franjas disponibles del alumno.`,
+      reason: `La solicitud lleva ${Math.round(age)} horas abierta y el matching no puede cruzar horarios reales.`,
+      expectedOutcome: 'La familia marca franjas y el sistema recomienda profesores compatibles de verdad.',
+      recommendedAction: 'Pedir a la familia que anada disponibilidad del alumno antes de proponer profesor.',
+      section: 'alumnos',
+      entityType: 'solicitud',
+      entityId: id,
+      entityName: clean(first(student.nombre, request.studentName, request.familyName, 'Solicitud'), 180),
+      requestId: id,
+      familyUid: userUidOf(family) || familyKey,
+      studentId: clean(first(student.id, studentKey), 220),
+      cooldownHours: options.userNotificationCooldownHours,
+      createAdminTask: age >= options.adminEscalationHours,
+      recipients: [
+        buildRecipient('familia', userUidOf(family) || familyKey, 'Marca las franjas del alumno', 'Asi podremos proponerte profesores que encajen con vuestro horario real.', 'Abrir alumno', 'alumnos', 'normal'),
+      ].filter(Boolean),
+    }));
+  }
+}
+
 function buildLowSupplySignals(dataset, options, nowMs, push) {
   const byRequest = matchesByRequest(dataset.solicitudMatches || []);
   for (const request of dataset.solicitudes || []) {
@@ -515,6 +597,53 @@ function buildLowSupplySignals(dataset, options, nowMs, push) {
   }
 }
 
+function buildTeacherPayoutReadinessSignals(dataset, options, nowMs, push) {
+  const teachers = buildAliasMap(dataset.profesores || [], ['profesor_id']);
+  const pendingByTeacher = new Map();
+  for (const klass of dataset.clases || []) {
+    if (!teacherPayoutPending(klass)) continue;
+    const teacherKey = clean(first(klass.teacherUid, klass.profesor_id), 220);
+    if (!teacherKey) continue;
+    const age = hoursSince(first(klass.endAtIso, klass.fecha_fin, klass.completedAt, klass.fecha, klass.createdAt), nowMs);
+    if (age < options.teacherPayoutReadinessHours) continue;
+    const bucket = pendingByTeacher.get(teacherKey) || { count: 0, amount: 0, latest: null, classIds: [] };
+    bucket.count += 1;
+    bucket.amount += teacherAmountOf(klass);
+    bucket.latest = bucket.latest || first(klass.endAtIso, klass.fecha_fin, klass.completedAt, klass.fecha, klass.createdAt);
+    bucket.classIds.push(idOf(klass, ['classId', 'clase_id']));
+    pendingByTeacher.set(teacherKey, bucket);
+  }
+
+  for (const [teacherKey, bucket] of pendingByTeacher.entries()) {
+    const teacher = teachers.get(teacherKey) || {};
+    if (teacherHasBizum(teacher)) continue;
+    const uid = userUidOf(teacher) || teacherKey;
+    const name = displayName(teacher, 'Profesor');
+    push(proactiveSignal({
+      nowMs,
+      signalId: 'teacher_missing_bizum_before_payout',
+      category: 'payment_readiness',
+      priority: bucket.count >= 2 ? 'high' : 'normal',
+      title: `Falta Bizum para pagar a ${name}`,
+      description: `${bucket.count} clase(s) completadas tienen ${Math.round(bucket.amount)} EUR pendientes para el profesor, pero no hay Bizum operativo.`,
+      reason: 'Si no se pide antes, el cierre quincenal exigira gestion manual y retrasara el pago al profesor.',
+      expectedOutcome: 'El profesor anade Bizum y el admin puede pagar sin perseguir datos.',
+      recommendedAction: 'Pedir Bizum al profesor y completar su perfil antes del proximo cierre.',
+      section: 'ingresos',
+      entityType: 'profesor',
+      entityId: teacherKey,
+      entityName: name,
+      teacherUid: uid,
+      classId: bucket.classIds[0] || '',
+      cooldownHours: options.userNotificationCooldownHours,
+      createAdminTask: true,
+      recipients: [
+        buildRecipient('profesor', uid, 'Falta tu Bizum', 'Anade Bizum en tu perfil para que podamos pagarte las clases sin retrasos.', 'Abrir perfil', 'perfil', 'normal'),
+      ].filter(Boolean),
+    }));
+  }
+}
+
 function buildUpcomingClassReadinessSignals(dataset, options, nowMs, push) {
   for (const klass of dataset.clases || []) {
     if (!scheduledUpcomingClass(klass, nowMs, options.upcomingClassReadinessHours)) continue;
@@ -538,6 +667,38 @@ function buildUpcomingClassReadinessSignals(dataset, options, nowMs, push) {
       familyUid: clean(first(klass.familyUid, klass.familia_id), 220),
       teacherUid: clean(first(klass.teacherUid, klass.profesor_id), 220),
       studentId: clean(first(klass.studentId, klass.alumno_id), 220),
+      cooldownHours: options.adminCooldownHours,
+      createAdminTask: true,
+    }));
+  }
+}
+
+function buildTeacherSupplyActivationSignals(dataset, options, nowMs, push) {
+  const activeAssignments = new Set((dataset.asignaciones || [])
+    .filter(activeAssignment)
+    .map((assignment) => clean(first(assignment.teacherUid, assignment.profesor_id), 220))
+    .filter(Boolean));
+  for (const teacher of dataset.profesores || []) {
+    if (!verifiedTeacher(teacher) || isClosed(teacher)) continue;
+    const teacherKey = idOf(teacher, ['profesor_id']);
+    if (!teacherKey || activeAssignments.has(teacherKey) || activeAssignments.has(userUidOf(teacher))) continue;
+    const ageDays = hoursSince(first(teacher.verifiedAt, teacher.verificadoAt, teacher.createdAt, teacher.created_at), nowMs) / 24;
+    if (ageDays < options.verifiedTeacherIdleDays) continue;
+    push(proactiveSignal({
+      nowMs,
+      signalId: 'verified_teacher_without_students',
+      category: 'supply_activation',
+      priority: ageDays >= options.verifiedTeacherIdleDays * 2 ? 'normal' : 'low',
+      title: `Profesor verificado sin alumnos: ${displayName(teacher, 'Profesor')}`,
+      description: 'El profesor ya esta listo, pero no tiene ninguna asignacion activa.',
+      reason: `Lleva ${Math.round(ageDays)} dias disponible sin alumnos; puede perder motivacion o abandonar.`,
+      expectedOutcome: 'El admin lo revisa para destacarlo, usarlo en matching o reactivar su disponibilidad.',
+      recommendedAction: 'Comparar con solicitudes abiertas y marcarlo como candidato destacado si encaja.',
+      section: 'profesores',
+      entityType: 'profesor',
+      entityId: teacherKey,
+      entityName: displayName(teacher, 'Profesor'),
+      teacherUid: userUidOf(teacher) || teacherKey,
       cooldownHours: options.adminCooldownHours,
       createAdminTask: true,
     }));
@@ -608,11 +769,14 @@ export function buildProactiveAssistPlan(dataset = {}, options = {}) {
     profileNudgeMinCompletion: number(options.profileNudgeMinCompletion, 85),
     profileNudgeCooldownHours: number(options.profileNudgeCooldownHours, 72),
     missingAvailabilityHours: number(options.missingAvailabilityHours, 24),
+    requestAvailabilityNudgeHours: number(options.requestAvailabilityNudgeHours, 12),
     upcomingClassReadinessHours: number(options.upcomingClassReadinessHours, 36),
+    teacherPayoutReadinessHours: number(options.teacherPayoutReadinessHours, 1),
     unreadCriticalNotificationHours: number(options.unreadCriticalNotificationHours, 12),
     lowSupplyRequestHours: number(options.lowSupplyRequestHours, 24),
     lowSupplyMinCandidates: number(options.lowSupplyMinCandidates, 2),
     lowSupplyMinScore: number(options.lowSupplyMinScore, 55),
+    verifiedTeacherIdleDays: number(options.verifiedTeacherIdleDays, 7),
     staleAdminTaskHours: number(options.staleAdminTaskHours, 48),
     userNotificationCooldownHours: number(options.userNotificationCooldownHours, 72),
     adminCooldownHours: number(options.adminCooldownHours, 24),
@@ -627,8 +791,11 @@ export function buildProactiveAssistPlan(dataset = {}, options = {}) {
   buildTeacherProfileSignals(dataset, thresholds, nowMs, push);
   buildFamilyProfileSignals(dataset, thresholds, nowMs, push);
   buildAvailabilitySignals(dataset, thresholds, nowMs, push);
+  buildRequestReadinessSignals(dataset, thresholds, nowMs, push);
   buildLowSupplySignals(dataset, thresholds, nowMs, push);
+  buildTeacherPayoutReadinessSignals(dataset, thresholds, nowMs, push);
   buildUpcomingClassReadinessSignals(dataset, thresholds, nowMs, push);
+  buildTeacherSupplyActivationSignals(dataset, thresholds, nowMs, push);
   buildUnreadNotificationSignals(dataset, thresholds, nowMs, push);
   buildStaleAdminTaskSignals(dataset, thresholds, nowMs, push);
 
@@ -641,8 +808,11 @@ export function buildProactiveAssistPlan(dataset = {}, options = {}) {
     onboarding: sorted.filter((item) => item.category === 'onboarding').length,
     profileHelp: sorted.filter((item) => item.category === 'profile').length,
     schedulingHelp: sorted.filter((item) => item.category === 'scheduling').length,
+    requestReadiness: sorted.filter((item) => item.category === 'request_readiness').length,
     matchingHelp: sorted.filter((item) => item.category === 'matching').length,
+    paymentReadiness: sorted.filter((item) => item.category === 'payment_readiness').length,
     readinessChecks: sorted.filter((item) => item.category === 'readiness').length,
+    supplyActivation: sorted.filter((item) => item.category === 'supply_activation').length,
     attentionChecks: sorted.filter((item) => item.category === 'attention').length,
   };
 
