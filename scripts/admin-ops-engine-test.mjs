@@ -56,6 +56,10 @@ const dataset = {
       status: 'abierta',
       priority: 'urgente',
       category: 'pago',
+      alertPriorityScore: 96,
+      alertAttentionLabel: 'Incidencia critica',
+      alertRecommendedAction: 'Validar pago y contactar familia.',
+      alertConsequence: 'Puede bloquear confianza y cobros.',
       createdAt: '2026-06-28T12:00:00.000Z',
     },
   ],
@@ -124,6 +128,10 @@ const dataset = {
       familyUid: 'family_1',
       value: 36,
       suggestedActions: ['Avisar a la familia y revisar justificante.'],
+      alertPriorityScore: 91,
+      alertAttentionLabel: 'Incidencia importante',
+      alertRecommendedAction: 'Resolver antes del siguiente recordatorio.',
+      alertConsequence: 'Puede convertirse en incidencia critica.',
       lastSeenAt: '2026-06-29T09:00:00.000Z',
       status: 'active',
     },
@@ -146,6 +154,8 @@ assert(model.summary.waitingMatching === 1, 'Ops model must count requests waiti
 assert(model.summary.revenueAtRisk === 120, 'Ops model must calculate revenue at risk.');
 assert(model.summary.preventiveRisks === 1, 'Ops model must count preventive risks.');
 assert(model.items.some((item) => item.type === 'risk' && item.source === 'preventiveRisks'), 'Ops model must expose preventive risks as actionable items.');
+assert(model.items.some((item) => item.source === 'incidencias' && item.priority === 96), 'Ops model must use alert priority scores for incidents.');
+assert(model.items.some((item) => item.source === 'preventiveRisks' && item.automation.includes('Resolver antes')), 'Ops model must expose recommended alert actions.');
 assert(model.automationGroups.some((group) => group.type === 'matching_followup'), 'Ops model must suggest matching automation groups.');
 assert(model.items[0].priority >= model.items.at(-1).priority, 'Ops items must be sorted by priority.');
 

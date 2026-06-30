@@ -8,6 +8,7 @@
 
 export const INCIDENT_ENGINE_VERSION = 'incident-engine-2026-06-28';
 export const PREVENTIVE_INCIDENT_VERSION = 'preventive-incident-radar-2026-06-30';
+export const ALERT_PRIORITY_ENGINE_VERSION = 'alert-priority-engine-2026-06-30';
 
 export const INCIDENT_STATUSES = Object.freeze([
   'abierta',
@@ -1236,6 +1237,363 @@ export function buildPreventiveIncidentPlan(dataset = {}, options = {}) {
       actionable: risks.filter((risk) => risk.shouldCreateTask).length,
       incidentsToCreate: risks.filter((risk) => risk.shouldCreateIncident).length,
       adminNotifications: risks.filter((risk) => risk.shouldNotifyAdmin).length,
+    },
+  };
+}
+
+const ALERT_LEVELS = Object.freeze({
+  warning: { label: 'Advertencia', minScore: 0, prioridad: 'baja', rank: 4 },
+  task: { label: 'Tarea pendiente', minScore: 45, prioridad: 'media', rank: 3 },
+  important_incident: { label: 'Incidencia importante', minScore: 70, prioridad: 'alta', rank: 2 },
+  critical_incident: { label: 'Incidencia critica', minScore: 88, prioridad: 'urgente', rank: 1 },
+});
+
+function alertNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function alertStatus(item = {}) {
+  return lower(firstPresent(item.status, item.estado, item.lifecycleStatus, item.state));
+}
+
+function alertIsClosed(item = {}) {
+  return ['cerrada', 'cerrado', 'resuelta', 'resolved', 'closed', 'done', 'archivada', 'archived', 'suppressed'].includes(alertStatus(item));
+}
+
+function alertSignalDate(item = {}) {
+  return dateToIso(firstPresent(item.createdAt, item.created_at, item.detectedAt, item.firstSeenAt, item.lastSeenAt, item.updatedAt, item.updated_at));
+}
+
+function alertSignalAgeHours(item = {}, nowMs) {
+  const date = preventiveDate(alertSignalDate(item));
+  if (!date) return 0;
+  return Math.max(0, (nowMs - date.getTime()) / 36e5);
+}
+
+function alertEntityId(item = {}) {
+  return clean(firstPresent(
+    item.entityId,
+    item.classId,
+    item.clase_id,
+    item.paymentId,
+    item.pago_id,
+    item.documentId,
+    item.documento_id,
+    item.requestId,
+    item.solicitud_id,
+    item.assignmentId,
+    item.asignacion_id,
+    item.chatId,
+    item.id,
+  ), 180);
+}
+
+function alertEntityType(item = {}, fallback = '') {
+  if (clean(item.entityType)) return clean(item.entityType, 80);
+  if (clean(firstPresent(item.classId, item.clase_id))) return 'clases';
+  if (clean(firstPresent(item.paymentId, item.pago_id))) return 'pagos';
+  if (clean(firstPresent(item.documentId, item.documento_id))) return 'documentos';
+  if (clean(firstPresent(item.requestId, item.solicitud_id))) return 'solicitudes';
+  if (clean(firstPresent(item.assignmentId, item.asignacion_id))) return 'asignaciones';
+  if (clean(firstPresent(item.chatId))) return 'chats';
+  return clean(fallback || 'operativa', 80);
+}
+
+function alertCategory(item = {}) {
+  return normalizeIncidentCategory(firstPresent(item.categoria, item.category, item.type, item.alertType), `${item.title || ''} ${item.titulo || ''} ${item.description || ''} ${item.descripcion || ''}`);
+}
+
+function alertExplicitPriorityScore(item = {}) {
+  const rank = alertNumber(firstPresent(item.priorityRank, item.alertPriorityRank), 0);
+  if (rank > 0) return Math.max(0, 105 - rank * 18);
+  const priority = lower(firstPresent(item.alertPriority, item.severity, item.priority, item.prioridad));
+  if (['critical', 'critica', 'critico', 'urgente'].includes(priority)) return 92;
+  if (['high', 'alta', 'alto'].includes(priority)) return 78;
+  if (['medium', 'media', 'normal'].includes(priority)) return 58;
+  if (['low', 'baja', 'bajo'].includes(priority)) return 28;
+  return 45;
+}
+
+function alertCategoryScore(category = '') {
+  return {
+    seguridad: 96,
+    pago: 80,
+    finanzas: 78,
+    clase: 76,
+    conflicto: 78,
+    tecnica: 72,
+    sincronizacion: 70,
+    ia: 66,
+    matching: 64,
+    documentacion: 60,
+    comunicacion: 58,
+    perfil: 45,
+    operativa: 48,
+  }[category] || 48;
+}
+
+function alertLevelFromScore(score) {
+  if (score >= ALERT_LEVELS.critical_incident.minScore) return 'critical_incident';
+  if (score >= ALERT_LEVELS.important_incident.minScore) return 'important_incident';
+  if (score >= ALERT_LEVELS.task.minScore) return 'task';
+  return 'warning';
+}
+
+function alertPriorityFromLevel(level) {
+  return ALERT_LEVELS[level] || ALERT_LEVELS.warning;
+}
+
+function alertDedupeKey(signal = {}) {
+  return preventiveSafeId(
+    alertCategory(signal),
+    clean(firstPresent(signal.type, signal.source, signal.alertType, 'alert'), 80),
+    alertEntityType(signal),
+    alertEntityId(signal),
+    clean(firstPresent(signal.familyUid, signal.familia_id, signal.teacherUid, signal.profesor_id, signal.relatedUserUid), 120),
+  );
+}
+
+function alertTitle(signal = {}) {
+  return clean(firstPresent(signal.title, signal.titulo, signal.label, signal.alertType, signal.type, 'Alerta operativa'), 180);
+}
+
+function alertDescription(signal = {}) {
+  return clean(firstPresent(signal.description, signal.descripcion, signal.body, signal.message, signal.reason, alertTitle(signal)), 1200);
+}
+
+function alertRecommendedAction(signal = {}, level = 'warning') {
+  const actions = preventiveList(firstPresent(signal.suggestedActions, signal.recommendedActions, signal.actions));
+  if (actions.length) return clean(actions[0], 240);
+  const category = alertCategory(signal);
+  if (level === 'critical_incident') return 'Intervenir hoy, revisar causa raiz y dejar registro en el ticket.';
+  if (category === 'pago') return 'Revisar el pago, recordar a la familia y validar si existe justificante.';
+  if (category === 'clase') return 'Cerrar el estado de la clase y confirmar si requiere incidencia.';
+  if (category === 'matching') return 'Abrir la solicitud y asignar o proponer el mejor profesor disponible.';
+  if (category === 'documentacion') return 'Validar o pedir de nuevo el documento necesario.';
+  if (category === 'perfil') return 'Pedir al usuario que complete los datos que bloquean confianza o matching.';
+  if (category === 'tecnica') return 'Revisar logs, permisos y reintentos antes de que afecte a usuarios.';
+  return 'Revisar la ficha operativa y decidir si se cierra, automatiza o escala.';
+}
+
+function alertConsequence(signal = {}, level = 'warning') {
+  const category = alertCategory(signal);
+  if (level === 'critical_incident') return 'Puede bloquear pagos, clases, acceso o confianza de usuarios reales.';
+  if (category === 'pago') return 'Puede generar impagos, reclamaciones o perdida de confianza del profesor.';
+  if (category === 'clase') return 'Puede dejar calendario, pagos y reputacion en estados incoherentes.';
+  if (category === 'matching') return 'Puede dejar a una familia esperando sin siguiente paso claro.';
+  if (category === 'comunicacion') return 'Puede impedir que familia y profesor coordinen horarios.';
+  if (category === 'perfil') return 'Puede reducir conversion, confianza y calidad del matching.';
+  return 'Puede acumular trabajo manual o degradar la experiencia si no se atiende.';
+}
+
+function normalizeAlertSignal(source, item = {}) {
+  const category = alertCategory(item);
+  const entityType = alertEntityType(item, source);
+  const entityId = alertEntityId(item) || clean(item.id || source, 180);
+  return {
+    ...item,
+    signalSource: source,
+    signalId: clean(item.id || `${source}_${entityId}`, 180),
+    entityType,
+    entityId,
+    category,
+    title: alertTitle(item),
+    description: alertDescription(item),
+    dedupeKey: alertDedupeKey({ ...item, entityType, entityId, category, source }),
+    createdAtIso: alertSignalDate(item),
+    automatic: item.automatic === true || item.fromAutomation === true || item.createdByUid === 'automation' || item.reportado_por === 'automation',
+  };
+}
+
+function collectAlertSignals(dataset = {}) {
+  const signals = [];
+  for (const item of preventiveList(dataset.incidents || dataset.incidencias)) {
+    if (alertIsClosed(item)) continue;
+    signals.push(normalizeAlertSignal('incidencias', item));
+  }
+  for (const item of preventiveList(dataset.preventiveRisks)) {
+    if (alertIsClosed(item)) continue;
+    signals.push(normalizeAlertSignal('preventiveRisks', item));
+  }
+  for (const item of preventiveList(dataset.opsAlerts)) {
+    if (alertIsClosed(item)) continue;
+    signals.push(normalizeAlertSignal('opsAlerts', item));
+  }
+  for (const item of preventiveList(dataset.notifications || dataset.notificaciones)) {
+    const isRead = item.readAt || item.leida === true || item.read === true;
+    if (isRead || item.suppressedByPriorityEngine === true) continue;
+    const priority = lower(firstPresent(item.priority, item.severity));
+    if (!['critical', 'high', 'urgente', 'alta'].includes(priority)) continue;
+    signals.push(normalizeAlertSignal('notificaciones', item));
+  }
+  return signals;
+}
+
+export function buildAlertPriorityDecision(signal = {}, context = {}, options = {}) {
+  const nowIso = options.nowIso || new Date().toISOString();
+  const now = new Date(nowIso);
+  const nowMs = Number.isNaN(now.getTime()) ? Date.now() : now.getTime();
+  const normalized = normalizeAlertSignal(signal.signalSource || signal.source || 'manual', signal);
+  const category = normalized.category;
+  const ageHours = alertSignalAgeHours(normalized, nowMs);
+  const explicitScore = alertExplicitPriorityScore(normalized);
+  const categoryScore = alertCategoryScore(category);
+  const amount = alertNumber(firstPresent(normalized.amount, normalized.monto, normalized.value, normalized.familyAmount), 0);
+  const duplicateCount = alertNumber(context.duplicateCount, 1);
+  const isDuplicate = Boolean(context.isDuplicate);
+  const isPrimary = context.isPrimary !== false;
+  const isOverdue = normalized.isOverdue === true
+    || normalized.overdue === true
+    || /vencid|overdue|dead_letter|sin confirmar|sin respuesta|bloquead/i.test(`${normalized.type || ''} ${normalized.source || ''} ${normalized.title} ${normalized.description}`);
+  const affectedUsers = Math.max(0, alertNumber(context.affectedUsers, 0));
+  const reasoning = [];
+
+  let score = Math.max(explicitScore, categoryScore);
+  reasoning.push(`Base ${Math.round(score)} por prioridad/categoria ${category}.`);
+  if (isOverdue) {
+    score += 12;
+    reasoning.push('Esta vencida o bloqueada.');
+  }
+  if (ageHours >= 48) {
+    score += 10;
+    reasoning.push(`Lleva ${Math.round(ageHours)}h abierta.`);
+  } else if (ageHours >= 24) {
+    score += 6;
+    reasoning.push(`Lleva ${Math.round(ageHours)}h sin resolver.`);
+  }
+  if (amount >= 150) {
+    score += 8;
+    reasoning.push(`Importe relevante (${Math.round(amount)} EUR).`);
+  } else if (amount > 0) {
+    score += 3;
+    reasoning.push('Tiene impacto economico.');
+  }
+  if (affectedUsers >= 5) {
+    score += 8;
+    reasoning.push(`${affectedUsers} usuarios potencialmente afectados.`);
+  }
+  if (duplicateCount >= 3) {
+    score += 4;
+    reasoning.push(`${duplicateCount} avisos parecidos agrupados.`);
+  }
+  if (normalized.signalSource === 'notificaciones') {
+    score -= 18;
+    reasoning.push('Es una notificacion, no un ticket operativo.');
+  }
+  if (isDuplicate && normalized.automatic) {
+    score = Math.min(score, 42);
+    reasoning.push('Duplicado automatico: se suprime para reducir ruido.');
+  } else if (isDuplicate) {
+    score -= 12;
+    reasoning.push('Duplicado agrupado bajo una alerta principal.');
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const level = alertLevelFromScore(score);
+  const meta = alertPriorityFromLevel(level);
+  const shouldNotifyAdmin = !isDuplicate && score >= alertNumber(options.adminNotificationScore, 82);
+  const shouldCreateTask = !isDuplicate && score >= alertNumber(options.taskScore, 55);
+  const canAutoResolve = isDuplicate && normalized.automatic && normalized.signalSource === 'incidencias';
+  const autoAction = canAutoResolve
+    ? 'close_duplicate_automatic_incident'
+    : isDuplicate && normalized.signalSource === 'notificaciones'
+      ? 'suppress_duplicate_notification'
+      : '';
+  const recommendedAction = canAutoResolve
+    ? 'Cerrar automaticamente como duplicado y mantener la alerta principal.'
+    : alertRecommendedAction(normalized, level);
+
+  return {
+    id: preventiveSafeId('alert_priority', normalized.signalSource, normalized.signalId, normalized.dedupeKey),
+    version: ALERT_PRIORITY_ENGINE_VERSION,
+    signalSource: normalized.signalSource,
+    signalId: normalized.signalId,
+    entityType: normalized.entityType,
+    entityId: normalized.entityId,
+    dedupeKey: normalized.dedupeKey,
+    category,
+    title: normalized.title,
+    description: normalized.description,
+    priorityScore: score,
+    attentionLevel: level,
+    attentionLabel: meta.label,
+    prioridad: meta.prioridad,
+    priority: incidentPriorityMeta(meta.prioridad).severity,
+    priorityRank: meta.rank,
+    shouldNotifyAdmin,
+    shouldCreateTask,
+    canAutoResolve,
+    autoAction,
+    suppressedAsNoise: Boolean(isDuplicate),
+    duplicateCount,
+    isPrimary,
+    whyDetected: reasoning,
+    consequence: alertConsequence(normalized, level),
+    recommendedAction,
+    familyUid: clean(firstPresent(normalized.familyUid, normalized.familia_id), 180),
+    teacherUid: clean(firstPresent(normalized.teacherUid, normalized.profesor_id), 180),
+    relatedUserUid: clean(firstPresent(normalized.relatedUserUid, normalized.userUid, normalized.ownerUid), 180),
+    createdAtIso: normalized.createdAtIso || nowIso,
+    decidedAt: nowIso,
+    fingerprint: preventiveSafeId(normalized.dedupeKey, score, level, recommendedAction),
+  };
+}
+
+export function buildAlertPriorityPlan(dataset = {}, options = {}) {
+  const signals = collectAlertSignals(dataset);
+  const grouped = new Map();
+  for (const signal of signals) {
+    const group = grouped.get(signal.dedupeKey) || [];
+    group.push(signal);
+    grouped.set(signal.dedupeKey, group);
+  }
+
+  const decisions = [];
+  for (const group of grouped.values()) {
+    const ranked = [...group].sort((a, b) => (
+      alertExplicitPriorityScore(b) - alertExplicitPriorityScore(a)
+    ) || (
+      alertCategoryScore(b.category) - alertCategoryScore(a.category)
+    ) || String(alertSignalDate(a)).localeCompare(String(alertSignalDate(b))));
+    const affected = new Set(group.flatMap((item) => [
+      item.familyUid,
+      item.familia_id,
+      item.teacherUid,
+      item.profesor_id,
+      item.relatedUserUid,
+      item.userUid,
+      item.ownerUid,
+    ].map((value) => clean(value, 180)).filter(Boolean)));
+    ranked.forEach((signal, index) => {
+      decisions.push(buildAlertPriorityDecision(signal, {
+        duplicateCount: ranked.length,
+        isDuplicate: index > 0,
+        isPrimary: index === 0,
+        affectedUsers: affected.size,
+      }, options));
+    });
+  }
+
+  decisions.sort((a, b) => (b.priorityScore - a.priorityScore) || (a.priorityRank - b.priorityRank) || a.title.localeCompare(b.title));
+  const visible = decisions.filter((item) => !item.suppressedAsNoise);
+  const autoActions = decisions.filter((item) => item.autoAction);
+  return {
+    version: ALERT_PRIORITY_ENGINE_VERSION,
+    generatedAt: options.nowIso || new Date().toISOString(),
+    totalSignals: signals.length,
+    totalDecisions: decisions.length,
+    decisions,
+    topAlerts: visible.slice(0, alertNumber(options.maxTopAlerts, 20)),
+    autoActions,
+    summary: {
+      critical: visible.filter((item) => item.attentionLevel === 'critical_incident').length,
+      important: visible.filter((item) => item.attentionLevel === 'important_incident').length,
+      tasks: visible.filter((item) => item.attentionLevel === 'task').length,
+      warnings: visible.filter((item) => item.attentionLevel === 'warning').length,
+      suppressedNoise: decisions.filter((item) => item.suppressedAsNoise).length,
+      autoResolvable: autoActions.length,
+      adminNotifications: visible.filter((item) => item.shouldNotifyAdmin).length,
     },
   };
 }

@@ -37,6 +37,7 @@ import {
   normalizeClassStatus,
 } from '../js/calendar-engine.js';
 import {
+  buildAlertPriorityPlan,
   buildAutomaticIncidentPayload,
   buildPreventiveIncidentPlan,
   normalizeIncidentPriority,
@@ -3249,6 +3250,190 @@ async function processPreventiveIncidentRadar(db, stats) {
   }
 }
 
+function alertPriorityOptions() {
+  return {
+    nowIso: isoNow(),
+    adminNotificationScore: runtimeNumber('incidents.alertAdminNotificationScore', 82, 1, 100),
+    taskScore: runtimeNumber('incidents.alertTaskScore', 55, 1, 100),
+    maxTopAlerts: runtimeNumber('incidents.alertMaxTopAlerts', 40, 1, 200),
+  };
+}
+
+function alertSignalCollection(source) {
+  return {
+    incidencias: 'incidencias',
+    preventiveRisks: 'preventiveRisks',
+    opsAlerts: 'opsAlerts',
+    notificaciones: 'notificaciones',
+  }[source] || '';
+}
+
+async function patchAlertSource(db, decision, patch) {
+  const collectionName = alertSignalCollection(decision.signalSource);
+  if (!collectionName || !decision.signalId) return false;
+  const ref = db.collection(collectionName).doc(decision.signalId);
+  const snap = await ref.get().catch(() => null);
+  if (!snap?.exists) return false;
+  await updateRef(ref, {
+    ...patch,
+    updatedAt: now(),
+    updated_at: isoNow(),
+  });
+  return true;
+}
+
+async function materializeAlertPriorityDecision(db, decision, stats) {
+  const ref = db.collection('alertDecisions').doc(decision.id);
+  const existing = await ref.get();
+  const existingData = existing.exists ? existing.data() : {};
+  const changed = !existing.exists || existingData.fingerprint !== decision.fingerprint;
+
+  await writeDoc(db.collection('alertDecisions'), decision.id, {
+    ...decision,
+    status: decision.suppressedAsNoise ? 'suppressed' : 'active',
+    estado: decision.suppressedAsNoise ? 'suprimida' : 'activa',
+    firstSeenAt: existing.exists ? (existingData.firstSeenAt || now()) : now(),
+    lastSeenAt: now(),
+    createdAt: existing.exists ? (existingData.createdAt || now()) : now(),
+    updatedAt: now(),
+  });
+  if (!existing.exists) stats.alertDecisionsCreated += 1;
+  stats.alertDecisionsEvaluated += 1;
+
+  const sourcePatch = {
+    alertPriorityEngineVersion: decision.version,
+    alertPriorityScore: decision.priorityScore,
+    alertAttentionLevel: decision.attentionLevel,
+    alertAttentionLabel: decision.attentionLabel,
+    alertPriority: decision.priority,
+    alertPrioridad: decision.prioridad,
+    alertPriorityRank: decision.priorityRank,
+    alertRecommendedAction: decision.recommendedAction,
+    alertConsequence: decision.consequence,
+    alertWhyDetected: decision.whyDetected,
+    alertDedupeKey: decision.dedupeKey,
+    alertDuplicateCount: decision.duplicateCount,
+    alertSuppressedAsNoise: decision.suppressedAsNoise,
+    alertLastDecisionAt: isoNow(),
+  };
+  const patched = await patchAlertSource(db, decision, sourcePatch);
+  if (patched) stats.alertSourcesUpdated += 1;
+
+  if (decision.autoAction === 'close_duplicate_automatic_incident' && decision.signalSource === 'incidencias') {
+    await patchAlertSource(db, decision, {
+      estado: 'cerrada',
+      status: 'cerrada',
+      resolvedAt: now(),
+      fecha_resolucion: isoNow(),
+      resolution: 'Cerrada automaticamente como duplicado de una alerta principal.',
+      resolucion: 'Cerrada automaticamente como duplicado de una alerta principal.',
+      rootCause: 'duplicado_automatico',
+      causa: 'duplicado_automatico',
+      suppressedByPriorityEngine: true,
+      alertAutoResolvedAt: now(),
+    });
+    stats.alertAutoResolutionsApplied += 1;
+  }
+
+  if (decision.autoAction === 'suppress_duplicate_notification' && decision.signalSource === 'notificaciones') {
+    await patchAlertSource(db, decision, {
+      suppressedByPriorityEngine: true,
+      suppressedAt: now(),
+      suppressionReason: 'Duplicado agrupado por el motor de prioridades.',
+    });
+    stats.alertNotificationsSuppressed += 1;
+  }
+
+  if (decision.shouldCreateTask) {
+    const taskId = notificationId('crm_alert_priority', decision.id);
+    const taskRef = db.collection('crmTasks').doc(taskId);
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+      const dueMinutes = decision.attentionLevel === 'critical_incident'
+        ? 20
+        : decision.attentionLevel === 'important_incident'
+          ? 90
+          : 240;
+      await writeDoc(db.collection('crmTasks'), taskId, {
+        title: decision.title,
+        description: `${decision.description} Mejor accion: ${decision.recommendedAction}`,
+        priority: decision.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: decision.entityType,
+        entityId: decision.entityId,
+        alertDecisionId: decision.id,
+        alertScore: decision.priorityScore,
+        alertLevel: decision.attentionLevel,
+        familyUid: decision.familyUid || '',
+        teacherUid: decision.teacherUid || '',
+        tags: ['alerta_inteligente', decision.category, decision.attentionLevel],
+        dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueMinutes * 60 * 1000)),
+        source: 'alert_priority_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.alertTasksCreated += 1;
+    }
+  }
+
+  if (decision.shouldNotifyAdmin && changed) {
+    const created = await notifyAdminsOnce(
+      db,
+      decision.attentionLevel === 'critical_incident' ? 'Alerta critica priorizada' : 'Alerta importante priorizada',
+      `${decision.title}. ${decision.consequence} Accion recomendada: ${decision.recommendedAction}`,
+      {
+        type: 'alert_priority',
+        alertDecisionId: decision.id,
+        signalSource: decision.signalSource,
+        signalId: decision.signalId,
+        priorityScore: decision.priorityScore,
+        attentionLevel: decision.attentionLevel,
+        url: '/pages/login.html',
+      },
+      `alert_priority_${decision.id}`,
+    );
+    stats.alertNotificationsCreated += created;
+  }
+}
+
+async function processAlertPriorityEngine(db, stats) {
+  if (!runtimeBoolean('incidents.alertPriorityEnabled', true)) return;
+  const scanLimit = runtimeNumber('incidents.alertPriorityScanLimit', limit, 10, 5000);
+  const [incidents, preventiveRisks, notifications, opsAlerts] = await Promise.all([
+    listCollection(db, 'incidencias', scanLimit),
+    listCollection(db, 'preventiveRisks', scanLimit).catch(() => []),
+    listCollection(db, 'notificaciones', scanLimit),
+    listCollection(db, 'opsAlerts', scanLimit),
+  ]);
+  const plan = buildAlertPriorityPlan({
+    incidents,
+    preventiveRisks,
+    notifications,
+    opsAlerts,
+  }, alertPriorityOptions());
+
+  stats.alertPriorityVersion = plan.version;
+  stats.alertSignalsEvaluated = plan.totalSignals;
+  stats.alertCritical = plan.summary.critical;
+  stats.alertImportant = plan.summary.important;
+  stats.alertSuppressedNoise = plan.summary.suppressedNoise;
+  stats.alertAutoResolvable = plan.summary.autoResolvable;
+
+  await writeDoc(db.collection('alertPrioritySnapshots'), notificationId('alert_priority_snapshot', plan.generatedAt.slice(0, 16)), {
+    ...plan.summary,
+    version: plan.version,
+    totalSignals: plan.totalSignals,
+    generatedAt: plan.generatedAt,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+
+  for (const decision of plan.decisions.slice(0, scanLimit)) {
+    await materializeAlertPriorityDecision(db, decision, stats);
+  }
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -3525,6 +3710,19 @@ async function main() {
     preventiveOpsAlertsCreated: 0,
     preventiveAutomationEventsCreated: 0,
     preventiveRadarVersion: '',
+    alertPriorityVersion: '',
+    alertSignalsEvaluated: 0,
+    alertDecisionsEvaluated: 0,
+    alertDecisionsCreated: 0,
+    alertSourcesUpdated: 0,
+    alertCritical: 0,
+    alertImportant: 0,
+    alertSuppressedNoise: 0,
+    alertAutoResolvable: 0,
+    alertAutoResolutionsApplied: 0,
+    alertNotificationsSuppressed: 0,
+    alertNotificationsCreated: 0,
+    alertTasksCreated: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
@@ -3564,6 +3762,7 @@ async function main() {
 
   await processPlatformAutomationSweep(db, stats);
   await processPreventiveIncidentRadar(db, stats);
+  await processAlertPriorityEngine(db, stats);
   await processTrustReputation(db, stats);
   await writeAnalyticsRollup(db, stats);
   const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');

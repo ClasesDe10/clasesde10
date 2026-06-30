@@ -39,6 +39,7 @@ const [
 assert(engine.includes('NOTIFICATION_EVENTS'), 'Notification engine must define event constants.');
 assert(engine.includes('class_unmarked_after_1h'), 'Notification engine must include unmarked class event.');
 assert(engine.includes('weekly_payment_due'), 'Notification engine must include weekly payment event.');
+assert(engine.includes('alert_priority'), 'Notification engine must include prioritized alert event.');
 assert(engine.includes('chat_message'), 'Notification engine must include chat message event.');
 assert(engine.includes('buildNotificationDocument'), 'Notification engine must build normalized documents.');
 assert(engine.includes('isNotificationEnabled'), 'Notification engine must expose settings checks.');

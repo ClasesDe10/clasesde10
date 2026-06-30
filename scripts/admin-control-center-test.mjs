@@ -45,7 +45,9 @@ assert(module.includes('computeControlCenter'), 'Control center must compute agg
 assert(module.includes('computeMissionControl'), 'Control center must compute Mission Control system health.');
 assert(module.includes('platformHealthChecks'), 'Control center must persist platform health snapshots.');
 assert(module.includes('preventiveRisks'), 'Control center must load preventive risk signals.');
+assert(module.includes('alertDecisions'), 'Control center must load alert priority decisions.');
 assert(module.includes('riesgo(s) preventivos altos'), 'Mission Control must surface severe preventive risks.');
+assert(module.includes('alerta(s) priorizadas por score'), 'Mission Control must surface scored alert decisions.');
 assert(module.includes('Mission Control'), 'Control center must render the Mission Control hero.');
 assert(module.includes('Estado tecnico de la plataforma'), 'Mission Control must expose technical platform status.');
 assert(module.includes('Firebase'), 'Mission Control must monitor Firebase.');
@@ -120,5 +122,6 @@ assert(rules.includes('match /adminAiQueries/{queryId}'), 'Firestore rules must 
 assert(rules.includes('match /platformHealthChecks/{checkId}'), 'Firestore rules must protect Mission Control health checks.');
 assert(rules.includes('match /platformConfigHistory/{historyId}'), 'Firestore rules must protect platform configuration history.');
 assert(rules.includes('match /preventiveRisks/{riskId}'), 'Firestore rules must protect preventive risks.');
+assert(rules.includes('match /alertDecisions/{decisionId}'), 'Firestore rules must protect alert decisions.');
 
 console.log('Admin control center validation passed.');

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
+  buildAlertPriorityPlan,
   buildAutomaticIncidentPayload,
   buildIncidentStats,
   buildIncidentUpdatePatch,
@@ -193,6 +194,63 @@ assert.ok(preventiveTypes.has('class_missing_core_relation'));
 assert.ok(preventiveTypes.has('automation_dead_letter'));
 assert.equal(preventive.summary.critical >= 1, true);
 
+const alertPlan = buildAlertPriorityPlan({
+  incidencias: [{
+    id: 'inc_critical',
+    source: 'payment_overdue',
+    categoria: 'pago',
+    priority: 'critical',
+    status: 'abierta',
+    automatic: true,
+    paymentId: 'pay_critical',
+    amount: 180,
+    titulo: 'Pago vencido critico',
+    descripcion: 'Pago vencido con importe alto.',
+    createdAt: '2026-06-28T10:00:00.000Z',
+  }, {
+    id: 'inc_duplicate',
+    source: 'payment_overdue',
+    categoria: 'pago',
+    priority: 'critical',
+    status: 'abierta',
+    automatic: true,
+    paymentId: 'pay_critical',
+    amount: 180,
+    titulo: 'Pago vencido critico duplicado',
+    descripcion: 'Pago vencido con importe alto.',
+    createdAt: '2026-06-28T11:00:00.000Z',
+  }],
+  preventiveRisks: [{
+    id: 'risk_task',
+    type: 'incomplete_teacher_profile',
+    severity: 'medium',
+    status: 'active',
+    entityType: 'profesores',
+    entityId: 'teacher_profile',
+    title: 'Perfil incompleto',
+    description: 'Faltan campos de confianza.',
+  }],
+  notificaciones: [{
+    id: 'notif_1',
+    type: 'payment_overdue',
+    priority: 'high',
+    userUid: 'admin_1',
+    title: 'Pago pendiente',
+    body: 'Aviso repetido de pago.',
+    createdAt: '2026-06-30T08:00:00.000Z',
+    readAt: null,
+  }],
+}, {
+  nowIso: '2026-06-30T10:00:00.000Z',
+  adminNotificationScore: 82,
+  taskScore: 55,
+});
+assert.equal(alertPlan.summary.critical >= 1, true);
+assert.equal(alertPlan.summary.autoResolvable >= 1, true);
+assert.ok(alertPlan.decisions.some((item) => item.autoAction === 'close_duplicate_automatic_incident'));
+assert.ok(alertPlan.topAlerts[0].priorityScore >= alertPlan.topAlerts.at(-1).priorityScore);
+assert.ok(alertPlan.decisions.every((item) => item.recommendedAction && item.consequence && item.whyDetected.length));
+
 const adminHtml = fs.readFileSync('pages/dashboard/admin.html', 'utf8');
 const adminModule = fs.readFileSync('js/admin-incidents.js', 'utf8');
 const worker = fs.readFileSync('scripts/firebase-automation-worker.mjs', 'utf8');
@@ -208,14 +266,18 @@ assert.match(worker, /payment_overdue/);
 assert.match(worker, /document_stale/);
 assert.match(worker, /class_unconfirmed/);
 assert.match(worker, /processPreventiveIncidentRadar/);
+assert.match(worker, /processAlertPriorityEngine/);
 assert.match(worker, /preventiveRisks/);
+assert.match(worker, /alertDecisions/);
 assert.match(rules, /ticketId/);
 assert.match(rules, /history/);
 assert.match(rules, /preventiveRisks/);
+assert.match(rules, /alertDecisions/);
 assert.match(indexes, /priorityRank/);
 assert.match(indexes, /assignedAdminEmail/);
 assert.match(platformConfig, /incidents\.urgentSlaHours/);
 assert.match(platformConfig, /incidents\.preventiveRadarEnabled/);
+assert.match(platformConfig, /incidents\.alertPriorityEnabled/);
 
 console.log(JSON.stringify({
   ok: true,

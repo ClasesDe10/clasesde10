@@ -28,6 +28,7 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   MATCHING_READY: 'matching_ready',
   MATCHING_NO_MATCH: 'matching_no_match',
   MATCHING_ACTIVE_INTERVENTION: 'matching_active_intervention',
+  ALERT_PRIORITY: 'alert_priority',
   ASSIGNMENT_CREATED: 'assignment_created',
   VERIFICATION_PENDING: 'verification_pending',
   DOCUMENT_REVIEW_PENDING: 'document_review_pending',
@@ -128,6 +129,12 @@ export const NOTIFICATION_EVENT_DEFINITIONS = Object.freeze({
     label: 'Matching activo',
     category: 'matching',
     priority: 'high',
+    channels: ['internal', 'browser', 'push'],
+  },
+  [NOTIFICATION_EVENTS.ALERT_PRIORITY]: {
+    label: 'Alerta priorizada',
+    category: 'incidencias',
+    priority: 'critical',
     channels: ['internal', 'browser', 'push'],
   },
   [NOTIFICATION_EVENTS.ASSIGNMENT_CREATED]: {

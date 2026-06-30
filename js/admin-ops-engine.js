@@ -264,23 +264,31 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
   for (const incident of dataset.incidencias || []) {
     if (!isOpen(incident)) continue;
     const priorityLabel = clean(first(incident.priority, incident.prioridad, incident.priorityLabel)).toLowerCase();
-    const urgent = HIGH_PRIORITIES.has(priorityLabel) || asNumber(incident.priorityRank) <= 2;
+    const alertScore = asNumber(first(incident.alertPriorityScore, incident.priorityScore));
+    const alertLevel = clean(first(incident.alertAttentionLevel, incident.attentionLevel)).toLowerCase();
+    const urgent = alertScore >= 88 || alertLevel === 'critical_incident' || HIGH_PRIORITIES.has(priorityLabel) || asNumber(incident.priorityRank) <= 2;
+    const priority = alertScore || (urgent ? 98 : 82);
     items.push(makeItem({
       id: itemId('incident.open', incident),
       type: 'incident',
-      title: urgent ? 'Incidencia critica abierta' : 'Incidencia abierta',
-      detail: clean(first(incident.title, incident.titulo, incident.category, incident.categoria, incident.description, incident.descripcion, 'Incidencia')),
+      title: first(incident.alertAttentionLabel, urgent ? 'Incidencia critica abierta' : 'Incidencia abierta'),
+      detail: clean(first(incident.alertConsequence, incident.title, incident.titulo, incident.category, incident.categoria, incident.description, incident.descripcion, 'Incidencia')),
       section: 'incidencias',
-      priority: urgent ? 98 : 82,
+      priority,
       tone: urgent ? 'danger' : 'warning',
       entityType: 'incidencia',
       entityId: clean(first(incident.id, incident.ticketId)),
       entityName: clean(first(incident.entityName, incident.userName, incident.reportedByName, incident.email, 'Usuario')),
       actionLabel: 'Gestionar incidencia',
-      automation: 'Asignar responsable y actualizar SLA',
+      automation: first(incident.alertRecommendedAction, 'Asignar responsable y actualizar SLA'),
       minutesSaved: urgent ? 16 : 8,
       createdAt: first(incident.createdAt, incident.created_at),
       source: 'incidencias',
+      metadata: {
+        alertScore,
+        alertLevel,
+        whyDetected: incident.alertWhyDetected || [],
+      },
     }));
   }
 
@@ -432,21 +440,24 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     const status = statusOf(risk);
     if (CLOSED_STATUSES.has(status)) continue;
     const severity = clean(first(risk.severity, risk.priority, risk.prioridad)).toLowerCase();
-    const priority = severity === 'critical' || severity === 'urgente'
+    const alertScore = asNumber(first(risk.alertPriorityScore, risk.priorityScore));
+    const priority = alertScore || (severity === 'critical' || severity === 'urgente'
       ? 98
       : severity === 'high' || severity === 'alta'
         ? 90
         : severity === 'medium' || severity === 'media'
           ? 76
-          : 58;
-    const action = Array.isArray(risk.suggestedActions) && risk.suggestedActions.length
-      ? risk.suggestedActions[0]
-      : 'Resolver preventivamente antes de que afecte al usuario';
+          : 58);
+    const action = first(
+      risk.alertRecommendedAction,
+      Array.isArray(risk.suggestedActions) && risk.suggestedActions.length ? risk.suggestedActions[0] : '',
+      'Resolver preventivamente antes de que afecte al usuario',
+    );
     items.push(makeItem({
       id: itemId('preventive-risk', risk),
       type: 'risk',
-      title: clean(first(risk.title, 'Riesgo preventivo')),
-      detail: clean(first(risk.description, risk.metric, 'Riesgo operativo detectado automaticamente.')),
+      title: clean(first(risk.alertAttentionLabel, risk.title, 'Riesgo preventivo')),
+      detail: clean(first(risk.alertConsequence, risk.description, risk.metric, 'Riesgo operativo detectado automaticamente.')),
       section: 'incidencias',
       priority,
       tone: priority >= 90 ? 'danger' : priority >= 76 ? 'warning' : 'info',
@@ -463,6 +474,8 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
         riskId: risk.id,
         riskType: risk.type,
         severity,
+        alertScore,
+        alertLevel: risk.alertAttentionLevel || '',
         suggestedActions: risk.suggestedActions || [],
       },
     }));

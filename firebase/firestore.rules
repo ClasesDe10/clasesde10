@@ -2121,6 +2121,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /alertDecisions/{decisionId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /alertPrioritySnapshots/{snapshotId} {
+      allow read, write: if isAdmin();
+    }
+
     match /adminAiQueries/{queryId} {
       allow read, write: if isAdmin();
     }

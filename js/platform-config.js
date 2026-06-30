@@ -101,6 +101,11 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
     recurrentIncidentThreshold: 3,
     familyInactiveDays: 14,
     unreadHighNotificationHours: 24,
+    alertPriorityEnabled: true,
+    alertPriorityScanLimit: 1000,
+    alertTaskScore: 55,
+    alertAdminNotificationScore: 82,
+    alertMaxTopAlerts: 40,
   },
   matching: {
     maxCandidates: 5,
@@ -329,6 +334,11 @@ export const PLATFORM_CONFIG_SECTIONS = Object.freeze([
       field('incidents.recurrentIncidentThreshold', 'Umbral incidencias recurrentes', 'number', { min: 2, max: 50, step: 1 }),
       field('incidents.familyInactiveDays', 'Familia inactiva con solicitud (dias)', 'number', { min: 1, max: 365, step: 1 }),
       field('incidents.unreadHighNotificationHours', 'Aviso prioritario sin leer (h)', 'number', { min: 1, max: 720, step: 1 }),
+      field('incidents.alertPriorityEnabled', 'Motor inteligente de prioridades', 'boolean'),
+      field('incidents.alertPriorityScanLimit', 'Alertas escaneadas por motor', 'number', { min: 10, max: 5000, step: 10 }),
+      field('incidents.alertTaskScore', 'Score minimo para tarea CRM', 'number', { min: 1, max: 100, step: 1 }),
+      field('incidents.alertAdminNotificationScore', 'Score minimo para avisar admin', 'number', { min: 1, max: 100, step: 1 }),
+      field('incidents.alertMaxTopAlerts', 'Alertas principales maximas', 'number', { min: 1, max: 200, step: 1 }),
     ],
   },
   {
