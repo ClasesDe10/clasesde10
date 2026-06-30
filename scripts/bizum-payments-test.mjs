@@ -13,6 +13,7 @@ async function read(relativePath) {
 }
 
 const [
+  familyDashboard,
   professorDashboard,
   adminDashboard,
   rules,
@@ -23,6 +24,7 @@ const [
   utils,
   automationWorker,
 ] = await Promise.all([
+  read('pages/dashboard/familia.html'),
   read('pages/dashboard/profesor.html'),
   read('pages/dashboard/admin.html'),
   read('firebase/firestore.rules'),
@@ -33,6 +35,12 @@ const [
   read('js/utils.js'),
   read('scripts/firebase-automation-worker.mjs'),
 ]);
+
+assert(familyDashboard.includes('family-payment-workbench'), 'Family dashboard must show a payment confirmation workbench.');
+assert(familyDashboard.includes('buildFamilyPaymentConfirmationGroups'), 'Family dashboard must group unpaid classes before payment confirmation.');
+assert(familyDashboard.includes('buildFamilyClassPaymentConfirmationPayload'), 'Family dashboard must create class-linked payment payloads.');
+assert(familyDashboard.includes('pago-class-ids'), 'Family payment modal must preserve linked class ids.');
+assert(familyDashboard.includes('Adjuntar captura o comprobante si lo tienes'), 'Family proofs must be optional to keep the payment flow short.');
 
 assert(professorDashboard.includes('btn-solicitar-bizum'), 'Professor dashboard must expose the Bizum request button.');
 assert(professorDashboard.includes('tbody-bizum-pendientes'), 'Professor dashboard must list Bizum-eligible classes.');
@@ -77,6 +85,7 @@ assert(rules.includes('validTeacherPayoutCreate'), 'Firestore rules must validat
 assert(rules.includes('validFamilyPaymentCreate'), 'Firestore rules must validate family payment creates.');
 assert(rules.includes("request.resource.data.paymentType == 'teacher_payout'"), 'Rules must require teacher_payout type.');
 assert(rules.includes("request.resource.data.paymentType == 'family_payment'"), 'Rules must require family_payment type.');
+assert(rules.includes("request.resource.data.canonicalCollection == 'pagos'"), 'Payment rules must accept normalized payment metadata safely.');
 assert(rules.includes('isTeacherParticipant(resource.data)'), 'Teachers must be able to read their own payout requests.');
 
 assert(compatClient.includes('documentId'), 'Firebase compat client must query document ids with documentId().');

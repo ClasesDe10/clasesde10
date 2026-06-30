@@ -222,19 +222,20 @@
 
       <!-- ══ JUSTIFICANTES ══ -->
       <section id="section-pagos" class="dash-section" style="display:none">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
-          <button class="btn btn-primary" id="btn-nuevo-pago">+ Subir justificante</button>
-        </div>
-        <div class="alert alert-info" style="margin-bottom:20px">
-          <span class="alert-icon">ℹ</span>
-          <div class="alert-body">
-            <div class="alert-title">Justificantes</div>
-            Cuando el equipo te indique que hay un justificante pendiente, súbelo aquí para que podamos validarlo.
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap">
+          <div>
+            <h2 style="margin:0;color:var(--navy);font-size:1.15rem">Pagos y justificantes</h2>
+            <p style="margin:4px 0 0;color:var(--gray-mid);font-size:.88rem">Confirma solo los pagos que ya hayas realizado. El equipo los revisara y actualizara las clases.</p>
           </div>
+          <button class="btn btn-outline" id="btn-nuevo-pago">Registrar otro pago</button>
         </div>
-        <div class="card">
+        <div id="family-payment-workbench" class="family-payment-workbench">
+          <div class="card"><div class="card-body"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></div></div>
+        </div>
+        <div class="card" style="margin-top:20px">
+          <div class="card-header"><span class="card-title">Historial de justificantes</span></div>
           <div class="table-wrapper">
-            <table>
+            <table class="responsive-card-table">
               <thead>
                 <tr><th>Fecha</th><th>Concepto</th><th>Método</th><th>Referencia</th><th>Estado</th><th>Justificante</th></tr>
               </thead>
@@ -577,10 +578,14 @@
 <div class="modal-overlay" id="modal-pago">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">Subir justificante de pago</span>
+      <span class="modal-title" id="modal-pago-titulo">Confirmar pago</span>
       <button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="pago-group-key">
+      <input type="hidden" id="pago-class-ids">
+      <input type="hidden" id="pago-due-at">
+      <div class="payment-confirm-summary" id="pago-resumen-grupo" style="display:none"></div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Importe (€) <span class="required">*</span></label>
@@ -606,13 +611,13 @@
       <label class="upload-zone" id="pago-upload-zone" style="margin-top:8px">
         <input type="file" id="pago-file" accept=".pdf,.jpg,.jpeg,.png,.webp">
         <div class="upload-zone-icon">📎</div>
-        <div class="upload-zone-title">Adjuntar captura Bizum o comprobante</div>
-        <div class="upload-zone-sub">Obligatorio · PDF, JPG, PNG</div>
+        <div class="upload-zone-title">Adjuntar captura o comprobante si lo tienes</div>
+        <div class="upload-zone-sub">Opcional · PDF, JPG, PNG · Max. 10 MB</div>
       </label>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-pago">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-pago">Enviar justificante a revisión</button>
+      <button class="btn btn-primary" id="btn-confirmar-pago">Enviar a revision</button>
     </div>
   </div>
 </div>
@@ -636,9 +641,14 @@ import {
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260629-attendance-direct';
 import {
+  buildFamilyClassPaymentConfirmationPayload,
+  buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentPayload,
+  buildPaymentScheduleIndex,
   buildWeeklyPaymentSchedulePayload,
   classFamilyPaymentState,
+  normalizePaymentStatus,
+  paymentAmount,
   paymentScheduleDocumentId,
   paymentScheduleLabel,
   paymentStatusForBadge,
@@ -700,9 +710,32 @@ let documentosFamiliaPerfilCache = [];
 let alumnosFamiliaPerfilCache = [];
 let disponibilidadHijosCache = new Map();
 let paymentSchedulesCache = new Map();
+let familyPaymentGroupsCache = new Map();
 
 function ownerUid() {
   return usuario.uid || usuario.firebase_uid || usuario.id;
+}
+
+function familyPaymentQueryIds() {
+  return Array.from(new Set([
+    familiaFirestoreId,
+    familiaData?.userUid,
+    familiaData?.usuario_id,
+    usuario.uid,
+    usuario.firebase_uid,
+    usuario.id,
+    familiaId,
+  ].filter(Boolean)));
+}
+
+function formatEuros(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function isOpenFamilyPayment(pago = {}) {
+  const status = normalizePaymentStatus(pago.estado || pago.status);
+  return ['pendiente', 'procesando', 'solicitado', 'requiere_accion', 'vencido'].includes(status);
 }
 
 function renderQualityPanel(targetId, evaluation) {
@@ -1041,9 +1074,11 @@ async function cargarInicio() {
   const mesInicio = hoy.substring(0,7) + '-01';
 
   // Cargar hijos primero para poder filtrar clases correctamente
-  const { data: hijos } = await db.from('alumnos').select('*').eq('familia_id', familiaId).eq('activo', true);
-  const { count: pagosPend } = await db.from('pagos').select('id', {count:'exact',head:true})
-    .eq('familia_id', familiaId).eq('estado','pendiente');
+  const [{ data: hijos }, pagosResumenInicio] = await Promise.all([
+    db.from('alumnos').select('*').eq('familia_id', familiaId).eq('activo', true),
+    cargarPagosFamiliaFirestore(),
+  ]);
+  const pagosPend = pagosResumenInicio.filter(isOpenFamilyPayment).length;
 
   document.getElementById('stat-hijos').textContent = hijos?.length || 0;
   document.getElementById('stat-pagos-pendientes').textContent = pagosPend || 0;
@@ -1054,10 +1089,10 @@ async function cargarInicio() {
       hijo.id,
       [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
     ]));
-    const [clasesFamilia, { data: asig }, { data: pagosRelacion }, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
+    const [clasesFamilia, { data: asig }, pagosRelacion, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
       cargarClasesPorAlumnos(ids, { hijosPorId, desde: mesInicio, limit: 160 }),
       db.from('asignaciones').select('*').in('alumno_id', ids).eq('activa', true),
-      cargarFirestoreWhere('pagos', 'familyUid', '==', familiaId),
+      Promise.resolve(pagosResumenInicio),
       cargarFirestoreWhere('solicitudes', 'familyUid', '==', familiaId),
       cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
       cargarChatsUsuarioActual(),
@@ -1448,6 +1483,23 @@ function paymentScheduleFor(source = {}) {
     if (found) return found;
   }
   return null;
+}
+
+function paymentScheduleIndexFamilia() {
+  const byId = new Map();
+  for (const schedule of paymentSchedulesCache.values()) {
+    if (!schedule?.id || byId.has(schedule.id)) continue;
+    byId.set(schedule.id, schedule);
+  }
+  return buildPaymentScheduleIndex(Array.from(byId.values()));
+}
+
+function timestampToIso(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value.toDate === 'function') return value.toDate().toISOString();
+  if (value.seconds) return new Date(value.seconds * 1000).toISOString();
+  return '';
 }
 
 async function cargarPaymentSchedulesFamilia() {
@@ -2014,40 +2066,181 @@ document.getElementById('btn-enviar-solicitud').addEventListener('click', async 
 });
 
 // ── PAGOS ────────────────────────────────────────────────────────
+async function cargarDocumentoPago(documentId) {
+  if (!documentId) return null;
+  const snap = await getDoc(firestoreDoc(firebaseDb, 'documentos', documentId)).catch(() => null);
+  return snap?.exists() ? { id: snap.id, ...snap.data() } : null;
+}
+
+async function cargarPagosFamiliaFirestore() {
+  const ids = familyPaymentQueryIds();
+  const byId = new Map();
+  for (const field of ['familyUid', 'familia_id']) {
+    for (const id of ids) {
+      try {
+        const snap = await getDocs(firestoreQuery(
+          firestoreCollection(firebaseDb, 'pagos'),
+          where(field, '==', id),
+        ));
+        snap.docs.forEach((item) => {
+          const data = { id: item.id, ...item.data() };
+          data.created_at = data.created_at || timestampToIso(data.createdAt);
+          data.updated_at = data.updated_at || timestampToIso(data.updatedAt);
+          byId.set(item.id, data);
+        });
+      } catch (error) {
+        console.warn('No se pudieron cargar pagos familiares', field, error);
+      }
+    }
+  }
+
+  const rows = await Promise.all(Array.from(byId.values()).map(async (pago) => {
+    const documentId = pago.documento_id || pago.documentId;
+    const documento = await cargarDocumentoPago(documentId);
+    return {
+      ...pago,
+      documentos: documento,
+    };
+  }));
+  rows.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  return rows;
+}
+
+function renderPaymentClassLine(clase = {}) {
+  const time = [clase.startTime, clase.endTime].filter(Boolean).join('-');
+  return `<li>
+    <span>${sanitize(formatFechaCorta(clase.date))}${time ? ` · ${sanitize(time)}` : ''}</span>
+    <strong>${sanitize(formatEuros(clase.amount))}</strong>
+  </li>`;
+}
+
+function renderPaymentGroupCard(group = {}) {
+  const due = group.dueAt ? formatPaymentDueAt(group.dueAt) : 'Sin plan semanal definido';
+  const subjectText = group.subjects?.length ? group.subjects.join(', ') : 'Clases particulares';
+  const rows = (group.classes || []).slice(0, 4).map(renderPaymentClassLine).join('');
+  const extra = group.classCount > 4 ? `<li><span>Y ${group.classCount - 4} clase(s) mas</span><strong></strong></li>` : '';
+  return `
+    <article class="payment-confirm-card ${group.overdue ? 'is-overdue' : ''}">
+      <div class="payment-confirm-card-head">
+        <div>
+          <strong>${sanitize(group.studentName)} · ${sanitize(group.teacherName)}</strong>
+          <span>${sanitize(subjectText)} · ${sanitize(group.classCount)} clase(s)</span>
+        </div>
+        ${badgeEstado(group.overdue ? 'vencido' : 'pendiente')}
+      </div>
+      <ul class="payment-class-lines">${rows}${extra}</ul>
+      <div class="payment-confirm-card-footer">
+        <div>
+          <span>Importe a confirmar</span>
+          <strong>${sanitize(formatEuros(group.amount))}</strong>
+          <em>Limite: ${sanitize(due)}</em>
+        </div>
+        <button class="btn btn-primary btn-sm" data-action="confirmar-pago-grupo" data-key="${sanitize(group.key)}">Confirmar pago</button>
+      </div>
+    </article>`;
+}
+
+function renderPaymentReviewCard(pago = {}) {
+  const amount = paymentAmount(pago);
+  const classCount = Array.isArray(pago.classIds) ? pago.classIds.length : Number(pago.classCount || 0);
+  return `
+    <div class="payment-review-row">
+      <div>
+        <strong>${sanitize(pago.concepto || pago.notas_familia || 'Pago enviado a revision')}</strong>
+        <span>${sanitize(classCount ? `${classCount} clase(s)` : 'Sin clases vinculadas')} · ${sanitize(formatFechaCorta(pago.created_at))}</span>
+      </div>
+      <div>
+        <strong>${sanitize(formatEuros(amount))}</strong>
+        ${badgeEstado(paymentStatusForBadge(pago))}
+      </div>
+    </div>`;
+}
+
+function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = false) {
+  const container = document.getElementById('family-payment-workbench');
+  if (!container) return;
+  const openPayments = pagos.filter(isOpenFamilyPayment);
+  const pendingHtml = groups.length
+    ? groups.map(renderPaymentGroupCard).join('')
+    : renderEmptyState({
+        icon: 'OK',
+        title: hasStudents ? 'No hay clases pendientes de confirmar' : 'Primero anade un alumno',
+        description: hasStudents
+          ? 'Cuando una clase quede marcada como realizada y tenga importe, aparecera aqui para confirmar el pago en segundos.'
+          : 'Al tener alumno, profesor y clases realizadas, esta zona mostrara automaticamente los pagos pendientes.',
+        actions: hasStudents
+          ? [emptyAction('Ver clases', { 'data-section': 'clases' }, 'ghost')]
+          : [emptyAction('Anadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
+      });
+  const reviewHtml = openPayments.length
+    ? openPayments.slice(0, 5).map(renderPaymentReviewCard).join('')
+    : `<div class="payment-review-empty">No tienes justificantes en revision.</div>`;
+
+  container.innerHTML = `
+    <div class="payment-workbench-grid">
+      <section class="payment-workbench-panel">
+        <div class="payment-workbench-head">
+          <div>
+            <span>Accion recomendada</span>
+            <strong>Clases listas para confirmar</strong>
+          </div>
+        </div>
+        <div class="payment-confirm-list">${pendingHtml}</div>
+      </section>
+      <section class="payment-workbench-panel payment-workbench-panel-muted">
+        <div class="payment-workbench-head">
+          <div>
+            <span>Seguimiento</span>
+            <strong>En revision</strong>
+          </div>
+        </div>
+        <div class="payment-review-list">${reviewHtml}</div>
+      </section>
+    </div>`;
+}
+
 async function cargarPagos() {
   if (!familiaId) return;
-  const { data, error } = await db.from('pagos')
-    .select('*, documentos(id,nombre,storage_path)')
-    .eq('familia_id', familiaId)
-    .order('created_at',{ascending:false});
+  const [pagos, { data: hijos }] = await Promise.all([
+    cargarPagosFamiliaFirestore(),
+    db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId),
+  ]);
+  await cargarPaymentSchedulesFamilia();
+  const hijosPorId = new Map((hijos || []).map((hijo) => [
+    hijo.id,
+    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
+  ]));
+  const clases = hijos?.length
+    ? await cargarClasesPorAlumnos(hijos.map((hijo) => hijo.id), { hijosPorId, limit: 320 })
+    : [];
+  const groups = buildFamilyPaymentConfirmationGroups(clases, pagos, paymentScheduleIndexFamilia());
+  familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
+  renderFamilyPaymentWorkbench(groups, pagos, Boolean(hijos?.length));
+
   const tbody = document.getElementById('tbody-pagos');
-  if (error) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
-    return;
-  }
-  if (!data?.length) {
+  if (!pagos.length) {
     tbody.innerHTML = renderTableEmptyState(6, {
-      icon: '💶',
-      title: 'Aún no hay justificantes registrados',
-      description: 'Cuando el equipo te pida un justificante, podrás subirlo aquí y revisar su estado.',
+      icon: 'OK',
+      title: 'Aun no hay justificantes registrados',
+      description: 'Cuando confirmes un pago, aparecera aqui con su estado de revision.',
       actions: [
-        emptyAction('Subir justificante', { 'data-action': 'abrir-modal-pago' }, 'primary'),
         emptyAction('Ver clases', { 'data-section': 'clases' }, 'ghost'),
       ],
     });
     return;
   }
-  tbody.innerHTML = data.map(p => {
+  tbody.innerHTML = pagos.map(p => {
     const doc = Array.isArray(p.documentos) ? p.documentos[0] : p.documentos;
+    const docPath = doc?.storage_path || doc?.storagePath;
     return `<tr>
-    <td>${formatFechaCorta(p.created_at)}</td>
-    <td>${sanitize(p.notas_familia||'—')}</td>
-    <td>${sanitize(p.metodo)}</td>
-    <td style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia||'—')}</td>
-    <td>${badgeEstado(paymentStatusForBadge(p))}</td>
-    <td>${doc?.storage_path
-      ? `<button class="btn btn-ghost btn-sm" data-action="ver-pago-doc" data-doc-path="${sanitize(doc.storage_path)}">Ver</button>`
-      : '—'}</td>
+    <td data-label="Fecha">${formatFechaCorta(p.created_at)}</td>
+    <td data-label="Concepto">${sanitize(p.concepto || p.notas_familia || 'Pago familiar')}</td>
+    <td data-label="Metodo">${sanitize(p.metodo || p.method || 'bizum')}</td>
+    <td data-label="Referencia" style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia || p.reference || '—')}</td>
+    <td data-label="Estado">${badgeEstado(paymentStatusForBadge(p))}</td>
+    <td data-label="Justificante">${docPath
+      ? `<button class="btn btn-ghost btn-sm" data-action="ver-pago-doc" data-doc-path="${sanitize(docPath)}">Ver</button>`
+      : '<span style="color:var(--gray-mid)">Sin archivo</span>'}</td>
   </tr>`;
   }).join('');
 }
@@ -2060,8 +2253,62 @@ document.getElementById('tbody-pagos').addEventListener('click', async (e) => {
   window.open(data.url, '_blank', 'noopener,noreferrer');
 });
 
-document.getElementById('btn-nuevo-pago').addEventListener('click', () => {
+document.getElementById('family-payment-workbench')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-action="confirmar-pago-grupo"]');
+  if (!btn) return;
+  const group = familyPaymentGroupsCache.get(btn.dataset.key);
+  if (!group) {
+    showToast('Pago no disponible', 'Recarga la pagina y vuelve a intentarlo.', 'warning');
+    return;
+  }
+  abrirModalPagoGrupo(group);
+});
+
+function resetPagoFileInput() {
+  pagoFile.value = '';
+  pagoZone.querySelector('.upload-zone-title').textContent = 'Adjuntar captura o comprobante si lo tienes';
+}
+
+function abrirModalPagoGrupo(group = {}) {
+  document.getElementById('modal-pago-titulo').textContent = 'Confirmar pago de clases';
+  document.getElementById('pago-group-key').value = group.key || '';
+  document.getElementById('pago-class-ids').value = (group.classIds || []).join(',');
+  document.getElementById('pago-due-at').value = group.dueAt || '';
+  const amountInput = document.getElementById('pago-monto');
+  amountInput.value = group.amount ? String(group.amount.toFixed(2)) : '';
+  amountInput.readOnly = true;
+  document.getElementById('pago-metodo').value = 'bizum';
+  document.getElementById('pago-referencia').value = '';
+  document.getElementById('pago-notas').value = `Pago confirmado para ${group.classCount} clase(s) de ${group.studentName}.`;
+  const summary = document.getElementById('pago-resumen-grupo');
+  summary.style.display = '';
+  summary.innerHTML = `
+    <strong>${sanitize(group.studentName)} con ${sanitize(group.teacherName)}</strong>
+    <span>${sanitize(group.classCount)} clase(s) · ${sanitize(formatEuros(group.amount))}</span>
+    <em>Se vinculara automaticamente con estas clases para que el admin pueda validarlo.</em>`;
+  resetPagoFileInput();
   document.getElementById('modal-pago').classList.add('open');
+}
+
+function abrirModalPagoManual() {
+  document.getElementById('modal-pago-titulo').textContent = 'Registrar otro pago';
+  document.getElementById('pago-group-key').value = '';
+  document.getElementById('pago-class-ids').value = '';
+  document.getElementById('pago-due-at').value = '';
+  const amountInput = document.getElementById('pago-monto');
+  amountInput.value = '';
+  amountInput.readOnly = false;
+  document.getElementById('pago-metodo').value = 'bizum';
+  document.getElementById('pago-referencia').value = '';
+  document.getElementById('pago-notas').value = '';
+  document.getElementById('pago-resumen-grupo').style.display = 'none';
+  document.getElementById('pago-resumen-grupo').innerHTML = '';
+  resetPagoFileInput();
+  document.getElementById('modal-pago').classList.add('open');
+}
+
+document.getElementById('btn-nuevo-pago').addEventListener('click', () => {
+  abrirModalPagoManual();
 });
 
 const pagoZone = document.getElementById('pago-upload-zone');
@@ -2069,26 +2316,44 @@ const pagoFile = document.getElementById('pago-file');
 const UPLOAD_EXT_PERMITIDAS = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 const UPLOAD_MIME_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 pagoFile.addEventListener('change', () => {
-  pagoZone.querySelector('.upload-zone-title').textContent = pagoFile.files[0]?.name || 'Adjuntar comprobante';
+  pagoZone.querySelector('.upload-zone-title').textContent = pagoFile.files[0]?.name || 'Adjuntar captura o comprobante si lo tienes';
 });
 
 document.getElementById('btn-confirmar-pago').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-confirmar-pago');
+  const originalText = btn.textContent;
   const monto = parseFloat(document.getElementById('pago-monto').value);
   if (!monto || monto <= 0) { showToast('Atención','Indica el importe.','warning'); return; }
+  const classIds = document.getElementById('pago-class-ids').value.split(',').map((item) => item.trim()).filter(Boolean);
+  const group = familyPaymentGroupsCache.get(document.getElementById('pago-group-key').value) || {};
+  const referencia = document.getElementById('pago-referencia').value.trim();
+  const notas = document.getElementById('pago-notas').value.trim();
+  if (!classIds.length && !referencia && !notas) {
+    showToast('Falta detalle', 'Indica una referencia o una nota breve para poder revisar el pago.', 'warning');
+    return;
+  }
 
   let documentoId = null;
   const file = pagoFile.files[0];
-  if (!file) { showToast('Atención','Adjunta el justificante del pago.','warning'); return; }
-  if (file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
+  if (file && file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
   if (file) {
     const ext  = (file.name.split('.').pop() || '').toLowerCase();
     if (!UPLOAD_EXT_PERMITIDAS.includes(ext) || (file.type && !UPLOAD_MIME_PERMITIDOS.includes(file.type))) {
       showToast('Error', 'Formato no permitido. Usa PDF, JPG, PNG o WebP.', 'error');
+      btn.disabled = false;
+      btn.textContent = originalText;
       return;
     }
-    const path = `pagos/${Date.now()}.${ext}`;
+    const path = `pagos/${ownerUid()}/${Date.now()}.${ext}`;
     const { data: up, error: upErr } = await uploadDocument(path, file);
-    if (upErr) { showToast('Error', upErr.message, 'error'); return; }
+    if (upErr) {
+      showToast('Error', upErr.message, 'error');
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
     const storagePath = up?.fullPath || up?.path || path;
 
     const { data: doc, error: docErr } = await db.from('documentos')
@@ -2104,24 +2369,42 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
       }))
       .select('id')
       .single();
-    if (docErr) { showToast('Error', docErr.message, 'error'); return; }
+    if (docErr) {
+      showToast('Error', docErr.message, 'error');
+      btn.disabled = false;
+      btn.textContent = originalText;
+      return;
+    }
     documentoId = doc.id;
   }
 
-  const { error } = await db.from('pagos').insert(buildFamilyPaymentPayload({
-    familia_id:  familiaFirestoreId,
+  const basePayload = {
+    familia_id: familiaFirestoreId,
     familyUid: familiaFirestoreId,
     documento_id: documentoId,
+    documentId: documentoId,
     monto,
-    metodo:      document.getElementById('pago-metodo').value,
+    metodo: document.getElementById('pago-metodo').value,
     gateway: 'manual',
-    referencia:  document.getElementById('pago-referencia').value.trim(),
-    notas_familia: document.getElementById('pago-notas').value.trim(),
-  }));
+    referencia,
+    notas_familia: notas,
+    classIds,
+    dueAt: document.getElementById('pago-due-at').value || undefined,
+    due_at: document.getElementById('pago-due-at').value || undefined,
+  };
+  const payload = classIds.length
+    ? buildFamilyClassPaymentConfirmationPayload(group, basePayload)
+    : buildFamilyPaymentPayload(basePayload);
+  const { error } = await db.from('pagos').insert(payload);
+  btn.disabled = false;
+  btn.textContent = originalText;
   if (error) { showToast('Error', error.message, 'error'); return; }
   document.getElementById('modal-pago').classList.remove('open');
-  showToast('Justificante enviado', 'Lo validaremos en breve.', 'success');
-  cargarPagos();
+  resetPagoFileInput();
+  showToast('Pago enviado', classIds.length ? 'Queda vinculado a las clases y pendiente de validacion.' : 'Lo revisaremos en breve.', 'success');
+  await cargarPagos();
+  await cargarInicio();
+  if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
 });
 
 // ── PERFIL ───────────────────────────────────────────────────────

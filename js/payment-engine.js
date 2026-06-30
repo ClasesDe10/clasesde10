@@ -463,6 +463,130 @@ export function unpaidFamilyClasses(classes = []) {
   });
 }
 
+function paymentBlocksClassConfirmation(payment = {}) {
+  const status = normalizePaymentStatus(payment.estado || payment.status);
+  return isFamilyPayment(payment)
+    && !['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado'].includes(status)
+    && Array.isArray(payment.classIds)
+    && payment.classIds.length > 0;
+}
+
+function classPaymentAmount(classData = {}) {
+  return paymentAmount({ amount: classData.precio_total ?? classData.amount ?? classData.familyAmount });
+}
+
+function classPaymentGroupKey(classData = {}, state = {}) {
+  const assignmentId = cleanPaymentText(classData.assignmentId || classData.asignacion_id, 180);
+  const teacherUid = cleanPaymentText(classData.teacherUid || classData.profesor_id, 180);
+  const studentId = cleanPaymentText(classData.studentId || classData.alumno_id, 180);
+  const dueKey = state.dueAt ? String(state.dueAt).slice(0, 10) : 'sin-plan';
+  return [assignmentId || `${teacherUid}:${studentId}`, dueKey].join('|');
+}
+
+export function buildFamilyPaymentConfirmationGroups(classes = [], payments = [], scheduleIndex = new Map(), options = {}) {
+  const blockedClassIds = new Set();
+  for (const payment of payments || []) {
+    if (!paymentBlocksClassConfirmation(payment)) continue;
+    payment.classIds.map(String).filter(Boolean).forEach((classId) => blockedClassIds.add(classId));
+  }
+
+  const groups = new Map();
+  for (const classData of unpaidFamilyClasses(classes)) {
+    const classId = String(classData.id || '');
+    if (!classId || blockedClassIds.has(classId)) continue;
+
+    const schedule = paymentScheduleForClass(classData, scheduleIndex);
+    const state = classFamilyPaymentState(classData, schedule, options);
+    const key = classPaymentGroupKey(classData, state);
+    const amount = classPaymentAmount(classData);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        familyUid: classData.familyUid || classData.familia_id || '',
+        familia_id: classData.familia_id || classData.familyUid || '',
+        teacherUid: classData.teacherUid || classData.profesor_id || '',
+        profesor_id: classData.profesor_id || classData.teacherUid || '',
+        studentId: classData.studentId || classData.alumno_id || '',
+        alumno_id: classData.alumno_id || classData.studentId || '',
+        assignmentId: classData.assignmentId || classData.asignacion_id || '',
+        asignacion_id: classData.asignacion_id || classData.assignmentId || '',
+        studentName: cleanPaymentText(classData.studentName || classData.alumno_nombre || classData.alumnoNombre || 'Alumno/a', 160),
+        teacherName: cleanPaymentText(classData.teacherName || classData.profesor_nombre || classData.profesorNombre || 'Profesor/a', 160),
+        dueAt: state.dueAt || '',
+        state: state.state,
+        overdue: state.overdue === true,
+        graceHours: state.graceHours || null,
+        amount: 0,
+        classIds: [],
+        classes: [],
+        subjects: new Set(),
+      });
+    }
+
+    const group = groups.get(key);
+    group.amount = Math.round((group.amount + amount) * 100) / 100;
+    group.classIds.push(classId);
+    group.classes.push({
+      id: classId,
+      date: classData.fecha || classData.date || '',
+      startTime: classData.hora_inicio || classData.startTime || '',
+      endTime: classData.hora_fin || classData.endTime || '',
+      subject: cleanPaymentText(classData.materia || classData.subject || '', 160),
+      amount,
+    });
+    if (classData.materia || classData.subject) group.subjects.add(cleanPaymentText(classData.materia || classData.subject, 160));
+    if (state.overdue) {
+      group.state = 'overdue';
+      group.overdue = true;
+    }
+    if (!group.dueAt && state.dueAt) group.dueAt = state.dueAt;
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    classCount: group.classIds.length,
+    subjects: Array.from(group.subjects),
+    status: group.overdue ? 'vencido' : 'pendiente',
+    label: `${group.classIds.length} clase(s) de ${group.studentName} con ${group.teacherName}`,
+  })).sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    return String(a.dueAt || '9999').localeCompare(String(b.dueAt || '9999'));
+  });
+}
+
+export function buildFamilyClassPaymentConfirmationPayload(group = {}, input = {}, options = {}) {
+  const classIds = Array.isArray(input.classIds) && input.classIds.length
+    ? input.classIds.map(String).filter(Boolean)
+    : (Array.isArray(group.classIds) ? group.classIds.map(String).filter(Boolean) : []);
+  const amount = paymentAmount({ amount: input.monto ?? input.amount ?? group.amount });
+  const concept = cleanPaymentText(
+    input.concepto
+      || `Justificante ${classIds.length || group.classCount || 1} clase(s) - ${group.studentName || 'Alumno/a'}`,
+    240,
+  );
+
+  return buildFamilyPaymentPayload({
+    ...input,
+    familyUid: input.familyUid || input.familia_id || group.familyUid || group.familia_id,
+    familia_id: input.familia_id || input.familyUid || group.familia_id || group.familyUid,
+    teacherUid: input.teacherUid || input.profesor_id || group.teacherUid || group.profesor_id,
+    profesor_id: input.profesor_id || input.teacherUid || group.profesor_id || group.teacherUid,
+    studentId: input.studentId || input.alumno_id || group.studentId || group.alumno_id,
+    alumno_id: input.alumno_id || input.studentId || group.alumno_id || group.studentId,
+    assignmentId: input.assignmentId || input.asignacion_id || group.assignmentId || group.asignacion_id,
+    asignacion_id: input.asignacion_id || input.assignmentId || group.asignacion_id || group.assignmentId,
+    monto: amount,
+    amount,
+    classIds,
+    dueAt: input.dueAt || input.due_at || group.dueAt,
+    due_at: input.due_at || input.dueAt || group.dueAt,
+    concepto: concept,
+    notas_familia: input.notas_familia || input.familyNotes || concept,
+    familyNotes: input.familyNotes || input.notas_familia || concept,
+    verificationSource: input.verificationSource || 'family_dashboard_confirmation',
+  }, options);
+}
+
 export function matchPaymentToClasses(payment = {}, classes = []) {
   const explicit = Array.isArray(payment.classIds) ? payment.classIds.map(String).filter(Boolean) : [];
   if (explicit.length) return { status: 'matched', classIds: explicit, confidence: 1, reason: 'explicit_class_ids' };

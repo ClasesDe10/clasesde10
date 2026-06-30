@@ -1,5 +1,7 @@
 import {
   buildClassPaymentPatch,
+  buildFamilyClassPaymentConfirmationPayload,
+  buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentPayload,
   buildPaymentScheduleIndex,
   buildWeeklyPaymentSchedulePayload,
@@ -58,8 +60,8 @@ assert(validation.verified === true && validation.validatedByUid === 'admin_1', 
 assert(isPaymentVerified({ ...familyPayment, ...validation }), 'Validated payment must be verified.');
 
 const classes = [
-  { id: 'c1', estado: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 20, fecha: '2026-06-20' },
-  { id: 'c2', estado: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 30, fecha: '2026-06-21' },
+  { id: 'c1', estado: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 20, fecha: '2026-06-20', teacherUid: 'teacher_1', studentId: 'student_1', studentName: 'Juan', teacherName: 'Miguel', materia: 'Matematicas' },
+  { id: 'c2', estado: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 30, fecha: '2026-06-21', teacherUid: 'teacher_1', studentId: 'student_1', studentName: 'Juan', teacherName: 'Miguel', materia: 'Fisica' },
   { id: 'c3', estado: 'realizada', familyPaymentStatus: 'pagado', precio_total: 20, fecha: '2026-06-22' },
 ];
 const match = matchPaymentToClasses({ ...familyPayment, monto: 50 }, classes);
@@ -89,6 +91,21 @@ assert(
   scheduleIndex.get('teacher_student:teacher_1:student_1')?.id === weeklySchedule.id,
   'Weekly payment schedules must keep compatibility with underscore cache keys.',
 );
+const confirmationGroups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, {
+  nowMs: new Date('2026-06-22T12:00:00').getTime(),
+});
+assert(confirmationGroups.length === 1, 'Family payment confirmation must group unpaid classes by relation and due date.');
+assert(confirmationGroups[0].amount === 50 && confirmationGroups[0].classCount === 2, 'Family confirmation group must total linked class amounts.');
+const blockedGroups = buildFamilyPaymentConfirmationGroups(classes, [{ paymentType: 'family_payment', estado: 'pendiente', classIds: ['c1', 'c2'] }], scheduleIndex);
+assert(blockedGroups.length === 0, 'Open payment proofs must block duplicate family confirmation for the same classes.');
+const confirmationPayload = buildFamilyClassPaymentConfirmationPayload(confirmationGroups[0], {
+  familyUid: 'family_1',
+  metodo: 'bizum',
+  referencia: 'BIZ-42',
+}, { nowIso: '2026-06-28T10:00:00.000Z' });
+assert(confirmationPayload.classIds.length === 2, 'Family confirmation payload must keep explicit class ids.');
+assert(confirmationPayload.reconciliationStatus === 'matched', 'Family confirmation payload must be reconciled from creation.');
+assert(confirmationPayload.verificationSource === 'family_dashboard_confirmation', 'Family confirmation payload must expose its source.');
 const scheduledDueAt = weeklyPaymentDueAtForClass(
   { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
   weeklySchedule,

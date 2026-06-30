@@ -1020,6 +1020,7 @@ service cloud.firestore {
         && request.resource.data.classCount == request.resource.data.classIds.size()
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.keys().hasAny(['canonicalCollection']) || request.resource.data.canonicalCollection == 'pagos')
         && request.resource.data.keys().hasOnly([
           'tipo',
           'paymentType',
@@ -1046,6 +1047,15 @@ service cloud.firestore {
           'idempotencyKey',
           'dueAt',
           'due_at',
+          'fecha_vencimiento',
+          'schemaVersion',
+          'canonicalCollection',
+          'searchKeywords',
+          'day',
+          'month',
+          'partitionKey',
+          'dayPartitionKey',
+          'scaleShard',
           'createdAt',
           'created_at',
           'updatedAt',
@@ -1071,6 +1081,7 @@ service cloud.firestore {
         && request.resource.data.provider == request.resource.data.gateway
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.keys().hasAny(['canonicalCollection']) || request.resource.data.canonicalCollection == 'pagos')
         && request.resource.data.keys().hasOnly([
           'tipo',
           'paymentType',
@@ -1098,7 +1109,16 @@ service cloud.firestore {
           'verified',
           'dueAt',
           'due_at',
+          'fecha_vencimiento',
           'idempotencyKey',
+          'schemaVersion',
+          'canonicalCollection',
+          'searchKeywords',
+          'day',
+          'month',
+          'partitionKey',
+          'dayPartitionKey',
+          'scaleShard',
           'createdAt',
           'created_at',
           'updatedAt',
