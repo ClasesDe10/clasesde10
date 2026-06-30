@@ -540,6 +540,7 @@ export function buildAdminAiContext(rawData = {}, options = {}) {
     publicLeads: rawData.publicLeads || rawData.leadsPublicos || [],
     automationEvents: rawData.automationEvents || [],
     lifecycleEvents: rawData.lifecycleEvents || rawData.classLifecycleEvents || [],
+    internalAiInsights: rawData.internalAiInsights || [],
     documentsPending: [],
   };
 
@@ -625,8 +626,8 @@ function inferSources(intent) {
     teacher_highlights: ['profesores', 'clases', 'asignaciones', 'pagos'],
     city_growth: ['familias', 'solicitudes', 'leadsPublicos', 'clases'],
     subject_supply_gap: ['solicitudes', 'profesores', 'solicitudMatches'],
-    automation_opportunities: ['pagos', 'solicitudes', 'documentos', 'incidencias', 'clases', 'automationEvents'],
-    general_health: ['clases', 'pagos', 'solicitudes', 'profesores', 'familias'],
+    automation_opportunities: ['pagos', 'solicitudes', 'documentos', 'incidencias', 'clases', 'automationEvents', 'internalAiInsights'],
+    general_health: ['clases', 'pagos', 'solicitudes', 'profesores', 'familias', 'internalAiInsights'],
   };
   return base[intent] || base.general_health;
 }
@@ -830,7 +831,17 @@ function answerAutomationOpportunities(context) {
   const docsPending = (context.data.documents || []).filter((item) => ['pendiente', 'pending', 'revision', 'en_revision'].includes(statusOf(item))).length;
   const unassigned = (context.data.requests || []).filter((item) => ['nueva', 'nuevo', 'pendiente', 'open', ''].includes(statusOf(item)) && !first(item.assignedTeacherUid, item.profesor_asignado_id)).length;
   const classNotClosed = (context.data.classes || []).filter((item) => !isCompletedClass(item) && !isCancelledClass(item) && (daysSince(classDate(item)) ?? 0) > 1).length;
+  const internalInsights = (context.data.internalAiInsights || [])
+    .filter((item) => isOpenIncident(item) || ['', 'active', 'activa', 'open', 'abierta'].includes(statusOf(item)))
+    .sort((a, b) => asNumber(b.priorityScore) - asNumber(a.priorityScore))
+    .slice(0, 4);
   const rows = [
+    ...internalInsights.map((item) => row(
+      first(item.title, 'IA interna'),
+      `Score ${round(first(item.priorityScore, 0), 0)}`,
+      first(item.recommendedAction, item.summary, 'Revisar insight operativo calculado automaticamente.'),
+      { section: first(item.section, 'operaciones'), tone: asNumber(item.priorityScore) >= 84 ? 'warning' : 'info' },
+    )),
     pendingPayments ? row('Recordatorios de pagos', `${pendingPayments} familia(s)`, 'Enviar notificacion interna/push y crear tarea CRM si el pago sigue pendiente.', { section: 'pagos', tone: 'warning' }) : null,
     unassigned ? row('Asignacion de solicitudes', `${unassigned} solicitud(es)`, 'Ejecutar matching y avisar al admin cuando no haya profesor con score suficiente.', { section: 'solicitudes', tone: 'danger' }) : null,
     inactiveTeachers ? row('Reactivacion de profesores', `${inactiveTeachers} profesor(es)`, 'Crear campana de disponibilidad y pedir actualizacion de perfil a oferta fria.', { section: 'profesores', tone: 'warning' }) : null,
@@ -843,18 +854,21 @@ function answerAutomationOpportunities(context) {
     'automation_opportunities',
     'Procesos con mas retorno para automatizar',
     rows.length
-      ? 'Estas automatizaciones reducen seguimiento manual sin depender de un LLM.'
+      ? 'Priorizo primero los insights internos ya calculados y despues los cuellos de botella clasicos.'
       : 'No veo cuellos de botella claros para automatizar con los datos actuales.',
     rows,
   );
 }
 
 function answerGeneralHealth(context) {
+  const activeInternalInsights = (context.data.internalAiInsights || [])
+    .filter((item) => ['', 'active', 'activa', 'open', 'abierta', 'pending', 'pendiente'].includes(statusOf(item)));
   const rows = [
     row('Profesores activos', `${context.teacherStats.filter((item) => item.active).length}`, `${context.teacherStats.filter((item) => item.verified).length} verificados.`, { section: 'profesores', tone: 'info' }),
     row('Familias activas', `${context.familyStats.filter((item) => item.active).length}`, `${context.familyStats.filter((item) => item.pendingPayments.length).length} con pagos pendientes.`, { section: 'familias', tone: 'info' }),
     row('Clases esta semana', `${context.week.classes.length}`, `${context.week.completedClasses.length} completadas, ${formatEuros(context.week.revenue)} realizado.`, { section: 'clases', tone: 'success' }),
     row('Incidencias abiertas', `${context.week.openIncidents.length}`, 'Usa "Que incidencias se repiten mas?" para ver patrones.', { section: 'incidencias', tone: context.week.openIncidents.length ? 'warning' : 'success' }),
+    row('IA interna activa', `${activeInternalInsights.length}`, 'Insights automaticos sobre chats, perfiles, documentos, datos y prioridades.', { section: 'operaciones', tone: activeInternalInsights.length ? 'warning' : 'success' }),
   ];
   return answerPayload(
     context,

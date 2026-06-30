@@ -37,6 +37,10 @@ import {
   buildProactiveAssistPlan,
 } from '../js/proactive-assist-engine.js';
 import {
+  INTERNAL_AI_ASSISTANT_VERSION,
+  buildInternalAiAssistantPlan,
+} from '../js/internal-ai-assistant-engine.js';
+import {
   SCHEDULED_CLASS_STATUSES,
   buildClassIncidentPayload,
   classEnded,
@@ -614,6 +618,16 @@ async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
   const snap = await ref.limit(maxDocs).get();
   const rows = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
   return collectionName === 'clases' ? filterAfterClassReset(rows) : rows;
+}
+
+async function listCollectionGroup(db, groupName, maxDocs = trustContextLimit) {
+  const snap = await db.collectionGroup(groupName).limit(maxDocs).get();
+  return snap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+    chatId: clean(doc.data().chatId || doc.data().threadId || doc.ref.parent.parent?.id || doc.ref.parent.path),
+    __ref: doc.ref,
+  }));
 }
 
 async function loadTrustContext(db) {
@@ -4211,6 +4225,242 @@ async function processProactiveAssist(db, stats) {
   await closeResolvedProactiveAssistSignals(db, activeIds, stats, scanLimit);
 }
 
+function internalAiAssistantOptions() {
+  return {
+    nowIso: isoNow(),
+    scanLimit: runtimeNumber('ai.internalAssistantScanLimit', limit, 10, 5000),
+    longConversationMessageThreshold: runtimeNumber('ai.internalAssistantLongChatMessages', 20, 5, 500),
+    conflictKeywordThreshold: runtimeNumber('ai.internalAssistantConflictKeywordThreshold', 2, 1, 20),
+    staleChatHours: runtimeNumber('ai.internalAssistantStaleChatHours', 24, 1, 1440),
+    staleIncidentHours: runtimeNumber('ai.internalAssistantStaleIncidentHours', 24, 1, 1440),
+    incidentSummaryMinEntries: runtimeNumber('ai.internalAssistantIncidentSummaryEntries', 4, 2, 100),
+    documentReviewHours: runtimeNumber('ai.internalAssistantDocumentReviewHours', 24, 1, 1440),
+    profileCompletionMinPercent: runtimeNumber('ai.internalAssistantProfileMinPercent', 85, 1, 100),
+    patternWindowDays: runtimeNumber('ai.internalAssistantPatternWindowDays', 30, 1, 365),
+    recurrentPatternThreshold: runtimeNumber('ai.internalAssistantPatternThreshold', 3, 2, 100),
+    dailyBriefMinScore: runtimeNumber('ai.internalAssistantDailyBriefMinScore', 58, 1, 100),
+    dailyBriefMaxItems: runtimeNumber('ai.internalAssistantDailyBriefMaxItems', 8, 3, 50),
+  };
+}
+
+async function materializeInternalAiInsight(db, insight, stats) {
+  const ref = db.collection('internalAiInsights').doc(insight.id);
+  const existing = await ref.get();
+  const existingData = existing.exists ? existing.data() : {};
+  const fingerprint = JSON.stringify([
+    insight.insightId,
+    insight.category,
+    insight.priority,
+    insight.priorityScore,
+    insight.summary,
+    insight.recommendedAction,
+    insight.evidence.join('|'),
+  ]);
+  const changed = !existing.exists || existingData.fingerprint !== fingerprint;
+
+  await writeDoc(db.collection('internalAiInsights'), insight.id, {
+    ...insight,
+    status: 'active',
+    estado: 'activa',
+    fingerprint,
+    firstSeenAt: existing.exists ? (existingData.firstSeenAt || now()) : now(),
+    lastSeenAt: now(),
+    createdAt: existing.exists ? (existingData.createdAt || now()) : now(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+  });
+  stats.internalAiInsightsEvaluated += 1;
+  if (!existing.exists) stats.internalAiInsightsCreated += 1;
+
+  const shouldCreateTask = insight.requiresHumanReview
+    && insight.priorityScore >= 70
+    && runtimeBoolean('ai.internalAssistantAutoCreateTasks', true);
+  if (shouldCreateTask) {
+    const taskId = notificationId('crm_internal_ai', insight.dedupeKey);
+    const taskRef = db.collection('crmTasks').doc(taskId);
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+      const dueMinutes = insight.priority === 'critical' ? 30 : insight.priority === 'high' ? 180 : 720;
+      await writeDoc(db.collection('crmTasks'), taskId, {
+        title: insight.title,
+        description: `${insight.summary} Accion recomendada: ${insight.recommendedAction}`,
+        priority: insight.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: insight.entityType || 'internalAiInsight',
+        entityId: insight.entityId || insight.id,
+        entityName: insight.entityName || '',
+        internalAiInsightId: insight.id,
+        familyUid: insight.familyUid || '',
+        teacherUid: insight.teacherUid || '',
+        studentId: insight.studentId || '',
+        tags: ['ia_interna', insight.category, insight.insightId],
+        dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueMinutes * 60 * 1000)),
+        source: 'internal_ai_assistant_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.internalAiTasksCreated += 1;
+    }
+  }
+
+  const shouldCreateAlert = changed
+    && (insight.priority === 'critical' || insight.priority === 'high' || insight.category === 'data_quality')
+    && runtimeBoolean('ai.internalAssistantAutoCreateOpsAlerts', true);
+  if (shouldCreateAlert) {
+    const alertId = notificationId('ops_internal_ai', insight.id);
+    const alertRef = db.collection('opsAlerts').doc(alertId);
+    const alertSnap = await alertRef.get();
+    if (!alertSnap.exists) {
+      await writeDoc(db.collection('opsAlerts'), alertId, {
+        alertType: 'internal_ai_assistant',
+        type: 'internal_ai_assistant',
+        title: insight.title,
+        message: `${insight.summary} Accion: ${insight.recommendedAction}`,
+        severity: insight.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: insight.entityType || 'internalAiInsight',
+        entityId: insight.entityId || insight.id,
+        internalAiInsightId: insight.id,
+        source: 'internal_ai_assistant_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.internalAiOpsAlertsCreated += 1;
+    }
+  }
+}
+
+async function closeResolvedInternalAiInsights(db, activeIds, stats, scanLimit) {
+  const snap = await db.collection('internalAiInsights')
+    .limit(scanLimit)
+    .get()
+    .catch(() => null);
+  if (!snap) return;
+  for (const doc of snap.docs) {
+    if (activeIds.has(doc.id)) continue;
+    const status = normalizeStatus(doc.data());
+    if (['resolved', 'resuelta', 'cerrada', 'archived', 'archivada'].includes(status)) continue;
+    await updateRef(doc.ref, {
+      status: 'resolved',
+      estado: 'resuelta',
+      resolvedAt: now(),
+      resolved_at: isoNow(),
+      resolution: 'La IA interna dejo de detectar esta oportunidad en el ultimo barrido.',
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    stats.internalAiInsightsResolved += 1;
+  }
+}
+
+async function processInternalAiAssistant(db, stats) {
+  if (!runtimeBoolean('ai.enabled', true) || !runtimeBoolean('ai.internalAssistantEnabled', true)) return;
+  const options = internalAiAssistantOptions();
+  const scanLimit = options.scanLimit;
+  const [
+    users,
+    legacyUsers,
+    teachers,
+    families,
+    students,
+    classes,
+    payments,
+    requests,
+    assignments,
+    chats,
+    messages,
+    incidents,
+    documents,
+    notifications,
+    alertDecisions,
+    preventiveRisks,
+    platformSupervisionFindings,
+    relationshipFollowups,
+    proactiveAssistSignals,
+    crmTasks,
+    opsAlerts,
+    previousInsights,
+  ] = await Promise.all([
+    listCollection(db, 'users', scanLimit).catch(() => []),
+    listCollection(db, 'usuarios', scanLimit).catch(() => []),
+    listCollection(db, 'profesores', scanLimit),
+    listCollection(db, 'familias', scanLimit),
+    listCollection(db, 'alumnos', scanLimit),
+    listCollection(db, 'clases', scanLimit),
+    listCollection(db, 'pagos', scanLimit),
+    listCollection(db, 'solicitudes', scanLimit),
+    listCollection(db, 'asignaciones', scanLimit),
+    listCollection(db, 'chats', scanLimit),
+    listCollectionGroup(db, 'mensajes', scanLimit).catch(() => []),
+    listCollection(db, 'incidencias', scanLimit),
+    listCollection(db, 'documentos', scanLimit),
+    listCollection(db, 'notificaciones', scanLimit).catch(() => []),
+    listCollection(db, 'alertDecisions', scanLimit).catch(() => []),
+    listCollection(db, 'preventiveRisks', scanLimit).catch(() => []),
+    listCollection(db, 'platformSupervisionFindings', scanLimit).catch(() => []),
+    listCollection(db, 'relationshipFollowups', scanLimit).catch(() => []),
+    listCollection(db, 'proactiveAssistSignals', scanLimit).catch(() => []),
+    listCollection(db, 'crmTasks', scanLimit).catch(() => []),
+    listCollection(db, 'opsAlerts', scanLimit).catch(() => []),
+    listCollection(db, 'internalAiInsights', scanLimit).catch(() => []),
+  ]);
+
+  const plan = buildInternalAiAssistantPlan({
+    users,
+    usuarios: legacyUsers,
+    profesores: teachers,
+    familias: families,
+    alumnos: students,
+    clases: classes,
+    pagos: payments,
+    solicitudes: requests,
+    asignaciones: assignments,
+    chats,
+    mensajes: messages,
+    incidencias: incidents,
+    documentos: documents,
+    notificaciones: notifications,
+    alertDecisions,
+    preventiveRisks,
+    platformSupervisionFindings,
+    relationshipFollowups,
+    proactiveAssistSignals,
+    crmTasks,
+    opsAlerts,
+    previousInsights,
+  }, options);
+
+  stats.internalAiAssistantVersion = plan.version;
+  stats.internalAiInsightsDetected = plan.total;
+  stats.internalAiCritical = plan.summary.critical;
+  stats.internalAiHigh = plan.summary.high;
+  stats.internalAiHumanReview = plan.summary.humanReview;
+  stats.internalAiChatInsights = plan.summary.chatInsights;
+  stats.internalAiIncidentInsights = plan.summary.incidentInsights;
+  stats.internalAiDocumentInsights = plan.summary.documentInsights;
+  stats.internalAiProfileInsights = plan.summary.profileInsights;
+  stats.internalAiDataQualityInsights = plan.summary.dataQualityInsights;
+  stats.internalAiPatternInsights = plan.summary.patternInsights;
+  stats.internalAiOperationsInsights = plan.summary.operationsInsights;
+
+  await writeDoc(db.collection('internalAiInsightSnapshots'), notificationId('internal_ai_snapshot', plan.generatedAt.slice(0, 16)), {
+    ...plan.summary,
+    version: plan.version,
+    thresholds: plan.thresholds,
+    generatedAt: plan.generatedAt,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+
+  const activeIds = new Set(plan.insights.map((insight) => insight.id));
+  for (const insight of plan.insights.slice(0, scanLimit)) {
+    await materializeInternalAiInsight(db, insight, stats);
+  }
+  await closeResolvedInternalAiInsights(db, activeIds, stats, scanLimit);
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -4546,6 +4796,23 @@ async function main() {
     proactiveAssistReadinessChecks: 0,
     proactiveAssistSupplyActivation: 0,
     proactiveAssistAttentionChecks: 0,
+    internalAiAssistantVersion: INTERNAL_AI_ASSISTANT_VERSION,
+    internalAiInsightsDetected: 0,
+    internalAiInsightsEvaluated: 0,
+    internalAiInsightsCreated: 0,
+    internalAiInsightsResolved: 0,
+    internalAiTasksCreated: 0,
+    internalAiOpsAlertsCreated: 0,
+    internalAiCritical: 0,
+    internalAiHigh: 0,
+    internalAiHumanReview: 0,
+    internalAiChatInsights: 0,
+    internalAiIncidentInsights: 0,
+    internalAiDocumentInsights: 0,
+    internalAiProfileInsights: 0,
+    internalAiDataQualityInsights: 0,
+    internalAiPatternInsights: 0,
+    internalAiOperationsInsights: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
@@ -4580,6 +4847,7 @@ async function main() {
   await processPlatformSelfSupervision(db, stats);
   await processRelationshipFollowups(db, stats);
   await processProactiveAssist(db, stats);
+  await processInternalAiAssistant(db, stats);
 
   if (criticalOnly) {
     console.log(JSON.stringify(stats, null, 2));

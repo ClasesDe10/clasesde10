@@ -599,6 +599,43 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     }));
   }
 
+  for (const insight of dataset.internalAiInsights || []) {
+    const status = statusOf(insight);
+    if (CLOSED_STATUSES.has(status)) continue;
+    const priority = asNumber(insight.priorityScore) || (clean(insight.priority).toLowerCase() === 'critical'
+      ? 96
+      : clean(insight.priority).toLowerCase() === 'high'
+        ? 84
+        : clean(insight.priority).toLowerCase() === 'low'
+          ? 34
+          : 58);
+    items.push(makeItem({
+      id: itemId('internal-ai', insight),
+      type: 'ai_assist',
+      title: clean(first(insight.title, 'Insight de IA interna')),
+      detail: clean(first(insight.summary, insight.recommendedAction, 'La IA interna detecto una oportunidad accionable.')),
+      section: clean(first(insight.section, insight.category, 'operaciones'), 80),
+      priority,
+      tone: priority >= 92 ? 'danger' : priority >= 75 ? 'warning' : priority <= 40 ? 'info' : 'gold',
+      entityType: clean(first(insight.entityType, 'internalAiInsight')),
+      entityId: clean(first(insight.entityId, insight.id)),
+      entityName: clean(first(insight.entityName, insight.category, 'IA interna')),
+      actionLabel: 'Revisar insight',
+      automation: clean(first(insight.recommendedAction, 'Aplicar accion recomendada por IA interna'), 180),
+      minutesSaved: priority >= 80 ? 15 : 8,
+      createdAt: first(insight.lastSeenAt, insight.generatedAt, insight.createdAt),
+      source: 'internalAiInsights',
+      metadata: {
+        insightId: insight.id,
+        insightType: insight.insightId,
+        category: insight.category,
+        confidence: insight.confidence,
+        confidenceScore: insight.confidenceScore,
+        requiresHumanReview: insight.requiresHumanReview !== false,
+      },
+    }));
+  }
+
   for (const chat of dataset.chats || []) {
     const schedulingStatus = clean(first(chat.schedulingStatus, chat.estado_programacion, chat.relationshipStage)).toLowerCase();
     const stale = hoursSince(first(chat.updatedAt, chat.updated_at, chat.createdAt, chat.created_at), now) >= 48;
@@ -637,6 +674,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     selfSupervisionFindings: visibleItems.filter((item) => item.type === 'supervision').length,
     relationshipFollowups: visibleItems.filter((item) => item.type === 'followup').length,
     proactiveAssistSignals: visibleItems.filter((item) => item.type === 'proactive').length,
+    internalAiInsights: visibleItems.filter((item) => item.type === 'ai_assist').length,
     overdueTasks: visibleItems.filter((item) => item.type === 'task').length,
     estimatedMinutesSaved: visibleItems.reduce((sum, item) => sum + asNumber(item.minutesSaved), 0),
   };
@@ -650,6 +688,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     { type: 'self_supervision', label: 'Autosupervision', section: 'auditoria', count: visibleItems.filter((item) => item.type === 'supervision').length },
     { type: 'relationship_followup', label: 'Acompanamiento post-match', section: 'chat', count: visibleItems.filter((item) => item.type === 'followup').length },
     { type: 'proactive_assist', label: 'Asistencia proactiva', section: 'operaciones', count: visibleItems.filter((item) => item.type === 'proactive').length },
+    { type: 'internal_ai', label: 'IA interna', section: 'ia', count: visibleItems.filter((item) => item.type === 'ai_assist').length },
   ].filter((item) => item.count > 0);
 
   return {

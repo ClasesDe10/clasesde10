@@ -51,6 +51,17 @@ const sample = {
   publicLeads: [
     { id: 'l1', tipo: 'familia', ciudad: 'Madrid', createdAt: '2026-06-27T10:00:00Z' },
   ],
+  internalAiInsights: [
+    {
+      id: 'ia_1',
+      title: 'Chat largo que conviene resumir',
+      summary: 'Hay una conversacion con demasiados mensajes antes de programar.',
+      recommendedAction: 'Resumir chat y fijar siguiente accion.',
+      status: 'active',
+      priorityScore: 84,
+      section: 'chat',
+    },
+  ],
 };
 
 const context = buildAdminAiContext(sample, { now });
@@ -97,6 +108,8 @@ assert(subjects.rows[0].label === 'quimica', 'Chemistry must be the largest supp
 const automations = answerAdminQuestion('Que procesos pueden automatizarse?', sample, { now });
 assert(automations.intent === 'automation_opportunities', 'Automation intent failed.');
 assert(automations.rows.length >= 3, 'Automation answer must include actionable opportunities.');
+assert(automations.sourceCollections.includes('internalAiInsights'), 'Automation answer must use internal AI insights as a source.');
+assert(automations.rows.some((item) => item.label === 'Chat largo que conviene resumir'), 'Automation answer must surface internal AI priorities first.');
 
 console.log(JSON.stringify({
   ok: true,

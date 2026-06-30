@@ -2133,6 +2133,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /internalAiInsights/{insightId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /internalAiInsightSnapshots/{snapshotId} {
+      allow read, write: if isAdmin();
+    }
+
     match /classLifecycleEvents/{eventId} {
       allow read, write: if isAdmin();
     }

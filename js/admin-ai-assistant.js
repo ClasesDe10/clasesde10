@@ -53,6 +53,7 @@ const DATA_SPECS = [
   ['metricSnapshots', 'metricSnapshots', 250],
   ['opsAlerts', 'opsAlerts', 500],
   ['platformHealthChecks', 'platformHealthChecks', 300],
+  ['internalAiInsights', 'internalAiInsights', 500],
 ];
 
 let cachedData = null;

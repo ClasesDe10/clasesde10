@@ -35,6 +35,7 @@ const LIVE_SIGNAL_COLLECTIONS = [
   { name: 'platformSupervisionFindings', orderField: 'lastSeenAt', limit: 20 },
   { name: 'relationshipFollowups', orderField: 'lastSeenAt', limit: 20 },
   { name: 'proactiveAssistSignals', orderField: 'lastSeenAt', limit: 20 },
+  { name: 'internalAiInsights', orderField: 'lastSeenAt', limit: 20 },
 ];
 
 function clean(value, max = 4000) {
@@ -336,6 +337,7 @@ async function loadData(db, leadsAdapter) {
     platformSupervisionFindings,
     relationshipFollowups,
     proactiveAssistSignals,
+    internalAiInsights,
     healthChecks,
   ] = await Promise.all([
     safeRead('users', () => loadRows(db, 'usuarios'), [], loadErrors),
@@ -377,6 +379,7 @@ async function loadData(db, leadsAdapter) {
     safeRead('platformSupervisionFindings', () => loadRows(db, 'platformSupervisionFindings'), [], loadErrors),
     safeRead('relationshipFollowups', () => loadRows(db, 'relationshipFollowups'), [], loadErrors),
     safeRead('proactiveAssistSignals', () => loadRows(db, 'proactiveAssistSignals'), [], loadErrors),
+    safeRead('internalAiInsights', () => loadRows(db, 'internalAiInsights'), [], loadErrors),
     safeRead('platformHealthChecks', () => loadRows(db, 'platformHealthChecks'), [], loadErrors),
   ]);
 
@@ -414,6 +417,7 @@ async function loadData(db, leadsAdapter) {
     platformSupervisionFindings,
     relationshipFollowups,
     proactiveAssistSignals,
+    internalAiInsights,
     healthChecks,
     loadErrors,
   };
@@ -857,6 +861,8 @@ function computeMissionControl(data, metrics) {
   const severeRelationshipFollowups = activeRelationshipFollowups.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const activeProactiveSignals = (data.proactiveAssistSignals || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
   const severeProactiveSignals = activeProactiveSignals.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
+  const activeInternalAiInsights = (data.internalAiInsights || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
+  const severeInternalAiInsights = activeInternalAiInsights.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const latestMetricSnapshot = latestItem(data.metricSnapshots || []);
   const latestHealthSnapshot = latestItem(data.healthChecks || []);
   const latestAutomation = latestItem(data.automationEvents || []);
@@ -1104,18 +1110,31 @@ function computeMissionControl(data, metrics) {
       name: 'IA',
       description: 'Asistente admin, scoring, recomendaciones y reranking.',
       section: 'ia',
-      issues: aiErrors.length ? [issue({
-        status: aiErrors.length > 2 ? 'degraded' : 'attention',
-        what: `${aiErrors.length} incidencia(s) IA en 48h`,
-        impact: 'Respuestas o recomendaciones pueden degradarse a modo estructurado.',
-        affectedUsers: affectedUniqueUsers(aiErrors, ['actorUid', 'entityId']),
-        cause: 'Errores de IA, timeout, cuota o reranking detectados en logs.',
-        fix: 'Usar modo estructurado gratuito, revisar prompts/coste y reintentar procesos fallidos.',
-        startedAt: oldestDate(aiErrors),
-        signals: aiErrors.map((item) => first(item.action, item.type, item.intent)),
-        section: 'ia',
-      })] : [],
-      okSignals: [`${data.adminAiQueries?.length || 0} consultas admin registradas`, 'Modo estructurado disponible', 'Matching deterministic fallback activo'],
+      issues: [
+        ...(aiErrors.length ? [issue({
+          status: aiErrors.length > 2 ? 'degraded' : 'attention',
+          what: `${aiErrors.length} incidencia(s) IA en 48h`,
+          impact: 'Respuestas o recomendaciones pueden degradarse a modo estructurado.',
+          affectedUsers: affectedUniqueUsers(aiErrors, ['actorUid', 'entityId']),
+          cause: 'Errores de IA, timeout, cuota o reranking detectados en logs.',
+          fix: 'Usar modo estructurado gratuito, revisar prompts/coste y reintentar procesos fallidos.',
+          startedAt: oldestDate(aiErrors),
+          signals: aiErrors.map((item) => first(item.action, item.type, item.intent)),
+          section: 'ia',
+        })] : []),
+        ...(severeInternalAiInsights.length ? [issue({
+          status: severeInternalAiInsights.some((item) => clean(item.priority).toLowerCase() === 'critical') ? 'degraded' : 'attention',
+          what: `${severeInternalAiInsights.length} insight(s) IA interna prioritarios`,
+          impact: 'La IA interna ha detectado trabajo operativo que ahorra revision manual o evita bloqueos.',
+          affectedUsers: affectedUniqueUsers(severeInternalAiInsights, ['familyUid', 'teacherUid', 'studentId', 'entityId']),
+          cause: severeInternalAiInsights.slice(0, 3).map((item) => first(item.title, item.insightId)).join(', '),
+          fix: severeInternalAiInsights[0]?.recommendedAction || 'Abrir Operaciones y revisar el insight prioritario.',
+          startedAt: oldestDate(severeInternalAiInsights, (item) => first(item.generatedAt, item.firstSeenAt, item.createdAt)),
+          signals: severeInternalAiInsights.map((item) => `${first(item.insightId, item.category, item.id)} (${item.priorityScore || 0})`),
+          section: 'operaciones',
+        })] : []),
+      ],
+      okSignals: [`${data.adminAiQueries?.length || 0} consultas admin registradas`, `${activeInternalAiInsights.length} insight(s) IA interna`, 'Modo estructurado disponible', 'Matching deterministic fallback activo'],
     }),
     subsystem({
       id: 'matching',
@@ -1487,6 +1506,8 @@ function computeControlCenter(data) {
   const severeRelationshipFollowups = relationshipFollowups.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const proactiveAssistSignals = (data.proactiveAssistSignals || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
   const severeProactiveSignals = proactiveAssistSignals.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
+  const internalAiInsights = (data.internalAiInsights || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
+  const severeInternalAiInsights = internalAiInsights.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const pendingPaymentAmount = pendingPayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const overduePaymentAmount = overduePayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const averageTicket = completedMonth.length ? revenueMonth / completedMonth.length : 0;
@@ -1509,6 +1530,7 @@ function computeControlCenter(data) {
     - Math.min(20, severeSupervisionFindings.length * 5)
     - Math.min(16, severeRelationshipFollowups.length * 4)
     - Math.min(14, severeProactiveSignals.length * 3)
+    - Math.min(16, severeInternalAiInsights.length * 3)
     - Math.max(0, 90 - completionHealth) * 0.25
     - Math.min(18, Math.max(0, timing.avgTimeToAssignHours - 24) * 0.6)
     - Math.min(12, riskyClasses.length * 2)
@@ -1559,6 +1581,8 @@ function computeControlCenter(data) {
     severeRelationshipFollowups,
     proactiveAssistSignals,
     severeProactiveSignals,
+    internalAiInsights,
+    severeInternalAiInsights,
     pendingPaymentAmount,
     overduePaymentAmount,
     averageTicket,
@@ -1607,6 +1631,12 @@ function computeControlCenter(data) {
       tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
       title: first(item.title, 'Ayuda proactiva'),
       body: `${first(item.expectedOutcome, item.description, 'La plataforma detecto una accion util.')} Accion: ${first(item.recommendedAction, 'Abrir Operaciones')}`,
+      section: first(item.section, 'operaciones'),
+    })),
+    ...severeInternalAiInsights.slice(0, 5).map((item) => ({
+      tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
+      title: first(item.title, 'IA interna'),
+      body: `${first(item.summary, 'Insight operativo detectado.')} Accion: ${first(item.recommendedAction, 'Abrir Operaciones')}`,
       section: first(item.section, 'operaciones'),
     })),
     ...severePreventiveRisks.slice(0, 4).map((item) => ({
@@ -1729,6 +1759,13 @@ function computeControlCenter(data) {
       section: first(item.section, 'operaciones'),
       tone: ['critical', 'high'].includes(clean(item.priority).toLowerCase()) ? 'warning' : 'info',
     })),
+    ...internalAiInsights.map((item) => ({
+      date: first(item.generatedAt, item.lastSeenAt, item.createdAt),
+      title: `IA interna ${first(item.category, item.insightId, '')}`.trim(),
+      body: first(item.title, item.summary, item.recommendedAction, 'Insight operativo'),
+      section: first(item.section, 'operaciones'),
+      tone: ['critical', 'high'].includes(clean(item.priority).toLowerCase()) ? 'warning' : 'info',
+    })),
     ...data.documents.map((item) => ({
       date: createdDate(item),
       title: `Documento ${statusOf(item) || 'pendiente'}`,
@@ -1784,6 +1821,12 @@ function computeControlCenter(data) {
       section: first(item.section, 'operaciones'),
       tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
     })),
+    ...severeInternalAiInsights.slice(0, 4).map((item) => ({
+      title: first(item.title, 'IA interna'),
+      body: first(item.recommendedAction, item.summary, 'Revisar insight operativo'),
+      section: first(item.section, 'operaciones'),
+      tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
+    })),
   ].slice(0, 10);
 
   const dataQuality = [
@@ -1796,6 +1839,7 @@ function computeControlCenter(data) {
     { label: 'Hallazgos de autosupervision', value: platformSupervisionFindings.length, section: 'auditoria' },
     { label: 'Seguimientos post-match activos', value: relationshipFollowups.length, section: 'chat' },
     { label: 'Ayudas proactivas activas', value: proactiveAssistSignals.length, section: 'operaciones' },
+    { label: 'Insights IA interna activos', value: internalAiInsights.length, section: 'ia' },
     { label: 'Solicitudes antiguas sin asignar', value: staleUnassigned.length, section: 'solicitudes' },
     { label: 'Pagos vencidos', value: overduePayments.length, section: 'pagos' },
     { label: 'Documentos pendientes', value: pendingDocs.length, section: 'documentos' },

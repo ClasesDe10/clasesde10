@@ -49,11 +49,13 @@ assert(module.includes('alertDecisions'), 'Control center must load alert priori
 assert(module.includes('platformSupervisionFindings'), 'Control center must load platform self-supervision findings.');
 assert(module.includes('relationshipFollowups'), 'Control center must load relationship follow-up signals.');
 assert(module.includes('proactiveAssistSignals'), 'Control center must load proactive assistance signals.');
+assert(module.includes('internalAiInsights'), 'Control center must load internal AI insights.');
 assert(module.includes('riesgo(s) preventivos altos'), 'Mission Control must surface severe preventive risks.');
 assert(module.includes('alerta(s) priorizadas por score'), 'Mission Control must surface scored alert decisions.');
 assert(module.includes('hallazgo(s) de autosupervision'), 'Mission Control must surface self-supervision findings.');
 assert(module.includes('seguimiento(s) post-match prioritarios'), 'Mission Control must surface post-match follow-up signals.');
 assert(module.includes('senal(es) proactivas prioritarias'), 'Mission Control must surface proactive assistance signals.');
+assert(module.includes('insight(s) IA interna prioritarios'), 'Mission Control must surface internal AI insights.');
 assert(module.includes('Mission Control'), 'Control center must render the Mission Control hero.');
 assert(module.includes('Estado tecnico de la plataforma'), 'Mission Control must expose technical platform status.');
 assert(module.includes('Firebase'), 'Mission Control must monitor Firebase.');
@@ -135,5 +137,7 @@ assert(rules.includes('match /relationshipFollowups/{followupId}'), 'Firestore r
 assert(rules.includes('match /relationshipFollowupSnapshots/{snapshotId}'), 'Firestore rules must protect relationship follow-up snapshots.');
 assert(rules.includes('match /proactiveAssistSignals/{signalId}'), 'Firestore rules must protect proactive assistance signals.');
 assert(rules.includes('match /proactiveAssistSnapshots/{snapshotId}'), 'Firestore rules must protect proactive assistance snapshots.');
+assert(rules.includes('match /internalAiInsights/{insightId}'), 'Firestore rules must protect internal AI insights.');
+assert(rules.includes('match /internalAiInsightSnapshots/{snapshotId}'), 'Firestore rules must protect internal AI snapshots.');
 
 console.log('Admin control center validation passed.');
