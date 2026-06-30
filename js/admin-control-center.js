@@ -2244,14 +2244,374 @@ function renderMissionControl(mission) {
   </section>`;
 }
 
+function decisionTone(score = 0, fallback = '') {
+  if (fallback) return fallback;
+  if (score >= 92) return 'danger';
+  if (score >= 78) return 'warning';
+  if (score >= 55) return 'gold';
+  return 'info';
+}
+
+function decisionItem({
+  score = 50,
+  title = '',
+  body = '',
+  section = 'operaciones',
+  action = 'Abrir',
+  impact = 'Medio',
+  effort = 'Bajo',
+  metric = '',
+  automation = '',
+  tone = '',
+} = {}) {
+  return {
+    score: Math.max(0, Math.min(100, Math.round(asNumber(score)))),
+    title: clean(title, 120),
+    body: clean(body, 240),
+    section: clean(section, 40) || 'operaciones',
+    action: clean(action, 80) || 'Abrir',
+    impact: clean(impact, 80) || 'Medio',
+    effort: clean(effort, 80) || 'Bajo',
+    metric: clean(metric, 100),
+    automation: clean(automation, 180),
+    tone: decisionTone(score, tone),
+  };
+}
+
+function dedupeDecisions(decisions = []) {
+  const seen = new Set();
+  return decisions.filter((item) => {
+    const key = `${item.section}:${item.title}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildAdminDecisionCenter(metrics = {}) {
+  const decisions = [];
+  const pushDecision = (condition, item) => {
+    if (condition) decisions.push(decisionItem(item));
+  };
+
+  pushDecision(metrics.overduePayments?.length, {
+    score: 100,
+    title: 'Cobrar pagos vencidos',
+    body: `${metrics.overduePayments.length} pago(s) vencidos por ${formatEuros(metrics.overduePaymentAmount)}. Es la palanca mas urgente de caja y confianza.`,
+    section: 'pagos',
+    action: 'Abrir pagos',
+    impact: 'Caja inmediata',
+    effort: 'Bajo',
+    metric: formatEuros(metrics.overduePaymentAmount),
+    automation: 'Priorizar recordatorio, revision de justificante y aviso al admin.',
+  });
+
+  pushDecision(metrics.staleUnassigned?.length, {
+    score: 96,
+    title: 'Asignar profesor a solicitudes antiguas',
+    body: `${metrics.staleUnassigned.length} solicitud(es) llevan mas de 24h sin profesor. Reducir esto mejora conversion y confianza familiar.`,
+    section: 'solicitudes',
+    action: 'Asignar profesor',
+    impact: 'Conversion',
+    effort: 'Medio',
+    metric: `${metrics.staleUnassigned.length} antiguas`,
+    automation: 'Usar ranking IA y plan de matching activo antes de revisar manualmente.',
+  });
+
+  pushDecision(metrics.classesWithoutConfirmation?.length, {
+    score: 90,
+    title: 'Cerrar clases pasadas sin confirmar',
+    body: `${metrics.classesWithoutConfirmation.length} clase(s) pasadas siguen sin cierre operativo. Bloquean pagos, reputacion y calendario.`,
+    section: 'clases',
+    action: 'Revisar clases',
+    impact: 'Consistencia',
+    effort: 'Bajo',
+    metric: `${metrics.classesWithoutConfirmation.length} clases`,
+    automation: 'Enviar aviso interno y marcar incidencia si supera la ventana de confirmacion.',
+  });
+
+  pushDecision(metrics.pendingTeachers?.length, {
+    score: 84,
+    title: 'Validar profesores pendientes',
+    body: `${metrics.pendingTeachers.length} profesor(es) esperan revision. La oferta disponible limita el matching futuro.`,
+    section: 'profesores',
+    action: 'Abrir profesores',
+    impact: 'Oferta',
+    effort: 'Medio',
+    metric: `${metrics.pendingTeachers.length} perfiles`,
+    automation: 'Filtrar por perfil completo, documentos y confianza antes de contactar.',
+  });
+
+  pushDecision(metrics.pendingDocs?.length, {
+    score: 80,
+    title: 'Revisar documentos pendientes',
+    body: `${metrics.pendingDocs.length} documento(s) afectan verificaciones, confianza y elegibilidad de profesores.`,
+    section: 'documentos',
+    action: 'Abrir documentos',
+    impact: 'Confianza',
+    effort: 'Medio',
+    metric: `${metrics.pendingDocs.length} docs`,
+    automation: 'Resolver primero documentos vinculados a profesores activos o candidatos de matching.',
+  });
+
+  pushDecision(metrics.riskyClasses?.length, {
+    score: 82,
+    title: 'Corregir precios o margen de clases',
+    body: `${metrics.riskyClasses.length} clase(s) tienen importe incompleto o margen bajo. Puede distorsionar finanzas y pagos.`,
+    section: 'finanzas',
+    action: 'Abrir finanzas',
+    impact: 'Margen',
+    effort: 'Bajo',
+    metric: `${metrics.riskyClasses.length} clases`,
+    automation: 'Aplicar reglas de tarifa por profesor, alumno y modalidad antes de validar pagos.',
+  });
+
+  pushDecision(metrics.severeRelationshipFollowups?.length, {
+    score: 86,
+    title: 'Desbloquear relaciones familia-profesor',
+    body: `${metrics.severeRelationshipFollowups.length} seguimiento(s) post-match requieren accion para evitar que una relacion se enfrie.`,
+    section: 'chat',
+    action: 'Abrir chat',
+    impact: 'Retencion',
+    effort: 'Bajo',
+    metric: `${metrics.severeRelationshipFollowups.length} seguimientos`,
+    automation: 'Priorizar chats con horario pendiente, primera clase pendiente o cancelaciones repetidas.',
+  });
+
+  pushDecision(metrics.severeProactiveSignals?.length, {
+    score: 78,
+    title: 'Atender senales proactivas',
+    body: `${metrics.severeProactiveSignals.length} senal(es) indican usuarios que necesitan ayuda antes de abrir incidencia.`,
+    section: 'operaciones',
+    action: 'Abrir operaciones',
+    impact: 'Prevencion',
+    effort: 'Bajo',
+    metric: `${metrics.severeProactiveSignals.length} senales`,
+    automation: 'Convertir las senales repetidas en tareas automaticas con propietario.',
+  });
+
+  pushDecision(metrics.severeInternalAiInsights?.length, {
+    score: 76,
+    title: 'Revisar insights de IA interna',
+    body: `${metrics.severeInternalAiInsights.length} insight(s) priorizados resumen patrones que ahorran revision manual.`,
+    section: 'ia',
+    action: 'Abrir IA',
+    impact: 'Ahorro admin',
+    effort: 'Bajo',
+    metric: `${metrics.severeInternalAiInsights.length} insights`,
+    automation: 'Usar consultas estructuradas antes de pedir resumen generativo.',
+  });
+
+  pushDecision(metrics.missionControl?.issues?.length, {
+    score: metrics.missionControl.status === 'outage' ? 100 : metrics.missionControl.status === 'degraded' ? 88 : 70,
+    title: 'Investigar subsistemas con atencion',
+    body: `${metrics.missionControl.issues.length} subsistema(s) no estan plenamente operativos. Revisar causa probable antes de que afecte a usuarios.`,
+    section: 'auditoria',
+    action: 'Ver Mission Control',
+    impact: 'Continuidad',
+    effort: 'Medio',
+    metric: `${metrics.missionControl.score}/100`,
+    automation: 'Registrar snapshot y abrir incidencia si la degradacion se repite.',
+  });
+
+  for (const alert of (metrics.alerts || []).slice(0, 5)) {
+    decisions.push(decisionItem({
+      score: alert.tone === 'danger' ? 87 : 68,
+      title: alert.title,
+      body: alert.body,
+      section: alert.section,
+      action: 'Revisar',
+      impact: alert.tone === 'danger' ? 'Alto' : 'Medio',
+      effort: 'Bajo',
+      metric: 'Alerta',
+      tone: alert.tone,
+    }));
+  }
+
+  const ordered = dedupeDecisions(decisions)
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
+
+  const primary = ordered[0] || decisionItem({
+    score: 35,
+    title: 'Operacion sin bloqueos urgentes',
+    body: 'No hay decisiones criticas abiertas. El mejor siguiente paso es revisar crecimiento, calidad de perfiles y oportunidades de automatizacion.',
+    section: 'analitica',
+    action: 'Abrir analitica',
+    impact: 'Mejora continua',
+    effort: 'Bajo',
+    metric: `${metrics.healthScore || 0}/100`,
+    tone: 'info',
+  });
+
+  const modules = [
+    {
+      label: 'Matching',
+      value: metrics.requestsUnassigned?.length || 0,
+      hint: `${metrics.requestsOpen?.length || 0} abiertas`,
+      section: 'solicitudes',
+      tone: metrics.staleUnassigned?.length ? 'danger' : metrics.requestsUnassigned?.length ? 'warning' : 'success',
+    },
+    {
+      label: 'Caja',
+      value: formatEuros(metrics.pendingPaymentAmount || 0),
+      hint: `${formatEuros(metrics.overduePaymentAmount || 0)} vencido`,
+      section: 'pagos',
+      tone: metrics.overduePaymentAmount ? 'danger' : metrics.pendingPaymentAmount ? 'warning' : 'success',
+    },
+    {
+      label: 'Calidad',
+      value: (metrics.pendingDocs?.length || 0) + (metrics.pendingTeachers?.length || 0),
+      hint: 'docs + profes',
+      section: 'documentos',
+      tone: (metrics.pendingDocs?.length || 0) + (metrics.pendingTeachers?.length || 0) ? 'warning' : 'success',
+    },
+    {
+      label: 'Relacion',
+      value: metrics.relationshipSummary?.blocked?.length || 0,
+      hint: `${metrics.relationshipSummary?.pendingSchedule?.length || 0} sin horario`,
+      section: 'chat',
+      tone: metrics.relationshipSummary?.blocked?.length ? 'danger' : metrics.relationshipSummary?.pendingSchedule?.length ? 'warning' : 'success',
+    },
+  ];
+
+  const automations = [
+    {
+      label: 'Recordatorios utiles',
+      value: (metrics.classesWithoutConfirmation?.length || 0) + (metrics.overduePayments?.length || 0),
+      section: 'notificaciones',
+      hint: 'clases y pagos',
+    },
+    {
+      label: 'Matching asistido',
+      value: metrics.staleUnassigned?.length || 0,
+      section: 'solicitudes',
+      hint: 'solicitudes antiguas',
+    },
+    {
+      label: 'Reputacion recalculada',
+      value: (metrics.pendingDocs?.length || 0) + (metrics.riskyClasses?.length || 0),
+      section: 'profesores',
+      hint: 'confianza y finanzas',
+    },
+  ];
+
+  return {
+    primary,
+    queue: ordered.slice(0, 6),
+    modules,
+    automations,
+    summary: {
+      urgent: ordered.filter((item) => item.score >= 85).length,
+      total: ordered.length,
+      businessHealth: metrics.healthScore || 0,
+      systemHealth: metrics.missionControl?.score || 0,
+      estimatedMinutesSaved: Math.min(240, ordered.reduce((sum, item) => sum + (item.score >= 85 ? 14 : 8), 0)),
+    },
+  };
+}
+
+function renderDecisionCard(item, index = 0) {
+  return `<article class="decision-card ${escapeHtml(item.tone)}">
+    <div class="decision-score">
+      <strong>${escapeHtml(String(item.score))}</strong>
+      <span>prioridad</span>
+    </div>
+    <div class="decision-card-body">
+      <div class="decision-card-top">
+        <span>${escapeHtml(index === 0 ? 'Siguiente decision' : `#${index + 1}`)}</span>
+        ${renderBadge(item.impact, item.tone === 'danger' ? 'danger' : item.tone === 'warning' ? 'warning' : 'gray')}
+      </div>
+      <h3>${escapeHtml(item.title)}</h3>
+      <p>${escapeHtml(item.body)}</p>
+      <div class="decision-meta">
+        <span>Esfuerzo: ${escapeHtml(item.effort)}</span>
+        ${item.metric ? `<span>${escapeHtml(item.metric)}</span>` : ''}
+        ${item.automation ? `<span>${escapeHtml(item.automation)}</span>` : ''}
+      </div>
+    </div>
+    ${renderActionButton(item.section, item.action)}
+  </article>`;
+}
+
+function renderDecisionCenter(decisionCenter) {
+  if (!decisionCenter) return '';
+  const queue = decisionCenter.queue.length
+    ? decisionCenter.queue.map((item, index) => renderDecisionCard(item, index)).join('')
+    : renderDecisionCard(decisionCenter.primary, 0);
+
+  return `<section class="decision-center">
+    <div class="decision-hero">
+      <div>
+        <div class="control-eyebrow">Centro de decision</div>
+        <h2>Que necesita decidir el administrador ahora</h2>
+        <p>Prioriza caja, matching, calidad, relaciones y continuidad operativa con datos vivos del panel. No son graficos decorativos: cada bloque abre el modulo donde actuar.</p>
+      </div>
+      <div class="decision-summary">
+        <div><strong>${escapeHtml(String(decisionCenter.summary.urgent))}</strong><span>urgentes</span></div>
+        <div><strong>${escapeHtml(String(decisionCenter.summary.total))}</strong><span>decisiones</span></div>
+        <div><strong>${escapeHtml(String(decisionCenter.summary.estimatedMinutesSaved))}m</strong><span>ahorro estimado</span></div>
+      </div>
+    </div>
+
+    <div class="decision-grid">
+      <section class="decision-panel decision-panel-main">
+        <div class="decision-panel-head">
+          <span>Prioridad operativa</span>
+          ${renderBadge(`Negocio ${decisionCenter.summary.businessHealth}/100`, decisionCenter.summary.businessHealth >= 80 ? 'success' : decisionCenter.summary.businessHealth >= 60 ? 'warning' : 'danger')}
+        </div>
+        ${renderDecisionCard(decisionCenter.primary, 0)}
+      </section>
+
+      <section class="decision-panel">
+        <div class="decision-panel-head">
+          <span>Cola de decisiones</span>
+          ${renderBadge(`${decisionCenter.queue.length}`, decisionCenter.queue.length ? 'warning' : 'success')}
+        </div>
+        <div class="decision-queue">${queue}</div>
+      </section>
+    </div>
+
+    <div class="decision-support-grid">
+      <section class="decision-panel">
+        <div class="decision-panel-head">
+          <span>Decisiones por modulo</span>
+          ${renderBadge('Atajos', 'navy')}
+        </div>
+        <div class="decision-module-grid">
+          ${decisionCenter.modules.map((item) => `<button type="button" class="decision-module ${escapeHtml(item.tone)}" data-control-nav="${escapeHtml(item.section)}">
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(String(item.value))}</strong>
+            <em>${escapeHtml(item.hint)}</em>
+          </button>`).join('')}
+        </div>
+      </section>
+      <section class="decision-panel">
+        <div class="decision-panel-head">
+          <span>Automatizaciones que ahorran tiempo</span>
+          ${renderBadge(`Sistema ${decisionCenter.summary.systemHealth}/100`, decisionCenter.summary.systemHealth >= 80 ? 'success' : 'warning')}
+        </div>
+        <div class="decision-automation-list">
+          ${decisionCenter.automations.map((item) => `<button type="button" data-control-nav="${escapeHtml(item.section)}">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${escapeHtml(String(item.value))} caso(s) detectados - ${escapeHtml(item.hint)}</span>
+          </button>`).join('')}
+        </div>
+      </section>
+    </div>
+  </section>`;
+}
+
 function renderControlCenter(container, metrics, state) {
   const previousMonth = metrics.monthly.at(-2) || {};
   const currentMonth = metrics.monthly.at(-1) || {};
   const revenueTrend = trendFromPrevious(currentMonth.revenue || 0, previousMonth.revenue || 0);
   const classTrend = trendFromPrevious(currentMonth.classes || 0, previousMonth.classes || 0);
   const healthTone = metrics.healthScore >= 80 ? 'success' : metrics.healthScore >= 60 ? 'warning' : 'danger';
+  const decisionCenter = buildAdminDecisionCenter(metrics);
 
   container.innerHTML = `<div class="control-center">
+    ${renderDecisionCenter(decisionCenter)}
+
     ${renderMissionControl(metrics.missionControl)}
 
     <div class="control-hero">

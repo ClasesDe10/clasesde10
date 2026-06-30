@@ -81,6 +81,12 @@ assert(module.includes('forecastMonthClose'), 'Control center must forecast mont
 assert(module.includes('detectBusinessAnomalies'), 'Control center must detect business anomalies.');
 assert(module.includes('computeTeacherLeaderboard'), 'Control center must rank outstanding teachers.');
 assert(module.includes('computeOperationalTiming'), 'Control center must compute operational timing.');
+assert(module.includes('buildAdminDecisionCenter'), 'Control center must build an admin decision center.');
+assert(module.includes('Centro de decision'), 'Control center must render a decision center.');
+assert(module.includes('Que necesita decidir el administrador ahora'), 'Decision center must explain the immediate admin decision.');
+assert(module.includes('Cola de decisiones'), 'Decision center must render a prioritized decision queue.');
+assert(module.includes('Decisiones por modulo'), 'Decision center must group decisions by admin module.');
+assert(module.includes('Automatizaciones que ahorran tiempo'), 'Decision center must surface automation opportunities.');
 assert(module.includes('LIVE_SIGNAL_COLLECTIONS'), 'Control center must subscribe to bounded live Firestore signal collections.');
 assert(module.includes('firestoreLimit(limit)'), 'Control center live subscriptions must cap realtime reads.');
 assert(module.includes('orderBy(orderField'), 'Control center live subscriptions must use ordered signal queries.');
@@ -104,6 +110,9 @@ assert(module.includes('Familias activas'), 'Control center must render active f
 assert(module.includes('Pagos pendientes'), 'Control center must render payment risk metrics.');
 
 assert(css.includes('.control-center'), 'Dashboard CSS must style the control center shell.');
+assert(css.includes('.decision-center'), 'Dashboard CSS must style the admin decision center.');
+assert(css.includes('.decision-card'), 'Dashboard CSS must style prioritized decision cards.');
+assert(css.includes('.decision-module-grid'), 'Dashboard CSS must style module decision shortcuts.');
 assert(css.includes('.mission-control'), 'Dashboard CSS must style Mission Control shell.');
 assert(css.includes('.mission-system-grid'), 'Dashboard CSS must style Mission Control system grid.');
 assert(css.includes('.mission-mini-map'), 'Dashboard CSS must style Mission Control subsystem map.');

@@ -11,11 +11,18 @@ async (page) => {
     const root = document.querySelector('#section-dashboard');
     const text = root?.textContent || '';
     const cards = root?.querySelectorAll('.control-kpi').length || 0;
+    const decisions = root?.querySelectorAll('.decision-card').length || 0;
+    const decisionModules = root?.querySelectorAll('.decision-module').length || 0;
     const missionSystems = root?.querySelectorAll('.mission-system').length || 0;
     const chartBars = root?.querySelectorAll('.control-chart-bar').length || 0;
     const actionButtons = root?.querySelectorAll('[data-control-nav]').length || 0;
     const required = [
       'Mission Control',
+      'Centro de decision',
+      'Que necesita decidir el administrador ahora',
+      'Cola de decisiones',
+      'Decisiones por modulo',
+      'Automatizaciones que ahorran tiempo',
       'Estado tecnico de la plataforma',
       'Incidencias prioritarias',
       'Mapa de subsistemas',
@@ -39,6 +46,8 @@ async (page) => {
     return {
       text,
       cards,
+      decisions,
+      decisionModules,
       missionSystems,
       chartBars,
       actionButtons,
@@ -62,6 +71,12 @@ async (page) => {
   if (result.cards < 6) {
     throw new Error(`Expected at least 6 KPI cards, got ${result.cards}`);
   }
+  if (result.decisions < 1) {
+    throw new Error(`Expected prioritized admin decisions, got ${result.decisions}`);
+  }
+  if (result.decisionModules < 4) {
+    throw new Error(`Expected module decision shortcuts, got ${result.decisionModules}`);
+  }
   if (result.missionSystems < 15) {
     throw new Error(`Expected all Mission Control subsystems, got ${result.missionSystems}`);
   }
@@ -78,6 +93,8 @@ async (page) => {
   return {
     topbar: await page.locator('#topbar-title').textContent().catch(() => ''),
     cards: result.cards,
+    decisions: result.decisions,
+    decisionModules: result.decisionModules,
     missionSystems: result.missionSystems,
     chartBars: result.chartBars,
     actionButtons: result.actionButtons,
