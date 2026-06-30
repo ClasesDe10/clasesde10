@@ -12,6 +12,7 @@ import {
   MATCHING_VERSION,
   buildFamilyRequestBrief,
   buildMatchingAiPrompt,
+  buildMatchingDecisionSupport,
   buildTeacherProfileRecommendations,
   classifyIncident,
   getRequestProfile as getMatchingRequestProfile,
@@ -1044,6 +1045,58 @@ async function loadTeachers(db) {
     .filter((teacher) => teacher.active && ['verificado', 'activo', 'pendiente_revision', 'pendiente', ''].includes(teacher.status));
 }
 
+async function enrichRequestForMatching(db, requestId, request = {}) {
+  const studentId = clean(request.studentId || request.alumno_id || request.studentUid, 180);
+  const familyUid = clean(request.familyUid || request.familia_id || request.familyId, 180);
+  const [studentSnap, familySnap] = await Promise.all([
+    studentId ? db.collection('alumnos').doc(studentId).get().catch(() => null) : null,
+    familyUid ? db.collection('familias').doc(familyUid).get().catch(() => null) : null,
+  ]);
+  const student = studentSnap?.exists ? { id: studentSnap.id, ...studentSnap.data() } : {};
+  const family = familySnap?.exists ? { id: familySnap.id, ...familySnap.data() } : {};
+  const requestStudent = request.studentSnapshot || request.alumnos || {};
+  const requestFamily = request.familySnapshot || request.familias?.usuarios || request.familias || {};
+  const studentAvailability = request.availabilitySlots
+    || request.disponibilidadSlots
+    || request.studentAvailabilitySlots
+    || requestStudent.availabilitySlots
+    || requestStudent.disponibilidadSlots
+    || student.availabilitySlots
+    || student.disponibilidadSlots
+    || student.disponibilidad_slots
+    || student.franjasDisponibles
+    || [];
+
+  return {
+    ...request,
+    id: requestId,
+    studentSnapshot: {
+      ...student,
+      ...requestStudent,
+      availabilitySlots: requestStudent.availabilitySlots || requestStudent.disponibilidadSlots || studentAvailability,
+      disponibilidadSlots: requestStudent.disponibilidadSlots || requestStudent.availabilitySlots || studentAvailability,
+    },
+    familySnapshot: {
+      ...family,
+      ...requestFamily,
+    },
+    availabilitySlots: studentAvailability,
+    disponibilidadSlots: studentAvailability,
+  };
+}
+
+function shouldRegenerateMatching(request = {}) {
+  if (request.assignedTeacherUid || request.profesor_asignado_id) return false;
+  const status = lower(request.status || request.estado);
+  if (!['nueva', 'pendiente', 'pending', ''].includes(status)) return false;
+  if (request.matchStatus !== 'ready' || !request.matchRunId) return true;
+  if (request.matchingVersion !== MATCHING_VERSION) return true;
+  const maxAgeHours = runtimeNumber('matching.recomputeReadyAfterHours', 24, 1, 168);
+  const computedAt = dateFromFirestore(request.matchComputedAt || request.matchComputed_at);
+  if (!computedAt) return true;
+  return Date.now() - computedAt.getTime() >= maxAgeHours * 60 * 60 * 1000;
+}
+
 async function callGeminiForMatching(profile, baseCandidates) {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
@@ -1184,10 +1237,11 @@ async function processPublicLeads(db, stats) {
 }
 
 async function generateMatchesForRequest(db, requestId, request, stats, reason = 'worker_scan') {
-  const profile = getMatchingRequestProfile({ id: requestId, ...request });
-  const requestBrief = buildFamilyRequestBrief({ id: requestId, ...request });
+  const enrichedRequest = await enrichRequestForMatching(db, requestId, request);
+  const profile = getMatchingRequestProfile(enrichedRequest);
+  const requestBrief = buildFamilyRequestBrief(enrichedRequest);
   const teachers = await loadTeachers(db);
-  const baseCandidates = rankTeachersForRequest({ id: requestId, ...request }, teachers, {
+  const baseCandidates = rankTeachersForRequest(enrichedRequest, teachers, {
     limit: 10,
     minScore: 25,
   });
@@ -1201,6 +1255,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
   }
 
   const candidates = mergeProfessionalAiRanking(baseCandidates, aiResult).slice(0, 5);
+  const decisionSupport = buildMatchingDecisionSupport(enrichedRequest, candidates);
   const aiUsed = Boolean(aiResult?.matches?.length);
   const aiMode = process.env.GEMINI_API_KEY
     ? (aiUsed ? 'gemini_assisted' : 'gemini_attempted_fallback_deterministic')
@@ -1214,6 +1269,9 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       status: candidates.length ? 'completed' : 'no_match',
       profile,
       requestBrief,
+      decisionSupport,
+      matchQuality: decisionSupport.quality,
+      matchConfidenceScore: decisionSupport.confidenceScore,
       candidatesCount: candidates.length,
       matchingVersion: MATCHING_VERSION,
       aiUsed,
@@ -1251,6 +1309,8 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
         levelMatch: profile.level,
         aiUsed,
         aiMode,
+        decisionQuality: decisionSupport.quality,
+        decisionConfidenceScore: decisionSupport.confidenceScore,
         status: 'propuesto',
         estado: 'propuesto',
         createdAt: now(),
@@ -1261,8 +1321,13 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       matchStatus: candidates.length ? 'ready' : 'no_match',
       bestTeacherUid: candidates[0]?.teacherUid || null,
       bestScore: candidates[0]?.score || 0,
+      matchingVersion: MATCHING_VERSION,
       matchRunId: runRef.id,
       matchComputedAt: now(),
+      matchDecision: decisionSupport,
+      matchQuality: decisionSupport.quality,
+      matchConfidenceScore: decisionSupport.confidenceScore,
+      matchNeedsReview: decisionSupport.quality !== 'listo_para_asignar',
       aiBrief: requestBrief,
       aiVersion: AI_FEATURES_VERSION,
       updatedAt: now(),
@@ -1278,6 +1343,8 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     candidatesCount: candidates.length,
     bestTeacherUid: candidates[0]?.teacherUid || null,
     bestScore: candidates[0]?.score || 0,
+    matchQuality: decisionSupport.quality,
+    matchConfidenceScore: decisionSupport.confidenceScore,
     aiUsed,
     aiMode,
     aiError,
@@ -1303,7 +1370,7 @@ async function processPendingRequests(db, stats) {
   for (const doc of snap.docs) {
     const data = doc.data();
     stats.requestsSeen += 1;
-    if (data.matchStatus === 'ready') continue;
+    if (!shouldRegenerateMatching(data)) continue;
     await generateMatchesForRequest(db, doc.id, data, stats);
   }
 }
@@ -1320,7 +1387,7 @@ async function dispatchSystemJob(db, job, stats) {
     const requestSnap = await db.collection('solicitudes').doc(requestId).get();
     if (!requestSnap.exists) return { skipped: true, reason: 'request_not_found', requestId };
     const request = requestSnap.data();
-    if (request.matchStatus === 'ready' && request.matchRunId) {
+    if (request.matchStatus === 'ready' && request.matchRunId && payload.force !== true && !shouldRegenerateMatching(request)) {
       return { skipped: true, reason: 'already_matched', requestId };
     }
     await generateMatchesForRequest(db, requestId, request, stats, payload.reason || 'system_job');

@@ -97,6 +97,7 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
     teacherScanLimit: 1000,
     userScanLimit: 2000,
     assignmentScanLimit: 5000,
+    recomputeReadyAfterHours: 24,
     weights: {
       subject: 24,
       level: 12,
@@ -312,6 +313,7 @@ export const PLATFORM_CONFIG_SECTIONS = Object.freeze([
       field('matching.teacherScanLimit', 'Profesores escaneados', 'number', { min: 10, max: 10000, step: 10 }),
       field('matching.userScanLimit', 'Usuarios escaneados', 'number', { min: 10, max: 20000, step: 10 }),
       field('matching.assignmentScanLimit', 'Asignaciones escaneadas', 'number', { min: 10, max: 50000, step: 10 }),
+      field('matching.recomputeReadyAfterHours', 'Recalcular matches listos tras horas', 'number', { min: 1, max: 168, step: 1 }),
       field('matching.aiRerankEnabled', 'Reordenacion asistida por IA', 'boolean'),
       field('matching.weights', 'Pesos del scoring', 'json'),
     ],

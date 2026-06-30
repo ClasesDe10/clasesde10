@@ -5,6 +5,7 @@ import {
   MATCHING_VERSION,
   buildFamilyRequestBrief,
   buildMatchingAiPrompt,
+  buildMatchingDecisionSupport,
   buildTeacherProfileRecommendations,
   classifyIncident,
   evaluateTeacherProfile,
@@ -153,6 +154,35 @@ assert.equal(travelRanking[0].teacherUid, 'teacher_with_car');
 assert.ok(travelRanking[0].scoreBreakdown.location.points > travelRanking[1].scoreBreakdown.location.points);
 assert.ok(travelRanking[1].risks.some((risk) => risk.toLowerCase().includes('coche')));
 
+const structuredRequest = {
+  ...presencialRequest,
+  availabilitySlots: [
+    { dayIndex: 1, startTime: '17:00', endTime: '19:00' },
+    { dayIndex: 3, startTime: '18:00', endTime: '19:00' },
+  ],
+};
+const structuredFitTeacher = {
+  ...localTeacher,
+  id: 'teacher_structured_fit',
+  teacherUid: 'teacher_structured_fit',
+  availabilitySlots: [
+    { dayIndex: 1, startTime: '16:30', endTime: '19:30' },
+    { dayIndex: 3, startTime: '17:30', endTime: '19:30' },
+  ],
+};
+const structuredBadTeacher = {
+  ...localTeacher,
+  id: 'teacher_structured_bad',
+  teacherUid: 'teacher_structured_bad',
+  availabilitySlots: [
+    { dayIndex: 0, startTime: '10:00', endTime: '12:00' },
+  ],
+};
+const structuredRanking = rankTeachersForRequest(structuredRequest, [structuredBadTeacher, structuredFitTeacher], { limit: 2, includeZeroScore: true });
+assert.equal(structuredRanking[0].teacherUid, 'teacher_structured_fit');
+assert.ok(structuredRanking[0].scoreBreakdown.availability.points > structuredRanking[1].scoreBreakdown.availability.points);
+assert.ok(structuredRanking[0].reasons.some((reason) => reason.includes('Franjas reales compatibles')));
+
 const reliableTeacher = {
   ...completeTeacher,
   id: 'teacher_reliable',
@@ -217,6 +247,12 @@ assert.ok(aiMerged.find((match) => match.teacherUid === 'teacher_slow').aiAdjust
 const prompt = buildMatchingAiPrompt(request, ranking);
 assert.ok(prompt.includes('No inventes datos'));
 assert.ok(prompt.includes('JSON requerido'));
+
+const decisionSupport = buildMatchingDecisionSupport(structuredRequest, structuredRanking);
+assert.equal(decisionSupport.version, MATCHING_VERSION);
+assert.equal(decisionSupport.quality, 'listo_para_asignar');
+assert.ok(decisionSupport.confidenceScore >= 80);
+assert.equal(decisionSupport.topTeacherUid, 'teacher_structured_fit');
 
 const profileAssistant = buildTeacherProfileRecommendations(completeTeacher);
 assert.equal(profileAssistant.version, AI_FEATURES_VERSION);

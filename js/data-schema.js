@@ -77,7 +77,13 @@ export const CANONICAL_FIELDS = Object.freeze({
   ],
   familias: ['userUid', 'email', 'nombre', 'apellidos', 'displayName', 'telefono', 'address', 'city', 'postalCode', 'zone', 'status', 'active', 'createdAt', 'updatedAt'],
   alumnos: ['familyUid', 'studentUid', 'nombre', 'apellidos', 'displayName', 'level', 'course', 'school', 'birthDate', 'active', 'createdAt', 'updatedAt'],
-  solicitudes: ['familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference', 'notes', 'status', 'matchStatus', 'assignedTeacherUid', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
+  solicitudes: [
+    'familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference',
+    'availabilitySlots', 'notes', 'status', 'matchStatus', 'matchingVersion', 'matchRunId',
+    'matchComputedAt', 'matchDecision', 'matchQuality', 'matchConfidenceScore', 'matchNeedsReview',
+    'bestTeacherUid', 'bestScore', 'assignedTeacherUid', 'month', 'partitionKey', 'scaleShard',
+    'createdAt', 'updatedAt',
+  ],
   asignaciones: ['requestId', 'familyUid', 'teacherUid', 'studentId', 'subject', 'status', 'active', 'chatId', 'schedulingStatus', 'relationshipStage', 'createdAt', 'updatedAt'],
   clases: [
     'assignmentId', 'scheduleProposalId', 'familyUid', 'teacherUid', 'studentId',

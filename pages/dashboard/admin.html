@@ -1228,7 +1228,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260629-school-profile';
+import { buildMatchingDecisionSupport, evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260630-matching-v3';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -4653,7 +4653,8 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
         minScore: matchingMinScore,
         includeZeroScore,
       });
-    renderAsignarMatches(aiMatches, null);
+    const decisionSupport = buildMatchingDecisionSupport(solicitud || { materia, subject: materia }, aiMatches);
+    renderAsignarMatches(aiMatches, null, decisionSupport);
     openModal('modal-asignar');
     return;
   } catch (error) {
@@ -4664,7 +4665,33 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
   }
 };
 
-function renderAsignarMatches(matches, error) {
+function renderMatchingDecisionSupport(decision = {}) {
+  if (!decision?.quality) return '';
+  const tone = decision.quality === 'listo_para_asignar'
+    ? 'success'
+    : decision.quality === 'sin_match' || decision.quality === 'datos_insuficientes'
+      ? 'warning'
+      : 'info';
+  const qualityLabel = {
+    listo_para_asignar: 'Listo para asignar',
+    revisar_antes_de_asignar: 'Revisar antes de asignar',
+    datos_insuficientes: 'Datos insuficientes',
+    sin_match: 'Sin match claro',
+  }[decision.quality] || decision.quality;
+  const warnings = (decision.warnings || []).slice(0, 3).map((item) => `<li>${sanitize(item)}</li>`).join('');
+  return `
+    <div class="alert alert-${tone}" style="margin:0 0 10px">
+      <span class="alert-icon">${tone === 'success' ? '✓' : '!'}</span>
+      <div class="alert-body">
+        <div class="alert-title">${sanitize(qualityLabel)} · ${Math.round(Number(decision.confidenceScore || 0))}% confianza</div>
+        <div>${sanitize(decision.summary || '')}</div>
+        <div style="margin-top:4px"><strong>Siguiente paso:</strong> ${sanitize(decision.nextAction || '')}</div>
+        ${warnings ? `<ul style="margin:6px 0 0 16px;padding:0">${warnings}</ul>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderAsignarMatches(matches, error, decisionSupport = null) {
   const box = document.getElementById('asignar-match-recomendaciones');
   if (!box) return;
   if (error) {
@@ -4672,10 +4699,10 @@ function renderAsignarMatches(matches, error) {
     return;
   }
   if (!matches.length) {
-    box.innerHTML = 'No hay datos suficientes para calcular recomendaciones. Puedes asignar manualmente solo profesores activos/verificados con perfil completo.';
+    box.innerHTML = `${renderMatchingDecisionSupport(decisionSupport)}No hay datos suficientes para calcular recomendaciones. Puedes asignar manualmente solo profesores activos/verificados con perfil completo.`;
     return;
   }
-  box.innerHTML = matches.map((m) => {
+  box.innerHTML = renderMatchingDecisionSupport(decisionSupport) + matches.map((m) => {
     const teacherId = String(m.profesor_id || m.teacherUid || '');
     const profesor = profesoresCache.get(teacherId);
     const profileQuality = profesor ? evaluateTeacherProfile(profesor) : null;

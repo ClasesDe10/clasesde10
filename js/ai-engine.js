@@ -5,9 +5,14 @@
  * model later, but the baseline score is always explainable and bounded.
  */
 
+import {
+  availabilitySlotLabel,
+  minutesFromTime,
+  normalizeAvailabilitySlots as normalizeStructuredAvailabilitySlots,
+} from './availability-engine.js';
 import { buildTeacherTrustProfile } from './trust-engine.js';
 
-export const MATCHING_VERSION = 'professional_matching_v2';
+export const MATCHING_VERSION = 'professional_matching_v3';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
 
 export const MATCHING_WEIGHTS = Object.freeze({
@@ -377,6 +382,15 @@ function normalizeAvailabilitySlots(slots) {
   return asArray(slots).map((slot) => slot).filter(Boolean);
 }
 
+function structuredAvailabilitySlots(...values) {
+  return normalizeStructuredAvailabilitySlots(values.flatMap((value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'object') return [value];
+    return [];
+  }));
+}
+
 function slotDay(slot) {
   const raw = slot?.dia_semana ?? slot?.dayOfWeek ?? slot?.day ?? slot?.dia;
   if (typeof raw === 'number') {
@@ -432,9 +446,17 @@ export function getTeacherProfile(teacher = {}) {
     experienceYears: firstNumber(teacher.experiencia_anios, teacher.experienceYears, teacher.anios_experiencia)
       ?? yearsFromText([teacher.experiencia, teacher.bio, teacher.presentacion, teacher.experienceSummary].filter(Boolean).join(' ')),
     availability: clean(teacher.disponibilidad_resumen || teacher.availabilitySummary || teacher.disponibilidad, 500),
-    availabilitySlots: Array.isArray(teacher.availabilitySlots || teacher.disponibilidadSlots)
-      ? (teacher.availabilitySlots || teacher.disponibilidadSlots)
-      : normalizeAvailabilitySlots(teacher.disponibilidad_detalle),
+    availabilitySlots: [
+      ...structuredAvailabilitySlots(
+        teacher.availabilitySlots,
+        teacher.disponibilidadSlots,
+        teacher.disponibilidad_slots,
+        teacher.disponibilidad_detalle,
+      ),
+      ...(!Array.isArray(teacher.availabilitySlots || teacher.disponibilidadSlots || teacher.disponibilidad_slots || teacher.disponibilidad_detalle)
+        ? normalizeAvailabilitySlots(teacher.disponibilidad_detalle)
+        : []),
+    ],
     hasCar: booleanOrNull(teacher.hasCar, teacher.tiene_coche, teacher.carAvailable, teacher.vehiculo_propio, teacher.coche),
     bio: clean(teacher.bio || teacher.presentacion || teacher.experiencia || teacher.experienceSummary, 1500),
     hasBizum: teacher.acepta_bizum === true || teacher.hasBizum === true,
@@ -464,6 +486,21 @@ export function getRequestProfile(request = {}) {
   const metadata = request.metadata || {};
   const student = request.studentSnapshot || request.alumnos || {};
   const family = request.familySnapshot || request.familias?.usuarios || request.familias || {};
+  const availabilitySlots = structuredAvailabilitySlots(
+    request.availabilitySlots,
+    request.disponibilidadSlots,
+    request.disponibilidad_slots,
+    request.studentAvailabilitySlots,
+    request.alumnoAvailabilitySlots,
+    metadata.availabilitySlots,
+    metadata.disponibilidadSlots,
+    student.availabilitySlots,
+    student.disponibilidadSlots,
+    student.disponibilidad_slots,
+    student.franjasDisponibles,
+    family.availabilitySlots,
+    family.disponibilidadSlots,
+  );
   return {
     id: request.id || request.requestId || '',
     subject: clean(request.materia || request.subject || metadata.materia || metadata.materias || request.asunto, 180),
@@ -476,6 +513,7 @@ export function getRequestProfile(request = {}) {
     lat: firstNumber(request.lat, request.latitude, metadata.lat, metadata.latitude, student.lat, student.latitude, family.lat, family.latitude),
     lng: firstNumber(request.lng, request.lon, request.longitude, metadata.lng, metadata.lon, metadata.longitude, student.lng, student.lon, student.longitude, family.lng, family.lon, family.longitude),
     schedule: clean(request.preferencia_horario || request.disponibilidad || request.schedule || metadata.disponibilidad || metadata.frecuencia || metadata.inicio, 300),
+    availabilitySlots,
     studentName: clean(student.nombre || request.alumno_nombre || metadata.alumno, 160),
     familyName: clean([family.nombre, family.apellidos].filter(Boolean).join(' ') || request.familia_nombre, 160),
   };
@@ -634,18 +672,37 @@ function scoreLocation(requestProfile, teacherProfile) {
 function scoreAvailability(requestProfile, teacherProfile) {
   const requestDays = daySet(requestProfile.schedule);
   const requestPeriods = periodSet(requestProfile.schedule);
-  if (!requestProfile.schedule) return component('availability', 0.55, 'Horario de la familia no indicado', ['Horario flexible o pendiente'], ['Confirmar disponibilidad real']);
+  const requestSlots = structuredAvailabilitySlots(requestProfile.availabilitySlots);
+  const teacherSlots = structuredAvailabilitySlots(teacherProfile.availabilitySlots);
+  if (!requestProfile.schedule && !requestSlots.length) return component('availability', 0.55, 'Horario de la familia no indicado', ['Horario flexible o pendiente'], ['Confirmar disponibilidad real']);
 
   const teacherDays = daySet(teacherProfile.availability);
   const teacherPeriods = periodSet(teacherProfile.availability);
-  (teacherProfile.availabilitySlots || []).forEach((slot) => {
+  teacherSlots.forEach((slot) => {
     const day = slotDay(slot);
     if (Number.isFinite(day)) teacherDays.add(day);
     periodFromTimeRange(slot?.hora_inicio || slot?.startTime, slot?.hora_fin || slot?.endTime).forEach((period) => teacherPeriods.add(period));
   });
 
-  if (!teacherProfile.availability && !teacherProfile.availabilitySlots.length) {
+  if (!teacherProfile.availability && !teacherSlots.length) {
     return component('availability', 0.2, 'Profesor sin disponibilidad real', [], ['El profesor no tiene disponibilidad cargada']);
+  }
+
+  if (requestSlots.length && teacherSlots.length) {
+    const fit = structuredAvailabilityFit(requestSlots, teacherSlots);
+    const detail = `${Math.round(fit.ratio * 100)}% de las franjas del alumno encajan`;
+    const examples = fit.examples.length ? ` Ej: ${fit.examples.join('; ')}.` : '';
+    if (fit.ratio >= 0.85) {
+      return component('availability', 1, detail, [`Franjas reales compatibles.${examples}`]);
+    }
+    if (fit.ratio >= 0.45) {
+      return component('availability', Math.max(0.55, fit.ratio), detail, ['Hay solape parcial de franjas reales.'], ['Confirmar horario exacto antes de asignar']);
+    }
+    return component('availability', Math.max(0.12, fit.ratio), detail, [], ['Las franjas reales del alumno y profesor apenas se solapan']);
+  }
+
+  if (requestSlots.length && !teacherSlots.length) {
+    return component('availability', 0.25, 'Alumno con franjas; profesor sin franjas estructuradas', [], ['Comparacion exacta de horario bloqueada por falta de franjas del profesor']);
   }
 
   const dayRatio = !requestDays.size || !teacherDays.size ? 0.55 : overlapCount(requestDays, teacherDays) / requestDays.size;
@@ -654,6 +711,53 @@ function scoreAvailability(requestProfile, teacherProfile) {
   if (ratio >= 0.75) return component('availability', ratio, 'Disponibilidad compatible', ['Disponibilidad horaria compatible.']);
   if (ratio >= 0.4) return component('availability', ratio, 'Disponibilidad parcial', ['Disponibilidad parcialmente compatible.'], ['Confirmar horario concreto']);
   return component('availability', ratio, 'Disponibilidad baja', [], ['Disponibilidad poco compatible']);
+}
+
+function slotDurationMinutes(slot = {}) {
+  const start = minutesFromTime(slot.startTime || slot.hora_inicio);
+  const end = minutesFromTime(slot.endTime || slot.hora_fin);
+  if (start === null || end === null || end <= start) return 0;
+  return end - start;
+}
+
+function overlapMinutes(a = {}, b = {}) {
+  const aStart = minutesFromTime(a.startTime || a.hora_inicio);
+  const aEnd = minutesFromTime(a.endTime || a.hora_fin);
+  const bStart = minutesFromTime(b.startTime || b.hora_inicio);
+  const bEnd = minutesFromTime(b.endTime || b.hora_fin);
+  if (aStart === null || aEnd === null || bStart === null || bEnd === null) return 0;
+  if (a.dayIndex !== b.dayIndex) return 0;
+  return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+}
+
+function structuredAvailabilityFit(requestSlots = [], teacherSlots = []) {
+  const request = normalizeStructuredAvailabilitySlots(requestSlots);
+  const teacher = normalizeStructuredAvailabilitySlots(teacherSlots);
+  let total = 0;
+  let covered = 0;
+  const examples = [];
+
+  request.forEach((requestSlot) => {
+    const duration = slotDurationMinutes(requestSlot);
+    if (!duration) return;
+    total += duration;
+    const best = teacher
+      .map((teacherSlot) => ({ teacherSlot, minutes: overlapMinutes(requestSlot, teacherSlot) }))
+      .sort((a, b) => b.minutes - a.minutes)[0];
+    if (best?.minutes > 0) {
+      covered += Math.min(duration, best.minutes);
+      if (examples.length < 2) {
+        examples.push(`${availabilitySlotLabel(requestSlot)} con ${availabilitySlotLabel(best.teacherSlot)}`);
+      }
+    }
+  });
+
+  return {
+    ratio: total ? clamp(covered / total, 0, 1) : 0,
+    coveredMinutes: covered,
+    totalMinutes: total,
+    examples,
+  };
 }
 
 function scoreExperience(requestProfile, teacherProfile) {
@@ -865,6 +969,63 @@ export function rankTeachersForRequest(request, teachers = [], options = {}) {
       return String(a.teacherName).localeCompare(String(b.teacherName));
     })
     .slice(0, limit);
+}
+
+export function buildMatchingDecisionSupport(request, candidates = []) {
+  const profile = getRequestProfile(request);
+  const matches = (candidates || []).filter(Boolean);
+  const assignable = matches.filter((match) => match.assignable);
+  const best = matches[0] || null;
+  const warnings = [];
+  const missing = [];
+
+  if (!profile.subject) missing.push('materia');
+  if (!profile.level) missing.push('nivel');
+  if (!profile.modality) missing.push('modalidad');
+  if (!profile.schedule && !profile.availabilitySlots.length) missing.push('horario/franjas');
+  if (!profile.zone && !profile.postalCode && !profile.address && !modalitySet(profile.modality).has('online')) missing.push('zona o direccion');
+  if (!matches.length) warnings.push('No hay candidatos calculados para esta solicitud.');
+  if (matches.length && !assignable.length) warnings.push('Hay candidatos, pero ninguno es asignable sin revisar perfil/verificacion.');
+  if (best?.hardBlocks?.length) warnings.push(`El primer candidato tiene bloqueo: ${best.hardBlocks.join(', ')}.`);
+  if (best?.risks?.length) warnings.push(...best.risks.slice(0, 2));
+
+  const bestScore = Number(best?.score || 0);
+  const confidenceScore = Math.round(Math.min(100,
+    (assignable.length ? 30 : 0)
+    + Math.min(45, Math.max(0, bestScore) * 0.45)
+    + (missing.length ? 0 : 15)
+    + (best?.locationEstimate?.available || modalitySet(profile.modality).has('online') ? 10 : 0),
+  ));
+  const quality = !matches.length
+    ? 'sin_match'
+    : confidenceScore >= 82 && assignable.length
+      ? 'listo_para_asignar'
+      : confidenceScore >= 58
+        ? 'revisar_antes_de_asignar'
+        : 'datos_insuficientes';
+  const nextAction = quality === 'listo_para_asignar'
+    ? 'Asignar el primer candidato si el admin confirma criterio pedagogico.'
+    : quality === 'sin_match'
+      ? 'Pedir mas datos o ampliar profesores disponibles.'
+      : missing.length
+        ? `Completar ${joinNatural(missing)} antes de cerrar asignacion.`
+        : 'Revisar riesgos y confirmar disponibilidad exacta.';
+
+  return {
+    version: MATCHING_VERSION,
+    quality,
+    confidenceScore,
+    summary: best
+      ? `${best.teacherName || 'Profesor'} encaja con ${bestScore}% y ${assignable.length} candidato(s) asignable(s).`
+      : 'Sin candidato claro para la solicitud.',
+    nextAction,
+    warnings: unique(warnings).slice(0, 6),
+    missing,
+    topTeacherUid: best?.teacherUid || '',
+    topScore: bestScore,
+    assignableCount: assignable.length,
+    candidatesCount: matches.length,
+  };
 }
 
 export function buildMatchingAiPrompt(requestProfile, baseCandidates = []) {
