@@ -2193,6 +2193,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    match /relationshipFollowups/{followupId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /relationshipFollowupSnapshots/{snapshotId} {
+      allow read, write: if isAdmin();
+    }
+
     match /resumenMensual/{summaryId} {
       allow read, write: if isAdmin();
     }

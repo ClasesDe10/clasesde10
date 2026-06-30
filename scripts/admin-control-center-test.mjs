@@ -47,9 +47,11 @@ assert(module.includes('platformHealthChecks'), 'Control center must persist pla
 assert(module.includes('preventiveRisks'), 'Control center must load preventive risk signals.');
 assert(module.includes('alertDecisions'), 'Control center must load alert priority decisions.');
 assert(module.includes('platformSupervisionFindings'), 'Control center must load platform self-supervision findings.');
+assert(module.includes('relationshipFollowups'), 'Control center must load relationship follow-up signals.');
 assert(module.includes('riesgo(s) preventivos altos'), 'Mission Control must surface severe preventive risks.');
 assert(module.includes('alerta(s) priorizadas por score'), 'Mission Control must surface scored alert decisions.');
 assert(module.includes('hallazgo(s) de autosupervision'), 'Mission Control must surface self-supervision findings.');
+assert(module.includes('seguimiento(s) post-match prioritarios'), 'Mission Control must surface post-match follow-up signals.');
 assert(module.includes('Mission Control'), 'Control center must render the Mission Control hero.');
 assert(module.includes('Estado tecnico de la plataforma'), 'Mission Control must expose technical platform status.');
 assert(module.includes('Firebase'), 'Mission Control must monitor Firebase.');
@@ -127,5 +129,7 @@ assert(rules.includes('match /preventiveRisks/{riskId}'), 'Firestore rules must 
 assert(rules.includes('match /alertDecisions/{decisionId}'), 'Firestore rules must protect alert decisions.');
 assert(rules.includes('match /platformSupervisionFindings/{findingId}'), 'Firestore rules must protect self-supervision findings.');
 assert(rules.includes('match /platformSupervisionSnapshots/{snapshotId}'), 'Firestore rules must protect self-supervision snapshots.');
+assert(rules.includes('match /relationshipFollowups/{followupId}'), 'Firestore rules must protect relationship follow-ups.');
+assert(rules.includes('match /relationshipFollowupSnapshots/{snapshotId}'), 'Firestore rules must protect relationship follow-up snapshots.');
 
 console.log('Admin control center validation passed.');

@@ -26,6 +26,8 @@ for (const needle of [
   'defaultCommissionPercent',
   'defaultPaymentDueDays',
   'systemJobBatchLimit',
+  'qualityCheckCompletedClasses',
+  'repeatedCancellationThreshold',
   'teacherScanLimit',
   'maintenanceMode',
   'featureFlags',

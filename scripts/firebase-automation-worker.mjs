@@ -27,6 +27,11 @@ import {
   buildTeacherTrustProfile,
   buildTrustSnapshotPatch,
 } from '../js/trust-engine.js';
+import { buildRelationshipsFromCollections } from '../js/relationship-engine.js';
+import {
+  RELATIONSHIP_FOLLOWUP_VERSION,
+  buildRelationshipFollowupPlan,
+} from '../js/relationship-followup-engine.js';
 import {
   SCHEDULED_CLASS_STATUSES,
   buildClassIncidentPayload,
@@ -3751,6 +3756,229 @@ async function processPlatformSelfSupervision(db, stats) {
   await closeResolvedPlatformSupervisionFindings(db, activeIds, stats, scanLimit);
 }
 
+function relationshipFollowupOptions() {
+  return {
+    nowIso: isoNow(),
+    scanLimit: runtimeNumber('followup.scanLimit', limit, 10, 5000),
+    scheduleNudgeHours: runtimeNumber('followup.scheduleNudgeHours', 12, 1, 720),
+    proposedScheduleNudgeHours: runtimeNumber('followup.proposedScheduleNudgeHours', 8, 1, 720),
+    firstClassPrepHours: runtimeNumber('followup.firstClassPrepHours', 24, 1, 168),
+    firstClassCheckinHours: runtimeNumber('followup.firstClassCheckinHours', 24, 1, 720),
+    confirmationNudgeHours: runtimeNumber('followup.confirmationNudgeHours', 2, 1, 168),
+    activeSilenceDays: runtimeNumber('followup.activeSilenceDays', 7, 1, 365),
+    qualityCheckCompletedClasses: runtimeNumber('followup.qualityCheckCompletedClasses', 3, 1, 50),
+    qualityCheckCooldownDays: runtimeNumber('followup.qualityCheckCooldownDays', 45, 1, 365),
+    repeatedCancellationWindowDays: runtimeNumber('followup.repeatedCancellationWindowDays', 30, 1, 365),
+    repeatedCancellationThreshold: runtimeNumber('followup.repeatedCancellationThreshold', 3, 2, 50),
+    teacherActivityDropDays: runtimeNumber('followup.teacherActivityDropDays', 21, 1, 365),
+    adminEscalationHours: runtimeNumber('followup.adminEscalationHours', 48, 1, 1440),
+    adminEscalationDays: runtimeNumber('followup.adminEscalationDays', 14, 1, 365),
+    userNotificationCooldownHours: runtimeNumber('followup.userNotificationCooldownHours', 24, 1, 720),
+    adminCooldownHours: runtimeNumber('followup.adminCooldownHours', 24, 1, 720),
+    maxUserNotifications: runtimeNumber('followup.maxUserNotifications', 40, 0, 500),
+  };
+}
+
+async function materializeRelationshipFollowupAction(db, action, stats) {
+  const ref = db.collection('relationshipFollowups').doc(action.id);
+  const existing = await ref.get();
+  const existingData = existing.exists ? existing.data() : {};
+  const fingerprint = JSON.stringify([
+    action.actionId,
+    action.relationshipId,
+    action.stage,
+    action.priority,
+    action.description,
+    action.recommendedAction,
+    action.recipients.map((item) => `${item.role}:${item.userUid}`).join('|'),
+  ]);
+  const changed = !existing.exists || existingData.fingerprint !== fingerprint;
+
+  await writeDoc(db.collection('relationshipFollowups'), action.id, {
+    ...action,
+    status: action.recipients.length ? 'sent' : 'active',
+    estado: action.recipients.length ? 'enviada' : 'activa',
+    fingerprint,
+    firstSeenAt: existing.exists ? (existingData.firstSeenAt || now()) : now(),
+    lastSeenAt: now(),
+    sentAt: action.recipients.length ? now() : (existingData.sentAt || null),
+    createdAt: existing.exists ? (existingData.createdAt || now()) : now(),
+    updatedAt: now(),
+    updated_at: isoNow(),
+  });
+  stats.relationshipFollowupsEvaluated += 1;
+  if (!existing.exists) stats.relationshipFollowupsCreated += 1;
+
+  for (const recipient of action.recipients) {
+    const created = await notifyUserOnce(
+      db,
+      recipient.userUid,
+      recipient.title,
+      recipient.body,
+      {
+        type: 'relationship_followup',
+        followupId: action.id,
+        actionId: action.actionId,
+        relationshipId: action.relationshipId,
+        stage: action.stage,
+        section: recipient.section || action.section,
+        url: '/pages/login.html',
+      },
+      `relationship_followup_${action.id}_${recipient.role}_${recipient.userUid}`,
+    );
+    if (created) stats.relationshipFollowupNotificationsCreated += 1;
+  }
+
+  if (action.createAdminTask && runtimeBoolean('followup.autoCreateAdminTasks', true)) {
+    const taskId = notificationId('crm_relationship_followup', action.dedupeKey);
+    const taskRef = db.collection('crmTasks').doc(taskId);
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+      const dueMinutes = action.priority === 'critical' ? 30 : action.priority === 'high' ? 180 : 720;
+      await writeDoc(db.collection('crmTasks'), taskId, {
+        title: action.title,
+        description: `${action.description} Accion recomendada: ${action.recommendedAction}`,
+        priority: action.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: 'relationship',
+        entityId: action.relationshipId,
+        relationshipId: action.relationshipId,
+        relationshipFollowupId: action.id,
+        familyUid: action.familyUid || '',
+        teacherUid: action.teacherUid || '',
+        studentId: action.studentId || '',
+        tags: ['seguimiento_relacion', action.category, action.actionId],
+        dueAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + dueMinutes * 60 * 1000)),
+        source: 'relationship_followup_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.relationshipFollowupTasksCreated += 1;
+    }
+  }
+
+  if (action.createOpsAlert && changed) {
+    const alertId = notificationId('ops_relationship_followup', action.id);
+    const alertRef = db.collection('opsAlerts').doc(alertId);
+    const alertSnap = await alertRef.get();
+    if (!alertSnap.exists) {
+      await writeDoc(db.collection('opsAlerts'), alertId, {
+        alertType: 'relationship_followup',
+        type: 'relationship_followup',
+        title: action.title,
+        message: `${action.description} Accion: ${action.recommendedAction}`,
+        severity: action.priority,
+        status: 'open',
+        estado: 'abierta',
+        entityType: 'relationship',
+        entityId: action.relationshipId,
+        relationshipFollowupId: action.id,
+        source: 'relationship_followup_engine',
+        createdAt: now(),
+        updatedAt: now(),
+      }, { merge: false });
+      stats.relationshipFollowupOpsAlertsCreated += 1;
+    }
+  }
+}
+
+async function closeResolvedRelationshipFollowups(db, activeIds, stats, scanLimit) {
+  const snap = await db.collection('relationshipFollowups')
+    .limit(scanLimit)
+    .get()
+    .catch(() => null);
+  if (!snap) return;
+  for (const doc of snap.docs) {
+    if (activeIds.has(doc.id)) continue;
+    const status = normalizeStatus(doc.data());
+    if (['resolved', 'resuelta', 'cerrada', 'archived', 'archivada'].includes(status)) continue;
+    await updateRef(doc.ref, {
+      status: 'resolved',
+      estado: 'resuelta',
+      resolvedAt: now(),
+      resolved_at: isoNow(),
+      resolution: 'El seguimiento dejo de ser necesario en el ultimo barrido.',
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    stats.relationshipFollowupsResolved += 1;
+  }
+}
+
+async function processRelationshipFollowups(db, stats) {
+  if (!runtimeBoolean('followup.enabled', true)) return;
+  const options = relationshipFollowupOptions();
+  const scanLimit = options.scanLimit;
+  const [
+    classes,
+    payments,
+    requests,
+    assignments,
+    chats,
+    incidents,
+    documents,
+    teachers,
+    families,
+    students,
+    previousFollowups,
+  ] = await Promise.all([
+    listCollection(db, 'clases', scanLimit),
+    listCollection(db, 'pagos', scanLimit),
+    listCollection(db, 'solicitudes', scanLimit),
+    listCollection(db, 'asignaciones', scanLimit),
+    listCollection(db, 'chats', scanLimit).catch(() => []),
+    listCollection(db, 'incidencias', scanLimit),
+    listCollection(db, 'documentos', scanLimit),
+    listCollection(db, 'profesores', scanLimit),
+    listCollection(db, 'familias', scanLimit),
+    listCollection(db, 'alumnos', scanLimit),
+    listCollection(db, 'relationshipFollowups', scanLimit).catch(() => []),
+  ]);
+
+  const relationships = buildRelationshipsFromCollections({
+    classes,
+    payments,
+    requests,
+    assignments,
+    chats,
+    incidents,
+    documents,
+    teachers,
+    families,
+    students,
+  }, { nowMs: Date.now() });
+
+  const plan = buildRelationshipFollowupPlan({
+    relationships,
+    previousFollowups,
+  }, options);
+
+  stats.relationshipFollowupVersion = plan.version;
+  stats.relationshipFollowupsDetected = plan.total;
+  stats.relationshipFollowupUserNotifications = plan.summary.userNotifications;
+  stats.relationshipFollowupAdminTasks = plan.summary.adminTasks;
+  stats.relationshipFollowupScheduleBlocked = plan.summary.scheduleBlocked;
+  stats.relationshipFollowupQualityChecks = plan.summary.qualityChecks;
+  stats.relationshipFollowupCancellationRisks = plan.summary.cancellationRisks;
+
+  await writeDoc(db.collection('relationshipFollowupSnapshots'), notificationId('relationship_followup_snapshot', plan.generatedAt.slice(0, 16)), {
+    ...plan.summary,
+    version: plan.version,
+    thresholds: plan.thresholds,
+    generatedAt: plan.generatedAt,
+    relationshipsEvaluated: relationships.length,
+    createdAt: now(),
+    updatedAt: now(),
+  }, { merge: false });
+
+  const activeIds = new Set(plan.actions.map((action) => action.id));
+  for (const action of plan.actions.slice(0, scanLimit)) {
+    await materializeRelationshipFollowupAction(db, action, stats);
+  }
+  await closeResolvedRelationshipFollowups(db, activeIds, stats, scanLimit);
+}
+
 async function loadFamilyClassesForPayment(db, payment) {
   const familyUid = clean(payment.familyUid || payment.familia_id);
   if (!familyUid) return [];
@@ -4054,6 +4282,19 @@ async function main() {
     selfSupervisionIncidentsCreated: 0,
     selfSupervisionOpsAlertsCreated: 0,
     selfSupervisionNotificationsCreated: 0,
+    relationshipFollowupVersion: RELATIONSHIP_FOLLOWUP_VERSION,
+    relationshipFollowupsDetected: 0,
+    relationshipFollowupsEvaluated: 0,
+    relationshipFollowupsCreated: 0,
+    relationshipFollowupsResolved: 0,
+    relationshipFollowupNotificationsCreated: 0,
+    relationshipFollowupTasksCreated: 0,
+    relationshipFollowupOpsAlertsCreated: 0,
+    relationshipFollowupUserNotifications: 0,
+    relationshipFollowupAdminTasks: 0,
+    relationshipFollowupScheduleBlocked: 0,
+    relationshipFollowupQualityChecks: 0,
+    relationshipFollowupCancellationRisks: 0,
     scaleLimits: {
       trustContextLimit,
       matchingTeacherScanLimit: runtimeNumber('matching.teacherScanLimit', matchingTeacherScanLimit, 1, 10000),
@@ -4086,6 +4327,7 @@ async function main() {
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
   await processPlatformSelfSupervision(db, stats);
+  await processRelationshipFollowups(db, stats);
 
   if (criticalOnly) {
     console.log(JSON.stringify(stats, null, 2));

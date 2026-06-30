@@ -33,6 +33,7 @@ const LIVE_SIGNAL_COLLECTIONS = [
   { name: 'preventiveRisks', orderField: 'lastSeenAt', limit: 20 },
   { name: 'alertDecisions', orderField: 'lastSeenAt', limit: 20 },
   { name: 'platformSupervisionFindings', orderField: 'lastSeenAt', limit: 20 },
+  { name: 'relationshipFollowups', orderField: 'lastSeenAt', limit: 20 },
 ];
 
 function clean(value, max = 4000) {
@@ -332,6 +333,7 @@ async function loadData(db, leadsAdapter) {
     preventiveRisks,
     alertDecisions,
     platformSupervisionFindings,
+    relationshipFollowups,
     healthChecks,
   ] = await Promise.all([
     safeRead('users', () => loadRows(db, 'usuarios'), [], loadErrors),
@@ -371,6 +373,7 @@ async function loadData(db, leadsAdapter) {
     safeRead('preventiveRisks', () => loadRows(db, 'preventiveRisks'), [], loadErrors),
     safeRead('alertDecisions', () => loadRows(db, 'alertDecisions'), [], loadErrors),
     safeRead('platformSupervisionFindings', () => loadRows(db, 'platformSupervisionFindings'), [], loadErrors),
+    safeRead('relationshipFollowups', () => loadRows(db, 'relationshipFollowups'), [], loadErrors),
     safeRead('platformHealthChecks', () => loadRows(db, 'platformHealthChecks'), [], loadErrors),
   ]);
 
@@ -406,6 +409,7 @@ async function loadData(db, leadsAdapter) {
     preventiveRisks,
     alertDecisions,
     platformSupervisionFindings,
+    relationshipFollowups,
     healthChecks,
     loadErrors,
   };
@@ -845,6 +849,8 @@ function computeMissionControl(data, metrics) {
   const severeAlertDecisions = activeAlertDecisions.filter((item) => asNumber(item.priorityScore) >= 82 || ['critical_incident', 'important_incident'].includes(clean(item.attentionLevel)));
   const activeSupervisionFindings = (data.platformSupervisionFindings || []).filter((item) => ['active', 'activa', 'open', 'abierta', ''].includes(statusOf(item)));
   const severeSupervisionFindings = activeSupervisionFindings.filter((item) => ['critical', 'high', 'urgente', 'alta'].includes(clean(first(item.severity, item.priority)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
+  const activeRelationshipFollowups = (data.relationshipFollowups || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
+  const severeRelationshipFollowups = activeRelationshipFollowups.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const latestMetricSnapshot = latestItem(data.metricSnapshots || []);
   const latestHealthSnapshot = latestItem(data.healthChecks || []);
   const latestAutomation = latestItem(data.automationEvents || []);
@@ -1122,8 +1128,19 @@ function computeMissionControl(data, metrics) {
           signals: matchingErrors.map((item) => first(item.type, item.status, item.id)),
           section: 'solicitudes',
         })] : []),
+        ...(severeRelationshipFollowups.length ? [issue({
+          status: severeRelationshipFollowups.some((item) => clean(item.priority).toLowerCase() === 'critical') ? 'degraded' : 'attention',
+          what: `${severeRelationshipFollowups.length} seguimiento(s) post-match prioritarios`,
+          impact: 'Familias o profesores pueden quedarse sin siguiente paso claro despues del matching.',
+          affectedUsers: affectedUniqueUsers(severeRelationshipFollowups, ['familyUid', 'teacherUid', 'studentId']),
+          cause: severeRelationshipFollowups.slice(0, 3).map((item) => first(item.title, item.actionId)).join(', '),
+          fix: severeRelationshipFollowups[0]?.recommendedAction || 'Abrir Operaciones y resolver el siguiente paso.',
+          startedAt: oldestDate(severeRelationshipFollowups, (item) => first(item.generatedAt, item.firstSeenAt, item.createdAt)),
+          signals: severeRelationshipFollowups.map((item) => first(item.actionId, item.stage, item.id)),
+          section: 'chat',
+        })] : []),
       ],
-      okSignals: [`${data.requestMatches.length} matches`, `${data.matchingRuns.length} ejecuciones`, `${metrics.teachersVerified.length} profesores verificados`],
+      okSignals: [`${data.requestMatches.length} matches`, `${data.matchingRuns.length} ejecuciones`, `${metrics.teachersVerified.length} profesores verificados`, `${activeRelationshipFollowups.length} seguimientos post-match`],
     }),
     subsystem({
       id: 'calendar',
@@ -1449,6 +1466,8 @@ function computeControlCenter(data) {
   const severeAlertDecisions = alertDecisions.filter((item) => asNumber(item.priorityScore) >= 82 || ['critical_incident', 'important_incident'].includes(clean(item.attentionLevel)));
   const platformSupervisionFindings = (data.platformSupervisionFindings || []).filter((item) => ['active', 'activa', 'open', 'abierta', ''].includes(statusOf(item)));
   const severeSupervisionFindings = platformSupervisionFindings.filter((item) => ['critical', 'high', 'urgente', 'alta'].includes(clean(first(item.severity, item.priority)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
+  const relationshipFollowups = (data.relationshipFollowups || []).filter((item) => ['active', 'activa', 'sent', 'enviada', 'pending', 'pendiente', ''].includes(statusOf(item)));
+  const severeRelationshipFollowups = relationshipFollowups.filter((item) => ['critical', 'high'].includes(clean(first(item.priority, item.severity)).toLowerCase()) || asNumber(item.priorityScore) >= 82);
   const pendingPaymentAmount = pendingPayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const overduePaymentAmount = overduePayments.reduce((sum, item) => sum + asNumber(first(item.monto, item.amount)), 0);
   const averageTicket = completedMonth.length ? revenueMonth / completedMonth.length : 0;
@@ -1469,6 +1488,7 @@ function computeControlCenter(data) {
     - Math.min(18, severePreventiveRisks.length * 4)
     - Math.min(18, severeAlertDecisions.length * 3)
     - Math.min(20, severeSupervisionFindings.length * 5)
+    - Math.min(16, severeRelationshipFollowups.length * 4)
     - Math.max(0, 90 - completionHealth) * 0.25
     - Math.min(18, Math.max(0, timing.avgTimeToAssignHours - 24) * 0.6)
     - Math.min(12, riskyClasses.length * 2)
@@ -1515,6 +1535,8 @@ function computeControlCenter(data) {
     severeAlertDecisions,
     platformSupervisionFindings,
     severeSupervisionFindings,
+    relationshipFollowups,
+    severeRelationshipFollowups,
     pendingPaymentAmount,
     overduePaymentAmount,
     averageTicket,
@@ -1552,6 +1574,12 @@ function computeControlCenter(data) {
       title: first(item.title, 'Hallazgo de autosupervision'),
       body: `${first(item.consequence, item.description, 'Requiere revision.')} Accion: ${first(item.recommendedAction, 'Abrir Operaciones')}`,
       section: 'auditoria',
+    })),
+    ...severeRelationshipFollowups.slice(0, 5).map((item) => ({
+      tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
+      title: first(item.title, 'Seguimiento post-match'),
+      body: `${first(item.expectedOutcome, item.description, 'Hay un siguiente paso pendiente.')} Accion: ${first(item.recommendedAction, 'Abrir chat')}`,
+      section: first(item.section, 'chat'),
     })),
     ...severePreventiveRisks.slice(0, 4).map((item) => ({
       tone: clean(item.severity).toLowerCase() === 'critical' ? 'danger' : 'warning',
@@ -1659,6 +1687,13 @@ function computeControlCenter(data) {
       section: 'auditoria',
       tone: clean(item.severity).toLowerCase() === 'critical' ? 'danger' : 'warning',
     })),
+    ...relationshipFollowups.map((item) => ({
+      date: first(item.generatedAt, item.lastSeenAt, item.createdAt),
+      title: `Seguimiento ${first(item.stage, item.actionId, '')}`.trim(),
+      body: first(item.title, item.description, item.recommendedAction, 'Seguimiento post-match'),
+      section: first(item.section, 'chat'),
+      tone: ['critical', 'high'].includes(clean(item.priority).toLowerCase()) ? 'warning' : 'info',
+    })),
     ...data.documents.map((item) => ({
       date: createdDate(item),
       title: `Documento ${statusOf(item) || 'pendiente'}`,
@@ -1702,6 +1737,12 @@ function computeControlCenter(data) {
       section: 'auditoria',
       tone: clean(item.severity).toLowerCase() === 'critical' ? 'danger' : 'warning',
     })),
+    ...severeRelationshipFollowups.slice(0, 4).map((item) => ({
+      title: first(item.title, 'Seguimiento post-match'),
+      body: first(item.recommendedAction, item.description, 'Resolver siguiente paso'),
+      section: first(item.section, 'chat'),
+      tone: clean(item.priority).toLowerCase() === 'critical' ? 'danger' : 'warning',
+    })),
   ].slice(0, 10);
 
   const dataQuality = [
@@ -1712,6 +1753,7 @@ function computeControlCenter(data) {
     { label: 'Riesgos preventivos activos', value: preventiveRisks.length, section: 'incidencias' },
     { label: 'Alertas priorizadas por score', value: alertDecisions.length, section: 'incidencias' },
     { label: 'Hallazgos de autosupervision', value: platformSupervisionFindings.length, section: 'auditoria' },
+    { label: 'Seguimientos post-match activos', value: relationshipFollowups.length, section: 'chat' },
     { label: 'Solicitudes antiguas sin asignar', value: staleUnassigned.length, section: 'solicitudes' },
     { label: 'Pagos vencidos', value: overduePayments.length, section: 'pagos' },
     { label: 'Documentos pendientes', value: pendingDocs.length, section: 'documentos' },
@@ -1758,6 +1800,8 @@ function computeControlCenter(data) {
     automationErrors,
     platformSupervisionFindings,
     severeSupervisionFindings,
+    relationshipFollowups,
+    severeRelationshipFollowups,
     pendingPaymentAmount,
     overduePaymentAmount,
     averageTicket,

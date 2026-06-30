@@ -113,6 +113,22 @@ assert(relationships[0].modules.chat === true && relationships[0].modules.calend
 assert(relationships[0].nextActions.admin.length === 1, 'Admin must receive one primary next action.');
 assert(relationshipStageLabel(relationships[0].stage), 'Stage labels must be available for UI.');
 
+const relationshipWithCancellations = buildRelationshipRecord({
+  request,
+  assignment,
+  chat,
+  classes: [
+    { id: 'class_done', assignmentId: 'asig_1', estado: 'pagada', fecha: '2026-06-20', hora_inicio: '17:00', updatedAt: '2026-06-20T18:00:00.000Z' },
+    { id: 'class_cancelled', assignmentId: 'asig_1', estado: 'cancelada', fecha: '2026-06-24', hora_inicio: '17:00', updatedAt: '2026-06-24T17:00:00.000Z' },
+  ],
+}, { nowMs });
+
+assert(relationshipWithCancellations.counts.completedClasses === 1, 'Completed class count must be exposed for relationship follow-up.');
+assert(relationshipWithCancellations.counts.cancelledClasses === 1, 'Cancelled class count must be exposed for preventive relationship follow-up.');
+assert(relationshipWithCancellations.lastCompletedClassAt, 'Last completed class date must be exposed.');
+assert(relationshipWithCancellations.lastCancelledClassAt, 'Last cancelled class date must be exposed.');
+assert(relationshipWithCancellations.history.cancelledClassDates.length === 1, 'Cancellation history must be compact and queryable.');
+
 const summary = summarizeRelationships(relationships);
 assert(summary.total === 1, 'Summary must count relationships.');
 assert(summary.avgHealth <= 100 && summary.avgHealth >= 0, 'Summary health must stay bounded.');

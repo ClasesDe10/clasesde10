@@ -338,6 +338,7 @@ function computeFlags(input, nowMs) {
   const currentClasses = classes.filter((item) => classIsInProgress(item, nowMs));
   const confirmationPending = classes.filter((item) => classNeedsConfirmation(item, nowMs));
   const completedClasses = classes.filter((item) => ['realizada', 'pagada'].includes(classStatusForBadge(item)));
+  const cancelledClasses = classes.filter((item) => normalizeClassStatus(first(item.estado, item.status, item.lifecycleStatus)) === 'cancelada');
   const unpaidClasses = classes.filter(classHasOpenPayment);
   const pendingProposals = proposals.filter((item) => ['propuesta', 'pending', 'pendiente'].includes(itemStatus(item)));
   const acceptedProposals = proposals.filter((item) => ['aceptada', 'accepted'].includes(itemStatus(item)));
@@ -359,6 +360,7 @@ function computeFlags(input, nowMs) {
     currentClasses,
     confirmationPending,
     completedClasses,
+    cancelledClasses,
     unpaidClasses,
     pendingProposals,
     acceptedProposals,
@@ -485,6 +487,10 @@ export function buildRelationshipRecord(input = {}, options = {}) {
   const urgency = urgencyFrom(stage, healthScore);
   const totalFamilyAmount = payments.filter(isFamilyPayment).reduce((sum, item) => sum + paymentAmount(item), 0);
   const totalTeacherAmount = payments.filter(isTeacherPayout).reduce((sum, item) => sum + paymentAmount(item), 0);
+  const nextClassDate = flags.futureClasses[0] ? classStartAt(flags.futureClasses[0]) : null;
+  const lastClassMs = latestDate(classes);
+  const lastCompletedClassMs = latestDate(flags.completedClasses);
+  const lastCancelledClassMs = latestDate(flags.cancelledClasses);
   const lastActivityAt = latestDate([
     request,
     assignment,
@@ -521,6 +527,7 @@ export function buildRelationshipRecord(input = {}, options = {}) {
     counts: {
       classes: classes.length,
       completedClasses: flags.completedClasses.length,
+      cancelledClasses: flags.cancelledClasses.length,
       scheduledClasses: flags.scheduledClasses.length,
       futureClasses: flags.futureClasses.length,
       payments: payments.length,
@@ -566,9 +573,30 @@ export function buildRelationshipRecord(input = {}, options = {}) {
       flags.openIncidents.length ? 'incident.follow_up' : '',
       flags.overduePayments.length ? 'payment.overdue_follow_up' : '',
       flags.confirmationPending.length ? 'class.confirmation_reminder' : '',
+      flags.cancelledClasses.length >= 3 ? 'relationship.cancellation_pattern_review' : '',
       stage === 'pendiente_horario' ? 'relationship.schedule_reminder' : '',
       stage === 'chat_pendiente' ? 'relationship.chat_repair' : '',
     ].filter(Boolean),
+    history: {
+      completedClassDates: flags.completedClasses
+        .map((item) => updatedAt(item))
+        .map(toDate)
+        .filter(Boolean)
+        .sort((a, b) => b.getTime() - a.getTime())
+        .slice(0, 12)
+        .map((date) => date.toISOString()),
+      cancelledClassDates: flags.cancelledClasses
+        .map((item) => updatedAt(item))
+        .map(toDate)
+        .filter(Boolean)
+        .sort((a, b) => b.getTime() - a.getTime())
+        .slice(0, 12)
+        .map((date) => date.toISOString()),
+    },
+    nextClassAt: nextClassDate ? nextClassDate.toISOString() : null,
+    lastClassAt: lastClassMs ? new Date(lastClassMs).toISOString() : null,
+    lastCompletedClassAt: lastCompletedClassMs ? new Date(lastCompletedClassMs).toISOString() : null,
+    lastCancelledClassAt: lastCancelledClassMs ? new Date(lastCancelledClassMs).toISOString() : null,
     lastActivityAt: lastActivityAt ? new Date(lastActivityAt).toISOString() : null,
   };
 

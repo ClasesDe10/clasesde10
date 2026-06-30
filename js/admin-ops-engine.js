@@ -529,6 +529,41 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     }));
   }
 
+  for (const followup of dataset.relationshipFollowups || []) {
+    const status = statusOf(followup);
+    if (CLOSED_STATUSES.has(status)) continue;
+    const priority = asNumber(followup.priorityScore) || (clean(followup.priority).toLowerCase() === 'critical'
+      ? 95
+      : clean(followup.priority).toLowerCase() === 'high'
+        ? 84
+        : 58);
+    const category = clean(first(followup.category, followup.actionId)).toLowerCase();
+    const section = clean(first(followup.section, category.includes('continuity') ? 'chat' : '') || 'chat', 80);
+    items.push(makeItem({
+      id: itemId('relationship-followup', followup),
+      type: 'followup',
+      title: clean(first(followup.title, 'Seguimiento de relacion')),
+      detail: clean(first(followup.expectedOutcome, followup.description, followup.reason, 'Acompanamiento post-match pendiente.')),
+      section,
+      priority,
+      tone: priority >= 90 ? 'danger' : priority >= 75 ? 'warning' : 'info',
+      entityType: 'relationship',
+      entityId: clean(first(followup.relationshipId, followup.entityId, followup.id)),
+      entityName: clean(first(followup.relationshipTitle, followup.subject, followup.familyUid, followup.teacherUid, 'Relacion')),
+      actionLabel: 'Acompanamiento',
+      automation: clean(first(followup.recommendedAction, 'Revisar siguiente paso de la relacion'), 180),
+      minutesSaved: priority >= 80 ? 14 : 8,
+      createdAt: first(followup.lastSeenAt, followup.generatedAt, followup.createdAt),
+      source: 'relationshipFollowups',
+      metadata: {
+        followupId: followup.id,
+        actionId: followup.actionId,
+        stage: followup.stage,
+        recipients: Array.isArray(followup.recipients) ? followup.recipients.length : 0,
+      },
+    }));
+  }
+
   for (const chat of dataset.chats || []) {
     const schedulingStatus = clean(first(chat.schedulingStatus, chat.estado_programacion, chat.relationshipStage)).toLowerCase();
     const stale = hoursSince(first(chat.updatedAt, chat.updated_at, chat.createdAt, chat.created_at), now) >= 48;
@@ -565,6 +600,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     openIncidents: visibleItems.filter((item) => item.type === 'incident').length,
     preventiveRisks: visibleItems.filter((item) => item.type === 'risk').length,
     selfSupervisionFindings: visibleItems.filter((item) => item.type === 'supervision').length,
+    relationshipFollowups: visibleItems.filter((item) => item.type === 'followup').length,
     overdueTasks: visibleItems.filter((item) => item.type === 'task').length,
     estimatedMinutesSaved: visibleItems.reduce((sum, item) => sum + asNumber(item.minutesSaved), 0),
   };
@@ -576,6 +612,7 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
     { type: 'document_review', label: 'Revision documental', section: 'documentos', count: visibleItems.filter((item) => item.type === 'document').length },
     { type: 'crm_followup', label: 'Seguimientos CRM', section: 'profesores', count: visibleItems.filter((item) => ['teacher', 'family', 'task'].includes(item.type)).length },
     { type: 'self_supervision', label: 'Autosupervision', section: 'auditoria', count: visibleItems.filter((item) => item.type === 'supervision').length },
+    { type: 'relationship_followup', label: 'Acompanamiento post-match', section: 'chat', count: visibleItems.filter((item) => item.type === 'followup').length },
   ].filter((item) => item.count > 0);
 
   return {
