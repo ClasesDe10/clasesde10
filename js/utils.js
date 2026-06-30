@@ -671,6 +671,19 @@ const LABEL_ESTADO = {
   familia:       'Familia',
   profesor:      'Profesor',
   verificado:    'Verificado',
+  clase_programada: 'Clase programada',
+  clase_proxima: 'Clase proxima',
+  recordatorio_enviado: 'Recordatorio enviado',
+  clase_iniciada: 'Clase en curso',
+  clase_finalizada: 'Clase finalizada',
+  pendiente_confirmacion: 'Pendiente de confirmar',
+  pendiente_pago: 'Pendiente de pago',
+  pago_en_revision: 'Pago en revision',
+  pago_recibido: 'Pago recibido',
+  comision_liquidada: 'Profesor liquidado',
+  valoracion_pendiente: 'Valoracion pendiente',
+  clase_archivada: 'Archivada',
+  incidencia_abierta: 'Incidencia abierta',
 };
 const BADGE_MAPA = {
   programada: 'badge-info', confirmada: 'badge-info', realizada: 'badge-success',
@@ -683,6 +696,11 @@ const BADGE_MAPA = {
   nuevo: 'badge-info', contactado: 'badge-warning', cerrado: 'badge-success', spam: 'badge-danger',
   contacto: 'badge-info', familia: 'badge-gold', profesor: 'badge-success',
   verificado: 'badge-success',
+  clase_programada: 'badge-info', clase_proxima: 'badge-warning', recordatorio_enviado: 'badge-warning',
+  clase_iniciada: 'badge-info', clase_finalizada: 'badge-info', pendiente_confirmacion: 'badge-warning',
+  pendiente_pago: 'badge-warning', pago_en_revision: 'badge-info', pago_recibido: 'badge-success',
+  comision_liquidada: 'badge-success', valoracion_pendiente: 'badge-gold',
+  clase_archivada: 'badge-gray', incidencia_abierta: 'badge-danger',
 };
 
 export function badgeEstado(estado) {

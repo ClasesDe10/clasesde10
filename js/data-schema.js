@@ -79,7 +79,16 @@ export const CANONICAL_FIELDS = Object.freeze({
   alumnos: ['familyUid', 'studentUid', 'nombre', 'apellidos', 'displayName', 'level', 'course', 'school', 'birthDate', 'active', 'createdAt', 'updatedAt'],
   solicitudes: ['familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference', 'notes', 'status', 'matchStatus', 'assignedTeacherUid', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
   asignaciones: ['requestId', 'familyUid', 'teacherUid', 'studentId', 'subject', 'status', 'active', 'chatId', 'schedulingStatus', 'relationshipStage', 'createdAt', 'updatedAt'],
-  clases: ['assignmentId', 'scheduleProposalId', 'familyUid', 'teacherUid', 'studentId', 'subject', 'date', 'startTime', 'endTime', 'startAtIso', 'endAtIso', 'durationMinutes', 'status', 'lifecycleStatus', 'attendanceStatus', 'familyAmount', 'teacherAmount', 'platformFee', 'familyPaymentStatus', 'teacherPaymentStatus', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
+  clases: [
+    'assignmentId', 'scheduleProposalId', 'familyUid', 'teacherUid', 'studentId',
+    'subject', 'date', 'startTime', 'endTime', 'startAtIso', 'endAtIso',
+    'durationMinutes', 'status', 'lifecycleStatus', 'lifecycleTargetStatus',
+    'attendanceStatus', 'familyAmount', 'teacherAmount', 'platformFee',
+    'familyPaymentStatus', 'teacherPaymentStatus', 'linkedFamilyPaymentId',
+    'linkedFamilyPaymentStatus', 'linkedFamilyPaymentAmount',
+    'familyPaymentReviewStatus', 'paymentReviewStartedAt',
+    'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt',
+  ],
   pagos: ['paymentType', 'familyUid', 'teacherUid', 'studentId', 'classIds', 'amount', 'method', 'gateway', 'status', 'dueAt', 'reconciliationStatus', 'idempotencyKey', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
   paymentSchedules: ['ownerUid', 'familyUid', 'teacherUid', 'studentId', 'assignmentId', 'dayOfWeek', 'time', 'graceHours', 'status', 'active', 'createdAt', 'updatedAt'],
   documentos: ['ownerUid', 'ownerRole', 'type', 'name', 'storagePath', 'downloadUrl', 'status', 'verificationStatus', 'expiresAt', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],
@@ -197,7 +206,7 @@ const STATUS_TO_LIFECYCLE = Object.freeze({
   confirmada: 'clase_programada',
   realizada: 'pendiente_confirmacion',
   completada: 'pendiente_pago',
-  cancelada: 'clase_cancelada',
+  cancelada: 'cancelada',
   reprogramada: 'clase_programada',
 });
 

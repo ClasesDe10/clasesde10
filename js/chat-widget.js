@@ -474,7 +474,9 @@ const ACTIVE_CLIENT_BUSY_STATUSES = new Set([
   'confirmed',
   'pendiente_confirmacion',
   'clase_programada',
+  'clase_proxima',
   'recordatorio_enviado',
+  'clase_iniciada',
   'clase_en_curso',
 ]);
 

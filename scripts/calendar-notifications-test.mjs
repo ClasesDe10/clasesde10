@@ -53,6 +53,8 @@ assert(classLifecycleEngine.includes('CLASS_LIFECYCLE_STATES'), 'Class lifecycle
 assert(classLifecycleEngine.includes('CLASS_LIFECYCLE_TRANSITIONS'), 'Class lifecycle engine must define allowed transitions.');
 assert(classLifecycleEngine.includes('deriveLifecycleTargetState'), 'Class lifecycle engine must derive target state.');
 assert(classLifecycleEngine.includes('buildClassLifecycleTransition'), 'Class lifecycle engine must build auditable transitions.');
+assert(classLifecycleEngine.includes("'clase_proxima'"), 'Class lifecycle engine must represent upcoming classes explicitly.');
+assert(classLifecycleEngine.includes("'pago_en_revision'"), 'Class lifecycle engine must represent linked payment review explicitly.');
 
 assert(calendarSync.includes('buildIcsCalendar'), 'Calendar sync must prepare iCalendar export.');
 assert(calendarSync.includes('googleCalendarTemplateUrl'), 'Calendar sync must prepare Google Calendar links.');
@@ -99,6 +101,9 @@ assert(automationWorker.includes('processAttendanceConfirmations'), 'Automation 
 assert(automationWorker.includes('createClassIncidentOnce'), 'Automation worker must create idempotent class incidents.');
 assert(automationWorker.includes('processPaymentReminders'), 'Automation worker must process payment reminders.');
 assert(automationWorker.includes('weekly_payment_due'), 'Automation worker must create weekly payment reminders.');
+assert(automationWorker.includes('processLinkedFamilyPaymentContext'), 'Automation worker must sync linked family payment context before lifecycle transitions.');
+assert(automationWorker.includes('linkedFamilyPaymentContextPatch'), 'Automation worker must materialize linked payment status on classes.');
+assert(automationWorker.includes("type: 'class.payment_review_started'"), 'Automation worker must emit a specific event when class payment review starts.');
 assert(automationWorker.includes('notifyUserOnce'), 'Automation notifications must be idempotent.');
 assert(automationWorker.includes('processClassLifecycle'), 'Automation worker must process lifecycle transitions.');
 assert(automationWorker.includes('classLifecycleEvents'), 'Automation worker must write lifecycle history events.');

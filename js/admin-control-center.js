@@ -1387,7 +1387,7 @@ function computeControlCenter(data) {
 
   const staleUnassigned = requestsUnassigned.filter((item) => daysAgo(createdDate(item)) > 1);
   const classesWithoutConfirmation = data.classes.filter((item) => isScheduledClass(item) && daysAgo(classDate(item)) > 0.05);
-  const lifecycleBlocked = (data.lifecycleEvents || []).filter((item) => ['incidencia_abierta', 'pendiente_confirmacion', 'pendiente_pago'].includes(clean(item.to).toLowerCase()) && daysAgo(createdDate(item)) <= 14);
+  const lifecycleBlocked = (data.lifecycleEvents || []).filter((item) => ['incidencia_abierta', 'pendiente_confirmacion', 'pendiente_pago', 'pago_en_revision'].includes(clean(item.to).toLowerCase()) && daysAgo(createdDate(item)) <= 14);
   const automationErrors = (data.automationEvents || []).filter((item) => {
     const text = clean([item.type, item.status, item.error, item.message].join(' ')).toLowerCase();
     return /(error|failed|fallo|exception|missing|unavailable)/.test(text) && daysAgo(createdDate(item)) <= 14;

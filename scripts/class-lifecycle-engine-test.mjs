@@ -20,10 +20,17 @@ assert(nextLifecycleState('clase_programada', 'pendiente_pago') === 'clase_final
 
 assert(deriveLifecycleTargetState({
   estado: 'confirmada',
-  fecha: '2026-07-01',
+  fecha: '2026-07-02',
   hora_inicio: '17:00',
   hora_fin: '18:00',
 }, { nowMs: now }) === 'clase_programada', 'Future classes must stay scheduled.');
+
+assert(deriveLifecycleTargetState({
+  estado: 'confirmada',
+  fecha: '2026-07-01',
+  hora_inicio: '17:00',
+  hora_fin: '18:00',
+}, { nowMs: now }) === 'clase_proxima', 'Classes inside the next 24 hours must become upcoming when no reminder window is active.');
 
 assert(deriveLifecycleTargetState({
   estado: 'confirmada',
@@ -72,6 +79,12 @@ const confirmedClass = {
 };
 
 assert(deriveLifecycleTargetState(confirmedClass, { nowMs: now }) === 'pendiente_pago', 'Confirmed unpaid classes must wait for family payment.');
+
+assert(deriveLifecycleTargetState({
+  ...confirmedClass,
+  linkedFamilyPaymentId: 'pay_pending',
+  linkedFamilyPaymentRawStatus: 'pendiente',
+}, { nowMs: now }) === 'pago_en_revision', 'Linked open payment proofs must move classes into payment review.');
 
 assert(deriveLifecycleTargetState({
   estado: 'pagada',
@@ -126,5 +139,16 @@ assert(transition.patch.lifecycleStatus === 'pendiente_pago', 'Transition patch 
 assert(transition.historyEvent.classId === 'class_1', 'Transition must include history event.');
 assert(transition.auditEvent.type === 'class_lifecycle_transition', 'Transition must include audit event.');
 assert(transition.notifications.some((item) => item.role === 'family'), 'Pending payment must notify family.');
+
+const reviewTransition = buildClassLifecycleTransition('class_review', {
+  ...confirmedClass,
+  lifecycleStatus: 'pendiente_pago',
+  linkedFamilyPaymentId: 'pay_pending',
+  linkedFamilyPaymentRawStatus: 'procesando',
+}, { nowMs: now, nowIso: '2026-06-30T18:15:00.000Z' });
+
+assert(reviewTransition.to === 'pago_en_revision', 'Transition builder must apply payment review state.');
+assert(reviewTransition.patch.paymentReviewStartedAt, 'Payment review transitions must timestamp review start.');
+assert(reviewTransition.notifications.some((item) => item.type === 'family_payment_review'), 'Payment review transitions must notify admin.');
 
 console.log('Class lifecycle engine validation passed.');

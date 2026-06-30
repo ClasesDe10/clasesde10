@@ -18,21 +18,24 @@ import {
 } from './calendar-engine.js';
 import {
   PAID_PAYMENT_STATUSES,
+  OPEN_PAYMENT_STATUSES,
   normalizePaymentStatus,
   paymentAmount,
 } from './payment-engine.js';
 
-export const CLASS_LIFECYCLE_VERSION = 'class_lifecycle_v1';
+export const CLASS_LIFECYCLE_VERSION = 'class_lifecycle_v2';
 
 export const CLASS_LIFECYCLE_STATES = Object.freeze([
   'solicitud_enviada',
   'solicitud_aceptada',
   'clase_programada',
+  'clase_proxima',
   'recordatorio_enviado',
   'clase_iniciada',
   'clase_finalizada',
   'pendiente_confirmacion',
   'pendiente_pago',
+  'pago_en_revision',
   'pago_recibido',
   'comision_liquidada',
   'valoracion_pendiente',
@@ -45,18 +48,20 @@ export const CLASS_LIFECYCLE_STATES = Object.freeze([
 export const CLASS_LIFECYCLE_TRANSITIONS = Object.freeze({
   solicitud_enviada: ['solicitud_aceptada', 'cancelada', 'incidencia_abierta'],
   solicitud_aceptada: ['clase_programada', 'cancelada', 'incidencia_abierta'],
-  clase_programada: ['recordatorio_enviado', 'clase_iniciada', 'clase_finalizada', 'cancelada', 'reprogramada', 'incidencia_abierta'],
-  recordatorio_enviado: ['clase_iniciada', 'clase_finalizada', 'cancelada', 'reprogramada', 'incidencia_abierta'],
+  clase_programada: ['clase_proxima', 'recordatorio_enviado', 'clase_iniciada', 'clase_finalizada', 'cancelada', 'reprogramada', 'incidencia_abierta'],
+  clase_proxima: ['recordatorio_enviado', 'clase_iniciada', 'clase_finalizada', 'cancelada', 'reprogramada', 'incidencia_abierta'],
+  recordatorio_enviado: ['clase_proxima', 'clase_iniciada', 'clase_finalizada', 'cancelada', 'reprogramada', 'incidencia_abierta'],
   clase_iniciada: ['clase_finalizada', 'pendiente_confirmacion', 'cancelada', 'incidencia_abierta'],
   clase_finalizada: ['pendiente_confirmacion', 'cancelada', 'incidencia_abierta'],
   pendiente_confirmacion: ['pendiente_pago', 'pago_recibido', 'valoracion_pendiente', 'cancelada', 'reprogramada', 'incidencia_abierta'],
-  pendiente_pago: ['pago_recibido', 'incidencia_abierta'],
+  pendiente_pago: ['pago_en_revision', 'pago_recibido', 'incidencia_abierta'],
+  pago_en_revision: ['pendiente_pago', 'pago_recibido', 'incidencia_abierta'],
   pago_recibido: ['comision_liquidada', 'valoracion_pendiente', 'incidencia_abierta'],
   comision_liquidada: ['valoracion_pendiente', 'clase_archivada', 'incidencia_abierta'],
   valoracion_pendiente: ['clase_archivada', 'incidencia_abierta'],
   clase_archivada: ['incidencia_abierta'],
   cancelada: ['reprogramada', 'incidencia_abierta'],
-  reprogramada: ['clase_programada', 'recordatorio_enviado', 'clase_iniciada', 'clase_finalizada', 'cancelada', 'incidencia_abierta'],
+  reprogramada: ['clase_programada', 'clase_proxima', 'recordatorio_enviado', 'clase_iniciada', 'clase_finalizada', 'cancelada', 'incidencia_abierta'],
   incidencia_abierta: ['reprogramada', 'cancelada', 'pendiente_confirmacion', 'pendiente_pago', 'clase_archivada'],
 });
 
@@ -69,6 +74,9 @@ const LEGACY_STATE_ALIASES = Object.freeze({
   confirmada: 'clase_programada',
   programada: 'clase_programada',
   scheduled: 'clase_programada',
+  proxima: 'clase_proxima',
+  próxima: 'clase_proxima',
+  upcoming: 'clase_proxima',
   started: 'clase_iniciada',
   iniciada: 'clase_iniciada',
   finished: 'clase_finalizada',
@@ -79,6 +87,9 @@ const LEGACY_STATE_ALIASES = Object.freeze({
   pagada: 'pago_recibido',
   pagado: 'pago_recibido',
   paid: 'pago_recibido',
+  en_revision: 'pago_en_revision',
+  revision: 'pago_en_revision',
+  in_review: 'pago_en_revision',
   validado: 'pago_recibido',
   validated: 'pago_recibido',
   archivada: 'clase_archivada',
@@ -132,6 +143,7 @@ export function nextLifecycleState(from, target) {
 
   const chronologicalNext = {
     clase_programada: 'clase_finalizada',
+    clase_proxima: 'clase_finalizada',
     recordatorio_enviado: 'clase_finalizada',
     clase_iniciada: 'clase_finalizada',
     clase_finalizada: 'pendiente_confirmacion',
@@ -181,7 +193,34 @@ export function isFamilyPaymentReceived(classData = {}) {
     || classData.estado_pago
     || classData.estado_cobro,
   );
-  return PAID_PAYMENT_STATUSES.includes(status);
+  if (PAID_PAYMENT_STATUSES.includes(status)) return true;
+  const linkedStatus = normalizePaymentStatus(
+    classData.linkedFamilyPaymentRawStatus
+    || classData.linkedFamilyPaymentStatus
+    || classData.familyPaymentReviewStatus
+    || classData.pendingFamilyPaymentStatus,
+  );
+  return PAID_PAYMENT_STATUSES.includes(linkedStatus);
+}
+
+export function familyPaymentReviewStatus(classData = {}) {
+  const status = normalizePaymentStatus(
+    classData.linkedFamilyPaymentRawStatus
+    || classData.linkedFamilyPaymentStatus
+    || classData.familyPaymentReviewStatus
+    || classData.pendingFamilyPaymentStatus
+    || classData.reconciliationStatus,
+  );
+  return status === 'pendiente' && !(
+    classData.linkedFamilyPaymentId
+    || classData.familyPaymentReviewStatus
+    || classData.pendingFamilyPaymentStatus
+  ) ? '' : status;
+}
+
+export function isFamilyPaymentInReview(classData = {}) {
+  const status = familyPaymentReviewStatus(classData);
+  return OPEN_PAYMENT_STATUSES.includes(status) || status === 'vencido';
 }
 
 export function isTeacherPayoutPaid(classData = {}) {
@@ -227,7 +266,10 @@ function paymentTargetState(classData = {}, current = '') {
   const teacherAmount = hasTeacherPayoutAmount(classData);
   const teacherPaid = isTeacherPayoutPaid(classData);
 
-  if (hasPrice && !familyPaid) return 'pendiente_pago';
+  if (hasPrice && !familyPaid) {
+    if (isFamilyPaymentInReview(classData)) return 'pago_en_revision';
+    return 'pendiente_pago';
+  }
   if (familyPaid && teacherAmount && !teacherPaid) return 'pago_recibido';
   if ((familyPaid || !hasPrice) && (!teacherAmount || teacherPaid)) {
     if (!hasClassReview(classData)) {
@@ -255,6 +297,10 @@ export function deriveLifecycleTargetState(classData = {}, options = {}) {
     if (classReminderWindows(classData, nowMs).length) return 'recordatorio_enviado';
     const start = classStartAt(classData);
     if (start && start.getTime() <= nowMs) return 'clase_iniciada';
+    if (start && start.getTime() - nowMs <= 24 * 60 * 60 * 1000) {
+      if (current === 'recordatorio_enviado') return 'recordatorio_enviado';
+      return 'clase_proxima';
+    }
     if (current === 'recordatorio_enviado') return 'recordatorio_enviado';
     return 'reprogramada';
   }
@@ -265,6 +311,10 @@ export function deriveLifecycleTargetState(classData = {}, options = {}) {
     if (classReminderWindows(classData, nowMs).length) return 'recordatorio_enviado';
     const start = classStartAt(classData);
     if (start && start.getTime() <= nowMs) return 'clase_iniciada';
+    if (start && start.getTime() - nowMs <= 24 * 60 * 60 * 1000) {
+      if (current === 'recordatorio_enviado') return 'recordatorio_enviado';
+      return 'clase_proxima';
+    }
     if (current === 'recordatorio_enviado') return 'recordatorio_enviado';
     return 'clase_programada';
   }
@@ -279,6 +329,10 @@ export function deriveLifecycleTargetState(classData = {}, options = {}) {
   }
 
   if (current === 'pago_recibido' || current === 'comision_liquidada' || current === 'valoracion_pendiente') {
+    return paymentTargetState(classData, current);
+  }
+
+  if (current === 'pago_en_revision') {
     return paymentTargetState(classData, current);
   }
 
@@ -317,6 +371,10 @@ export function buildLifecycleNotifications(classId, to, classData = {}) {
     notifications.push(lifecycleNotification(to, classId, classData, 'teacher', 'Clase programada', `Tienes una clase programada: ${label}.`));
     notifications.push(lifecycleNotification(to, classId, classData, 'family', 'Clase programada', `Se ha programado la clase: ${label}.`));
   }
+  if (to === 'clase_proxima') {
+    notifications.push(lifecycleNotification(to, classId, classData, 'teacher', 'Clase proxima', `La clase ${label} esta dentro de las proximas 24 horas.`, 'class_upcoming'));
+    notifications.push(lifecycleNotification(to, classId, classData, 'family', 'Clase proxima', `La clase ${label} esta dentro de las proximas 24 horas.`, 'class_upcoming'));
+  }
   if (to === 'clase_finalizada' || to === 'pendiente_confirmacion') {
     notifications.push(lifecycleNotification(to, classId, classData, 'teacher', 'Clase pendiente de confirmar', `Confirma el resultado de ${label}.`, 'class_confirmation_needed'));
     notifications.push(lifecycleNotification(to, classId, classData, 'family', 'Clase pendiente de confirmar', `Confirma si la clase ${label} se dio correctamente.`, 'class_confirmation_needed'));
@@ -324,6 +382,9 @@ export function buildLifecycleNotifications(classId, to, classData = {}) {
   if (to === 'pendiente_pago') {
     notifications.push(lifecycleNotification(to, classId, classData, 'family', 'Pago pendiente', `Queda pendiente el pago de ${label}.`, 'family_payment_pending'));
     notifications.push(lifecycleNotification(to, classId, classData, 'admin', 'Pago pendiente', `Revisar cobro pendiente de ${label}.`, 'family_payment_pending'));
+  }
+  if (to === 'pago_en_revision') {
+    notifications.push(lifecycleNotification(to, classId, classData, 'admin', 'Pago en revision', `Hay un justificante pendiente de revisar para ${label}.`, 'family_payment_review'));
   }
   if (to === 'pago_recibido') {
     notifications.push(lifecycleNotification(to, classId, classData, 'admin', 'Pago recibido', `Preparar liquidacion del profesor para ${label}.`, 'teacher_payout_pending'));
@@ -377,6 +438,7 @@ export function buildClassLifecycleTransition(classId, classData = {}, options =
   };
 
   if (to === 'clase_finalizada') patch.lifecycleCompletedAt = nowIso;
+  if (to === 'pago_en_revision') patch.paymentReviewStartedAt = classData.paymentReviewStartedAt || nowIso;
   if (to === 'clase_archivada') patch.archivedAt = nowIso;
 
   const historyEvent = {

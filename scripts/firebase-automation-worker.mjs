@@ -39,6 +39,7 @@ import {
   incidentPriorityMeta,
 } from '../js/incident-engine.js';
 import {
+  OPEN_PAYMENT_STATUSES,
   PAID_PAYMENT_STATUSES,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
@@ -1931,6 +1932,15 @@ async function processClassLifecycle(db, stats) {
       target: transition.target,
       lifecycleVersion: CLASS_LIFECYCLE_VERSION,
     });
+    if (transition.to === 'pago_en_revision') {
+      await addAutomationEvent(db, {
+        type: 'class.payment_review_started',
+        classId: data.id,
+        paymentId: clean(data.linkedFamilyPaymentId || data.familyPaymentId || data.paymentId, 180),
+        lifecycleVersion: CLASS_LIFECYCLE_VERSION,
+      });
+      stats.lifecyclePaymentReviewEventsCreated += 1;
+    }
 
     const recipients = await resolveClassRecipients(db, data);
     await notifyLifecycleRecipients(db, transition, recipients, stats);
@@ -2232,6 +2242,74 @@ async function processIncidentClassification(db, stats) {
 
 function paymentStatus(data) {
   return normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
+}
+
+function isoFromPaymentValue(value) {
+  const date = dateFromFirestore(value);
+  return date ? date.toISOString() : clean(value, 120);
+}
+
+function linkedFamilyPaymentContextPatch(payment = {}) {
+  const status = isPaymentOverdue(payment) && !isPaymentVerified(payment)
+    ? 'vencido'
+    : paymentStatus(payment);
+  const reviewStatus = [...OPEN_PAYMENT_STATUSES, 'vencido'].includes(status) ? status : '';
+  return {
+    linkedFamilyPaymentId: clean(payment.id || payment.paymentId, 180),
+    linkedFamilyPaymentStatus: status,
+    linkedFamilyPaymentRawStatus: status,
+    linkedFamilyPaymentAmount: paymentAmount(payment),
+    linkedFamilyPaymentCreatedAt: isoFromPaymentValue(payment.createdAt || payment.created_at),
+    linkedFamilyPaymentUpdatedAt: isoFromPaymentValue(payment.updatedAt || payment.updated_at) || isoNow(),
+    linkedFamilyPaymentDueAt: isoFromPaymentValue(payment.dueAt || payment.due_at || payment.fecha_vencimiento),
+    linkedFamilyPaymentReference: clean(payment.referencia || payment.reference || payment.concepto, 240),
+    familyPaymentReviewStatus: reviewStatus,
+    pendingFamilyPaymentStatus: reviewStatus,
+    updated_at: isoNow(),
+  };
+}
+
+function classNeedsLinkedPaymentPatch(classData = {}, patch = {}) {
+  return Object.entries(patch)
+    .filter(([key]) => key !== 'updated_at')
+    .some(([key, value]) => String(classData[key] ?? '') !== String(value ?? ''));
+}
+
+async function processLinkedFamilyPaymentContext(db, stats) {
+  const snap = await db.collection('pagos').limit(limit).get();
+  for (const doc of snap.docs) {
+    const data = { id: doc.id, ...doc.data() };
+    if (!isFamilyPayment(data)) continue;
+    const classIds = Array.isArray(data.classIds) ? data.classIds.map(String).filter(Boolean) : [];
+    if (!classIds.length) continue;
+
+    const status = paymentStatus(data);
+    const syncable = [
+      ...OPEN_PAYMENT_STATUSES,
+      ...PAID_PAYMENT_STATUSES,
+      'vencido',
+      'rechazado',
+      'fallido',
+      'devuelto',
+      'disputado',
+      'cancelado',
+    ].includes(status) || isPaymentOverdue(data) || isPaymentVerified(data);
+    if (!syncable) continue;
+
+    const patch = linkedFamilyPaymentContextPatch(data);
+    for (const classId of classIds) {
+      const ref = db.collection('clases').doc(classId);
+      const classSnap = await ref.get().catch(() => null);
+      if (!classSnap?.exists) continue;
+      const classData = classSnap.data() || {};
+      if (!classNeedsLinkedPaymentPatch(classData, patch)) continue;
+      await updateRef(ref, {
+        ...patch,
+        updatedAt: now(),
+      });
+      stats.classPaymentContextsUpdated += 1;
+    }
+  }
 }
 
 function isEndOfWeekWindow() {
@@ -2872,10 +2950,12 @@ async function main() {
     paymentsReconciled: 0,
     paymentsNeedingReview: 0,
     weeklyPaymentRemindersCreated: 0,
+    classPaymentContextsUpdated: 0,
     lifecycleClassesEvaluated: 0,
     lifecycleTransitionsApplied: 0,
     lifecycleHistoryEventsCreated: 0,
     lifecycleNotificationsCreated: 0,
+    lifecyclePaymentReviewEventsCreated: 0,
     trustProfilesUpdated: 0,
     systemJobsSeen: 0,
     systemJobsProcessed: 0,
@@ -2934,6 +3014,7 @@ async function main() {
   await processPublicLeads(db, stats);
   await processPendingRequests(db, stats);
   await processAssignedRequests(db, stats);
+  await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);
   await processUpcomingClassReminders(db, stats);
   await processUnmarkedClasses(db, stats);
@@ -2941,6 +3022,7 @@ async function main() {
   await processClassLifecycle(db, stats);
   await processIncidentClassification(db, stats);
   await reconcileVerifiedPayments(db, stats);
+  await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
 
