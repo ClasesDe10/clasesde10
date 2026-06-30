@@ -806,6 +806,8 @@ function renderAvailabilitySummary(availability = {}, role = '') {
   const busySummary = summarizeBusySlots(availability.busySlots || [], 3);
   const roleContext = availabilityForRole(role, availability);
   const targetMissing = role !== 'admin' && !roleContext.targetSlots.length;
+  const ownMissing = role !== 'admin' && !roleContext.ownSlots.length;
+  const ownSection = role === 'profesor' ? 'disponibilidad' : role === 'familia' ? 'alumnos' : '';
   const statusClass = targetMissing ? 'warning' : 'success';
   const statusText = targetMissing
     ? `Falta disponibilidad del ${roleContext.targetLabel}; no se puede proponer horario todavia.`
@@ -819,6 +821,11 @@ function renderAvailabilitySummary(availability = {}, role = '') {
         <div><span>Alumno</span><strong>${escapeHtml(studentSummary || 'Sin franjas marcadas')}</strong></div>
         <div class="schedule-availability-busy"><span>Ocupado</span><strong>${escapeHtml(busySummary || 'Sin clases confirmadas en conflicto')}</strong></div>
       </div>
+      ${ownMissing && ownSection ? `
+        <div class="schedule-availability-action">
+          <span>Completa tus franjas para que el horario salga a la primera.</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-open-dashboard-section="${ownSection}">Marcar disponibilidad</button>
+        </div>` : ''}
     </div>`;
 }
 
@@ -970,9 +977,10 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   const roleAvailability = availabilityForRole(role, availability);
   const proposalDisabled = role !== 'admin' && (availability.loading || !roleAvailability.targetSlots.length);
   const disabledAttr = proposalDisabled ? 'disabled' : '';
+  const isMine = (proposal) => currentActorIds.has(clean(proposal.proposedByUid, 180)) || (role !== 'admin' && proposal.proposedByRole === role);
   const proposalRows = proposals.length
     ? proposals.map((proposal) => {
-      const mine = currentActorIds.has(clean(proposal.proposedByUid, 180)) || (role !== 'admin' && proposal.proposedByRole === role);
+      const mine = isMine(proposal);
       const canRespond = proposal.status === 'propuesta' && (role === 'admin' || !mine);
       const statusLabel = proposal.status === 'aceptada' ? 'Aceptada'
         : proposal.status === 'rechazada' ? 'Rechazada'
@@ -1001,9 +1009,23 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
       ? 'Horario semanal pendiente de respuesta.'
       : accepted
         ? 'Hay una clase puntual creada desde el acuerdo.'
-        : activeProposal
-          ? 'Hay una propuesta puntual pendiente de respuesta.'
-          : 'Acordad un horario semanal fijo y usad clases puntuales solo como excepcion.';
+      : activeProposal
+        ? 'Hay una propuesta puntual pendiente de respuesta.'
+        : 'Acordad un horario semanal fijo y usad clases puntuales solo como excepcion.';
+  const activeProposalMine = activeProposal ? isMine(activeProposal) : false;
+  const canRespondActiveProposal = activeProposal && (role === 'admin' || !activeProposalMine);
+  const summaryActions = canRespondActiveProposal
+    ? `
+        <button class="btn btn-primary btn-sm" type="button" data-focus-active-proposal>Responder propuesta</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_ONE_OFF}">Proponer alternativa</button>`
+    : proposalDisabled && !plannerOpen
+      ? `<button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">Ver disponibilidad</button>`
+      : `
+        <button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">${acceptedRecurring ? 'Cambiar semanal' : 'Proponer semanal'}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_ONE_OFF}">Clase puntual</button>`;
+  const visibleProposalList = !plannerOpen && proposals.length
+    ? `<div class="schedule-proposal-list chat-schedule-visible-proposals">${proposalRows}</div>`
+    : '';
 
   panel.innerHTML = `
     <div class="chat-schedule-summary">
@@ -1012,11 +1034,11 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
         <div class="chat-thread-subtitle">${summary}</div>
       </div>
       <div class="chat-schedule-actions">
-        <button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">${acceptedRecurring ? 'Cambiar semanal' : 'Proponer semanal'}</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_ONE_OFF}">Clase puntual</button>
+        ${summaryActions}
         ${plannerOpen ? '<button class="btn btn-ghost btn-sm" type="button" data-close-schedule-planner>Cerrar</button>' : ''}
       </div>
     </div>
+    ${visibleProposalList}
     ${plannerOpen ? `
       <div class="chat-schedule-planner">
         ${renderAvailabilitySummary(availability, role)}
@@ -1494,6 +1516,20 @@ export async function initChatWidget({
     const openPanel = event.target.closest('[data-chat-open-panel]');
     if (openPanel) {
       setPanel(openPanel.dataset.chatOpenPanel);
+      return;
+    }
+
+    const openDashboardSection = event.target.closest('[data-open-dashboard-section]');
+    if (openDashboardSection) {
+      navigateDashboardSection(openDashboardSection.dataset.openDashboardSection);
+      return;
+    }
+
+    const focusActiveProposal = event.target.closest('[data-focus-active-proposal]');
+    if (focusActiveProposal) {
+      const active = container.querySelector('.schedule-proposal.active');
+      active?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      active?.querySelector('[data-accept-schedule], [data-reject-schedule]')?.focus();
       return;
     }
 

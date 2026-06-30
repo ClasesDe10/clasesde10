@@ -954,6 +954,20 @@ textarea {
 .schedule-availability-busy strong {
   color: #92400e;
 }
+.schedule-availability-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+.schedule-availability-action span {
+  color: var(--gray-dark);
+  font-size: .8rem;
+  font-weight: 700;
+}
 .schedule-availability-ok {
   display: inline-flex;
   margin-top: 4px;
@@ -971,6 +985,9 @@ textarea {
   gap: 8px;
   margin-top: 10px;
   min-width: 0;
+}
+.chat-schedule-visible-proposals {
+  margin-top: 12px;
 }
 .schedule-proposal {
   display: grid;
@@ -3994,6 +4011,14 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .schedule-availability-grid {
     grid-template-columns: 1fr;
+  }
+  .schedule-availability-action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .schedule-availability-action .btn {
+    width: 100%;
+    justify-content: center;
   }
   .chat-schedule-form [data-schedule-notes],
   .chat-schedule-form button {

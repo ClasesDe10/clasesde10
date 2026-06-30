@@ -51,6 +51,9 @@ assert(chat.includes('participantUids'), 'Accepted proposal classes must store p
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
 assert(chat.includes('data-chat-name-form'), 'Chat widget must let each participant save a private chat display name.');
 assert(chat.includes('data-open-schedule-planner'), 'Chat widget must keep schedule planning collapsed behind explicit actions.');
+assert(chat.includes('chat-schedule-visible-proposals'), 'Pending or accepted schedule proposals must stay visible while the planner form is collapsed.');
+assert(chat.includes('data-focus-active-proposal'), 'Chat widget must expose one clear action to respond to active schedule proposals.');
+assert(chat.includes('data-open-dashboard-section'), 'Chat widget must route missing own availability to the right dashboard section.');
 assert(chat.includes('data-chat-open-panel="chats"'), 'Secondary notification actions must switch panels without duplicating chat tab selectors.');
 assert(!chat.includes('data-chat-tab="chats">Ver chats'), 'Only real tabs should use data-chat-tab to avoid ambiguous chat controls.');
 assert(chat.includes('weekly_recurring'), 'Chat widget must support fixed weekly class schedules.');
@@ -101,6 +104,8 @@ assert(css.includes('.chat-schedule-panel'), 'Dashboard CSS must style the sched
 assert(css.includes('.schedule-proposal'), 'Dashboard CSS must style schedule proposals.');
 assert(css.includes('.chat-alias-form'), 'Dashboard CSS must style the private chat-name editor.');
 assert(css.includes('.chat-schedule-summary'), 'Dashboard CSS must style compact schedule summaries.');
+assert(css.includes('.chat-schedule-visible-proposals'), 'Dashboard CSS must style visible schedule proposal strips.');
+assert(css.includes('.schedule-availability-action'), 'Dashboard CSS must style availability recovery actions.');
 assert(css.includes('.chat-layout-notifications'), 'Dashboard CSS must isolate notification-only view.');
 assert(css.includes('.schedule-availability-busy'), 'Dashboard CSS must style occupied schedule slots.');
 
