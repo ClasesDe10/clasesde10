@@ -374,7 +374,8 @@
 
       <!-- ══ SECCIÓN: CALENDARIO ══ -->
       <section id="section-calendario" class="dash-section" style="display:none">
-        <div style="display:grid;grid-template-columns:1fr 340px;gap:20px">
+        <div id="admin-calendar-month-summary" class="admin-calendar-month-summary" aria-live="polite"></div>
+        <div class="admin-calendar-layout">
           <div id="calendario-wrapper"></div>
           <div class="card">
             <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
@@ -1271,7 +1272,7 @@ import {
 } from '../../js/finance-erp-engine.js?v=20260629-pricing';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
-  formatFechaCorta, formatHora, formatEuros, badgeEstado,
+  formatFechaCorta, formatHora, formatEuros, badgeEstado, nombreMes,
   getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize, initNotificacionesBadge
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js';
@@ -2874,9 +2875,71 @@ async function cargarClasesCalendario(anio, mes) {
   ]);
   const clases = applyClassPaymentContext(data || [], paymentContext.payments);
   cal.setClases(clases);
+  renderAdminCalendarMonthSummary(clases);
   if (cal.diaSeleccionado) {
     mostrarClasesDiaEconomico(cal.diaSeleccionado, cal.clasesPorFecha[cal.diaSeleccionado] || []);
   }
+}
+
+function renderAdminCalendarMonthSummary(clases = []) {
+  const cont = document.getElementById('admin-calendar-month-summary');
+  if (!cont) return;
+  const enriched = (clases || []).map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }));
+  const totals = enriched.reduce((acc, item) => {
+    const state = item.economic.state;
+    acc.classes += 1;
+    acc.family += item.economic.familyAmount || 0;
+    acc.teacher += item.economic.teacherAmount || 0;
+    acc.margin += item.economic.platformFee || 0;
+    acc[state] = (acc[state] || 0) + 1;
+    if (['pending', 'overdue', 'rejected', 'in_review'].includes(state)) {
+      acc.pendingCollection += item.economic.familyAmount || 0;
+    }
+    if (['missing_amount', 'missing_teacher_amount', 'overdue', 'rejected', 'in_review'].includes(state)) {
+      acc.alerts += 1;
+    }
+    if (state === 'payout_pending') {
+      acc.pendingTeacherPayout += item.economic.teacherAmount || 0;
+    }
+    return acc;
+  }, {
+    classes: 0,
+    family: 0,
+    teacher: 0,
+    margin: 0,
+    pendingCollection: 0,
+    pendingTeacherPayout: 0,
+    alerts: 0,
+  });
+
+  const monthName = cal ? `${nombreMes(cal.mes)} ${cal.anio}` : 'este mes';
+  const alertText = totals.alerts
+    ? `${totals.alerts} clase(s) requieren revision`
+    : 'Sin alertas economicas abiertas';
+  cont.innerHTML = `
+    <div class="admin-calendar-month-head">
+      <div>
+        <span class="section-eyebrow">Calendario economico</span>
+        <h3>${sanitize(monthName)}</h3>
+      </div>
+      <span class="badge ${totals.alerts ? 'badge-warning' : 'badge-success'}">${sanitize(alertText)}</span>
+    </div>
+    <div class="admin-calendar-month-grid">
+      ${[
+        ['Clases', String(totals.classes), 'programadas este mes'],
+        ['Facturacion', formatEuros(totals.family), 'importe familia'],
+        ['Margen', formatEuros(totals.margin), 'ClasesDe10'],
+        ['Pendiente cobro', formatEuros(totals.pendingCollection), 'familias'],
+        ['Pendiente profesor', formatEuros(totals.pendingTeacherPayout), 'liquidaciones'],
+      ].map(([label, value, hint]) => `
+        <div class="admin-calendar-kpi admin-calendar-month-kpi">
+          <span>${sanitize(label)}</span>
+          <strong>${sanitize(value)}</strong>
+          <small>${sanitize(hint)}</small>
+        </div>
+      `).join('')}
+    </div>
+  `;
 }
 
 function mostrarClasesDia(fecha, clases) {

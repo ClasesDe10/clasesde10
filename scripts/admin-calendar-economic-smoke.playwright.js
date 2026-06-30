@@ -11,6 +11,11 @@ async (page) => {
   if (!/En revision/i.test(legend) || !/Liquidar profesor/i.test(legend) || !/Liquidada/i.test(legend)) {
     throw new Error(`Economic calendar legend is incomplete: ${legend}`);
   }
+  const monthKpis = await page.locator('#admin-calendar-month-summary .admin-calendar-kpi').count();
+  const monthSummary = await page.locator('#admin-calendar-month-summary').textContent().catch(() => '');
+  if (monthKpis < 5 || !/Facturacion/i.test(monthSummary) || !/Pendiente cobro/i.test(monthSummary)) {
+    throw new Error(`Economic month summary did not render: ${monthSummary.slice(0, 220)}`);
+  }
 
   const clickedDate = await page.evaluate(() => {
     const day = Array.from(document.querySelectorAll('.calendar-day[data-fecha]'))
@@ -21,7 +26,7 @@ async (page) => {
   });
 
   let detailText = '';
-  let kpis = 0;
+  let kpis = monthKpis;
   if (clickedDate) {
     await page.waitForFunction(() => {
       const panel = document.querySelector('#cal-clases-dia');

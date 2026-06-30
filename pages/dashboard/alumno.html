@@ -186,6 +186,7 @@ import { classStatusForBadge, isScheduledClassStatus } from '../../js/calendar-e
 
 const usuario = await requireAuth(['alumno']);
 if (!usuario) throw new Error('No autorizado');
+window.CD10CurrentUser = usuario;
 
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);

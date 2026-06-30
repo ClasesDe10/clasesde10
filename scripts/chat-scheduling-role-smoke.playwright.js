@@ -18,8 +18,10 @@ async (page) => {
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(password);
   await page.locator('#form-login').evaluate((form) => form.requestSubmit());
-  await page.waitForURL(/\/pages\/dashboard\/(admin|profesor|familia|alumno)(?:\.html)?(?:#.*)?$/, { timeout: 30000 });
+  await page.waitForURL(/\/pages\/dashboard\/(admin|profesor|familia|alumno)(?:\.html)?(?:#.*)?$/, { timeout: 30000, waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForFunction(() => /\/pages\/dashboard\/(admin|profesor|familia|alumno)(?:\.html)?(?:#.*)?$/.test(window.location.pathname), null, { timeout: 30000 });
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+  await page.waitForFunction(() => Boolean(window.CD10CurrentUser?.email), null, { timeout: 20000 });
 
   const currentUser = await page.evaluate(() => ({
     uid: window.CD10CurrentUser?.uid || '',
@@ -27,6 +29,9 @@ async (page) => {
     email: window.CD10CurrentUser?.email || '',
     role: window.CD10CurrentUser?.role || window.CD10CurrentUser?.rol || '',
   })).catch(() => null);
+  if (!currentUser?.email || !currentUser?.role) {
+    throw new Error(`Dashboard did not expose current user context: ${JSON.stringify(currentUser)}`);
+  }
 
   await page.locator('[data-section="chats"], [data-section="chat"]').first().click();
   await page.waitForSelector('[data-chat-tab="chats"]', { timeout: 20000 });

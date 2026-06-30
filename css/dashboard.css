@@ -3255,6 +3255,43 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   flex-wrap: wrap;
   margin-top: 10px;
 }
+.admin-calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+  gap: 20px;
+  align-items: start;
+}
+.admin-calendar-month-summary {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid rgba(15,31,61,.08);
+  border-radius: var(--radius);
+  background: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+.admin-calendar-month-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.admin-calendar-month-head h3 {
+  margin: 2px 0 0;
+  font-size: 1.05rem;
+  color: var(--navy);
+}
+.admin-calendar-month-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.admin-calendar-month-kpi small {
+  display: block;
+  margin-top: 2px;
+  color: var(--gray-mid);
+  font-size: .68rem;
+}
 .admin-calendar-day-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4549,6 +4586,15 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .page-content { padding: 12px; }
   .modal { border-radius: var(--radius) var(--radius) 0 0; max-width: 100%; }
   .modal-overlay { align-items: flex-end; padding: 0 0 var(--keyboard-inset, 0px); }
+  .admin-calendar-month-summary {
+    padding: 12px;
+  }
+  .admin-calendar-month-head {
+    flex-direction: column;
+  }
+  .admin-calendar-month-grid {
+    grid-template-columns: 1fr;
+  }
   #calendario-wrapper,
   .calendar-wrapper {
     max-width: calc(100vw - 24px);
@@ -4638,6 +4684,12 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 }
 
 @media (max-width: 900px) {
+  .admin-calendar-layout {
+    grid-template-columns: 1fr;
+  }
+  .admin-calendar-month-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .control-grid-main {
     grid-template-columns: 1fr;
   }

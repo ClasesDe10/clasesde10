@@ -11,7 +11,11 @@ async (page) => {
   await page.locator('#email').fill(email);
   await page.locator('#password').fill(password);
   await page.locator('#form-login').evaluate((form) => form.requestSubmit());
-  await page.waitForURL(/\/pages\/dashboard\/admin(?:\.html)?(?:#.*)?$/, { timeout: 20000 });
+  await page.waitForURL(/\/pages\/dashboard\/admin(?:\.html)?(?:#.*)?$/, { timeout: 20000, waitUntil: 'domcontentloaded' }).catch(() => {});
+  await page.waitForFunction(() => {
+    return /\/pages\/dashboard\/admin(?:\.html)?(?:#.*)?$/.test(window.location.pathname)
+      && Boolean(document.querySelector('#topbar-title'));
+  }, null, { timeout: 20000 });
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 
   return {

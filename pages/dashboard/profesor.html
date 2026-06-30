@@ -744,6 +744,7 @@ import { Calendario } from '../../js/calendario.js';
 
 const usuario = await requireAuth(['profesor']);
 if (!usuario) throw new Error('No autorizado');
+window.CD10CurrentUser = usuario;
 
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
