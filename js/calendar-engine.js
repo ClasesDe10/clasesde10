@@ -171,6 +171,123 @@ export function getClassAttendanceSummary(classData = {}) {
   return 'pendiente';
 }
 
+export function classAttendanceState(classData = {}, options = {}) {
+  const operationalStatus = normalizeClassStatus(classData.estado || classData.status);
+  const teacherStatus = cleanCalendarText(classData.teacherConfirmationStatus || classData.teacherAttendanceStatus || '', 40).toLowerCase();
+  const familyStatus = cleanCalendarText(classData.familyConfirmationStatus || classData.confirmacion_familia || classData.familyAttendanceStatus || '', 40).toLowerCase();
+  const incidentStatus = cleanCalendarText(classData.incidentStatus || classData.estado_incidencia || '', 40).toLowerCase();
+  const attendanceStatus = getClassAttendanceSummary(classData);
+  const ended = classEnded(classData, Number(options.marginMinutes || 0), options.nowMs ?? Date.now());
+  const hasFamilyConfirmation = ['realizada', 'no_realizada', 'incidencia'].includes(familyStatus);
+  const teacherMarked = ['realizada', 'cancelada', 'reprogramada', 'no_realizada', 'incidencia'].includes(teacherStatus);
+  const scheduled = isScheduledClassStatus(operationalStatus);
+
+  const base = {
+    key: 'scheduled',
+    label: 'Programada',
+    tone: 'info',
+    attendanceStatus,
+    operationalStatus,
+    teacherStatus,
+    familyStatus,
+    incidentStatus,
+    ended,
+    hasFamilyConfirmation,
+    teacherMarked,
+    canTeacherRegister: false,
+    canFamilyConfirm: false,
+    canFamilyReportIssue: false,
+    teacherNextStep: ended ? 'Registra el resultado cuando termine la clase.' : 'La clase todavia no ha terminado.',
+    familyNextStep: ended ? 'El profesor debe registrar primero el resultado.' : 'Cuando termine, el profesor registrara el resultado.',
+  };
+
+  if (operationalStatus === 'cancelada') {
+    return {
+      ...base,
+      key: 'cancelled',
+      label: 'Cancelada',
+      tone: 'danger',
+      teacherNextStep: 'La clase figura como cancelada.',
+      familyNextStep: 'La clase figura como cancelada.',
+    };
+  }
+
+  if (operationalStatus === 'reprogramada') {
+    return {
+      ...base,
+      key: 'rescheduled',
+      label: 'Reprogramada',
+      tone: 'warning',
+      canTeacherRegister: ended,
+      canFamilyReportIssue: ended && !hasFamilyConfirmation,
+      teacherNextStep: ended ? 'Confirma el resultado si finalmente se dio.' : 'Revisa el nuevo horario acordado.',
+      familyNextStep: ended ? 'Puedes avisar si el cambio no fue correcto.' : 'Revisa el nuevo horario acordado.',
+    };
+  }
+
+  if (incidentStatus === 'abierta' || attendanceStatus === 'incidencia' || attendanceStatus === 'discrepancia') {
+    return {
+      ...base,
+      key: 'incident',
+      label: 'Incidencia abierta',
+      tone: 'danger',
+      teacherNextStep: 'Hay una incidencia abierta para revisar.',
+      familyNextStep: 'Hemos avisado al administrador para revisar la clase.',
+    };
+  }
+
+  if (attendanceStatus === 'confirmada_por_ambas_partes') {
+    return {
+      ...base,
+      key: 'confirmed_by_both',
+      label: 'Confirmada por ambas partes',
+      tone: 'success',
+      teacherNextStep: 'Asistencia cerrada. El siguiente paso es el pago si queda pendiente.',
+      familyNextStep: 'Asistencia cerrada. Revisa pagos si corresponde.',
+    };
+  }
+
+  if (teacherStatus === 'realizada' && !hasFamilyConfirmation) {
+    return {
+      ...base,
+      key: 'pending_family',
+      label: 'Falta confirmar familia',
+      tone: 'warning',
+      canFamilyConfirm: ended,
+      canFamilyReportIssue: ended,
+      teacherNextStep: 'Esperando confirmacion de la familia.',
+      familyNextStep: 'El profesor la marco como impartida. Confirma si todo fue correcto.',
+    };
+  }
+
+  if (familyStatus === 'realizada' && teacherStatus !== 'realizada') {
+    return {
+      ...base,
+      key: 'pending_teacher',
+      label: 'Falta registrar profesor',
+      tone: 'warning',
+      canTeacherRegister: ended,
+      teacherNextStep: 'La familia ya confirmo; registra tu resultado para cerrar la asistencia.',
+      familyNextStep: 'Esperando a que el profesor confirme su registro.',
+    };
+  }
+
+  if (ended && (scheduled || operationalStatus === 'realizada')) {
+    return {
+      ...base,
+      key: 'pending_teacher',
+      label: 'Falta registrar profesor',
+      tone: 'warning',
+      canTeacherRegister: true,
+      canFamilyReportIssue: !hasFamilyConfirmation,
+      teacherNextStep: 'Registra si la clase se dio, se cancelo o se debe reprogramar.',
+      familyNextStep: 'Esperando a que el profesor registre el resultado. Puedes avisar si no se dio.',
+    };
+  }
+
+  return base;
+}
+
 export function buildClassLifecycleFields(classData = {}, nowIso = new Date().toISOString()) {
   const status = storedClassStatus(classData.estado || classData.status);
   const attendanceStatus = getClassAttendanceSummary(classData);

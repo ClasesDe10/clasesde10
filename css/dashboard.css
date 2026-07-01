@@ -3496,6 +3496,33 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   flex-wrap: wrap;
   margin-top: 10px;
 }
+.attendance-summary {
+  display: grid;
+  gap: 5px;
+  align-items: start;
+  justify-items: start;
+  max-width: 280px;
+}
+.attendance-hint,
+.attendance-notes,
+.muted {
+  color: var(--gray-mid);
+  font-size: .78rem;
+  line-height: 1.35;
+}
+.attendance-notes {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.class-action-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 .admin-calendar-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);

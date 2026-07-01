@@ -191,6 +191,27 @@ function classIdFromProposal(chatId, proposalId) {
   return `chat_${chatId}_${proposalId}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 900);
 }
 
+function withTimeout(promise, timeoutMs = 8000, label = 'operacion', fallbackValue) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`Timeout en ${label}; usando fallback seguro.`);
+      resolve(fallbackValue);
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function withTimeoutReject(promise, timeoutMs = 12000, label = 'operacion') {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} tardo demasiado. Comprueba conexion e intentalo de nuevo.`));
+    }, timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 function busyResourceKey(resourceType, resourceId) {
   const type = clean(resourceType, 40);
   const id = clean(resourceId, 180);
@@ -864,7 +885,11 @@ function buildBusySlotPayloadsForClass(classId, classFields = {}, context = {}) 
 async function persistBusySlotsForClass(classId, classFields = {}, context = {}) {
   const slots = buildBusySlotPayloadsForClass(classId, classFields, context);
   if (!slots.length) return [];
-  await Promise.all(slots.map((slot) => setDoc(doc(firebaseDb, 'busySlots', slot.id), slot.payload)));
+  await withTimeoutReject(
+    Promise.all(slots.map((slot) => setDoc(doc(firebaseDb, 'busySlots', slot.id), slot.payload))),
+    12000,
+    'Reserva de disponibilidad',
+  );
   return slots.map((slot) => ({ id: slot.id, ...slot.payload }));
 }
 
@@ -1056,7 +1081,7 @@ function renderSchedulePanelLegacy(container, chat, proposals, role, currentActo
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             <span class="badge ${proposal.status === 'aceptada' ? 'badge-success' : proposal.status === 'rechazada' ? 'badge-danger' : 'badge-warning'}">${statusLabel}</span>
-            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-reject-schedule>Rechazar</button>' : ''}
+            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-cd10-ux="off" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-cd10-ux="off" data-reject-schedule>Rechazar</button>' : ''}
             ${proposal.status === 'propuesta' && mine ? '<span class="badge badge-info">Esperando respuesta</span>' : ''}
           </div>
         </article>`;
@@ -1121,7 +1146,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             <span class="badge ${proposal.status === 'aceptada' ? 'badge-success' : proposal.status === 'rechazada' ? 'badge-danger' : 'badge-warning'}">${statusLabel}</span>
-            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-reject-schedule>Rechazar</button>' : ''}
+            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-cd10-ux="off" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-cd10-ux="off" data-reject-schedule>Rechazar</button>' : ''}
             ${proposal.status === 'propuesta' && mine ? '<span class="badge badge-info">Esperando respuesta</span>' : ''}
           </div>
         </article>`;
@@ -1541,12 +1566,12 @@ export async function initChatWidget({
     }
     state.scheduleProposals = [];
     state.availabilityByChat[chat.id] = { loading: true, teacherSlots: [], studentSlots: [] };
-    renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id]);
+    renderSchedulePanelWithActions(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id]);
 
     loadChatAvailability(chat, currentUid, role).then((availability) => {
       if (state.selectedChat?.id !== chat.id) return;
       state.availabilityByChat[chat.id] = availability;
-      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentActorIds, availability);
+      renderSchedulePanelWithActions(container, chat, state.scheduleProposals || [], role, currentActorIds, availability);
     }).catch((error) => {
       if (state.selectedChat?.id !== chat.id) return;
       state.availabilityByChat[chat.id] = {
@@ -1555,7 +1580,7 @@ export async function initChatWidget({
         studentSlots: [],
         error: error.message || 'No se pudo cargar la disponibilidad.',
       };
-      renderSchedulePanel(container, chat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[chat.id]);
+      renderSchedulePanelWithActions(container, chat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[chat.id]);
     });
 
     if (state.unsubscribe) state.unsubscribe();
@@ -1582,7 +1607,7 @@ export async function initChatWidget({
       state.scheduleProposals = snap.docs
         .map((item) => ({ id: item.id, ...item.data() }))
         .filter((proposal) => !isAcceptedScheduleProposal(proposal) || isAfterClassReset(proposal));
-      renderSchedulePanel(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id] || { loading: true });
+      renderSchedulePanelWithActions(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id] || { loading: true });
     }, (error) => {
       handleRealtimeError('No se pudieron abrir propuestas de horario', 'Horarios no disponibles', 'No se pudieron abrir las propuestas.', error);
     });
@@ -1637,6 +1662,93 @@ export async function initChatWidget({
     return false;
   }
 
+  async function resolveScheduleProposalForAction(proposalNode) {
+    const proposalId = clean(proposalNode?.dataset.scheduleProposalId, 180);
+    if (!proposalId || !state.selectedChat?.id) return null;
+    const cached = state.scheduleProposals?.find((entry) => entry.id === proposalId);
+    if (cached) return cached;
+
+    const proposalRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposalId);
+    const proposalSnap = await getDoc(proposalRef).catch((error) => {
+      console.warn('No se pudo leer la propuesta de horario desde Firestore', error);
+      return null;
+    });
+    if (!proposalSnap?.exists?.()) return null;
+    const proposal = { id: proposalSnap.id, ...proposalSnap.data() };
+    state.scheduleProposals = [
+      ...(state.scheduleProposals || []).filter((entry) => entry.id !== proposal.id),
+      proposal,
+    ];
+    return proposal;
+  }
+
+  async function handleScheduleProposalAction(event) {
+    const accept = event.target.closest('[data-accept-schedule]');
+    const reject = event.target.closest('[data-reject-schedule]');
+    if (!accept && !reject) return false;
+
+    event.preventDefault();
+    event.stopPropagation();
+    const actionButton = accept || reject;
+    if (actionButton.dataset.scheduleActionBusy === 'true') return true;
+    actionButton.dataset.scheduleActionBusy = 'true';
+
+    const proposalNode = event.target.closest('[data-schedule-proposal-id]');
+    try {
+      const proposal = await resolveScheduleProposalForAction(proposalNode);
+      if (!proposal || !state.selectedChat) {
+        console.warn('No se pudo resolver la propuesta de horario', {
+          proposalId: proposalNode?.dataset.scheduleProposalId || '',
+          chatId: state.selectedChat?.id || '',
+        });
+        showToast('Horario no disponible', 'Recarga el chat e intentalo de nuevo.', 'warning');
+        return true;
+      }
+      if (accept) {
+        await acceptScheduleProposal(proposal, accept);
+      } else {
+        await rejectScheduleProposal(proposal);
+      }
+    } catch (error) {
+      if (accept) {
+        console.error('No se pudo aceptar horario', error);
+        showToast('No se creo la clase', error.message || 'Revisa permisos o datos de horario.', 'error');
+      } else {
+        console.error('No se pudo rechazar horario', error);
+        showToast('No se rechazo', error.message || 'Revisa permisos.', 'error');
+      }
+    } finally {
+      delete actionButton.dataset.scheduleActionBusy;
+    }
+    return true;
+  }
+
+  function wireScheduleActionButtons() {
+    container.querySelectorAll('[data-accept-schedule], [data-reject-schedule]').forEach((button) => {
+      if (button.dataset.scheduleDirectHandler === 'true') return;
+      button.dataset.scheduleDirectHandler = 'true';
+      button.addEventListener('click', (event) => {
+        handleScheduleProposalAction(event);
+      });
+    });
+  }
+
+  function renderSchedulePanelWithActions(...args) {
+    renderSchedulePanel(...args);
+    wireScheduleActionButtons();
+  }
+
+  container.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-accept-schedule], [data-reject-schedule]')) return;
+    handleScheduleProposalAction(event);
+  }, true);
+
+  container.addEventListener('pointerdown', (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    if (!event.target.closest('[data-accept-schedule], [data-reject-schedule]')) return;
+    handleScheduleProposalAction(event);
+  }, true);
+
   container.addEventListener('click', async (event) => {
     const tab = event.target.closest('[data-chat-tab]');
     if (tab) {
@@ -1670,7 +1782,7 @@ export async function initChatWidget({
       if (panel) {
         panel.dataset.schedulePlannerOpen = 'true';
         panel.dataset.scheduleKind = normalizeScheduleKind(openSchedulePlanner.dataset.openSchedulePlanner);
-        renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
+        renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
         focusSchedulePrimaryField(panel);
       }
       return;
@@ -1681,7 +1793,7 @@ export async function initChatWidget({
       const panel = container.querySelector('[data-chat-schedule-panel]');
       if (panel) {
         panel.dataset.schedulePlannerOpen = 'false';
-        renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
+        renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
       }
       return;
     }
@@ -1751,28 +1863,17 @@ export async function initChatWidget({
       return;
     }
 
+    const accept = event.target.closest('[data-accept-schedule]');
+    const reject = event.target.closest('[data-reject-schedule]');
+    if (accept || reject) {
+      await handleScheduleProposalAction(event);
+      return;
+    }
+
     const item = event.target.closest('[data-chat-id]');
     if (item) {
       selectChat(item.dataset.chatId);
       return;
-    }
-
-    const accept = event.target.closest('[data-accept-schedule]');
-    const reject = event.target.closest('[data-reject-schedule]');
-    if (!accept && !reject) return;
-    const proposalNode = event.target.closest('[data-schedule-proposal-id]');
-    const proposal = state.scheduleProposals?.find((entry) => entry.id === proposalNode?.dataset.scheduleProposalId);
-    if (!proposal || !state.selectedChat) return;
-    if (accept) {
-      acceptScheduleProposal(proposal).catch((error) => {
-        console.error('No se pudo aceptar horario', error);
-        showToast('No se creo la clase', error.message || 'Revisa permisos o datos de horario.', 'error');
-      });
-    } else {
-      rejectScheduleProposal(proposal).catch((error) => {
-        console.error('No se pudo rechazar horario', error);
-        showToast('No se rechazo', error.message || 'Revisa permisos.', 'error');
-      });
     }
   });
 
@@ -1783,7 +1884,7 @@ export async function initChatWidget({
     if (!panel) return;
     panel.dataset.schedulePlannerOpen = 'true';
     panel.dataset.scheduleKind = normalizeScheduleKind(event.detail?.kind || SCHEDULE_KIND_ONE_OFF);
-    renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
+    renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
     setTimeout(() => focusSchedulePrimaryField(panel), 50);
   });
 
@@ -1793,7 +1894,7 @@ export async function initChatWidget({
     const panel = container.querySelector('[data-chat-schedule-panel]');
     if (!panel) return;
     panel.dataset.scheduleKind = normalizeScheduleKind(kindSelect.value);
-    renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
+    renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
     setTimeout(() => focusSchedulePrimaryField(panel), 0);
   });
 
@@ -1964,12 +2065,28 @@ export async function initChatWidget({
     showToast('Horario rechazado', 'Podéis proponer otra alternativa.', 'info');
   }
 
-  async function acceptScheduleProposal(proposal) {
+  async function acceptScheduleProposal(proposal, actionButton = null) {
+    const previousButtonText = actionButton?.textContent || '';
+    const setActionStage = (text) => {
+      if (actionButton?.isConnected) actionButton.textContent = text;
+    };
+    if (actionButton) {
+      actionButton.disabled = true;
+      actionButton.setAttribute('aria-busy', 'true');
+      actionButton.textContent = 'Creando clase...';
+    }
     const classId = classIdFromProposal(state.selectedChat.id, proposal.id);
     const proposalRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposal.id);
     const nowIso = new Date().toISOString();
-    const latestAvailability = await loadChatAvailability(state.selectedChat, currentUid, role)
-      .catch(() => state.availabilityByChat[state.selectedChat.id] || { teacherSlots: [], studentSlots: [], busySlots: [] });
+    const availabilityFallback = state.availabilityByChat[state.selectedChat.id] || { teacherSlots: [], studentSlots: [], busySlots: [] };
+    try {
+    setActionStage('Validando horario...');
+    const latestAvailability = await withTimeout(
+      loadChatAvailability(state.selectedChat, currentUid, role).catch(() => availabilityFallback),
+      8000,
+      'carga de disponibilidad para aceptar horario',
+      availabilityFallback,
+    );
     const busySlots = busySlotsForChatValidation(latestAvailability, state.scheduleProposals || [], state.selectedChat, proposal.id);
     const conflict = findBusySlotConflict(
       busySlots,
@@ -2018,7 +2135,13 @@ export async function initChatWidget({
       observaciones: proposal.notas || '',
       calendarUid: classId,
     };
-    const pricing = await buildScheduleClassPricing(state.selectedChat, input);
+    setActionStage('Calculando precio...');
+    const pricing = await withTimeout(
+      buildScheduleClassPricing(state.selectedChat, input),
+      8000,
+      'calculo de precio para aceptar horario',
+      pickClassPriceFields(buildClassPricingQuote(input, {}, { config: globalThis.CD10PlatformConfig || {} })),
+    );
     Object.assign(input, pricing);
     const classFields = buildAdminClassPayload(input, {}, { nowIso, calendarUid: classId });
     const participantUids = { ...(state.selectedChat.participantUids || {}) };
@@ -2084,7 +2207,9 @@ export async function initChatWidget({
       updatedAt: serverTimestamp(),
     };
     const classRef = doc(firebaseDb, 'clases', classId);
-    await setDoc(classRef, payload);
+    setActionStage('Guardando clase...');
+    await withTimeoutReject(setDoc(classRef, payload), 12000, 'Creacion de la clase');
+    setActionStage('Reservando horario...');
     const createdBusySlots = await persistBusySlotsForClass(classId, payload, {
       assignmentId: state.selectedChat.id,
       createdByUid: currentUid,
@@ -2093,7 +2218,8 @@ export async function initChatWidget({
       console.warn('No se pudieron materializar las franjas ocupadas desde el cliente', error);
       return [];
     });
-    await updateDoc(proposalRef, {
+    setActionStage('Actualizando propuesta...');
+    await withTimeoutReject(updateDoc(proposalRef, {
       ...classResetWriteFields(),
       status: 'aceptada',
       classId,
@@ -2101,8 +2227,9 @@ export async function initChatWidget({
       respondedByRole: role,
       respondedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
-    await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
+    }), 12000, 'Actualizacion de la propuesta');
+    setActionStage('Actualizando chat...');
+    await withTimeoutReject(updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
       schedulingStatus: 'clase_programada',
       relationshipStage: 'clase_programada',
       relationshipStatus: 'active',
@@ -2110,7 +2237,7 @@ export async function initChatWidget({
       lastRelationshipEvent: 'class_scheduled_from_chat',
       relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    });
+    }), 12000, 'Actualizacion del chat');
     state.availabilityByChat[state.selectedChat.id] = {
       ...(state.availabilityByChat[state.selectedChat.id] || {}),
       loading: false,
@@ -2123,8 +2250,16 @@ export async function initChatWidget({
     const scheduleText = isWeeklyRecurringProposal(proposal)
       ? `Horario semanal aceptado (${scheduleProposalDisplayLabel(proposal)}). Primera clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`
       : `Clase puntual aceptada y creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`;
-    await addSystemChatMessage(state.selectedChat, scheduleText);
+    setActionStage('Avisando a la otra parte...');
+    await withTimeoutReject(addSystemChatMessage(state.selectedChat, scheduleText), 12000, 'Mensaje de sistema');
     showToast(isWeeklyRecurringProposal(proposal) ? 'Horario semanal guardado' : 'Clase creada', 'La clase ya aparece en el calendario de familia y profesor.', 'success');
+    } finally {
+      if (actionButton?.isConnected) {
+        actionButton.disabled = false;
+        actionButton.removeAttribute('aria-busy');
+        if (previousButtonText) actionButton.textContent = previousButtonText;
+      }
+    }
   }
 
   container.querySelector('[data-chat-form]').addEventListener('submit', async (event) => {

@@ -66,8 +66,9 @@ assert(professorDashboard.includes('classStatusForBadge'), 'Professor dashboard 
 assert(professorDashboard.includes('claseTerminada(clase, 0)'), 'Professor pending-class scan must use actual class end time.');
 
 assert(familyDashboard.includes('buildFamilyConfirmationPayload'), 'Family dashboard must use the calendar adapter payload for confirmations.');
-assert(familyDashboard.includes('buildClassIncidentPayload'), 'Family dashboard must create structured incidents.');
-assert(familyDashboard.includes("db.from('incidencias').insert"), 'Family incidents must be persisted.');
+assert(familyDashboard.includes('const incidentPayload = {'), 'Family dashboard must create structured incident payloads.');
+assert(familyDashboard.includes("addDoc(firestoreCollection(firebaseDb, 'incidencias'), incidentPayload)"), 'Family incidents must be persisted through Firestore rules-compatible writes.');
+assert(familyDashboard.includes('createdAt: serverTimestamp()'), 'Family incidents must use server timestamps required by Firestore rules.');
 assert(familyDashboard.includes('isScheduledClassStatus'), 'Family dashboard must support scheduled aliases.');
 
 assert(studentDashboard.includes('isScheduledClassStatus'), 'Student dashboard must support scheduled aliases.');

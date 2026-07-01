@@ -257,6 +257,7 @@ const worker = fs.readFileSync('scripts/firebase-automation-worker.mjs', 'utf8')
 const rules = fs.readFileSync('firebase/firestore.rules', 'utf8');
 const indexes = fs.readFileSync('firebase/firestore.indexes.json', 'utf8');
 const platformConfig = fs.readFileSync('js/platform-config.js', 'utf8');
+const dataClient = fs.readFileSync('js/firebase-data-client.js', 'utf8');
 
 assert.match(adminHtml, /initAdminIncidents/);
 assert.match(adminHtml, /incidents-summary-grid/);
@@ -278,6 +279,7 @@ assert.match(indexes, /assignedAdminEmail/);
 assert.match(platformConfig, /incidents\.urgentSlaHours/);
 assert.match(platformConfig, /incidents\.preventiveRadarEnabled/);
 assert.match(platformConfig, /incidents\.alertPriorityEnabled/);
+assert.match(dataClient, /if \(!data\.id\) delete data\.id;/);
 
 console.log(JSON.stringify({
   ok: true,

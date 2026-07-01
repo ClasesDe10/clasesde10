@@ -175,13 +175,13 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
+import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import {
   showToast, initSidebar, formatFechaCorta, formatHora,
   badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js';
+import { Calendario } from '../../js/calendario.js?v=20260701-selected-refresh';
 import { classStatusForBadge, isScheduledClassStatus } from '../../js/calendar-engine.js?v=20260628-calendar';
 
 const usuario = await requireAuth(['alumno']);

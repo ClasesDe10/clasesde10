@@ -494,6 +494,7 @@ function normalizeWritePayload(table, payload, isCreate = false) {
       ? buildIncidentCreatePayload(data, globalThis.CD10CurrentUser || {}, { config: platformConfig })
       : normalizeIncident(data, { config: platformConfig });
     Object.assign(data, normalized);
+    if (!data.id) delete data.id;
     if (isCreate) delete data.createdAt;
     delete data.updatedAt;
   }

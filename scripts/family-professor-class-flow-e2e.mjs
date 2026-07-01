@@ -38,6 +38,13 @@ function nextWeekdayDate(targetDay = 2, minimumDaysAhead = 14) {
   return isoDate(date);
 }
 
+function pastClassDate(daysAgo = 2) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+  return isoDate(date);
+}
+
 async function main() {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const context = await browser.newContext({ viewport: { width: 1366, height: 900 } });
@@ -178,6 +185,70 @@ async function main() {
     }, { smokeId, familyUid, teacherUid, adminUid });
   }
 
+  async function createPastClass(classId, subject, classDate) {
+    await page.evaluate(async ({ smokeId: currentSmokeId, classId: currentClassId, subject: currentSubject, classDate: currentClassDate }) => {
+      const {
+        doc,
+        getDoc,
+        serverTimestamp,
+        setDoc,
+      } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
+      const { firebaseDb } = await import('/js/firebase-client.js');
+      const chatSnap = await getDoc(doc(firebaseDb, 'chats', currentSmokeId));
+      if (!chatSnap.exists()) throw new Error(`Chat no encontrado para clase pasada: ${currentSmokeId}`);
+      const chat = chatSnap.data();
+      const participantUids = chat.participantUids || {
+        [chat.familyUid || chat.familia_id]: true,
+        [chat.teacherUid || chat.profesor_id]: true,
+      };
+      await setDoc(doc(firebaseDb, 'clases', currentClassId), {
+        id: currentClassId,
+        assignmentId: currentSmokeId,
+        asignacion_id: currentSmokeId,
+        chatId: currentSmokeId,
+        familyUid: chat.familyUid || chat.familia_id,
+        familia_id: chat.familia_id || chat.familyUid,
+        teacherUid: chat.teacherUid || chat.profesor_id,
+        profesor_id: chat.profesor_id || chat.teacherUid,
+        studentId: chat.studentId || chat.alumno_id,
+        alumno_id: chat.alumno_id || chat.studentId,
+        studentName: chat.studentName || 'Alumno E2E',
+        alumno_nombre: chat.studentName || 'Alumno E2E',
+        teacherName: chat.teacherName || 'Profesor E2E',
+        profesor_nombre: chat.teacherName || 'Profesor E2E',
+        familyName: chat.familyName || 'Familia E2E',
+        materia: currentSubject,
+        subject: currentSubject,
+        fecha: currentClassDate,
+        date: currentClassDate,
+        hora_inicio: '09:00',
+        startTime: '09:00',
+        hora_fin: '10:00',
+        endTime: '10:00',
+        duracion_minutos: 60,
+        durationMinutes: 60,
+        precio_total: 30,
+        amount: 30,
+        familyAmount: 30,
+        importe_profesor: 22,
+        teacherAmount: 22,
+        comision_clasesde10: 8,
+        platformFee: 8,
+        estado: 'confirmada',
+        status: 'confirmada',
+        lifecycleStatus: 'clase_programada',
+        attendanceStatus: 'pendiente',
+        familyPaymentStatus: 'pendiente',
+        paymentStatus: 'pendiente',
+        teacherPaymentStatus: 'pendiente',
+        participantUids,
+        source: 'class_flow_attendance_e2e',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }, { smokeId, classId, subject, classDate });
+  }
+
   async function cleanupTestArtifacts() {
     if (cleanupDone || !cleanupTargets.smokeId) return;
     await login(credentials.adminEmail, credentials.adminPassword, 'admin');
@@ -216,11 +287,25 @@ async function main() {
         getDocs(query(collection(firebaseDb, 'notificaciones'), where('payload.chatId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
         getDocs(query(collection(firebaseDb, 'notificaciones'), where('payload.assignmentId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
       ];
-      const [classSnaps, busySnaps, availabilitySnaps, notificationSnaps] = await Promise.all([
+      const incidentQueries = [
+        getDocs(query(collection(firebaseDb, 'incidencias'), where('assignmentId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(firebaseDb, 'incidencias'), where('asignacion_id', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+      ];
+      if (targets.classId) {
+        incidentQueries.push(getDocs(query(collection(firebaseDb, 'incidencias'), where('classId', '==', targets.classId))).catch(() => ({ docs: [] })));
+      }
+      if (targets.givenClassId) {
+        incidentQueries.push(getDocs(query(collection(firebaseDb, 'incidencias'), where('classId', '==', targets.givenClassId))).catch(() => ({ docs: [] })));
+      }
+      if (targets.issueClassId) {
+        incidentQueries.push(getDocs(query(collection(firebaseDb, 'incidencias'), where('classId', '==', targets.issueClassId))).catch(() => ({ docs: [] })));
+      }
+      const [classSnaps, busySnaps, availabilitySnaps, notificationSnaps, incidentSnaps] = await Promise.all([
         Promise.all(classQueries),
         Promise.all(busyQueries),
         Promise.all(availabilityQueries),
         Promise.all(notificationQueries),
+        Promise.all(incidentQueries),
       ]);
       const refs = new Map();
       [
@@ -230,6 +315,7 @@ async function main() {
         ...busySnaps.flatMap((snap) => snap.docs || []),
         ...availabilitySnaps.flatMap((snap) => snap.docs || []),
         ...notificationSnaps.flatMap((snap) => snap.docs || []),
+        ...incidentSnaps.flatMap((snap) => snap.docs || []),
       ].forEach((item) => refs.set(item.ref.path, item.ref));
       await Promise.all([...refs.values()].map((ref) => deleteDoc(ref).catch(() => {})));
       await deleteDoc(chatRef).catch(() => {});
@@ -257,6 +343,86 @@ async function main() {
     throw new Error(`No se pudo navegar hasta la fecha ${date} en el calendario.`);
   }
 
+  async function openSection(section, tableSelector) {
+    await page.locator(`[data-section="${section}"]`).first().click();
+    if (tableSelector) await page.waitForSelector(tableSelector, { timeout: 25000 });
+    await page.waitForTimeout(500);
+  }
+
+  async function readClassDoc(classId) {
+    return page.evaluate(async ({ currentClassId }) => {
+      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
+      const { firebaseDb } = await import('/js/firebase-client.js');
+      const snap = await getDoc(doc(firebaseDb, 'clases', currentClassId));
+      if (!snap.exists()) return null;
+      const data = snap.data();
+      return {
+        id: snap.id,
+        status: data.status,
+        estado: data.estado,
+        lifecycleStatus: data.lifecycleStatus,
+        attendanceStatus: data.attendanceStatus,
+        teacherConfirmationStatus: data.teacherConfirmationStatus || null,
+        familyConfirmationStatus: data.familyConfirmationStatus || null,
+        incidentStatus: data.incidentStatus || null,
+      };
+    }, { currentClassId: classId });
+  }
+
+  async function waitForClassField(classId, predicate, label) {
+    return page.waitForFunction(async ({ currentClassId, predicateSource }) => {
+      const predicateFn = new Function('data', `return (${predicateSource})(data);`);
+      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
+      const { firebaseDb } = await import('/js/firebase-client.js');
+      const snap = await getDoc(doc(firebaseDb, 'clases', currentClassId));
+      if (!snap.exists()) return false;
+      return predicateFn(snap.data());
+    }, {
+      currentClassId: classId,
+      predicateSource: predicate.toString(),
+    }, { timeout: 25000 }).catch(async () => {
+      throw new Error(`No se actualizo la clase ${classId}: ${label}. Estado actual: ${JSON.stringify(await readClassDoc(classId))}`);
+    });
+  }
+
+  async function teacherMarksClassGiven(classId, subject) {
+    await login(credentials.teacherEmail, credentials.teacherPassword, 'profesor');
+    await openSection('clases', '#tbody-mis-clases');
+    const row = page.locator('#tbody-mis-clases tr').filter({ hasText: subject }).first();
+    await row.waitFor({ state: 'visible', timeout: 25000 });
+    const beforeText = await row.innerText();
+    if (!beforeText.includes('Falta registrar profesor')) throw new Error(`El profesor no ve el siguiente paso correcto antes de registrar: ${beforeText}`);
+    await row.locator('[data-action="registrar-clase"]').click();
+    await page.waitForSelector('#modal-registrar-clase.open', { timeout: 10000 });
+    await page.locator('#rc-estado').selectOption('realizada');
+    await page.locator('#rc-notas').fill(`Clase impartida en prueba automatica ${Date.now()}`);
+    await page.locator('#btn-confirmar-registro').click();
+    await waitForClassField(classId, (data) => data.attendanceStatus === 'pendiente_familia' && data.teacherConfirmationStatus === 'realizada', 'profesor marca realizada');
+  }
+
+  async function familyConfirmsClassGiven(classId, subject) {
+    await login(credentials.familyEmail, credentials.familyPassword, 'familia');
+    await openSection('clases', '#tbody-clases');
+    const row = page.locator('#tbody-clases tr').filter({ hasText: subject }).first();
+    await row.waitFor({ state: 'visible', timeout: 25000 });
+    const beforeText = await row.innerText();
+    if (!beforeText.includes('Falta confirmar familia')) throw new Error(`La familia no ve el siguiente paso correcto antes de confirmar: ${beforeText}`);
+    await row.locator('[data-status="realizada"]').click();
+    await waitForClassField(classId, (data) => data.attendanceStatus === 'confirmada_por_ambas_partes' && data.familyConfirmationStatus === 'realizada', 'familia confirma realizada');
+  }
+
+  async function familyReportsClassNotGiven(classId, subject) {
+    await login(credentials.familyEmail, credentials.familyPassword, 'familia');
+    await openSection('clases', '#tbody-clases');
+    const row = page.locator('#tbody-clases tr').filter({ hasText: subject }).first();
+    await row.waitFor({ state: 'visible', timeout: 25000 });
+    page.once('dialog', async (dialog) => {
+      await dialog.accept('La clase no se dio durante la prueba automatica de Codex.');
+    });
+    await row.locator('[data-status="no_realizada"]').click();
+    await waitForClassField(classId, (data) => data.attendanceStatus === 'incidencia' && data.familyConfirmationStatus === 'no_realizada' && data.incidentStatus === 'abierta', 'familia avisa no realizada');
+  }
+
   try {
     await login(credentials.familyEmail, credentials.familyPassword, 'familia');
     const familyUser = await currentUserInfo();
@@ -270,7 +436,7 @@ async function main() {
     await login(credentials.familyEmail, credentials.familyPassword, 'familia');
     const chatId = await openChatById(smokeId);
     debug.chatId = chatId;
-    const date = nextWeekdayDate(2, 14);
+    const date = nextWeekdayDate(2, 49);
     const proposal = await page.evaluate(async ({ chatId: currentChatId, date: classDate }) => {
       const {
         addDoc,
@@ -458,6 +624,26 @@ async function main() {
       throw new Error('La clase aceptada no aparece en Clases de familia.');
     }
 
+    const givenClassId = `${smokeId}_attendance_given`;
+    const issueClassId = `${smokeId}_attendance_issue`;
+    const givenSubject = 'Asistencia dada E2E';
+    const issueSubject = 'Asistencia no dada E2E';
+    cleanupTargets.givenClassId = givenClassId;
+    cleanupTargets.issueClassId = issueClassId;
+
+    await login(credentials.adminEmail, credentials.adminPassword, 'admin');
+    await createPastClass(givenClassId, givenSubject, pastClassDate(2));
+    await createPastClass(issueClassId, issueSubject, pastClassDate(3));
+
+    await teacherMarksClassGiven(givenClassId, givenSubject);
+    await familyConfirmsClassGiven(givenClassId, givenSubject);
+
+    await teacherMarksClassGiven(issueClassId, issueSubject);
+    await familyReportsClassNotGiven(issueClassId, issueSubject);
+
+    debug.attendanceGiven = await readClassDoc(givenClassId);
+    debug.attendanceIssue = await readClassDoc(issueClassId);
+
     await cleanupTestArtifacts();
 
     console.log(JSON.stringify({
@@ -473,6 +659,13 @@ async function main() {
         professorClasses: true,
         familyCalendar: true,
         familyClasses: true,
+        teacherMarksClassGiven: true,
+        familyConfirmsClassGiven: true,
+        familyReportsClassNotGiven: true,
+      },
+      attendance: {
+        given: debug.attendanceGiven,
+        issue: debug.attendanceIssue,
       },
       consoleEvents: consoleEvents.slice(-10),
     }, null, 2));

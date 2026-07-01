@@ -37,6 +37,9 @@ export class Calendario {
       this.clasesPorFecha[fecha].push({ ...c, fecha, date: c.date || fecha });
     });
     this.render();
+    if (this.diaSeleccionado) {
+      this.onDiaClick(this.diaSeleccionado, this.clasesPorFecha[this.diaSeleccionado] || []);
+    }
   }
 
   anterior() {

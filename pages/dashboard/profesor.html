@@ -188,7 +188,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th><th>Hora</th><th>Alumno</th><th>Materia</th><th>Duración</th><th>Ingreso</th><th>Estado</th><th>Mis notas</th><th>Acción</th>
+                  <th>Fecha</th><th>Hora</th><th>Alumno</th><th>Materia</th><th>Duración</th><th>Ingreso</th><th>Estado</th><th>Seguimiento</th><th>Acción</th>
                 </tr>
               </thead>
               <tbody id="tbody-mis-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
@@ -637,38 +637,38 @@
   </div>
 </div>
 
-<!-- MODAL: REGISTRAR CLASE REALIZADA -->
+<!-- MODAL: REGISTRAR RESULTADO DE CLASE -->
 <div class="modal-overlay" id="modal-registrar-clase">
   <div class="modal">
     <div class="modal-header">
-      <span class="modal-title">Registrar clase</span>
+      <span class="modal-title">Registrar resultado de la clase</span>
       <button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="rc-clase-id">
       <div id="rc-info" style="background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px;font-size:.875rem"></div>
       <div class="form-group">
-        <label class="form-label">Estado <span class="required">*</span></label>
+        <label class="form-label">Resultado <span class="required">*</span></label>
         <select class="form-control" id="rc-estado">
-          <option value="realizada">Realizada ✓</option>
-          <option value="cancelada">Cancelada</option>
-          <option value="reprogramada">Reprogramada</option>
+          <option value="realizada">Se dio correctamente</option>
+          <option value="cancelada">No se dio / cancelada</option>
+          <option value="reprogramada">Se reprogramara</option>
         </select>
       </div>
       <div class="form-group">
         <label class="form-label">Notas de la clase</label>
-        <textarea class="form-control" id="rc-notas" rows="4" placeholder="Observaciones sobre el progreso del alumno, temas vistos…"></textarea>
+        <textarea class="form-control" id="rc-notas" rows="4" placeholder="Temas vistos, progreso del alumno o cualquier detalle util para la familia y el seguimiento interno."></textarea>
       </div>
       <div id="rc-motivo-wrapper" style="display:none">
         <div class="form-group">
-          <label class="form-label">Motivo cancelación</label>
+          <label class="form-label" id="rc-motivo-label">Motivo</label>
           <input class="form-control" type="text" id="rc-motivo">
         </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-registrar-clase">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-registro">Guardar estado</button>
+      <button class="btn btn-primary" id="btn-confirmar-registro">Guardar resultado</button>
     </div>
   </div>
 </div>
@@ -709,7 +709,7 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
+import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
@@ -723,12 +723,13 @@ import {
 } from '../../js/profile-engine.js?v=20260629-school-profile';
 import {
   buildTeacherAttendancePayload,
+  classAttendanceState,
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260629-attendance-direct';
+} from '../../js/calendar-engine.js?v=20260701-attendance-clarity';
 import { buildTeacherPayoutPayload, classEconomicState } from '../../js/payment-engine.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260701-weekday-recurring';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260701-accept-pointer';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260701-journey-clarity';
@@ -740,7 +741,7 @@ import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   formatEuros, badgeEstado, getIniciales, debounce, sanitize, fechaHoy, nombreMes, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js';
+import { Calendario } from '../../js/calendario.js?v=20260701-selected-refresh';
 
 const usuario = await requireAuth(['profesor']);
 if (!usuario) throw new Error('No autorizado');
@@ -778,6 +779,10 @@ let perfil = perfilFirestoreSnap?.exists()
     });
 const profesorId = perfilLegacy?.id || perfil?.id || profesorFirestoreId;
 
+function isExpectedPermissionFallback(error) {
+  return /permission|insufficient permissions/i.test(String(error?.message || error || ''));
+}
+
 // Mostrar alerta de verificación
 if (perfil) {
   const banner = document.getElementById('alerta-verificacion');
@@ -808,6 +813,36 @@ let alumnosProfesorCache = new Map();
 
 function claseTerminada(clase, margenMinutos = 0) {
   return classEnded(clase, margenMinutos);
+}
+
+function renderTeacherAttendanceSummary(clase) {
+  const state = classAttendanceState(clase);
+  const badgeClass = state.tone === 'success' ? 'badge-success'
+    : state.tone === 'warning' ? 'badge-warning'
+    : state.tone === 'danger' ? 'badge-danger'
+    : 'badge-info';
+  const notes = clase.notas_profesor || clase.notasProfesor || '';
+  return `
+    <div class="attendance-summary">
+      <span class="badge ${badgeClass}">${sanitize(state.label)}</span>
+      <span class="attendance-hint">${sanitize(state.teacherNextStep)}</span>
+      ${notes ? `<span class="attendance-notes">${sanitize(notes)}</span>` : ''}
+    </div>
+  `;
+}
+
+function renderTeacherClassAction(clase) {
+  const state = classAttendanceState(clase);
+  if (!state.canTeacherRegister) return '<span class="muted">Sin accion ahora</span>';
+  const alumnoNombre = clase.alumno_nombre || clase.studentName || 'Alumno/a';
+  return `
+    <button class="btn btn-primary btn-sm"
+            data-action="registrar-clase"
+            data-id="${sanitize(clase.id)}"
+            data-alumno="${sanitize(alumnoNombre)}"
+            data-materia="${sanitize(clase.materia)}"
+            data-fecha="${formatFechaCorta(clase.fecha)}">Registrar resultado</button>
+  `;
 }
 
 function irA(sec, options = {}) {
@@ -915,7 +950,7 @@ async function cargarChatsUsuarioActual() {
     ));
     return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   } catch (error) {
-    console.warn('No se pudieron cargar chats para el resumen operativo', error);
+    if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron cargar chats para el resumen operativo', error);
     return [];
   }
 }
@@ -929,7 +964,7 @@ async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
     ));
     return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   } catch (error) {
-    console.warn(`No se pudo cargar ${nombreColeccion} para el resumen operativo`, error);
+    if (!isExpectedPermissionFallback(error)) console.warn(`No se pudo cargar ${nombreColeccion} para el resumen operativo`, error);
     return [];
   }
 }
@@ -1134,12 +1169,10 @@ async function cargarInicio() {
           <div class="clase-nombre">${sanitize(c.alumno_nombre || c.studentName || c.alumnos?.nombre || 'Alumno/a')} — ${sanitize(c.materia)}</div>
           <div class="clase-materia">${formatFechaCorta(c.fecha)} ${formatHora(c.hora_inicio)}</div>
         </div>
-        <button class="btn btn-primary btn-sm"
-                data-action="registrar-clase"
-                data-id="${sanitize(c.id)}"
-                data-alumno="${sanitize(c.alumno_nombre || c.studentName || ((c.alumnos?.nombre||'') + ' ' + (c.alumnos?.apellidos||'')))}"
-                data-materia="${sanitize(c.materia)}"
-                data-fecha="${formatFechaCorta(c.fecha)}">Registrar</button>
+        ${renderTeacherClassAction({
+          ...c,
+          alumno_nombre: c.alumno_nombre || c.studentName || ((c.alumnos?.nombre||'') + ' ' + (c.alumnos?.apellidos||'')),
+        })}
       </div>`).join('');
   }
 }
@@ -1186,6 +1219,7 @@ async function iniciarCalendario() {
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia||'')}</div>
               <div class="clase-materia">${sanitize(c.materia||'')}${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
+              ${renderTeacherAttendanceSummary(c)}
               <div class="calendar-payment-state"><span class="badge ${economicBadge}">${sanitize(economic.badge)}</span><span class="payment-due-hint">${sanitize(economic.label)}</span></div>
             </div>
             ${badgeEstado(classStatusForBadge(c))}
@@ -1245,17 +1279,8 @@ async function cargarMisClases() {
     <td>${c.duracion_minutos} min</td>
     <td><strong>${importeProfesorClase(c) > 0 ? formatEuros(importeProfesorClase(c)) : '—'}</strong></td>
     <td>${badgeEstado(classStatusForBadge(c))}</td>
-    <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.78rem">${sanitize(c.notas_profesor||'—')}</td>
-    <td>
-      ${isScheduledClassStatus(c.estado || c.status) && claseTerminada(c, 0)
-        ? `<button class="btn btn-primary btn-sm"
-                   data-action="registrar-clase"
-                   data-id="${sanitize(c.id)}"
-                   data-alumno="${sanitize(alumnoNombre)}"
-                   data-materia="${sanitize(c.materia)}"
-                   data-fecha="${formatFechaCorta(c.fecha)}">Registrar</button>`
-        : ''}
-    </td>
+    <td>${renderTeacherAttendanceSummary(c)}</td>
+    <td>${renderTeacherClassAction(c)}</td>
   </tr>`;
   }).join('');
 }
@@ -1269,12 +1294,16 @@ window.abrirRegistro = (id, alumno, materia, fecha) => {
   document.getElementById('rc-motivo').value = '';
   document.getElementById('rc-estado').value = 'realizada';
   document.getElementById('rc-motivo-wrapper').style.display = 'none';
+  const motivoLabel = document.getElementById('rc-motivo-label');
+  if (motivoLabel) motivoLabel.textContent = 'Motivo';
   document.getElementById('modal-registrar-clase').classList.add('open');
 };
 
 document.getElementById('rc-estado').addEventListener('change', (e) => {
-  document.getElementById('rc-motivo-wrapper').style.display =
-    ['cancelada','reprogramada'].includes(e.target.value) ? '' : 'none';
+  const needsReason = ['cancelada','reprogramada'].includes(e.target.value);
+  document.getElementById('rc-motivo-wrapper').style.display = needsReason ? '' : 'none';
+  const label = document.getElementById('rc-motivo-label');
+  if (label) label.textContent = e.target.value === 'reprogramada' ? 'Motivo de reprogramacion' : 'Motivo por el que no se dio';
 });
 
 document.getElementById('btn-confirmar-registro').addEventListener('click', async () => {
@@ -1282,16 +1311,29 @@ document.getElementById('btn-confirmar-registro').addEventListener('click', asyn
   const estado = document.getElementById('rc-estado').value;
   const notas  = document.getElementById('rc-notas').value.trim();
   const motivo = document.getElementById('rc-motivo').value.trim();
+  const btn = document.getElementById('btn-confirmar-registro');
+
+  if (['cancelada','reprogramada'].includes(estado) && !motivo) {
+    showToast('Falta el motivo', 'Indica brevemente por que no se dio o por que se reprograma.', 'warning');
+    return;
+  }
 
   const payload = buildTeacherAttendancePayload(estado, notas, motivo, usuario.uid || usuario.id);
   try {
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
     await updateDoc(firestoreDoc(firebaseDb, 'clases', id), payload);
   } catch (error) {
     showToast('Error', error.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Guardar resultado';
     return;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Guardar resultado';
   }
   document.getElementById('modal-registrar-clase').classList.remove('open');
-  showToast('Registrado', 'Clase actualizada correctamente.', 'success');
+  showToast('Resultado guardado', estado === 'realizada' ? 'La familia ya puede confirmar la clase.' : 'Hemos dejado registrada la incidencia para seguimiento.', 'success');
   cargarInicio();
   cargarMisClases();
   if (cal) cargarClasesCalendario(cal.anio, cal.mes);

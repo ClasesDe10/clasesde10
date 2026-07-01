@@ -623,7 +623,7 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260629-scheduling';
+import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
@@ -634,12 +634,12 @@ import {
   validatePostalCode,
 } from '../../js/profile-engine.js?v=20260629-school-profile';
 import {
-  buildClassIncidentPayload,
   buildFamilyConfirmationPayload,
+  classAttendanceState,
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260629-attendance-direct';
+} from '../../js/calendar-engine.js?v=20260701-attendance-clarity';
 import {
   applyClassPaymentContext,
   buildFamilyClassPaymentConfirmationPayload,
@@ -655,20 +655,20 @@ import {
   paymentStatusForBadge,
 } from '../../js/payment-engine.js?v=20260629-weekly-payments';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260701-weekday-recurring';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260701-accept-pointer';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-family-finance-privacy';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260701-journey-clarity';
 import { renderFamilyJourneyPanel } from '../../js/family-journey-ui.js?v=20260629-family-finance-privacy';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import { availabilitySlotLabel, summarizeAvailabilitySlots } from '../../js/availability-engine.js?v=20260629-busy-slots';
-import { collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js';
+import { Calendario } from '../../js/calendario.js?v=20260701-selected-refresh';
 
 const usuario = await requireAuth(['familia']);
 if (!usuario) throw new Error('No autorizado');
@@ -733,6 +733,10 @@ let familyPaymentGroupsCache = new Map();
 
 function ownerUid() {
   return usuario.uid || usuario.firebase_uid || usuario.id;
+}
+
+function isExpectedPermissionFallback(error) {
+  return /permission|insufficient permissions/i.test(String(error?.message || error || ''));
 }
 
 function familyPaymentQueryIds() {
@@ -855,11 +859,34 @@ function claseTerminada(clase, margenMinutos = 0) {
 }
 
 function labelConfirmacionFamilia(clase) {
-  const status = clase.familyConfirmationStatus || clase.confirmacion_familia || '';
-  if (status === 'realizada') return '<span class="badge badge-success">Confirmada</span>';
-  if (status === 'no_realizada') return '<span class="badge badge-danger">No realizada</span>';
-  if (status === 'incidencia') return '<span class="badge badge-warning">Incidencia</span>';
-  return '<span class="badge badge-gray">Pendiente</span>';
+  const state = classAttendanceState(clase);
+  const badgeClass = state.tone === 'success' ? 'badge-success'
+    : state.tone === 'warning' ? 'badge-warning'
+    : state.tone === 'danger' ? 'badge-danger'
+    : 'badge-info';
+  return `
+    <div class="attendance-summary">
+      <span class="badge ${badgeClass}">${sanitize(state.label)}</span>
+      <span class="attendance-hint">${sanitize(state.familyNextStep)}</span>
+    </div>
+  `;
+}
+
+function renderFamilyClassActions(clase) {
+  const state = classAttendanceState(clase);
+  if (state.hasFamilyConfirmation) return '<span class="muted">Ya respondida</span>';
+  if (state.canFamilyConfirm) {
+    return `
+      <div class="class-action-stack">
+        <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(clase.id)}" data-status="realizada">Confirmar que se dio</button>
+        <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(clase.id)}" data-status="no_realizada">Avisar que no se dio</button>
+      </div>
+    `;
+  }
+  if (state.canFamilyReportIssue) {
+    return `<button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(clase.id)}" data-status="no_realizada">Avisar que no se dio</button>`;
+  }
+  return '<span class="muted">Sin accion ahora</span>';
 }
 
 function irA(sec, options = {}) {
@@ -977,7 +1004,7 @@ async function cargarChatsUsuarioActual() {
     ));
     return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   } catch (error) {
-    console.warn('No se pudieron cargar chats para el resumen operativo', error);
+    if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron cargar chats para el resumen operativo', error);
     return [];
   }
 }
@@ -991,7 +1018,7 @@ async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
     ));
     return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
   } catch (error) {
-    console.warn(`No se pudo cargar ${nombreColeccion} para el resumen operativo`, error);
+    if (!isExpectedPermissionFallback(error)) console.warn(`No se pudo cargar ${nombreColeccion} para el resumen operativo`, error);
     return [];
   }
 }
@@ -1306,22 +1333,17 @@ async function iniciarCalendario() {
         }
         cont.innerHTML = clases.map(c => {
           const payment = familyPaymentStateForClass(c);
-          const puedeConfirmar = claseTerminada(c, 0)
-            && !['cancelada', 'reprogramada'].includes(c.estado)
-            && (isScheduledClassStatus(c.estado || c.status) || c.estado === 'realizada');
-          const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
-          const actions = puedeConfirmar && !yaConfirmada ? `
-            <div class="calendar-class-actions">
-              <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Dada</button>
-              <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="no_realizada">No dada</button>
-            </div>
-          ` : '';
+          const attendance = classAttendanceState(c);
+          const actions = attendance.canFamilyConfirm || attendance.canFamilyReportIssue
+            ? `<div class="calendar-class-actions">${renderFamilyClassActions(c)}</div>`
+            : `<div class="attendance-hint">${sanitize(attendance.familyNextStep)}</div>`;
           return `
           <div class="clase-item calendar-class-item payment-${payment.state}" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.alumno_nombre||'')}</div>
               <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre||'')}</div>
+              ${labelConfirmacionFamilia(c)}
               <div class="calendar-payment-state">${renderPaymentStateBadge(c)}</div>
               ${actions}
             </div>
@@ -1418,14 +1440,7 @@ async function cargarClases() {
   tbody.innerHTML = clases.map(c => {
     const alumnoNombre = c.alumno_nombre || c.studentName || hijosPorId.get(c.studentId || c.alumno_id) || 'Alumno/a';
     const profesorNombre = c.profesor_nombre || c.teacherName || 'Profesor asignado';
-    const puedeConfirmar = claseTerminada(c, 0)
-      && !['cancelada', 'reprogramada'].includes(c.estado)
-      && (isScheduledClassStatus(c.estado || c.status) || c.estado === 'realizada');
-    const yaConfirmada = Boolean(c.familyConfirmationStatus || c.confirmacion_familia);
-    const acciones = puedeConfirmar && !yaConfirmada ? `
-      <button class="btn btn-success btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="realizada">Dada</button>
-      <button class="btn btn-ghost btn-sm" data-action="confirmar-clase-familia" data-id="${sanitize(c.id)}" data-status="no_realizada">No dada</button>
-    ` : '—';
+    const acciones = renderFamilyClassActions(c);
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
@@ -1461,8 +1476,14 @@ async function confirmarClaseFamiliaDesdeBoton(btn) {
   btn.textContent = 'Guardando...';
   const status = btn.dataset.status;
   const notas = ['incidencia', 'no_realizada'].includes(status)
-    ? window.prompt(status === 'no_realizada' ? 'Cuéntanos por qué no se dio la clase:' : 'Cuéntanos brevemente qué pasó con la clase:') || ''
+    ? window.prompt(status === 'no_realizada' ? 'Cuéntanos por qué no se dio la clase para avisar al administrador:' : 'Cuéntanos brevemente qué pasó con la clase:') || ''
     : '';
+  if (['incidencia', 'no_realizada'].includes(status) && !notas.trim()) {
+    btn.disabled = false;
+    btn.textContent = originalText;
+    showToast('Sin cambios', 'Para avisar una incidencia necesitamos una breve explicacion.', 'info');
+    return;
+  }
 
   const claseRef = firestoreDoc(firebaseDb, 'clases', btn.dataset.id);
   const claseSnap = await getDoc(claseRef).catch(() => null);
@@ -1478,13 +1499,41 @@ async function confirmarClaseFamiliaDesdeBoton(btn) {
   }
 
   if (['incidencia', 'no_realizada'].includes(status)) {
-    const incidencia = buildClassIncidentPayload(btn.dataset.id, claseActual || {}, 'family_confirmation', notas || 'Clase marcada como no dada por la familia.', usuario.uid || usuario.id);
-    const { error: incError } = await db.from('incidencias').insert({
-      ...incidencia,
-      createdByUid: usuario.uid || usuario.id,
+    const classId = btn.dataset.id;
+    const title = 'Clase marcada como no dada';
+    const description = notas || 'Clase marcada como no dada por la familia.';
+    const incidentPayload = {
+      classId,
+      clase_id: classId,
+      familyUid: claseActual?.familyUid || claseActual?.familia_id || familiaFirestoreId,
+      familia_id: claseActual?.familia_id || claseActual?.familyUid || familiaFirestoreId,
+      teacherUid: claseActual?.teacherUid || claseActual?.profesor_id || '',
+      profesor_id: claseActual?.profesor_id || claseActual?.teacherUid || '',
+      studentId: claseActual?.studentId || claseActual?.alumno_id || '',
+      alumno_id: claseActual?.alumno_id || claseActual?.studentId || '',
+      tipo: 'family_confirmation',
+      titulo: title,
+      title,
+      descripcion: description,
+      description,
+      estado: 'abierta',
+      status: 'abierta',
+      prioridad: 'alta',
+      priority: 'high',
+      categoria: 'clase',
+      category: 'clase',
+      reportado_por: ownerUid(),
+      userUid: ownerUid(),
+      createdByUid: ownerUid(),
+      createdByEmail: usuario.email || '',
+      source: 'family_confirmation',
+      automatic: false,
+      createdAt: serverTimestamp(),
       created_at: new Date().toISOString(),
+    };
+    await addDoc(firestoreCollection(firebaseDb, 'incidencias'), incidentPayload).catch((error) => {
+      console.warn('No se pudo crear incidencia de clase', error);
     });
-    if (incError) console.warn('No se pudo crear incidencia de clase', incError);
   }
 
   showToast('Clase actualizada', status === 'realizada' ? 'Confirmacion guardada.' : 'Aviso enviado.', 'success');

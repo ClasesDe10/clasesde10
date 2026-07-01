@@ -3,6 +3,7 @@ import {
   buildClassIncidentPayload,
   buildFamilyConfirmationPayload,
   buildTeacherAttendancePayload,
+  classAttendanceState,
   classReminderWindows,
   classStatusForBadge,
   getClassAttendanceSummary,
@@ -54,10 +55,17 @@ assert(adminPayload.previousSchedule?.fecha === '2026-06-29', 'Admin payload mus
 const teacherPayload = buildTeacherAttendancePayload('realizada', 'Todo bien', '', 'teacher_1', '2026-06-30T18:05:00.000Z');
 assert(teacherPayload.attendanceStatus === 'pendiente_familia', 'Teacher completion must wait for family confirmation.');
 assert(teacherPayload.lifecycleStatus === 'pendiente_confirmacion', 'Teacher completion must enter pending confirmation lifecycle.');
+const endedClass = { id: 'class_ended', estado: 'confirmada', fecha: '2026-06-30', hora_inicio: '17:00', hora_fin: '18:00' };
+assert(classAttendanceState(endedClass, { nowMs: new Date('2026-06-30T18:10:00').getTime() }).canTeacherRegister, 'Ended classes must ask the teacher to register the result first.');
+const pendingFamilyState = classAttendanceState({ ...endedClass, ...teacherPayload }, { nowMs: new Date('2026-06-30T18:10:00').getTime() });
+assert(pendingFamilyState.canFamilyConfirm && pendingFamilyState.key === 'pending_family', 'Teacher-marked classes must ask family for confirmation.');
 
 const familyPayload = buildFamilyConfirmationPayload('incidencia', 'No aparecio', 'family_1', '2026-06-30T18:10:00.000Z');
 assert(familyPayload.incidentStatus === 'abierta', 'Family incidents must open incident status.');
 assert(getClassAttendanceSummary({ ...teacherPayload, ...familyPayload }) === 'incidencia', 'Incident confirmations must summarize as incidencia.');
+const confirmedPayload = buildFamilyConfirmationPayload('realizada', '', 'family_1', '2026-06-30T18:12:00.000Z', teacherPayload);
+const confirmedState = classAttendanceState({ ...endedClass, ...teacherPayload, ...confirmedPayload }, { nowMs: new Date('2026-06-30T18:15:00').getTime() });
+assert(confirmedState.key === 'confirmed_by_both' && !confirmedState.canFamilyConfirm, 'Classes confirmed by both parties must be closed for attendance.');
 
 const incident = buildClassIncidentPayload('class_1', { familyUid: 'family_1', teacherUid: 'teacher_1' }, 'family_confirmation', 'No se dio', 'family_1');
 assert(incident.estado === 'abierta' && incident.teacherUid === 'teacher_1', 'Incident payload must include participants and open status.');
