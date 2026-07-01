@@ -868,7 +868,7 @@ function renderShell(container, role) {
         <div class="chat-thread-header">
           <div>
             <div class="chat-thread-title">Notificaciones</div>
-            <div class="chat-thread-subtitle">Avisos de Admin y Sistema. En movil/PWA activa avisos para recibirlos fuera de la app.</div>
+            <div class="chat-thread-subtitle">Avisos importantes de Admin y Sistema. En movil/PWA puedes activar avisos fuera de la app.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
             <button class="btn btn-ghost btn-sm" type="button" data-chat-open-panel="chats">Ver chats</button>
@@ -1096,7 +1096,7 @@ function renderThreadHeader(container, chat, role, preference = {}) {
       <input class="form-control" type="text" maxlength="120" value="${escapeHtml(customName)}" data-chat-name-input aria-label="Nombre guardado para este chat" placeholder="${escapeHtml(defaultChatTitle(chat, role))}">
       <button class="btn btn-primary btn-sm" type="submit">Guardar</button>
     </form>
-    <button class="btn btn-ghost btn-sm chat-alias-toggle" type="button" data-edit-chat-name>${customName ? 'Cambiar nombre' : 'Guardar nombre'}</button>`;
+    <button class="btn btn-ghost btn-sm chat-alias-toggle" type="button" data-edit-chat-name>${customName ? 'Cambiar nombre' : 'Personalizar nombre'}</button>`;
 }
 
 function renderMessages(container, messages, currentUid) {
@@ -1224,7 +1224,7 @@ function renderNotifications(container, notifications) {
   if (!list) return;
 
   if (!notifications.length) {
-    list.innerHTML = '<div class="chat-empty-state">No hay notificaciones todavia.</div>';
+    list.innerHTML = '<div class="chat-empty-state">Sin notificaciones pendientes. Te avisaremos aqui cuando haya algo importante.</div>';
     return;
   }
 
