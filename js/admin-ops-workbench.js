@@ -15,7 +15,7 @@ import {
 } from './admin-ops-engine.js?v=20260629-ops';
 import { filterAfterClassReset } from './class-reset.js';
 
-export const ADMIN_OPS_WORKBENCH_VERSION = 'admin-ops-workbench-2026-06-29';
+export const ADMIN_OPS_WORKBENCH_VERSION = 'admin-ops-workbench-2026-07-01';
 
 const instances = new WeakMap();
 const COLLECTIONS = Object.freeze({
@@ -167,6 +167,109 @@ function renderAutomationGroups(state) {
   `).join('');
 }
 
+function routineCard({
+  label,
+  value,
+  detail,
+  section,
+  focus = '',
+  query = '',
+  tone = 'info',
+}) {
+  return `
+    <article class="ops-routine-card ops-routine-${escapeHtml(toneBadge(tone))}">
+      <div>
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <p>${escapeHtml(detail)}</p>
+      </div>
+      <div class="ops-routine-actions">
+        <button class="btn btn-outline btn-sm" type="button" data-ops-focus="${escapeHtml(focus)}" data-ops-query="${escapeHtml(query)}">Ver cola</button>
+        <button class="btn btn-primary btn-sm" type="button" data-ops-nav="${escapeHtml(section)}">Abrir</button>
+      </div>
+    </article>`;
+}
+
+function renderDailyRoutine(state) {
+  const s = state.model?.summary || {};
+  const topItem = state.model?.topItems?.[0] || null;
+  const crmCount = (state.model?.items || []).filter((item) => ['teacher', 'family', 'task'].includes(item.type)).length;
+  const relationCount = (s.relationshipFollowups || 0) + (s.proactiveAssistSignals || 0);
+  const qualityCount = (s.preventiveRisks || 0) + (s.selfSupervisionFindings || 0) + (s.internalAiInsights || 0);
+
+  const cards = [
+    routineCard({
+      label: 'Primero resolver',
+      value: topItem ? String(topItem.priority) : 'OK',
+      detail: topItem ? topItem.title : 'No hay una urgencia operativa destacada.',
+      section: topItem?.section || 'dashboard',
+      focus: topItem?.type || '',
+      tone: topItem?.tone || 'success',
+    }),
+    routineCard({
+      label: 'Matching',
+      value: formatNumber(s.waitingMatching || 0),
+      detail: 'Solicitudes que bloquean conversion si no reciben profesor.',
+      section: 'solicitudes',
+      focus: 'matching',
+      tone: s.waitingMatching ? 'danger' : 'success',
+    }),
+    routineCard({
+      label: 'Caja y pagos',
+      value: formatEuros(s.revenueAtRisk || 0),
+      detail: 'Dinero pendiente, vencido o por validar.',
+      section: 'pagos',
+      focus: 'payment',
+      tone: s.revenueAtRisk ? 'warning' : 'success',
+    }),
+    routineCard({
+      label: 'Incidencias y riesgos',
+      value: formatNumber((s.openIncidents || 0) + (s.preventiveRisks || 0) + (s.selfSupervisionFindings || 0)),
+      detail: 'Problemas reales, riesgos preventivos y hallazgos de autosupervision.',
+      section: 'incidencias',
+      focus: (s.openIncidents || 0) ? 'incident' : (s.preventiveRisks || 0) ? 'risk' : 'supervision',
+      tone: (s.openIncidents || 0) || (s.preventiveRisks || 0) ? 'warning' : 'success',
+    }),
+    routineCard({
+      label: 'CRM usuarios',
+      value: formatNumber(crmCount),
+      detail: 'Profesores, familias o tareas CRM que merecen seguimiento.',
+      section: 'profesores',
+      focus: '',
+      query: 'seguimiento',
+      tone: crmCount ? 'info' : 'success',
+    }),
+    routineCard({
+      label: 'Relaciones activas',
+      value: formatNumber(relationCount),
+      detail: 'Acompanamiento post-match y senales proactivas para evitar bloqueos.',
+      section: 'chats',
+      focus: (s.relationshipFollowups || 0) ? 'followup' : 'proactive',
+      tone: relationCount ? 'warning' : 'success',
+    }),
+    routineCard({
+      label: 'Calidad del sistema',
+      value: formatNumber(qualityCount),
+      detail: 'Autosupervision, IA interna y controles que mantienen la plataforma limpia.',
+      section: 'auditoria',
+      focus: (s.selfSupervisionFindings || 0) ? 'supervision' : (s.internalAiInsights || 0) ? 'ai_assist' : 'risk',
+      tone: qualityCount ? 'warning' : 'success',
+    }),
+  ];
+
+  return `
+    <section class="card ops-routine">
+      <div class="card-header">
+        <span class="card-title">Rutina diaria del administrador</span>
+        <span class="badge badge-gray">${formatNumber(s.estimatedMinutesSaved || 0)} min potenciales</span>
+      </div>
+      <div class="card-body">
+        <p class="ops-routine-intro">Orden recomendado para revisar ClasesDe10 sin perderse entre secciones: prioridad, matching, caja, incidencias, CRM, relaciones y calidad.</p>
+        <div class="ops-routine-grid">${cards.join('')}</div>
+      </div>
+    </section>`;
+}
+
 function getFilters(container) {
   return {
     search: clean(container.querySelector('[data-ops-search]')?.value || '').toLowerCase(),
@@ -189,6 +292,35 @@ function itemMatches(item, filters) {
     item.section,
     item.automation,
   ].join(' ').toLowerCase().includes(filters.search);
+}
+
+function renderOpsEmptyState(filters, model) {
+  const hasFilter = Boolean(filters.search || filters.type || filters.priority);
+  const title = hasFilter ? 'Sin acciones con estos filtros' : 'Sin acciones operativas abiertas';
+  const desc = hasFilter
+    ? 'La cola no tiene resultados para esa busqueda. Limpia filtros o abre directamente el modulo que quieras revisar.'
+    : 'Ahora mismo no hay bloqueos prioritarios. Puedes usar la rutina diaria para revisar caja, matching, CRM y calidad antes de cerrar la sesion.';
+  const quick = [
+    { label: 'Ver todo', focus: 'all', section: 'operaciones' },
+    { label: 'Solicitudes', focus: 'matching', section: 'solicitudes' },
+    { label: 'Pagos', focus: 'payment', section: 'pagos' },
+    { label: 'Incidencias', focus: 'incident', section: 'incidencias' },
+    { label: 'Documentos', focus: 'document', section: 'documentos' },
+    { label: 'CRM', query: 'seguimiento', section: 'profesores' },
+  ];
+  const top = (model?.topItems || []).slice(0, 3);
+  return `
+    <div class="empty-state ops-empty-state">
+      <div class="empty-title">${escapeHtml(title)}</div>
+      <div class="empty-desc">${escapeHtml(desc)}</div>
+      <div class="ops-empty-actions">
+        ${quick.map((item) => `<button class="btn btn-outline btn-sm" type="button" data-ops-focus="${escapeHtml(item.focus || '')}" data-ops-query="${escapeHtml(item.query || '')}">${escapeHtml(item.label)}</button>`).join('')}
+      </div>
+      ${top.length ? `<div class="ops-empty-suggestions">
+        <span>Tambien puedes abrir:</span>
+        ${top.map((item) => `<button class="btn btn-ghost btn-sm" type="button" data-ops-nav="${escapeHtml(item.section)}">${escapeHtml(item.title)}</button>`).join('')}
+      </div>` : ''}
+    </div>`;
 }
 
 function renderOpsItem(item) {
@@ -228,7 +360,7 @@ function renderItems(state) {
   if (count) count.textContent = `${formatNumber(items.length)} acciones`;
   list.innerHTML = items.length
     ? items.slice(0, 80).map(renderOpsItem).join('')
-    : '<div class="empty-state"><div class="empty-title">Sin acciones con estos filtros</div><div class="empty-desc">Prueba otro filtro o actualiza la bandeja.</div></div>';
+    : renderOpsEmptyState(filters, state.model);
 }
 
 function renderShell(state) {
@@ -255,6 +387,8 @@ function renderShell(state) {
         ${statCard('Dinero en riesgo', formatEuros(s.revenueAtRisk || 0), 'pagos pendientes', s.revenueAtRisk ? 'warning' : 'success')}
         ${statCard('Tiempo ahorrable', formatMinutes(s.estimatedMinutesSaved || 0), 'si se procesa en bloque', 'info')}
       </div>
+
+      ${renderDailyRoutine(state)}
 
       <section class="card">
         <div class="card-header">
@@ -285,6 +419,11 @@ function renderShell(state) {
             <option value="lead">Leads</option>
             <option value="task">Tareas</option>
             <option value="chat">Chats</option>
+            <option value="risk">Riesgos</option>
+            <option value="supervision">Autosupervision</option>
+            <option value="followup">Seguimientos</option>
+            <option value="proactive">Ayuda proactiva</option>
+            <option value="ai_assist">IA interna</option>
           </select>
           <select class="form-control" data-ops-priority aria-label="Filtrar por prioridad">
             <option value="">Todas las prioridades</option>
@@ -514,6 +653,20 @@ export async function initAdminOpsWorkbench({
       const nav = event.target.closest('[data-ops-nav]');
       if (nav) {
         state.navigate?.(nav.dataset.opsNav);
+        return;
+      }
+      const focus = event.target.closest('[data-ops-focus]');
+      if (focus) {
+        const value = clean(focus.dataset.opsFocus || '', 80);
+        const queryText = clean(focus.dataset.opsQuery || '', 120);
+        const search = state.container.querySelector('[data-ops-search]');
+        const type = state.container.querySelector('[data-ops-type]');
+        const priority = state.container.querySelector('[data-ops-priority]');
+        if (search) search.value = queryText;
+        if (priority) priority.value = '';
+        if (type) type.value = value === 'all' ? '' : value;
+        renderItems(state);
+        state.container.querySelector('[data-ops-list]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         return;
       }
       const task = event.target.closest('[data-ops-task]');

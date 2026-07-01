@@ -2063,14 +2063,6 @@ export async function initChatWidget({
       state.notificationPublicConfig = loaded.publicConfig;
       renderNotificationSettings(container, state.notificationSettings, state.notificationPublicConfig);
     }
-    state.unsubscribePushMessages = await watchForegroundPushMessages((payload) => {
-      const title = payload.notification?.title || payload.data?.title || 'ClasesDe10';
-      const body = payload.notification?.body || payload.data?.body || '';
-      showBrowserNotification(title, body, {
-        url: payload.fcmOptions?.link || payload.data?.url || '/pages/login.html',
-        type: payload.data?.type || 'push',
-      });
-    });
     state.unsubscribeNotifications = watchUserNotifications(currentUid, (notifications) => {
       const unreadCount = notifications.filter(isNotificationUnread).length;
       const latestUnread = notifications.find(isNotificationUnread);
@@ -2085,6 +2077,22 @@ export async function initChatWidget({
       }
       state.notificationsReady = true;
       state.lastUnreadCount = unreadCount;
+    });
+    if (!state.unsubscribeNotifications) {
+      state.notifications = [];
+      renderNotifications(container, []);
+    }
+    Promise.resolve(watchForegroundPushMessages((payload) => {
+      const title = payload.notification?.title || payload.data?.title || 'ClasesDe10';
+      const body = payload.notification?.body || payload.data?.body || '';
+      showBrowserNotification(title, body, {
+        url: payload.fcmOptions?.link || payload.data?.url || '/pages/login.html',
+        type: payload.data?.type || 'push',
+      });
+    })).then((unsubscribe) => {
+      state.unsubscribePushMessages = unsubscribe;
+    }).catch((error) => {
+      console.warn('No se pudo activar escucha push en primer plano', error);
     });
     await refreshChats();
   } catch (error) {

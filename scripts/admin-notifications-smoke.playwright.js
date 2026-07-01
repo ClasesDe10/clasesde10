@@ -4,6 +4,10 @@ async (page) => {
     const panel = document.querySelector('[data-chat-panel="notificaciones"]');
     return panel && getComputedStyle(panel).display !== 'none';
   }, null, { timeout: 20000 });
+  await page.waitForFunction(() => {
+    const text = document.querySelector('[data-notifications-list]')?.textContent || '';
+    return !/Cargando notificaciones/i.test(text);
+  }, null, { timeout: 20000 });
 
   const tabs = await page.locator('[data-chat-tab]').allTextContents();
   const formVisible = await page.locator('[data-admin-notification-form]').isVisible();
@@ -18,6 +22,9 @@ async (page) => {
   }
   if (!enableButton) {
     throw new Error('Browser notification permission button is missing.');
+  }
+  if (/Cargando notificaciones/i.test(notificationListText)) {
+    throw new Error('Notifications list stayed in loading state.');
   }
 
   return {

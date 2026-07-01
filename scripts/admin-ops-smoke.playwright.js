@@ -20,6 +20,22 @@ async (page) => {
   if (/No se pudo cargar/i.test(sectionText)) {
     throw new Error(`Ops workbench rendered an error: ${sectionText.slice(0, 240)}`);
   }
+  if (!/Rutina diaria del administrador/i.test(sectionText)) {
+    throw new Error('Ops workbench is missing the daily admin routine.');
+  }
+
+  const typeOptions = await page.locator('[data-ops-type] option').allTextContents().catch(() => []);
+  const missingOptions = ['Riesgos', 'Autosupervision', 'Seguimientos', 'Ayuda proactiva', 'IA interna']
+    .filter((label) => !typeOptions.some((option) => option.includes(label)));
+  if (missingOptions.length) {
+    throw new Error(`Ops workbench missing advanced filters: ${missingOptions.join(', ')}`);
+  }
+
+  await page.locator('[data-ops-focus="payment"]').first().click();
+  const focusedType = await page.locator('[data-ops-type]').evaluate((select) => select.value).catch(() => '');
+  if (focusedType !== 'payment') {
+    throw new Error(`Ops routine did not focus the payment queue; selected "${focusedType}".`);
+  }
 
   await page.locator('[data-ops-search]').fill('pago').catch(() => {});
   await page.waitForTimeout(250);
@@ -57,8 +73,11 @@ async (page) => {
   return {
     section: await page.locator('#topbar-title').textContent().catch(() => ''),
     kpis: await page.locator('#section-operaciones .ops-kpi').count().catch(() => 0),
+    routineCards: await page.locator('#section-operaciones .ops-routine-card').count().catch(() => 0),
     items: await page.locator('#section-operaciones .ops-item').count().catch(() => 0),
     automations: await page.locator('#section-operaciones .ops-automation').count().catch(() => 0),
+    advancedFilters: missingOptions.length === 0,
+    focusedType,
     globalPanelPresent: await page.locator('#admin-global-search-panel').count().catch(() => 0),
   };
 }
