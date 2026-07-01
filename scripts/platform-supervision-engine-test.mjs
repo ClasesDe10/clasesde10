@@ -314,6 +314,12 @@ assert.match(worker, /processPlatformSelfSupervision/);
 assert.match(worker, /platformSupervisionFindings/);
 assert.match(worker, /enqueue_payment_request_for_class/);
 assert.match(worker, /enqueue_relationship_ensure_chat/);
+assert.match(worker, /MAINTENANCE_HEALTH_VERSION/);
+assert.match(worker, /buildMaintenanceHealthCheck/);
+assert.match(worker, /writeMaintenanceHealthSnapshot/);
+assert.match(worker, /writeWorkerHeartbeat/);
+assert.match(worker, /listRecentCollection\(db, 'automationEvents'/);
+assert.match(worker, /closeResolvedSupervisionWorkItems/);
 assert.match(controlCenter, /platformSupervisionFindings/);
 assert.match(controlCenter, /hallazgo\(s\) de autosupervision/);
 assert.match(opsEngine, /type: 'supervision'/);
@@ -321,6 +327,9 @@ assert.match(opsWorkbench, /platformSupervisionFindings/);
 assert.match(rules, /platformSupervisionFindings/);
 assert.match(rules, /platformSupervisionSnapshots/);
 assert.match(config, /supervision\.automationHeartbeatHours/);
+assert.match(config, /supervision\.heartbeatEveryRun/);
+assert.match(config, /supervision\.healthSnapshotEveryRun/);
+assert.match(config, /supervision\.autoCloseResolvedAlerts/);
 assert.match(config, /Autosupervision/);
 
 console.log(JSON.stringify({

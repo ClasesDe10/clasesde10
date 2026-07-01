@@ -118,6 +118,9 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
     autoRepairSafeIssues: true,
     autoCreateTasks: true,
     autoCreateIncidents: true,
+    heartbeatEveryRun: true,
+    healthSnapshotEveryRun: true,
+    autoCloseResolvedAlerts: true,
   },
   matching: {
     maxCandidates: 5,
@@ -426,6 +429,9 @@ export const PLATFORM_CONFIG_SECTIONS = Object.freeze([
       field('supervision.autoRepairSafeIssues', 'Aplicar reparaciones seguras', 'boolean'),
       field('supervision.autoCreateTasks', 'Crear tareas CRM automaticas', 'boolean'),
       field('supervision.autoCreateIncidents', 'Crear incidencias automaticas', 'boolean'),
+      field('supervision.heartbeatEveryRun', 'Registrar latido en cada ejecucion', 'boolean'),
+      field('supervision.healthSnapshotEveryRun', 'Crear health check de mantenimiento', 'boolean'),
+      field('supervision.autoCloseResolvedAlerts', 'Cerrar alertas resueltas automaticamente', 'boolean'),
     ],
   },
   {

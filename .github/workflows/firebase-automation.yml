@@ -1,4 +1,4 @@
-name: Firebase automation worker
+name: Firebase automation and maintenance worker
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: false
         default: "false"
       mode:
-        description: "critical runs low-quota operational automations; full also refreshes trust, analytics and health snapshots"
+        description: "critical runs low-quota automations and maintenance; full also refreshes trust, analytics and scale snapshots"
         required: false
         default: "critical"
   schedule:

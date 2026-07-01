@@ -124,6 +124,7 @@ const matchingAssignmentScanLimit = Math.max(1, Number(process.env.MATCHING_ASSI
 const systemJobLimit = Math.max(1, Number(process.env.SYSTEM_JOB_LIMIT || 50));
 const systemJobLeaseMs = 10 * 60 * 1000;
 const systemJobMaxBackoffMs = 60 * 60 * 1000;
+const MAINTENANCE_HEALTH_VERSION = 'maintenance-health-2026-07-01';
 let automationRulesCache = { expiresAt: 0, rules: [] };
 let platformConfigCache = { expiresAt: 0, config: {} };
 let platformConfigRuntime = {};
@@ -636,6 +637,25 @@ async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
   return collectionName === 'clases' ? filterAfterClassReset(rows) : rows;
 }
 
+async function listRecentCollection(db, collectionName, maxDocs = trustContextLimit, orderField = 'updatedAt') {
+  const ref = collectionName === 'clases'
+    ? db.collection(collectionName).where('classResetGeneration', '==', CLASS_RESET_GENERATION)
+    : db.collection(collectionName);
+  try {
+    const snap = await ref.orderBy(orderField, 'desc').limit(maxDocs).get();
+    const rows = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
+    return collectionName === 'clases' ? filterAfterClassReset(rows) : rows;
+  } catch (error) {
+    await addAutomationEvent(db, {
+      type: 'maintenance.recent_collection_fallback',
+      collectionName,
+      orderField,
+      error: serializeJobError(error),
+    });
+    return listCollection(db, collectionName, maxDocs);
+  }
+}
+
 async function listCollectionGroup(db, groupName, maxDocs = trustContextLimit) {
   const snap = await db.collectionGroup(groupName).limit(maxDocs).get();
   return snap.docs.map((doc) => ({
@@ -865,6 +885,210 @@ function buildPlatformHealthCheck(metrics, alerts = [], source = 'github_actions
     affectedUsers: systems.reduce((sum, item) => sum + Number(item.affectedUsers || 0), 0),
     subsystems: systems,
   };
+}
+
+function maintenanceSubsystem({
+  id,
+  name,
+  status = 'operational',
+  what = '',
+  impact = 'Sin impacto observado.',
+  affectedUsers = 0,
+  cause = '',
+  fix = 'Mantener autoc comprobacion programada.',
+  signals = [],
+} = {}) {
+  return {
+    id,
+    name,
+    status,
+    what,
+    impact,
+    affectedUsers,
+    cause,
+    fix,
+    signals: signals.filter(Boolean).slice(0, 12),
+  };
+}
+
+function worstMaintenanceStatus(systems = []) {
+  const order = { operational: 0, attention: 1, degraded: 2, outage: 3 };
+  return systems.reduce((worst, item) => (
+    (order[item.status] || 0) > (order[worst] || 0) ? item.status : worst
+  ), 'operational');
+}
+
+function buildMaintenanceHealthCheck(stats = {}, source = 'github_actions_worker') {
+  const critical = Number(stats.selfSupervisionCriticalFindings || 0);
+  const high = Number(stats.selfSupervisionHighFindings || 0);
+  const findings = Number(stats.selfSupervisionFindingsDetected || 0);
+  const failedJobs = Number(stats.systemJobsFailed || 0);
+  const recoveredJobs = Number(stats.systemJobsRecoveredLeases || 0);
+  const queuedJobs = Number(stats.selfSupervisionJobsQueued || 0);
+  const autoRepairable = Number(stats.selfSupervisionAutoRepairable || 0);
+  const repaired = Number(stats.selfSupervisionAutoRepairsApplied || 0);
+  const openedAlerts = Number(stats.selfSupervisionOpsAlertsCreated || 0)
+    + Number(stats.preventiveOpsAlertsCreated || 0)
+    + Number(stats.relationshipFollowupOpsAlertsCreated || 0)
+    + Number(stats.proactiveAssistOpsAlertsCreated || 0)
+    + Number(stats.internalAiOpsAlertsCreated || 0);
+  const createdIncidents = Number(stats.selfSupervisionIncidentsCreated || 0)
+    + Number(stats.preventiveIncidentsCreated || 0)
+    + Number(stats.operationalIncidentsCreated || 0);
+
+  const systems = [
+    maintenanceSubsystem({
+      id: 'worker_heartbeat',
+      name: 'Latido del worker',
+      status: 'operational',
+      what: `Worker ejecutado en modo ${stats.criticalOnly ? 'critico' : 'completo'}.`,
+      cause: 'GitHub Actions o ejecucion CLI llego a inicializar Firebase y cargar configuracion.',
+      fix: 'Mantener el workflow programado cada 10 minutos.',
+      signals: [
+        `dryRun=${Boolean(stats.dryRun)}`,
+        `version=${MAINTENANCE_HEALTH_VERSION}`,
+      ],
+    }),
+    maintenanceSubsystem({
+      id: 'data_integrity',
+      name: 'Integridad de datos',
+      status: critical ? 'outage' : high ? 'degraded' : findings ? 'attention' : 'operational',
+      what: `${findings} hallazgo(s): ${critical} critico(s), ${high} alto(s).`,
+      impact: critical
+        ? 'Puede haber datos cruzados, relaciones huerfanas o estados que afecten a usuarios.'
+        : high
+          ? 'Hay inconsistencias importantes que conviene resolver antes de que bloqueen flujos.'
+          : findings
+            ? 'Hay detalles menores o preventivos detectados.'
+            : 'No se detectaron inconsistencias en el barrido.',
+      cause: 'Motor platform_self_supervision sobre clases, pagos, usuarios, chats, solicitudes y jobs.',
+      fix: critical || high
+        ? 'Abrir Mission Control/Operaciones y resolver hallazgos de autosupervision por prioridad.'
+        : 'Mantener el barrido programado.',
+      signals: [
+        `consistency=${Number(stats.selfSupervisionConsistencyIssues || 0)}`,
+        `blocked=${Number(stats.selfSupervisionBlockedProcesses || 0)}`,
+        `automation=${Number(stats.selfSupervisionAutomationIssues || 0)}`,
+      ],
+    }),
+    maintenanceSubsystem({
+      id: 'automation_jobs',
+      name: 'Cola y automatizaciones',
+      status: failedJobs ? 'degraded' : recoveredJobs ? 'attention' : 'operational',
+      what: `${Number(stats.systemJobsSeen || 0)} job(s) revisados, ${recoveredJobs} lease(s) recuperados, ${failedJobs} fallo(s).`,
+      impact: failedJobs
+        ? 'Una automatizacion no se completo y puede necesitar reintento.'
+        : recoveredJobs
+          ? 'Se recuperaron procesos que habian quedado procesando.'
+          : 'La cola no muestra bloqueo en este ciclo.',
+      cause: 'Worker procesa systemJobs vencidos y recupera leases expirados antes de autosupervisar.',
+      fix: failedJobs ? 'Revisar deadLetters/systemJobs y corregir la causa del job fallido.' : 'Mantener reintentos automaticos.',
+      signals: [
+        `processed=${Number(stats.systemJobsProcessed || 0)}`,
+        `failed=${failedJobs}`,
+        `recovered=${recoveredJobs}`,
+      ],
+    }),
+    maintenanceSubsystem({
+      id: 'auto_repair',
+      name: 'Autocorreccion segura',
+      status: autoRepairable > repaired + queuedJobs ? 'attention' : 'operational',
+      what: `${autoRepairable} hallazgo(s) reparables; ${repaired} reparacion(es) aplicadas y ${queuedJobs} job(s) encolados.`,
+      impact: autoRepairable > repaired + queuedJobs
+        ? 'Algunas reparaciones requieren siguiente ciclo o revision humana.'
+        : 'Las reparaciones seguras disponibles fueron aplicadas o encoladas.',
+      cause: 'Solo se autocorrigen acciones idempotentes: chat faltante, peticion de pago y notificaciones huerfanas.',
+      fix: 'Para el resto, mantener tarea/alerta admin y no modificar datos sensibles automaticamente.',
+      signals: [
+        `autoRepairable=${autoRepairable}`,
+        `applied=${repaired}`,
+        `queued=${queuedJobs}`,
+      ],
+    }),
+    maintenanceSubsystem({
+      id: 'noise_control',
+      name: 'Ruido operativo',
+      status: openedAlerts || createdIncidents ? 'attention' : 'operational',
+      what: `${openedAlerts} alerta(s) nueva(s), ${createdIncidents} incidencia(s) creada(s).`,
+      impact: openedAlerts || createdIncidents
+        ? 'El administrador vera solo avisos con prioridad real o cambio de estado.'
+        : 'No se genero ruido operativo nuevo.',
+      cause: 'Deduplicacion por findingId/idempotencyKey y cierre automatico de hallazgos resueltos.',
+      fix: 'Cerrar la causa raiz; el siguiente barrido resolvera hallazgos desaparecidos.',
+      signals: [
+        `opsAlertsCreated=${openedAlerts}`,
+        `incidentsCreated=${createdIncidents}`,
+        `opsAlertsResolved=${Number(stats.selfSupervisionOpsAlertsResolved || 0)}`,
+      ],
+    }),
+  ];
+
+  const status = worstMaintenanceStatus(systems);
+  const penalty = critical * 18 + high * 8 + failedJobs * 12 + Math.max(0, autoRepairable - repaired - queuedJobs) * 3;
+  const score = Math.max(5, Math.min(100, Math.round(100 - penalty)));
+
+  return {
+    schemaVersion: 'maintenance_health_v1',
+    version: MAINTENANCE_HEALTH_VERSION,
+    scope: 'maintenance',
+    source,
+    status,
+    score,
+    generated_at: isoNow(),
+    summary: {
+      findings,
+      critical,
+      high,
+      autoRepairable,
+      repaired,
+      queuedJobs,
+      failedJobs,
+      recoveredJobs,
+      openedAlerts,
+      createdIncidents,
+    },
+    counts: {
+      operational: systems.filter((item) => item.status === 'operational').length,
+      attention: systems.filter((item) => item.status === 'attention').length,
+      degraded: systems.filter((item) => item.status === 'degraded').length,
+      outage: systems.filter((item) => item.status === 'outage').length,
+    },
+    impactedSubsystems: systems.filter((item) => item.status !== 'operational').length,
+    affectedUsers: systems.reduce((sum, item) => sum + Number(item.affectedUsers || 0), 0),
+    subsystems: systems,
+  };
+}
+
+async function writeMaintenanceHealthSnapshot(db, stats, source = 'github_actions_worker') {
+  if (!runtimeBoolean('supervision.healthSnapshotEveryRun', true)) return null;
+  const health = buildMaintenanceHealthCheck(stats, source);
+  const id = `maintenance_${isoNow().slice(0, 16).replace(/[:]/g, '-')}`;
+  await writeDoc(db.collection('platformHealthChecks'), id, {
+    ...health,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+  stats.maintenanceHealthSnapshotsCreated += 1;
+  return health;
+}
+
+async function writeWorkerHeartbeat(db, status, stats = {}, extra = {}) {
+  if (!runtimeBoolean('supervision.heartbeatEveryRun', true)) return;
+  await addAutomationEvent(db, {
+    type: 'worker.heartbeat',
+    status,
+    mode: stats.criticalOnly ? 'critical' : 'full',
+    version: MAINTENANCE_HEALTH_VERSION,
+    stats: {
+      systemJobsSeen: Number(stats.systemJobsSeen || 0),
+      selfSupervisionFindingsDetected: Number(stats.selfSupervisionFindingsDetected || 0),
+      selfSupervisionCriticalFindings: Number(stats.selfSupervisionCriticalFindings || 0),
+      selfSupervisionHighFindings: Number(stats.selfSupervisionHighFindings || 0),
+      maintenanceHealthSnapshotsCreated: Number(stats.maintenanceHealthSnapshotsCreated || 0),
+    },
+    ...extra,
+  });
+  stats.workerHeartbeatsCreated += 1;
 }
 
 async function writeScaleMetricSnapshot(db, source = 'github_actions_worker') {
@@ -4210,6 +4434,48 @@ async function materializePlatformSupervisionFinding(db, finding, stats) {
   }
 }
 
+async function closeResolvedSupervisionWorkItems(db, findingId, stats) {
+  if (!runtimeBoolean('supervision.autoCloseResolvedAlerts', true)) return;
+  const [alertsSnap, tasksSnap] = await Promise.all([
+    db.collection('opsAlerts').where('findingId', '==', findingId).limit(20).get().catch(() => null),
+    db.collection('crmTasks').where('platformSupervisionFindingId', '==', findingId).limit(20).get().catch(() => null),
+  ]);
+
+  if (alertsSnap) {
+    for (const doc of alertsSnap.docs) {
+      const status = normalizeStatus(doc.data());
+      if (!['open', 'abierta', 'active', 'activa', ''].includes(status)) continue;
+      await updateRef(doc.ref, {
+        status: 'resolved',
+        estado: 'resuelta',
+        resolvedAt: now(),
+        resolved_at: isoNow(),
+        resolution: 'El hallazgo de autosupervision asociado dejo de detectarse.',
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+      stats.selfSupervisionOpsAlertsResolved += 1;
+    }
+  }
+
+  if (tasksSnap) {
+    for (const doc of tasksSnap.docs) {
+      const status = normalizeStatus(doc.data());
+      if (!['open', 'abierta', 'active', 'activa', 'pending', 'pendiente', ''].includes(status)) continue;
+      await updateRef(doc.ref, {
+        status: 'resolved',
+        estado: 'resuelta',
+        resolvedAt: now(),
+        resolved_at: isoNow(),
+        resolution: 'La autosupervision dejo de detectar este problema.',
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+      stats.selfSupervisionTasksResolved += 1;
+    }
+  }
+}
+
 async function closeResolvedPlatformSupervisionFindings(db, activeIds, stats, scanLimit) {
   const snap = await db.collection('platformSupervisionFindings')
     .where('status', '==', 'active')
@@ -4228,6 +4494,7 @@ async function closeResolvedPlatformSupervisionFindings(db, activeIds, stats, sc
       updatedAt: now(),
       updated_at: isoNow(),
     });
+    await closeResolvedSupervisionWorkItems(db, doc.id, stats);
     stats.selfSupervisionResolvedFindings += 1;
   }
 }
@@ -4262,12 +4529,12 @@ async function processPlatformSelfSupervision(db, stats) {
     listCollection(db, 'asignaciones', scanLimit),
     listCollection(db, 'chats', scanLimit).catch(() => []),
     listCollection(db, 'notificaciones', scanLimit),
-    listCollection(db, 'systemJobs', scanLimit),
-    listCollection(db, 'automationEvents', scanLimit),
-    listCollection(db, 'deadLetters', scanLimit),
-    listCollection(db, 'incidencias', scanLimit),
-    listCollection(db, 'preventiveRisks', scanLimit).catch(() => []),
-    listCollection(db, 'alertDecisions', scanLimit).catch(() => []),
+    listRecentCollection(db, 'systemJobs', scanLimit, 'updatedAt'),
+    listRecentCollection(db, 'automationEvents', scanLimit, 'createdAt'),
+    listRecentCollection(db, 'deadLetters', scanLimit, 'updatedAt'),
+    listRecentCollection(db, 'incidencias', scanLimit, 'updatedAt'),
+    listRecentCollection(db, 'preventiveRisks', scanLimit, 'lastSeenAt').catch(() => []),
+    listRecentCollection(db, 'alertDecisions', scanLimit, 'lastSeenAt').catch(() => []),
     listCollection(db, 'profesores', scanLimit),
     listCollection(db, 'familias', scanLimit),
     listCollection(db, 'alumnos', scanLimit),
@@ -4302,6 +4569,9 @@ async function processPlatformSelfSupervision(db, stats) {
   stats.selfSupervisionCriticalFindings = plan.summary.critical;
   stats.selfSupervisionHighFindings = plan.summary.high;
   stats.selfSupervisionAutoRepairable = plan.summary.autoRepairable;
+  stats.selfSupervisionBlockedProcesses = plan.summary.blockedProcesses;
+  stats.selfSupervisionConsistencyIssues = plan.summary.consistencyIssues;
+  stats.selfSupervisionAutomationIssues = plan.summary.automationIssues;
 
   await writeDoc(db.collection('platformSupervisionSnapshots'), notificationId('platform_supervision_snapshot', plan.generatedAt.slice(0, 16)), {
     ...plan.summary,
@@ -5190,7 +5460,29 @@ async function main() {
       throw new Error('Self-test failed: AI ranking merge did not preserve the expected teacher.');
     }
 
-    console.log(JSON.stringify({ selfTest: 'passed', matchingVersion: MATCHING_VERSION, best: aiMerged[0] }, null, 2));
+    const maintenanceHealth = buildMaintenanceHealthCheck({
+      criticalOnly: true,
+      selfSupervisionFindingsDetected: 3,
+      selfSupervisionCriticalFindings: 1,
+      selfSupervisionHighFindings: 1,
+      selfSupervisionConsistencyIssues: 2,
+      selfSupervisionAutomationIssues: 1,
+      selfSupervisionAutoRepairable: 1,
+      selfSupervisionAutoRepairsApplied: 1,
+      systemJobsSeen: 2,
+      systemJobsProcessed: 2,
+    }, 'self_test');
+    if (maintenanceHealth.status !== 'outage' || maintenanceHealth.score >= 100 || !maintenanceHealth.subsystems.some((item) => item.id === 'data_integrity')) {
+      throw new Error('Self-test failed: maintenance health did not classify critical supervision correctly.');
+    }
+
+    console.log(JSON.stringify({
+      selfTest: 'passed',
+      matchingVersion: MATCHING_VERSION,
+      maintenanceHealthVersion: MAINTENANCE_HEALTH_VERSION,
+      maintenanceStatus: maintenanceHealth.status,
+      best: aiMerged[0],
+    }, null, 2));
     return;
   }
 
@@ -5312,13 +5604,20 @@ async function main() {
     selfSupervisionResolvedFindings: 0,
     selfSupervisionCriticalFindings: 0,
     selfSupervisionHighFindings: 0,
+    selfSupervisionBlockedProcesses: 0,
+    selfSupervisionConsistencyIssues: 0,
+    selfSupervisionAutomationIssues: 0,
     selfSupervisionAutoRepairable: 0,
     selfSupervisionAutoRepairsApplied: 0,
     selfSupervisionJobsQueued: 0,
     selfSupervisionTasksCreated: 0,
+    selfSupervisionTasksResolved: 0,
     selfSupervisionIncidentsCreated: 0,
     selfSupervisionOpsAlertsCreated: 0,
+    selfSupervisionOpsAlertsResolved: 0,
     selfSupervisionNotificationsCreated: 0,
+    maintenanceHealthSnapshotsCreated: 0,
+    workerHeartbeatsCreated: 0,
     relationshipFollowupVersion: RELATIONSHIP_FOLLOWUP_VERSION,
     relationshipFollowupsDetected: 0,
     relationshipFollowupsEvaluated: 0,
@@ -5377,8 +5676,15 @@ async function main() {
     },
   };
 
+  await writeWorkerHeartbeat(db, 'started', stats, {
+    trigger: trustOnly ? 'trust_only' : criticalOnly ? 'critical_schedule' : 'full_schedule',
+    limit,
+  });
+
   if (trustOnly) {
     await processTrustReputation(db, stats);
+    await writeMaintenanceHealthSnapshot(db, stats, 'github_actions_trust_worker');
+    await writeWorkerHeartbeat(db, 'finished', stats, { trigger: 'trust_only' });
     console.log(JSON.stringify(stats, null, 2));
     return;
   }
@@ -5407,6 +5713,8 @@ async function main() {
   await processInternalAiAssistant(db, stats);
 
   if (criticalOnly) {
+    await writeMaintenanceHealthSnapshot(db, stats, 'github_actions_critical_worker');
+    await writeWorkerHeartbeat(db, 'finished', stats, { trigger: 'critical_schedule' });
     console.log(JSON.stringify(stats, null, 2));
     return;
   }
@@ -5419,6 +5727,8 @@ async function main() {
   const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');
   stats.metricSnapshotsCreated += 1;
   stats.opsAlertsCreated += snapshot.alerts.length;
+  await writeMaintenanceHealthSnapshot(db, stats, 'github_actions_full_worker');
+  await writeWorkerHeartbeat(db, 'finished', stats, { trigger: 'full_schedule' });
 
   console.log(JSON.stringify(stats, null, 2));
 }
