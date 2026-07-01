@@ -337,6 +337,21 @@ async function writeNotificationOnce(userUid, title, body, payload = {}, key = '
   return true;
 }
 
+function adminNotificationDedupeKey(title, payload = {}) {
+  const entity = payload.leadId
+    || payload.requestId
+    || payload.assignmentId
+    || payload.classId
+    || payload.paymentId
+    || payload.documentId
+    || payload.incidentId
+    || payload.month
+    || payload.runId
+    || payload.id
+    || new Date().toISOString().slice(0, 10);
+  return systemJobId(payload.type || 'admin_notification', `${entity}_${title}`);
+}
+
 async function notifyAdmins(title, body, payload = {}) {
   const admins = await getAdminUsers();
   if (!admins.length) {
@@ -351,7 +366,8 @@ async function notifyAdmins(title, body, payload = {}) {
     return;
   }
 
-  await Promise.all(admins.map((user) => writeNotification(user.id, title, body, payload, {
+  const key = adminNotificationDedupeKey(title, payload);
+  await Promise.all(admins.map((user) => writeNotificationOnce(user.id, title, body, payload, key, {
     role: user.role || 'admin',
     fromRole: 'admin',
   })));
@@ -631,6 +647,13 @@ function normalizeJobStatus(status) {
   if (['dead_letter', 'dead-letter', 'failed_permanently'].includes(value)) return 'dead_letter';
   if (['cancelled', 'canceled'].includes(value)) return 'cancelled';
   return 'queued';
+}
+
+function systemJobLeaseExpired(data = {}, nowMs = Date.now()) {
+  const leaseUntil = dateFromUnknown(data.leaseUntil);
+  if (leaseUntil) return leaseUntil.getTime() <= nowMs;
+  const startedAt = dateFromUnknown(data.startedAt || data.updatedAt);
+  return Boolean(startedAt && nowMs - startedAt.getTime() >= SYSTEM_JOB_LEASE_MS);
 }
 
 function jobPriority(priority) {
@@ -2820,6 +2843,8 @@ exports.processSystemJobs = onSchedule({
   const platformConfig = await loadPlatformConfig();
   const batchLimit = Math.max(1, Math.min(500, configNumber(platformConfig, 'automation.systemJobBatchLimit', SYSTEM_JOB_BATCH_LIMIT)));
   let snap;
+  let expiredSnap;
+  let legacyQueuedSnap;
   try {
     snap = await db.collection('systemJobs')
       .where('status', '==', 'queued')
@@ -2827,6 +2852,14 @@ exports.processSystemJobs = onSchedule({
       .orderBy('runAt', 'asc')
       .orderBy('priority', 'desc')
       .limit(batchLimit)
+      .get();
+    expiredSnap = await db.collection('systemJobs')
+      .where('status', '==', 'processing')
+      .limit(Math.min(batchLimit, 100))
+      .get();
+    legacyQueuedSnap = await db.collection('systemJobs')
+      .where('status', '==', 'queued')
+      .limit(Math.min(batchLimit, 100))
       .get();
   } catch (error) {
     logger.error('processSystemJobs query failed', { message: error.message });
@@ -2840,9 +2873,14 @@ exports.processSystemJobs = onSchedule({
 
   let processed = 0;
   let failed = 0;
-  for (const doc of snap.docs) {
+  let recovered = 0;
+  const expiredDocs = (expiredSnap?.docs || []).filter((doc) => systemJobLeaseExpired(doc.data()));
+  const legacyQueuedDocs = (legacyQueuedSnap?.docs || []).filter((doc) => !dateFromUnknown(doc.data().runAt));
+  const docsByPath = new Map([...snap.docs, ...legacyQueuedDocs, ...expiredDocs].map((doc) => [doc.ref.path, doc]));
+  for (const doc of docsByPath.values()) {
     const claimed = await claimSystemJob(doc.ref, workerId);
     if (!claimed) continue;
+    if (normalizeJobStatus(doc.data().status) === 'processing') recovered += 1;
 
     try {
       const result = await dispatchSystemJob(claimed);
@@ -2859,11 +2897,12 @@ exports.processSystemJobs = onSchedule({
     type: 'system_jobs_processed',
     workerId,
     scanned: snap.size,
+    recovered,
     processed,
     failed,
     createdAt: now(),
   });
-  logger.info('processSystemJobs completed', { workerId, scanned: snap.size, processed, failed });
+  logger.info('processSystemJobs completed', { workerId, scanned: snap.size, recovered, processed, failed });
 });
 
 exports.rollupScaleMetrics = onSchedule({

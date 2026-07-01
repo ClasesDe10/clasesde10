@@ -122,6 +122,7 @@ const matchingTeacherScanLimit = Math.max(1, Number(process.env.MATCHING_TEACHER
 const matchingUserScanLimit = Math.max(1, Number(process.env.MATCHING_USER_SCAN_LIMIT || 2000));
 const matchingAssignmentScanLimit = Math.max(1, Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000));
 const systemJobLimit = Math.max(1, Number(process.env.SYSTEM_JOB_LIMIT || 50));
+const systemJobLeaseMs = 10 * 60 * 1000;
 const systemJobMaxBackoffMs = 60 * 60 * 1000;
 let automationRulesCache = { expiresAt: 0, rules: [] };
 let platformConfigCache = { expiresAt: 0, config: {} };
@@ -329,23 +330,8 @@ async function notifyAdmins(db, title, body, payload = {}) {
     return;
   }
 
-  await Promise.all(admins.map((user) => writeDoc(db.collection('notificaciones'), null, {
-    ...buildNotificationDocument({
-      userUid: user.id,
-      role: user.role || 'admin',
-      title,
-      body,
-      type: payload.type || 'automation',
-      payload,
-      source: 'admin',
-    }),
-    readAt: null,
-    leida: false,
-    fromRole: 'admin',
-    fromAutomation: true,
-    createdAt: now(),
-    updatedAt: now(),
-  })));
+  const key = adminNotificationDedupeKey(title, payload);
+  await Promise.all(admins.map((user) => notifyUserOnce(db, user.id, title, body, payload, `${key}_${user.id}`)));
 }
 
 function notificationId(...parts) {
@@ -354,6 +340,21 @@ function notificationId(...parts) {
     .filter(Boolean)
     .join('__')
     .slice(0, 900);
+}
+
+function adminNotificationDedupeKey(title, payload = {}) {
+  const entity = payload.leadId
+    || payload.requestId
+    || payload.assignmentId
+    || payload.classId
+    || payload.paymentId
+    || payload.documentId
+    || payload.incidentId
+    || payload.month
+    || payload.runId
+    || payload.id
+    || new Date().toISOString().slice(0, 10);
+  return notificationId(payload.type || 'admin_notification', entity, title);
 }
 
 async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '') {
@@ -429,6 +430,21 @@ function normalizeWorkerJobStatus(status) {
   return 'queued';
 }
 
+function workerTimestampAfter(ms) {
+  return admin.firestore.Timestamp.fromDate(new Date(Date.now() + ms));
+}
+
+function workerJobRunAt(data = {}) {
+  return dateFromFirestore(data.runAt) || new Date(0);
+}
+
+function workerJobLeaseExpired(data = {}, nowMs = Date.now()) {
+  const leaseUntil = dateFromFirestore(data.leaseUntil);
+  if (leaseUntil) return leaseUntil.getTime() <= nowMs;
+  const startedAt = dateFromFirestore(data.startedAt || data.updatedAt);
+  return Boolean(startedAt && nowMs - startedAt.getTime() >= systemJobLeaseMs);
+}
+
 async function enqueueWorkerSystemJob(db, job, sourceEventType) {
   const id = notificationId('system_job', job.type, job.idempotencyKey || job.id);
   const ref = db.collection('systemJobs').doc(id);
@@ -442,7 +458,7 @@ async function enqueueWorkerSystemJob(db, job, sourceEventType) {
     payload: job.payload || {},
     status: 'queued',
     priority: workerJobPriority(job.priority),
-    runAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + Math.max(0, Number(job.runAfterMinutes || 0)) * 60 * 1000)),
+    runAt: workerTimestampAfter(Math.max(0, Number(job.runAfterMinutes || 0)) * 60 * 1000),
     attempts: 0,
     maxAttempts: Math.max(1, Number(job.maxAttempts || 5)),
     idempotencyKey: clean(job.idempotencyKey || job.id, 300),
@@ -1736,6 +1752,42 @@ async function markSystemJobCompleted(job, result) {
   });
 }
 
+async function claimWorkerSystemJob(db, job, workerId) {
+  if (dryRun) {
+    const attempts = Math.max(0, Number(job.data.attempts || 0)) + 1;
+    return { ...job, data: { ...job.data, attempts }, recovered: normalizeWorkerJobStatus(job.data.status) === 'processing' };
+  }
+
+  return db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(job.ref);
+    if (!snap.exists) return null;
+
+    const data = snap.data();
+    const status = normalizeWorkerJobStatus(data.status);
+    const runAt = workerJobRunAt(data);
+    if (status === 'queued' && runAt.getTime() > Date.now()) return null;
+    if (status === 'processing' && !workerJobLeaseExpired(data)) return null;
+    if (!['queued', 'processing'].includes(status)) return null;
+
+    const attempts = Math.max(0, Number(data.attempts || 0)) + 1;
+    transaction.set(job.ref, {
+      status: 'processing',
+      attempts,
+      workerId,
+      startedAt: now(),
+      leaseUntil: workerTimestampAfter(systemJobLeaseMs),
+      updatedAt: now(),
+    }, { merge: true });
+
+    return {
+      id: snap.id,
+      ref: job.ref,
+      data: { ...data, attempts },
+      recovered: status === 'processing',
+    };
+  });
+}
+
 async function markSystemJobFailed(db, job, error) {
   const attempts = Math.max(1, Number(job.data.attempts || 1));
   const maxAttempts = Math.max(1, Number(job.data.maxAttempts || 5));
@@ -1765,50 +1817,93 @@ async function markSystemJobFailed(db, job, error) {
 
   await writeDoc(job.ref.parent, job.id, {
     status: 'queued',
-    runAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + retryDelayMs(attempts))),
+    runAt: workerTimestampAfter(retryDelayMs(attempts)),
     leaseUntil: null,
     lastError,
     updatedAt: now(),
   });
 }
 
-async function processQueuedSystemJobs(db, stats) {
+async function listDueQueuedSystemJobs(db, batchLimit) {
+  try {
+    const [snap, legacySnap] = await Promise.all([
+      db.collection('systemJobs')
+        .where('status', '==', 'queued')
+        .where('runAt', '<=', admin.firestore.Timestamp.now())
+        .orderBy('runAt', 'asc')
+        .orderBy('priority', 'desc')
+        .limit(batchLimit)
+        .get(),
+      db.collection('systemJobs')
+        .where('status', '==', 'queued')
+        .limit(Math.min(batchLimit, 100))
+        .get()
+        .catch(() => ({ docs: [] })),
+    ]);
+    const jobsById = new Map();
+    snap.docs.forEach((doc) => jobsById.set(doc.id, { id: doc.id, ref: doc.ref, data: doc.data() }));
+    legacySnap.docs
+      .filter((doc) => !dateFromFirestore(doc.data().runAt))
+      .forEach((doc) => jobsById.set(doc.id, { id: doc.id, ref: doc.ref, data: doc.data() }));
+    return [...jobsById.values()];
+  } catch (error) {
+    await addAutomationEvent(db, {
+      type: 'system_jobs_due_query_fallback',
+      error: serializeJobError(error),
+      reason: 'direct_due_query_failed',
+    });
+    const snap = await db.collection('systemJobs')
+      .where('status', '==', 'queued')
+      .limit(batchLimit)
+      .get()
+      .catch(() => ({ docs: [] }));
+    return snap.docs
+      .map((doc) => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
+      .filter((job) => workerJobRunAt(job.data).getTime() <= Date.now());
+  }
+}
+
+async function listExpiredProcessingSystemJobs(db, batchLimit) {
   const snap = await db.collection('systemJobs')
-    .where('status', '==', 'queued')
-    .limit(runtimeNumber('automation.systemJobBatchLimit', systemJobLimit, 1, 500))
+    .where('status', '==', 'processing')
+    .limit(batchLimit)
     .get()
     .catch(() => ({ docs: [] }));
-  const dueJobs = snap.docs
+  return snap.docs
     .map((doc) => ({ id: doc.id, ref: doc.ref, data: doc.data() }))
-    .filter((job) => {
-      const runAt = dateFromFirestore(job.data.runAt);
-      return !runAt || runAt.getTime() <= Date.now();
-    })
+    .filter((job) => workerJobLeaseExpired(job.data));
+}
+
+async function processQueuedSystemJobs(db, stats) {
+  const batchLimit = runtimeNumber('automation.systemJobBatchLimit', systemJobLimit, 1, 500);
+  const workerId = `github-actions-worker-${Date.now().toString(36)}`;
+  const [queuedJobs, expiredProcessingJobs] = await Promise.all([
+    listDueQueuedSystemJobs(db, batchLimit),
+    listExpiredProcessingSystemJobs(db, Math.min(batchLimit, 100)),
+  ]);
+  const jobsById = new Map([...queuedJobs, ...expiredProcessingJobs].map((job) => [job.id, job]));
+  const dueJobs = [...jobsById.values()]
     .sort((a, b) => {
       const priority = Number(b.data.priority || 0) - Number(a.data.priority || 0);
       if (priority) return priority;
-      return (dateFromFirestore(a.data.runAt)?.getTime() || 0) - (dateFromFirestore(b.data.runAt)?.getTime() || 0);
+      return workerJobRunAt(a.data).getTime() - workerJobRunAt(b.data).getTime();
     });
 
-  stats.systemJobsSeen += snap.docs.length;
+  stats.systemJobsSeen += dueJobs.length;
   for (const job of dueJobs) {
-    const attempts = Math.max(0, Number(job.data.attempts || 0)) + 1;
-    await writeDoc(job.ref.parent, job.id, {
-      status: 'processing',
-      attempts,
-      workerId: 'github-actions-worker',
-      startedAt: now(),
-      leaseUntil: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000)),
-      updatedAt: now(),
-    });
-    job.data.attempts = attempts;
+    const claimed = await claimWorkerSystemJob(db, job, workerId);
+    if (!claimed) {
+      stats.systemJobsSkippedClaims += 1;
+      continue;
+    }
+    if (claimed.recovered) stats.systemJobsRecoveredLeases += 1;
 
     try {
-      const result = await dispatchSystemJob(db, job, stats);
-      await markSystemJobCompleted(job, result);
+      const result = await dispatchSystemJob(db, claimed, stats);
+      await markSystemJobCompleted(claimed, result);
       stats.systemJobsProcessed += 1;
     } catch (error) {
-      await markSystemJobFailed(db, job, error);
+      await markSystemJobFailed(db, claimed, error);
       stats.systemJobsFailed += 1;
     }
   }
@@ -5141,6 +5236,8 @@ async function main() {
     systemJobsSeen: 0,
     systemJobsProcessed: 0,
     systemJobsFailed: 0,
+    systemJobsRecoveredLeases: 0,
+    systemJobsSkippedClaims: 0,
     assignmentChatsEnsured: 0,
     paymentRequestsCreated: 0,
     metricSnapshotsCreated: 0,

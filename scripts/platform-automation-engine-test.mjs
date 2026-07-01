@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
 const {
@@ -18,6 +19,9 @@ const SUPPORTED_SYSTEM_JOBS = new Set([
   'payment.request_for_class',
   'relationship.ensure_chat',
 ]);
+
+const workerCode = readFileSync(new URL('./firebase-automation-worker.mjs', import.meta.url), 'utf8');
+const functionsCode = readFileSync(new URL('../functions/index.js', import.meta.url), 'utf8');
 
 function assertHas(items, predicate, message) {
   assert.ok(items.some(predicate), message);
@@ -335,6 +339,20 @@ assert.equal(eventIds.size, requestPlan.automationEvents.length, 'automation eve
 
 const defaultRuleIds = DEFAULT_AUTOMATION_RULES.map((rule) => rule.id);
 assert.equal(new Set(defaultRuleIds).size, defaultRuleIds.length, 'default automation rules must have stable unique IDs');
+
+assert.match(workerCode, /claimWorkerSystemJob/, 'GitHub worker must claim queued jobs transactionally.');
+assert.match(workerCode, /runTransaction/, 'GitHub worker job claims must use Firestore transactions.');
+assert.match(workerCode, /where\('runAt', '<=', admin\.firestore\.Timestamp\.now\(\)\)/, 'GitHub worker must query due jobs directly instead of scanning arbitrary queued jobs.');
+assert.match(workerCode, /listExpiredProcessingSystemJobs/, 'GitHub worker must recover expired processing leases.');
+assert.match(workerCode, /systemJobsRecoveredLeases/, 'GitHub worker must expose recovered lease counts.');
+assert.match(workerCode, /systemJobsSkippedClaims/, 'GitHub worker must expose skipped concurrent claim counts.');
+assert.match(workerCode, /adminNotificationDedupeKey/, 'GitHub worker admin notifications must use stable dedupe keys.');
+assert.doesNotMatch(workerCode, /admins\.map\(\(user\) => writeDoc\(db\.collection\('notificaciones'\), null/, 'GitHub worker admin notifications must not use random IDs.');
+assert.match(functionsCode, /systemJobLeaseExpired/, 'Cloud Functions worker must detect expired processing leases.');
+assert.match(functionsCode, /expiredSnap/, 'Cloud Functions worker must scan expired processing jobs.');
+assert.match(functionsCode, /claimSystemJob\(doc\.ref, workerId\)/, 'Cloud Functions worker must claim each job through the transaction helper.');
+assert.match(functionsCode, /adminNotificationDedupeKey/, 'Cloud Functions admin notifications must use stable dedupe keys.');
+assert.match(functionsCode, /writeNotificationOnce\(user\.id, title, body, payload, key/, 'Cloud Functions admin notifications must be idempotent.');
 
 for (const eventType of [
   'user.registered',
