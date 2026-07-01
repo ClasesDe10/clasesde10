@@ -845,6 +845,11 @@ function evaluarPerfilFamiliaActual(extra = {}) {
   return evaluateFamilyProfileProfessional({ ...familiaData, ...extra }, alumnosFamiliaPerfilCache, documentosFamiliaPerfilCache);
 }
 
+const familiaPerfilForm = document.getElementById('form-perfil');
+familiaPerfilForm?.addEventListener('input', () => {
+  familiaPerfilForm.dataset.dirty = 'true';
+});
+
 function claseTerminada(clase, margenMinutos = 0) {
   return classEnded(clase, margenMinutos);
 }
@@ -2588,7 +2593,18 @@ async function cargarChat() {
 }
 
 async function cargarPerfil() {
+  const form = familiaPerfilForm || document.getElementById('form-perfil');
+  if (form) form.dataset.loading = 'true';
   await Promise.all([cargarDocumentosFamiliaPerfilCache(), cargarAlumnosFamiliaPerfilCache()]);
+  if (form?.dataset.dirty === 'true') {
+    if (form) {
+      form.dataset.loading = 'false';
+      form.dataset.loaded = 'true';
+    }
+    renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
+    renderDocumentosFamilia();
+    return;
+  }
   document.getElementById('p-nombre').value    = usuario.nombre || familiaData.nombre || '';
   document.getElementById('p-apellidos').value = usuario.apellidos || familiaData.apellidos || '';
   document.getElementById('p-telefono').value  = usuario.telefono || familiaData.telefono || '';
@@ -2603,6 +2619,11 @@ async function cargarPerfil() {
   document.getElementById('p-emergencia-telefono').value = familiaData.contacto_emergencia_telefono || familiaData.emergencyContactPhone || '';
   document.getElementById('p-idiomas').value = toProfileList(familiaData.idiomas || familiaData.languages || []).join(', ');
   document.getElementById('p-notas').value = familiaData.notas_perfil || familiaData.profileNotes || '';
+  if (form) {
+    form.dataset.loading = 'false';
+    form.dataset.loaded = 'true';
+    form.dataset.dirty = 'false';
+  }
   renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
   renderDocumentosFamilia();
 }
@@ -2711,6 +2732,10 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     }
 
     await setDoc(firestoreDoc(firebaseDb, 'familias', familiaFirestoreId), familiaPayload, { merge: true });
+    Object.assign(usuario, { nombre, apellidos, telefono });
+    Object.assign(familiaData, familiaPayload);
+    if (familiaPerfilForm) familiaPerfilForm.dataset.dirty = 'false';
+    renderQualityPanel('familia-calidad-panel', evaluation);
   } catch (error) {
     showToast('Error', error.message || 'No se pudo guardar el perfil en Firebase.', 'error');
     return;

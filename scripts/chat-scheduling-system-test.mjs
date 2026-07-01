@@ -62,6 +62,9 @@ assert(chat.includes('recurrenceLabelFromFields'), 'Weekly schedules must render
 assert(!chat.includes('data-chat-layout-mode'), 'Chat widget must not expose the old mixed chat/classes layout selector.');
 assert(chat.includes("doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid)"), 'Chat widget must load per-user chat preferences.');
 assert(chat.includes("doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid)"), 'Chat widget must persist chat preferences per current user.');
+assert(chat.includes('readableChatIdentity'), 'Chat widget must reject one-letter/generic chat names before rendering titles.');
+assert(chat.includes('shortChatEntityLabel'), 'Chat widget must fall back to role labels with short ids when chat names are incomplete.');
+assert(chat.includes('realChatTitle'), 'Chat widget must only show a real chat name when it comes from profile data, not from fallback labels.');
 assert(chat.includes('Esperando respuesta'), 'Own schedule proposals must clearly show they are waiting for the other participant.');
 assert(chat.includes("relationshipStage: 'horario_propuesto'"), 'Schedule proposals must update the chat relationship stage.');
 assert(chat.includes("relationshipStage: 'clase_programada'"), 'Accepted proposals must activate the scheduled relationship stage.');

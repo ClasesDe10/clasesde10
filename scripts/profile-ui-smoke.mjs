@@ -6,10 +6,10 @@
  * verifies Firestore writes, and removes temporary Auth/Firestore data.
  */
 
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { chromium } from 'playwright';
 
 const firebaseClientSource = fs.readFileSync('js/firebase-client.js', 'utf8');
 const apiKey = firebaseClientSource.match(/apiKey:\s*'([^']+)'/)?.[1];
@@ -59,31 +59,34 @@ async function firestoreDeleteWithCliToken(collection, uid) {
   return { ok: true };
 }
 
-function runBrowserScript(script, email, password, role) {
-  const output = execFileSync(process.execPath, [
-    'scripts/run-playwright-cli-function.mjs',
-    '--url',
-    smokeUrl,
-    '--session',
-    `cd10-${role}-profile-ui-${Date.now()}`,
-    script,
-  ], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      CD10_PROFILE_EMAIL: email,
-      CD10_PROFILE_PASSWORD: password,
-    },
-    stdio: ['ignore', 'pipe', 'pipe'],
-    timeout: 240000,
-  });
-
-  const parsed = JSON.parse(output);
-  const result = parsed?.results?.[0]?.result;
-  if (!parsed.ok || result?.error) {
-    throw new Error(result?.error || output);
+async function launchChrome() {
+  try {
+    return await chromium.launch({ channel: 'chrome', headless: true });
+  } catch {
+    return chromium.launch({ headless: true });
   }
-  return result;
+}
+
+async function runBrowserScript(script, email, password) {
+  const source = fs.readFileSync(script, 'utf8').trim();
+  const testFn = (0, eval)(`(${source})`);
+  const previousEmail = process.env.CD10_PROFILE_EMAIL;
+  const previousPassword = process.env.CD10_PROFILE_PASSWORD;
+  process.env.CD10_PROFILE_EMAIL = email;
+  process.env.CD10_PROFILE_PASSWORD = password;
+
+  const browser = await launchChrome();
+  const page = await browser.newPage();
+  try {
+    await page.goto(smokeUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    return await testFn(page);
+  } finally {
+    await browser.close().catch(() => {});
+    if (previousEmail === undefined) delete process.env.CD10_PROFILE_EMAIL;
+    else process.env.CD10_PROFILE_EMAIL = previousEmail;
+    if (previousPassword === undefined) delete process.env.CD10_PROFILE_PASSWORD;
+    else process.env.CD10_PROFILE_PASSWORD = previousPassword;
+  }
 }
 
 async function runCase({ role, collection, script }) {
@@ -103,7 +106,7 @@ async function runCase({ role, collection, script }) {
     idToken = signUp.idToken;
     uid = signUp.localId;
 
-    const result = runBrowserScript(script, email, password, role);
+    const result = await runBrowserScript(script, email, password);
     uid = result.uid || uid;
     cleanup.push(await firestoreDeleteWithCliToken(collection, uid));
     cleanup.push(await firestoreDeleteWithCliToken('users', uid));

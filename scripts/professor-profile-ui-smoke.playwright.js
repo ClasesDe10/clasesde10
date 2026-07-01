@@ -8,19 +8,26 @@ async (page) => {
   await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
   const setup = await page.evaluate(async ({ email, password }) => {
     const { signInWithEmailAndPassword } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js');
-    const { doc, serverTimestamp, setDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
+    const { doc, getDoc, serverTimestamp, setDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
     const { firebaseAuth, firebaseDb } = await import('/js/firebase-client.js');
     const uid = (await signInWithEmailAndPassword(firebaseAuth, email, password)).user.uid;
-    await setDoc(doc(firebaseDb, 'users', uid), {
-      email, nombre: 'Profesor Smoke', apellidos: 'Inicial', role: 'profesor', active: true,
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    });
-    await setDoc(doc(firebaseDb, 'profesores', uid), {
-      userUid: uid, email, nombre: 'Profesor Smoke', apellidos: 'Inicial', active: true,
-      status: 'pendiente_perfil', perfil_completo: false, profileComplete: false,
-      estado_verificacion: 'pendiente_perfil', verificationStatus: 'pendiente_perfil',
-      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    });
+    const userRef = doc(firebaseDb, 'users', uid);
+    const teacherRef = doc(firebaseDb, 'profesores', uid);
+    const [userSnap, teacherSnap] = await Promise.all([getDoc(userRef), getDoc(teacherRef)]);
+    if (!userSnap.exists()) {
+      await setDoc(userRef, {
+        email, nombre: 'Profesor Smoke', apellidos: 'Inicial', role: 'profesor', active: true,
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+    }
+    if (!teacherSnap.exists()) {
+      await setDoc(teacherRef, {
+        userUid: uid, email, nombre: 'Profesor Smoke', apellidos: 'Inicial', active: true,
+        status: 'pendiente_perfil', perfil_completo: false, profileComplete: false,
+        estado_verificacion: 'pendiente_perfil', verificationStatus: 'pendiente_perfil',
+        createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+    }
     return { uid };
   }, { email, password });
 

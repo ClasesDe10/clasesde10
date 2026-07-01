@@ -284,19 +284,44 @@ async function loadFirestoreChatsForActor(role, actorIds = []) {
 }
 
 function defaultChatTitle(chat, role) {
-  if (role === 'profesor') return chat.studentName || chat.familyName || 'Familia';
-  if (role === 'familia') return chat.teacherName || 'Profesor';
-  return [chat.familyName || 'Familia', chat.teacherName || 'Profesor'].join(' / ');
+  const family = readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail);
+  const teacher = readableChatIdentity(chat.teacherName, chat.profesor_nombre, chat.teacherEmail);
+  const student = readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
+  if (role === 'profesor') return student || family || shortChatEntityLabel('Familia', chat.familyUid || chat.familia_id);
+  if (role === 'familia') return teacher || shortChatEntityLabel('Profesor', chat.teacherUid || chat.profesor_id);
+  return [
+    family || shortChatEntityLabel('Familia', chat.familyUid || chat.familia_id),
+    teacher || shortChatEntityLabel('Profesor', chat.teacherUid || chat.profesor_id),
+  ].join(' / ');
 }
 
 function chatTitle(chat, role, preference = {}) {
   return reliableName(preference.displayNameOverride, '') || defaultChatTitle(chat, role);
 }
 
+function realChatTitle(chat, role) {
+  const family = readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail);
+  const teacher = readableChatIdentity(chat.teacherName, chat.profesor_nombre, chat.teacherEmail);
+  const student = readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
+  if (role === 'profesor') return student || family;
+  if (role === 'familia') return teacher;
+  return [family, teacher].filter(Boolean).join(' / ');
+}
+
 function isUsefulChatIdentity(value) {
   const normalized = clean(value, 120).toLowerCase();
   return normalized
+    && normalized.length > 1
     && !['profesor', 'familia', 'alumno', 'alumno/a', 'profesor asignado'].includes(normalized);
+}
+
+function readableChatIdentity(...values) {
+  return values.map((value) => clean(value, 180)).find(isUsefulChatIdentity) || '';
+}
+
+function shortChatEntityLabel(label, id = '') {
+  const suffix = clean(id, 180).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
+  return suffix ? `${label} ${suffix}` : label;
 }
 
 function isExpectedPermissionFallback(error) {
@@ -306,10 +331,13 @@ function isExpectedPermissionFallback(error) {
 
 function chatSubtitle(chat, role, preference = {}) {
   const parts = [];
+  const realTitle = realChatTitle(chat, role);
   const defaultTitle = defaultChatTitle(chat, role);
-  if (preference.displayNameOverride && isUsefulChatIdentity(defaultTitle)) parts.push(`Nombre real: ${defaultTitle}`);
-  if (role === 'profesor' && isUsefulChatIdentity(chat.familyName) && chat.familyName !== defaultTitle) parts.push(`Familia: ${chat.familyName}`);
-  if (role !== 'profesor' && chat.studentName) parts.push(`Alumno/a: ${chat.studentName}`);
+  if (preference.displayNameOverride && isUsefulChatIdentity(realTitle)) parts.push(`Nombre real: ${realTitle}`);
+  const familyName = readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail);
+  const studentName = readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
+  if (role === 'profesor' && familyName && familyName !== defaultTitle) parts.push(`Familia: ${familyName}`);
+  if (role !== 'profesor' && studentName) parts.push(`Alumno/a: ${studentName}`);
   if (chat.materia) parts.push(chat.materia);
   return parts.join(' · ') || 'Asignacion activa';
 }
