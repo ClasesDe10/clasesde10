@@ -245,14 +245,37 @@ function normalizeUser(user) {
   };
 }
 
+function rowHasAny(row = {}, keys = []) {
+  return keys.some((key) => row[key] !== undefined && row[key] !== null && row[key] !== '');
+}
+
+async function hydrateMapWhenNeeded(name, needed) {
+  return needed ? safeCollectionMap(name) : new Map();
+}
+
 async function hydrateRows(table, rows) {
   if (!rows.length) return rows;
 
-  const users = await safeCollectionMap('users');
-  const familias = table !== 'familias' ? await safeCollectionMap('familias') : new Map();
-  const profesores = table !== 'profesores' ? await safeCollectionMap('profesores') : new Map();
-  const alumnos = table !== 'alumnos' ? await safeCollectionMap('alumnos') : new Map();
-  const documentos = table !== 'documentos' ? await safeCollectionMap('documentos') : new Map();
+  const needsFamilias = table !== 'familias'
+    && rows.some((row) => rowHasAny(row, ['familyUid', 'familia_id']));
+  const needsProfesores = table !== 'profesores'
+    && rows.some((row) => rowHasAny(row, ['teacherUid', 'profesor_id', 'profesor_asignado_id', 'assignedTeacherUid']));
+  const needsAlumnos = table !== 'alumnos'
+    && rows.some((row) => rowHasAny(row, ['studentId', 'studentUid', 'alumno_id']));
+  const needsDocumentos = table !== 'documentos'
+    && rows.some((row) => rowHasAny(row, ['documento_id', 'documentId']));
+  const needsUsers = needsFamilias
+    || needsProfesores
+    || ['profesores', 'familias'].includes(table)
+    || rows.some((row) => rowHasAny(row, ['userUid', 'usuario_id', 'uid']));
+
+  const [users, familias, profesores, alumnos, documentos] = await Promise.all([
+    hydrateMapWhenNeeded('users', needsUsers),
+    hydrateMapWhenNeeded('familias', needsFamilias),
+    hydrateMapWhenNeeded('profesores', needsProfesores),
+    hydrateMapWhenNeeded('alumnos', needsAlumnos),
+    hydrateMapWhenNeeded('documentos', needsDocumentos),
+  ]);
 
   return rows.map((row) => {
     const userUid = row.userUid || row.usuario_id || row.uid || row.id;
@@ -602,7 +625,7 @@ class FirebaseCompatQuery {
     rows = await hydrateRows(this.table, rows);
     rows = rows.filter((row) => this.filters.every((filter) => matchesFilter(row, filter)));
 
-    for (const sort of this.sorts.reverse()) {
+    for (const sort of this.sorts.slice().reverse()) {
       rows.sort((a, b) => compareValues(firstValue(a, sort.field), firstValue(b, sort.field), sort.ascending));
     }
 

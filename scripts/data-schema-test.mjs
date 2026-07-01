@@ -122,6 +122,9 @@ const serviceWorker = read('service-worker.js');
 const pkg = read('package.json');
 
 assert(firebaseDataClient.includes('normalizeEntityForWrite'), 'Compatibility data client must normalize writes.');
+assert(firebaseDataClient.includes('hydrateMapWhenNeeded'), 'Compatibility data client must hydrate relation maps selectively.');
+assert(firebaseDataClient.includes('Promise.all(['), 'Compatibility data client must load required relation maps concurrently.');
+assert(firebaseDataClient.includes('this.sorts.slice().reverse()'), 'Compatibility data client must not mutate sort order while reading.');
 assert(firestoreAdapter.includes('normalizeEntityForWrite'), 'Firestore adapters must normalize writes.');
 assert(firebaseAuth.includes('normalizeEntityForWrite'), 'Auth-created profiles must normalize writes.');
 assert(worker.includes('normalizeEntityForWrite'), 'Automation worker must normalize writes.');
