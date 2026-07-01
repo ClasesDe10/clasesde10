@@ -273,7 +273,7 @@ export function buildMobilityEstimate(origin = {}, destination = {}, options = {
 
   const risks = [];
   if (straight.confidence !== 'coordinates') {
-    risks.push('Ruta estimada sin coordenadas exactas; confirmar direccion antes de asignar.');
+    risks.push('Estimacion por codigo postal o zona; revisar direccion si hay dudas.');
   }
   if (hasCar === true && !driving.withinLimit) {
     risks.push(`Supera el limite de ${driving.limitMinutes} min en coche.`);

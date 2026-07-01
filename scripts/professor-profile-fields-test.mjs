@@ -47,6 +47,10 @@ assert.ok(aiEngine.includes('estimateTravelForMatch'), 'Matching engine must est
 assert.ok(aiEngine.includes('locationEstimate'), 'Matching results must expose location estimate');
 assert.ok(aiEngine.includes('formatTravelEstimateForDisplay'), 'Matching engine must expose formatted travel estimates');
 assert.ok(adminDashboard.includes('formatTravelEstimateForDisplay'), 'Admin recommendations must display formatted mobility estimates');
+assert.ok(adminDashboard.includes('normalizeTravelDisplayOptions'), 'Admin recommendations must recover travel badges from legacy/partial estimates');
+assert.ok(adminDashboard.includes('normalizeMatchingRiskText'), 'Admin recommendations must normalize legacy route-risk copy');
+assert.ok(adminDashboard.includes("includes('mobility')"), 'Admin recommendations must recalculate stale pre-mobility matches');
+assert.ok(adminDashboard.includes('Estimado por zona/CP'), 'Admin recommendations must show approximate-route warning without hiding travel time');
 assert.ok(adminDashboard.includes('Tiene coche'), 'Admin recommendations must show car mobility state');
 assert.ok(adminDashboard.includes('Sin coche: transporte publico'), 'Admin recommendations must show transit-only mobility state');
 

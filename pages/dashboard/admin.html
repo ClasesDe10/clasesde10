@@ -1229,7 +1229,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260701-mobility-v1';
+import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260701-mobility-v2';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -4739,7 +4739,8 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     const matchingMinScore = Number(getConfigValue(platformConfig, 'matching.minScore', 25));
     const includeZeroScore = getConfigValue(platformConfig, 'matching.includeZeroScoreForAdmin', true) === true;
     const needsFreshReasoning = !(matches || []).length
-      || (matches || []).some((match) => !match.scoreBreakdown?.fitConfidence);
+      || (matches || []).some((match) => !match.scoreBreakdown?.fitConfidence)
+      || (matches || []).some((match) => !String(match.matchingVersion || match.source || '').includes('mobility'));
     const aiMatches = !needsFreshReasoning
       ? matches
       : rankTeachersForRequest(requestForMatching, profsConSenales, {
@@ -4825,6 +4826,84 @@ function renderActiveMatchingPlan(plan = {}) {
     </div>`;
 }
 
+function normalizeTravelDisplayOptions(estimate = {}) {
+  if (!estimate?.available) return [];
+  if (Array.isArray(estimate.displayOptions) && estimate.displayOptions.length) {
+    return estimate.displayOptions.filter(Boolean);
+  }
+  const options = [];
+  const hasCar = estimate.hasCar === true;
+  const hasNoCar = estimate.hasCar === false;
+  const drivingMinutes = Number(estimate.drivingMinutes);
+  const drivingKm = Number(estimate.drivingKm ?? estimate.effectiveKm);
+  const transitMinutes = Number(estimate.transitMinutes);
+  const transitKm = Number(estimate.transitKm ?? estimate.effectiveKm);
+  const effectiveMinutes = Number(estimate.effectiveMinutes);
+  const effectiveKm = Number(estimate.effectiveKm ?? estimate.straightKm);
+  if (hasCar && Number.isFinite(drivingMinutes)) {
+    options.push({
+      mode: 'driving',
+      label: 'Coche',
+      km: Number.isFinite(drivingKm) ? drivingKm : '',
+      minutes: drivingMinutes,
+      withinLimit: estimate.hardDistanceRisk ? false : drivingMinutes <= 20,
+    });
+  }
+  if ((hasCar || hasNoCar || Number.isFinite(transitMinutes)) && Number.isFinite(transitMinutes)) {
+    options.push({
+      mode: 'transit',
+      label: 'Transporte publico',
+      km: Number.isFinite(transitKm) ? transitKm : '',
+      minutes: transitMinutes,
+      withinLimit: transitMinutes <= 35,
+    });
+  }
+  if (!options.length && Number.isFinite(effectiveMinutes)) {
+    options.push({
+      mode: estimate.recommendedMode || 'route',
+      label: hasNoCar ? 'Transporte publico' : hasCar ? 'Coche' : 'Ruta',
+      km: Number.isFinite(effectiveKm) ? effectiveKm : '',
+      minutes: effectiveMinutes,
+      withinLimit: estimate.withinRecommendedRange !== false,
+    });
+  }
+  return options;
+}
+
+function renderTravelOptionBadge(option = {}) {
+  const minutes = Number(option.minutes);
+  const km = Number(option.km);
+  const kmText = Number.isFinite(km) ? `${Math.round(km * 10) / 10} km` : 'km aprox.';
+  const minutesText = Number.isFinite(minutes) ? `${Math.round(minutes)} min` : 'min aprox.';
+  const className = option.withinLimit === false ? 'badge-warning' : 'badge-gray';
+  return `<span class="badge ${className}">${sanitize(option.label || 'Ruta')}: ${sanitize(kmText)} / ${sanitize(minutesText)}</span>`;
+}
+
+function travelEstimateSummary(estimate = {}, options = []) {
+  const formatted = estimate?.available ? formatTravelEstimateForDisplay(estimate) : '';
+  if (formatted && !/^Ruta estimada sin coordenadas exactas/i.test(String(formatted).trim())) {
+    return formatted;
+  }
+  return options.map((option) => {
+    const km = Number(option.km);
+    const minutes = Number(option.minutes);
+    const kmText = Number.isFinite(km) ? `${Math.round(km * 10) / 10} km` : 'km aprox.';
+    const minutesText = Number.isFinite(minutes) ? `${Math.round(minutes)} min` : 'min aprox.';
+    const mode = option.mode === 'driving' ? 'en coche'
+      : option.mode === 'transit' ? 'en transporte publico'
+        : 'aprox.';
+    return `${kmText} / ${minutesText} ${mode}`;
+  }).join(' | ');
+}
+
+function normalizeMatchingRiskText(risk = '') {
+  const text = String(risk || '').trim();
+  if (/ruta estimada sin coordenadas exactas/i.test(text)) {
+    return 'Estimacion por codigo postal o zona; revisar direccion si hay dudas.';
+  }
+  return text;
+}
+
 function renderAsignarMatches(matches, error, decisionSupport = null, activeMatchingPlan = null) {
   const box = document.getElementById('asignar-match-recomendaciones');
   if (!box) return;
@@ -4845,19 +4924,17 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
     const score = Number.isFinite(Number(m.score)) ? Number(m.score) : 0;
     const badgeClass = assignable && score >= 65 ? 'badge-success' : score >= 45 ? 'badge-warning' : 'badge-danger';
     const reasons = (m.reasons || []).slice(0, 2).map(sanitize).join(' ');
-    const risks = (m.risks || []).slice(0, 2).map(sanitize).join(' ');
+    const risks = (m.risks || []).slice(0, 2).map(normalizeMatchingRiskText).filter(Boolean).map(sanitize).join(' ');
     const profileIssues = (m.profileIssues || profileQuality?.issueLabels || []).slice(0, 3).map(sanitize).join(', ');
     const travelEstimate = m.locationEstimate || m.scoreBreakdown?.location?.locationEstimate || null;
-    const travelText = travelEstimate?.available
-      ? formatTravelEstimateForDisplay(travelEstimate)
-      : '';
-    const travelBadges = travelEstimate?.available
-      ? (travelEstimate.displayOptions || [])
-        .map((option) => `<span class="badge ${option.withinLimit === false ? 'badge-warning' : 'badge-gray'}">${sanitize(option.label)}: ${sanitize(option.km)} km / ${sanitize(option.minutes)} min</span>`)
-        .join('')
-      : '';
+    const travelOptions = normalizeTravelDisplayOptions(travelEstimate);
+    const travelText = travelEstimate?.available ? travelEstimateSummary(travelEstimate, travelOptions) : '';
+    const travelBadges = travelOptions.map(renderTravelOptionBadge).join('');
     const mobilityMode = travelEstimate?.available
       ? `<span class="badge badge-gray">${travelEstimate.hasCar === true ? 'Tiene coche' : travelEstimate.hasCar === false ? 'Sin coche: transporte publico' : 'Movilidad no indicada'}</span>`
+      : '';
+    const travelConfidence = travelEstimate?.available && travelEstimate.confidence && travelEstimate.confidence !== 'coordinates'
+      ? '<span class="badge badge-warning">Estimado por zona/CP</span>'
       : '';
     const notes = [travelText && `Desplazamiento: ${travelText}`, reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
     const quote = profesor ? buildAssignmentPricingQuote(window.solicitudAsignacionActual || {}, profesor) : null;
@@ -4889,9 +4966,10 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
           <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
         ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
-        ${travelText ? `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap" title="${sanitize(travelText)}">
+        ${travelEstimate?.available ? `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap" title="${sanitize(travelText || travelEstimate.displayText || 'Desplazamiento aproximado')}">
           ${mobilityMode}
           ${travelBadges}
+          ${travelConfidence}
         </div>` : ''}
         ${trust ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px">
           ${renderTrustBadge(trust.score, trust.level)}
