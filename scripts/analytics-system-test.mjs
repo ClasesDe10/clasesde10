@@ -64,9 +64,11 @@ assert(analyticsEngine.includes('pageConversion'), 'Analytics engine must calcul
 assert(analyticsEngine.includes('teacherConversion'), 'Analytics engine must calculate teacher conversion.');
 
 assert(dataClient.includes("import { trackDataMutation }"), 'Firebase data client must import analytics mutation tracker.');
-assert(dataClient.includes("trackDataMutation(this.table, 'insert'"), 'Firebase data client must track inserts.');
-assert(dataClient.includes("trackDataMutation(this.table, 'update'"), 'Firebase data client must track updates.');
-assert(dataClient.includes("trackDataMutation(this.table, 'delete'"), 'Firebase data client must track deletes.');
+assert(dataClient.includes('trackCompatDataMutation'), 'Firebase data client must wrap analytics mutation tracking safely.');
+assert(dataClient.includes("trackCompatDataMutation(this.table, 'insert'"), 'Firebase data client must track inserts.');
+assert(dataClient.includes("trackCompatDataMutation(this.table, 'update'"), 'Firebase data client must track updates.');
+assert(dataClient.includes("trackCompatDataMutation(this.table, 'delete'"), 'Firebase data client must track deletes.');
+assert(dataClient.includes("console.warn('Data mutation tracking failed'"), 'Firebase data client must handle analytics tracking failures.');
 assert(authModule.includes("auth.login.started"), 'Auth module must track login start.');
 assert(authModule.includes("auth.login.failed"), 'Auth module must track login failures.');
 assert(authModule.includes("auth.signup.succeeded"), 'Auth module must track signup success.');

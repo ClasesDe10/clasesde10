@@ -123,6 +123,9 @@ const pkg = read('package.json');
 
 assert(firebaseDataClient.includes('normalizeEntityForWrite'), 'Compatibility data client must normalize writes.');
 assert(firebaseDataClient.includes('hydrateMapWhenNeeded'), 'Compatibility data client must hydrate relation maps selectively.');
+assert(firebaseDataClient.includes('collectionQueryCache'), 'Compatibility data client must dedupe short-lived Firebase reads.');
+assert(firebaseDataClient.includes('invalidateCollectionCache'), 'Compatibility data client must invalidate cached reads after writes.');
+assert(firebaseDataClient.includes('bypassCache: Boolean(this.writeMode)'), 'Compatibility data client must bypass stale read cache while resolving writes.');
 assert(firebaseDataClient.includes('Promise.all(['), 'Compatibility data client must load required relation maps concurrently.');
 assert(firebaseDataClient.includes('this.sorts.slice().reverse()'), 'Compatibility data client must not mutate sort order while reading.');
 assert(firestoreAdapter.includes('normalizeEntityForWrite'), 'Firestore adapters must normalize writes.');

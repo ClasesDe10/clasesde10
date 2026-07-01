@@ -48,6 +48,7 @@ import {
   storedPaymentStatus,
 } from './payment-engine.js';
 import {
+  CLASS_RESET_GENERATION,
   classResetWriteFields,
   filterAfterClassReset,
 } from './class-reset.js';
@@ -91,7 +92,9 @@ const SERVER_FIELD_ALIASES = {
   fecha: 'date',
 };
 const COLLECTION_MAP_CACHE_MS = 30 * 1000;
+const COLLECTION_QUERY_CACHE_MS = 5 * 1000;
 const collectionMapCache = new Map();
+const collectionQueryCache = new Map();
 
 function collectionName(name) {
   return COLLECTION_ALIASES[name] || name;
@@ -103,6 +106,25 @@ function normalizeDate(value) {
   if (typeof value.toDate === 'function') return value.toDate().toISOString();
   if (value.seconds) return new Date(value.seconds * 1000).toISOString();
   return value;
+}
+
+function cacheableValue(value) {
+  if (value === undefined) return '__undefined__';
+  if (value === null) return null;
+  if (Array.isArray(value)) return value.map(cacheableValue);
+  if (typeof value === 'object') {
+    const normalized = normalizeDate(value);
+    if (normalized !== value) return normalized;
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = cacheableValue(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
+function cloneRows(rows = []) {
+  return rows.map((row) => ({ ...row }));
 }
 
 function toLegacyDoc(snap) {
@@ -125,6 +147,11 @@ function serverFilterField(field) {
 
 function serverOrderField(field) {
   if (field === 'id') return documentId();
+  return SERVER_FIELD_ALIASES[field] || field;
+}
+
+function cacheFieldName(field) {
+  if (field === 'id') return '__name__';
   return SERVER_FIELD_ALIASES[field] || field;
 }
 
@@ -162,16 +189,69 @@ function effectiveReadLimit(name, filters = [], sorts = [], max = null, options 
   return defaultReadLimit(collectionName(name), Number.isFinite(requested) && requested > 0 ? requested : null);
 }
 
-async function listCollection(name, filters = [], sorts = [], max = null) {
-  const cappedMax = effectiveReadLimit(name, filters, sorts, max);
-  let snap;
-  try {
-    snap = await getDocs(buildServerQuery(name, filters, sorts, cappedMax));
-  } catch (error) {
-    snap = await getDocs(buildServerQuery(name, filters, [], cappedMax));
+function queryCacheKey(name, filters = [], sorts = [], max = null) {
+  const target = collectionName(name);
+  return JSON.stringify({
+    collection: target,
+    filters: filters.map((filter) => ({
+      field: cacheFieldName(filter.field),
+      operator: filter.operator,
+      value: cacheableValue(filter.value),
+    })),
+    sorts: sorts.map((sort) => ({
+      field: cacheFieldName(sort.field),
+      ascending: sort.ascending !== false,
+    })),
+    max: Number.isFinite(Number(max)) && Number(max) > 0 ? Number(max) : null,
+    reset: target === 'clases' ? CLASS_RESET_GENERATION : '',
+  });
+}
+
+function invalidateCollectionCache(name) {
+  const target = collectionName(name);
+  collectionMapCache.delete(name);
+  collectionMapCache.delete(target);
+  for (const key of Array.from(collectionQueryCache.keys())) {
+    if (key.includes(`"collection":"${target}"`)) {
+      collectionQueryCache.delete(key);
+    }
   }
-  const rows = snap.docs.map(toLegacyDoc);
-  return collectionName(name) === 'clases' ? filterAfterClassReset(rows) : rows;
+}
+
+async function listCollection(name, filters = [], sorts = [], max = null, options = {}) {
+  const cappedMax = effectiveReadLimit(name, filters, sorts, max);
+  const cacheKey = options.bypassCache ? '' : queryCacheKey(name, filters, sorts, cappedMax);
+  const cached = cacheKey ? collectionQueryCache.get(cacheKey) : null;
+  if (cached && cached.expiresAt > Date.now()) return cloneRows(cached.value);
+  if (cached?.promise) return cloneRows(await cached.promise);
+
+  const promise = (async () => {
+    let snap;
+    try {
+      snap = await getDocs(buildServerQuery(name, filters, sorts, cappedMax));
+    } catch (error) {
+      snap = await getDocs(buildServerQuery(name, filters, [], cappedMax));
+    }
+    const rows = snap.docs.map(toLegacyDoc);
+    return collectionName(name) === 'clases' ? filterAfterClassReset(rows) : rows;
+  })();
+
+  if (cacheKey) {
+    collectionQueryCache.set(cacheKey, { value: cached?.value || [], expiresAt: 0, promise });
+  }
+  try {
+    const rows = await promise;
+    if (cacheKey) {
+      collectionQueryCache.set(cacheKey, {
+        value: cloneRows(rows),
+        expiresAt: Date.now() + COLLECTION_QUERY_CACHE_MS,
+      });
+    }
+    return cloneRows(rows);
+  } catch (error) {
+    if (cacheKey) collectionQueryCache.delete(cacheKey);
+    throw error;
+  }
 }
 
 async function safeListCollection(name) {
@@ -517,6 +597,12 @@ async function auditDataWrite(table, mode, records = [], extra = {}) {
   })));
 }
 
+function trackCompatDataMutation(table, mode, records = [], context = {}) {
+  trackDataMutation(table, mode, records, context).catch((error) => {
+    console.warn('Data mutation tracking failed', table, mode, error);
+  });
+}
+
 class FirebaseCompatQuery {
   constructor(table) {
     this.table = table;
@@ -621,7 +707,9 @@ class FirebaseCompatQuery {
       hasCursor: Boolean(this.rangeBounds),
       purpose: 'compat_db_from',
     });
-    let rows = await listCollection(this.table, this.filters, this.sorts, serverMax);
+    let rows = await listCollection(this.table, this.filters, this.sorts, serverMax, {
+      bypassCache: Boolean(this.writeMode),
+    });
     rows = await hydrateRows(this.table, rows);
     rows = rows.filter((row) => this.filters.every((filter) => matchesFilter(row, filter)));
 
@@ -666,10 +754,11 @@ class FirebaseCompatQuery {
       await auditDataWrite(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {
         filters: this.filters,
       });
-      trackDataMutation(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {
+      trackCompatDataMutation(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {
         filters: this.filters.length,
         source: 'compat_insert',
       });
+      invalidateCollectionCache(this.table);
       return { data: Array.isArray(this.writePayload) ? written : written[0], error: null };
     }
 
@@ -687,7 +776,7 @@ class FirebaseCompatQuery {
       })), {
         filters: this.filters,
       });
-      trackDataMutation(this.table, 'update', rows.map((row, index) => ({
+      trackCompatDataMutation(this.table, 'update', rows.map((row, index) => ({
         id: row.id,
         before: row,
         after: updatedRows[index],
@@ -695,6 +784,7 @@ class FirebaseCompatQuery {
         filters: this.filters.length,
         source: 'compat_update',
       });
+      invalidateCollectionCache(this.table);
       return { data: updatedRows, error: null };
     }
 
@@ -703,10 +793,11 @@ class FirebaseCompatQuery {
       await auditDataWrite(this.table, 'delete', rows.map((row) => ({ id: row.id, before: row })), {
         filters: this.filters,
       });
-      trackDataMutation(this.table, 'delete', rows.map((row) => ({ id: row.id, before: row })), {
+      trackCompatDataMutation(this.table, 'delete', rows.map((row) => ({ id: row.id, before: row })), {
         filters: this.filters.length,
         source: 'compat_delete',
       });
+      invalidateCollectionCache(this.table);
       return { data: rows, error: null };
     }
 
