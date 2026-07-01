@@ -35,7 +35,7 @@ import {
   FIELD_ALIAS_GROUPS as CANONICAL_FIELD_ALIAS_GROUPS,
   normalizeEntityForWrite,
 } from './data-schema.js';
-import { buildQueryBudget, defaultReadLimit } from './scale-engine.js';
+import { buildIdempotencyKey, buildQueryBudget, defaultReadLimit } from './scale-engine.js';
 import { buildIncidentCreatePayload, normalizeIncident } from './incident-engine.js?v=20260628-incidents';
 import { getConfigValue } from './platform-config.js?v=20260628-config';
 import {
@@ -190,12 +190,21 @@ async function getCollectionMap(name) {
 async function safeCollectionMap(name) {
   const cached = collectionMapCache.get(name);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached?.promise) return cached.promise;
+  const promise = getCollectionMap(name)
+    .then((value) => {
+      collectionMapCache.set(name, { value, expiresAt: Date.now() + COLLECTION_MAP_CACHE_MS });
+      return value;
+    })
+    .catch((error) => {
+      collectionMapCache.delete(name);
+      throw error;
+    });
+  collectionMapCache.set(name, { value: cached?.value || new Map(), expiresAt: 0, promise });
   try {
-    const value = await getCollectionMap(name);
-    collectionMapCache.set(name, { value, expiresAt: Date.now() + COLLECTION_MAP_CACHE_MS });
-    return value;
+    return await promise;
   } catch (_) {
-    return new Map();
+    return cached?.value || new Map();
   }
 }
 
@@ -318,6 +327,15 @@ function randomToken() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function deterministicPaymentDocId(data = {}) {
+  const key = String(data.idempotencyKey || '').trim();
+  if (!key) return '';
+  const classIds = Array.isArray(data.classIds) ? data.classIds.filter(Boolean) : [];
+  const hasExternalReference = Boolean(data.reference || data.referencia || data.documentId || data.documento_id || data.providerPaymentId || data.paymentIntentId);
+  if (!classIds.length && !hasExternalReference) return '';
+  return `pay_${buildIdempotencyKey('pagos', key)}`;
 }
 
 function normalizeWritePayload(table, payload, isCreate = false) {
@@ -612,8 +630,14 @@ class FirebaseCompatQuery {
           await setDoc(doc(firebaseDb, target, payload.id), data, { merge: true });
           written.push({ id: payload.id, ...data });
         } else {
-          const refDoc = await addDoc(collection(firebaseDb, target), data);
-          written.push({ id: refDoc.id, ...data });
+          const paymentId = this.table === 'pagos' ? deterministicPaymentDocId(data) : '';
+          if (paymentId) {
+            await setDoc(doc(firebaseDb, target, paymentId), data, { merge: true });
+            written.push({ id: paymentId, ...data });
+          } else {
+            const refDoc = await addDoc(collection(firebaseDb, target), data);
+            written.push({ id: refDoc.id, ...data });
+          }
         }
       }
       await auditDataWrite(this.table, 'insert', written.map((row) => ({ id: row.id, after: row })), {

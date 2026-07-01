@@ -562,12 +562,16 @@ export function paymentReference(payment = {}) {
 }
 
 export function paymentFingerprint(payment = {}) {
+  const classIds = Array.isArray(payment.classIds || payment.claseIds)
+    ? (payment.classIds || payment.claseIds).map(String).filter(Boolean).sort().join(',')
+    : '';
   return [
     cleanPaymentText(payment.gateway || payment.provider || 'manual', 40).toLowerCase(),
     cleanPaymentText(payment.metodo || payment.method || 'bizum', 40).toLowerCase(),
     paymentReference(payment).toLowerCase(),
     paymentAmount(payment).toFixed(2),
     cleanPaymentText(payment.familyUid || payment.familia_id || payment.teacherUid || payment.profesor_id, 180).toLowerCase(),
+    classIds,
   ].filter(Boolean).join('|');
 }
 

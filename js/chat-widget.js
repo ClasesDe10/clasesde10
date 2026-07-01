@@ -299,6 +299,11 @@ function isUsefulChatIdentity(value) {
     && !['profesor', 'familia', 'alumno', 'alumno/a', 'profesor asignado'].includes(normalized);
 }
 
+function isExpectedPermissionFallback(error) {
+  const message = clean(error?.message || error, 400).toLowerCase();
+  return /permission|insufficient permissions/.test(message);
+}
+
 function chatSubtitle(chat, role, preference = {}) {
   const parts = [];
   const defaultTitle = defaultChatTitle(chat, role);
@@ -321,7 +326,12 @@ async function loadAssignments(dbCompat, role, profileId, actorIds = []) {
   const field = role === 'familia' ? 'familia_id' : 'profesor_id';
   const results = await Promise.all(ids.map(async (id) => {
     const { data, error } = await dbCompat.from('asignaciones').select(select).eq('activa', true).eq(field, id);
-    if (error) throw error;
+    if (error) {
+      if (!isExpectedPermissionFallback(error)) {
+        console.warn(`No se pudieron cargar asignaciones por ${field}`, { id, message: error.message || String(error) });
+      }
+      return [];
+    }
     return data || [];
   }));
   return mergeDocsById(results.flat());
@@ -418,7 +428,12 @@ async function ensureChatForAssignment(assignment, usuario, role) {
 async function loadChats(dbCompat, role, profileId, usuario, actorIds = []) {
   if (role === 'admin') {
     const assignments = await loadAssignments(dbCompat, role, profileId, actorIds);
-    await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role)));
+    await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role).catch((error) => {
+      if (!isExpectedPermissionFallback(error)) {
+        console.warn('No se pudo preparar chat de asignacion', { assignmentId: assignment.id, message: error.message || String(error) });
+      }
+      return null;
+    })));
     const snap = await getDocs(query(
       collection(firebaseDb, 'chats'),
       orderBy('updatedAt', 'desc'),
@@ -432,7 +447,12 @@ async function loadChats(dbCompat, role, profileId, usuario, actorIds = []) {
   const actorSet = new Set([usuario?.uid, usuario?.firebase_uid, profileId, ...Array.from(actorIds || [])].map((id) => clean(id, 180)).filter(Boolean));
   const firestoreChats = await loadFirestoreChatsForActor(role, actorSet).catch(() => []);
   const assignments = await loadAssignments(dbCompat, role, profileId, actorIds);
-  const assignmentChats = (await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role))))
+  const assignmentChats = (await Promise.all(assignments.map((assignment) => ensureChatForAssignment(assignment, usuario, role).catch((error) => {
+    if (!isExpectedPermissionFallback(error)) {
+      console.warn('No se pudo preparar chat de asignacion', { assignmentId: assignment.id, message: error.message || String(error) });
+    }
+    return null;
+  }))))
     .filter(Boolean);
   const chats = mergeDocsById([...firestoreChats, ...assignmentChats]);
   chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
