@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
+import {
+  buildNotificationDocument,
+  notificationActionUrl,
+  safeInternalActionUrl,
+} from '../js/notification-engine.js';
 
 const root = process.cwd();
 
@@ -45,6 +50,21 @@ assert(engine.includes('proactive_assist'), 'Notification engine must include pr
 assert(engine.includes('chat_message'), 'Notification engine must include chat message event.');
 assert(engine.includes('buildNotificationDocument'), 'Notification engine must build normalized documents.');
 assert(engine.includes('isNotificationEnabled'), 'Notification engine must expose settings checks.');
+assert(engine.includes('safeInternalActionUrl'), 'Notification engine must sanitize action URLs.');
+assert(safeInternalActionUrl('/pages/dashboard/admin.html#pagos') === '/pages/dashboard/admin.html#pagos', 'Internal notification URLs must be preserved.');
+assert(safeInternalActionUrl('https://evil.example/phishing') === '/pages/login.html', 'External HTTPS notification URLs must be rejected.');
+assert(safeInternalActionUrl('//evil.example/phishing') === '/pages/login.html', 'Protocol-relative notification URLs must be rejected.');
+assert(safeInternalActionUrl('javascript:alert(1)') === '/pages/login.html', 'Javascript notification URLs must be rejected.');
+const unsafeNotification = buildNotificationDocument({
+  userUid: 'user_1',
+  title: 'Aviso',
+  body: 'Prueba',
+  payload: { url: 'https://evil.example/phishing' },
+});
+assert(unsafeNotification.actionUrl === '/pages/login.html', 'Unsafe notification actionUrl must be normalized.');
+assert(unsafeNotification.payload.url === '/pages/login.html', 'Unsafe notification payload URL must be normalized.');
+assert(notificationActionUrl({ actionUrl: '/pages/dashboard/familia.html#chat' }) === '/pages/dashboard/familia.html#chat', 'Internal notificationActionUrl must be preserved.');
+assert(notificationActionUrl({ actionUrl: 'data:text/html,evil' }) === '/pages/login.html', 'Data URL notificationActionUrl must be rejected.');
 
 assert(provider.includes('loadNotificationSettings'), 'Provider must load admin notification settings.');
 assert(provider.includes('saveNotificationSettings'), 'Provider must save admin notification settings.');
@@ -75,6 +95,7 @@ assert(serviceWorker.includes('onBackgroundMessage'), 'Service worker must handl
 assert(serviceWorker.includes('notificationclick'), 'Service worker must handle notification clicks.');
 
 assert(functions.includes('sendPushOnNotificationCreated'), 'Functions must send push when notification documents are created.');
+assert(functions.includes('safeInternalActionUrl'), 'Functions must sanitize notification action URLs before push.');
 assert(functions.includes('notifyOnChatMessage'), 'Functions must create notifications for new chat messages.');
 assert(functions.includes('notifyOnDocumentCreated'), 'Functions must notify admins about pending documents.');
 assert(functions.includes('notifyOnIncidentCreated'), 'Functions must notify admins about incidents.');
@@ -89,6 +110,7 @@ assert(automationWorker.includes('teacher_payout_pending'), 'Automation worker m
 assert(rules.includes('match /notificationTokens/{tokenId}'), 'Firestore rules must protect notification tokens.');
 assert(rules.includes("['readAt', 'leida', 'updatedAt']"), 'Firestore rules must allow users to mark notifications read.');
 assert(rules.includes('match /notificationPreferences/{userUid}'), 'Firestore rules must expose user notification preferences.');
+assert(rules.includes('validInternalUrl'), 'Firestore rules must reject external notification action URLs.');
 assert(indexes.includes('"collectionGroup": "notificaciones"'), 'Firestore indexes must include notification feed indexes.');
 assert(indexes.includes('"collectionGroup": "notificationTokens"'), 'Firestore indexes must include token lookup indexes.');
 

@@ -31,6 +31,14 @@ function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
 }
 
+function safeInternalActionUrl(value, fallback = '/pages/login.html') {
+  const candidate = clean(value, 500);
+  if (!candidate) return fallback;
+  if (!candidate.startsWith('/') || candidate.startsWith('//')) return fallback;
+  if (!/^\/[A-Za-z0-9/_.,~#?&=%:+-]*$/.test(candidate)) return fallback;
+  return candidate;
+}
+
 function lower(value) {
   return clean(value).toLowerCase();
 }
@@ -283,6 +291,7 @@ function buildNotification(userUid, title, body, payload = {}, extra = {}) {
   const definition = notificationDefinition(type);
   const finalTitle = clean(title, 140) || 'ClasesDe10';
   const finalBody = clean(body, 1200);
+  const actionUrl = safeInternalActionUrl(extra.actionUrl || payload.url || '/pages/login.html');
   return {
     userUid,
     usuario_id: userUid,
@@ -297,8 +306,9 @@ function buildNotification(userUid, title, body, payload = {}, extra = {}) {
     payload: {
       ...payload,
       type,
+      url: actionUrl,
     },
-    actionUrl: clean(extra.actionUrl || payload.url || '/pages/login.html', 500) || '/pages/login.html',
+    actionUrl,
     role: clean(extra.role, 40),
     readAt: null,
     leida: false,
@@ -421,7 +431,7 @@ async function sendPushForNotification(notificationId, notification) {
   const tokens = await getPushTokensForUser(userUid);
   if (!tokens.length) return { sent: 0, skipped: 'no_tokens' };
 
-  const actionUrl = clean(notification.actionUrl || notification.payload?.url || '/pages/login.html', 500) || '/pages/login.html';
+  const actionUrl = safeInternalActionUrl(notification.actionUrl || notification.payload?.url || '/pages/login.html');
   const message = {
     tokens: tokens.map((item) => item.token),
     notification: {

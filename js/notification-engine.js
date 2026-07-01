@@ -236,6 +236,14 @@ export function cleanNotificationText(value, max = 500) {
   return String(value || '').trim().slice(0, max);
 }
 
+export function safeInternalActionUrl(value, fallback = '/pages/login.html') {
+  const candidate = cleanNotificationText(value, 500);
+  if (!candidate) return fallback;
+  if (!candidate.startsWith('/') || candidate.startsWith('//')) return fallback;
+  if (!/^\/[A-Za-z0-9/_.,~#?&=%:+-]*$/.test(candidate)) return fallback;
+  return candidate;
+}
+
 export function notificationDefinition(type) {
   return NOTIFICATION_EVENT_DEFINITIONS[type] || NOTIFICATION_EVENT_DEFINITIONS[NOTIFICATION_EVENTS.AUTOMATION];
 }
@@ -269,7 +277,7 @@ export function normalizeNotificationType(type) {
 
 export function notificationActionUrl(notification = {}) {
   const payload = notification.payload || {};
-  return cleanNotificationText(notification.actionUrl || payload.url || '/pages/login.html', 500) || '/pages/login.html';
+  return safeInternalActionUrl(notification.actionUrl || payload.url || '/pages/login.html');
 }
 
 export function mergeNotificationSettings(settings = {}) {
@@ -321,6 +329,7 @@ export function buildNotificationDocument({
   const normalizedType = normalizeNotificationType(type);
   const finalTitle = cleanNotificationText(title, 140) || notificationCategoryLabel(normalizedType);
   const finalBody = cleanNotificationText(body, 1200);
+  const actionUrl = safeInternalActionUrl(payload.url || '/pages/login.html');
 
   return {
     userUid: cleanNotificationText(userUid, 180),
@@ -336,8 +345,9 @@ export function buildNotificationDocument({
     payload: {
       ...payload,
       type: normalizedType,
+      url: actionUrl,
     },
-    actionUrl: cleanNotificationText(payload.url || '/pages/login.html', 500) || '/pages/login.html',
+    actionUrl,
     role: cleanNotificationText(role, 40),
     readAt: null,
     leida: false,

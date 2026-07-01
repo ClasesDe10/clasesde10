@@ -13,6 +13,14 @@ function clean(value, max = 500) {
   return String(value ?? '').trim().slice(0, max);
 }
 
+function safeInternalActionUrl(value, fallback = '/pages/login.html') {
+  const candidate = clean(value, 500);
+  if (!candidate) return fallback;
+  if (!candidate.startsWith('/') || candidate.startsWith('//')) return fallback;
+  if (!/^\/[A-Za-z0-9/_.,~#?&=%:+-]*$/.test(candidate)) return fallback;
+  return candidate;
+}
+
 function lower(value) {
   return clean(value).toLowerCase();
 }
@@ -111,9 +119,10 @@ function addNotification(plan, event, target, title, body, payload = {}, options
     type,
     priority: clean(options.priority || 'normal', 40),
     channels: options.channels || ['internal', 'browser', 'push'],
-    actionUrl: clean(options.actionUrl || payload.url || '/pages/login.html', 500) || '/pages/login.html',
+    actionUrl: safeInternalActionUrl(options.actionUrl || payload.url || '/pages/login.html'),
     payload: {
       ...payload,
+      url: safeInternalActionUrl(options.actionUrl || payload.url || '/pages/login.html'),
       type,
       entityType: clean(event.entityType, 80),
       entityId: dataId(event),

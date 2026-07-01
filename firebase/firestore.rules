@@ -1798,6 +1798,11 @@ service cloud.firestore {
         && request.resource.data.payload.type == 'chat_message'
         && request.resource.data.payload.chatId is string
         && request.resource.data.payload.messageId is string
+        && validInternalUrl(request.resource.data.actionUrl)
+        && (
+          !request.resource.data.payload.keys().hasAny(['url'])
+          || validInternalUrl(request.resource.data.payload.url)
+        )
         && exists(/databases/$(database)/documents/chats/$(request.resource.data.payload.chatId))
         && isChatParticipant(get(/databases/$(database)/documents/chats/$(request.resource.data.payload.chatId)).data)
         && (
@@ -1816,6 +1821,199 @@ service cloud.firestore {
         && request.resource.data.leida == false
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
+    }
+
+    function validInternalUrl(value) {
+      return value == null
+        || (
+          value is string
+          && value.size() <= 500
+          && value.matches('^/[A-Za-z0-9/_.,~#?&=%:+-]*$')
+          && !value.matches('^//.*')
+        );
+    }
+
+    function validDocumentType(value) {
+      return value in [
+        'dni',
+        'identidad',
+        'titulo',
+        'notas_curso_anterior',
+        'notas_universidad',
+        'certificado',
+        'certificado_idiomas',
+        'certificado_formacion_especializada',
+        'referencia_academica_profesional',
+        'antecedentes',
+        'contrato',
+        'autorizacion',
+        'factura',
+        'recibo',
+        'justificante',
+        'justificante_pago',
+        'curriculum',
+        'interno',
+        'otro'
+      ];
+    }
+
+    function validOwnerDocumentStatus(value) {
+      return value in ['pendiente', 'en_revision'];
+    }
+
+    function validOwnerDocumentStoragePath(value) {
+      return value is string
+        && value.size() >= 12
+        && value.size() <= 600
+        && value.matches('^users/[^/]+/documentos/.+')
+        && !value.matches('.*\\.\\..*');
+    }
+
+    function validOwnerDocumentMime(value) {
+      return value == null
+        || (
+          value is string
+          && value.size() <= 180
+          && value.matches('^(image/(jpeg|jpg|png|webp)|application/pdf|application/msword|application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet|presentationml\\.presentation)|text/plain)$')
+        );
+    }
+
+    function validOwnerDocumentSize(value) {
+      return value == null
+        || value is int
+        || value is float;
+    }
+
+    function validOwnerDocumentBase(data) {
+      return data.keys().hasOnly([
+          'id',
+          'ownerUid',
+          'usuario_id',
+          'userUid',
+          'profileId',
+          'role',
+          'ownerRole',
+          'documentType',
+          'tipo',
+          'typeLabel',
+          'category',
+          'name',
+          'nombre',
+          'status',
+          'estado',
+          'storedStatus',
+          'rawStatus',
+          'verificationStatus',
+          'verificationLevel',
+          'version',
+          'versions',
+          'history',
+          'observations',
+          'adminNotes',
+          'storagePath',
+          'storage_path',
+          'url',
+          'mimeType',
+          'mime_type',
+          'sizeBytes',
+          'tamano_bytes',
+          'uploadedAt',
+          'createdAt',
+          'created_at',
+          'updatedAt',
+          'updated_at',
+          'expiresAt',
+          'daysToExpiry',
+          'expired',
+          'expiresSoon',
+          'requiresManualVerification',
+          'sensitive',
+          'publicSignal',
+          'trustWeight',
+          'permissions',
+          'autoChecks',
+          'automationFlags',
+          'documentCenterVersion',
+          'month',
+          'partitionKey',
+          'scaleShard'
+        ])
+        && data.keys().hasAll([
+          'ownerUid',
+          'usuario_id',
+          'userUid',
+          'role',
+          'ownerRole',
+          'documentType',
+          'tipo',
+          'name',
+          'nombre',
+          'status',
+          'estado',
+          'verificationStatus',
+          'storagePath',
+          'storage_path',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.ownerUid == request.auth.uid
+        && data.userUid == request.auth.uid
+        && data.usuario_id == request.auth.uid
+        && data.role in ['familia', 'profesor', 'alumno']
+        && data.ownerRole == data.role
+        && validDocumentType(data.documentType)
+        && data.tipo == data.documentType
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 240
+        && data.nombre == data.name
+        && validOwnerDocumentStatus(data.status)
+        && data.estado == data.status
+        && data.verificationStatus == data.status
+        && (!data.keys().hasAny(['storedStatus']) || data.storedStatus == data.status)
+        && (!data.keys().hasAny(['rawStatus']) || data.rawStatus == data.status)
+        && (!data.keys().hasAny(['verificationLevel']) || data.verificationLevel in ['sin_verificar', 'metadata_validada'])
+        && validOwnerDocumentStoragePath(data.storagePath)
+        && data.storage_path == data.storagePath
+        && (!data.keys().hasAny(['url']) || data.url == data.storagePath)
+        && validOwnerDocumentMime(data.mimeType)
+        && validOwnerDocumentMime(data.mime_type)
+        && validOwnerDocumentSize(data.sizeBytes)
+        && validOwnerDocumentSize(data.tamano_bytes)
+        && (!data.keys().hasAny(['sizeBytes']) || data.sizeBytes <= 10 * 1024 * 1024)
+        && (!data.keys().hasAny(['tamano_bytes']) || data.tamano_bytes <= 10 * 1024 * 1024)
+        && data.createdAt is string
+        && data.createdAt.size() <= 80
+        && data.updatedAt is string
+        && data.updatedAt.size() <= 80
+        && (!data.keys().hasAny(['created_at']) || data.created_at == data.createdAt)
+        && (!data.keys().hasAny(['updated_at']) || data.updated_at == data.updatedAt)
+        && (!data.keys().hasAny(['profileId']) || data.profileId is string)
+        && (!data.keys().hasAny(['version']) || data.version is int || data.version is float)
+        && (!data.keys().hasAny(['versions']) || data.versions is list)
+        && (!data.keys().hasAny(['history']) || data.history is list)
+        && (!data.keys().hasAny(['permissions']) || data.permissions is map)
+        && (!data.keys().hasAny(['autoChecks']) || data.autoChecks is map)
+        && (!data.keys().hasAny(['automationFlags']) || data.automationFlags is map)
+        && !data.keys().hasAny([
+          'verifiedAt',
+          'verifiedByUid',
+          'verifiedByEmail',
+          'rejectedAt',
+          'rejectedByUid',
+          'notas_admin'
+        ]);
+    }
+
+    function validOwnerDocumentCreate() {
+      return signedIn()
+        && validOwnerDocumentBase(request.resource.data);
+    }
+
+    function canOwnerDeleteDocument() {
+      return signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && (!resource.data.keys().hasAny(['status']) || resource.data.status in ['pendiente', 'en_revision', 'rechazado', 'requiere_actualizacion']);
     }
 
     match /leadsPublicos/{leadId} {
@@ -2057,8 +2255,10 @@ service cloud.firestore {
     }
 
     match /documentos/{documentId} {
-      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
-      allow read, update, delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow create: if isAdmin() || validOwnerDocumentCreate();
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || canOwnerDeleteDocument();
     }
 
     match /notificaciones/{notificationId} {

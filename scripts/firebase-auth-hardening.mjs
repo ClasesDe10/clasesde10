@@ -55,7 +55,8 @@ async function main() {
     process.exit(1);
   }
 
-  const update = await api(`${CONFIG_URL}?updateMask=signIn.email,signIn.phoneNumber`, {
+  const authorizedDomainsPatch = [...REQUIRED_AUTH_DOMAINS].sort();
+  const update = await api(`${CONFIG_URL}?updateMask=signIn.email,signIn.phoneNumber,authorizedDomains`, {
     method: 'PATCH',
     body: JSON.stringify({
       signIn: {
@@ -67,6 +68,7 @@ async function main() {
           enabled: false,
         },
       },
+      authorizedDomains: authorizedDomainsPatch,
     }),
   });
   if (!update.ok) {
@@ -96,6 +98,7 @@ async function main() {
     ok: true,
     emailPassword: 'enabled',
     phoneAuth: 'disabled',
+    removedExtraAuthorizedDomains: [...authorizedDomains].filter((domain) => !REQUIRED_AUTH_DOMAINS.has(domain)),
     authorizedDomains: [...authorizedDomains].sort(),
   }, null, 2));
 }
