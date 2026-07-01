@@ -1297,6 +1297,25 @@ window.addEventListener('cd10:platform-config-updated', (event) => {
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
 
+function setActionBusy(button, label = 'Procesando...') {
+  if (!button || button.dataset.busy === 'true') return false;
+  button.dataset.busy = 'true';
+  button.dataset.originalText = button.textContent || '';
+  button.disabled = true;
+  button.textContent = label;
+  return true;
+}
+
+function clearActionBusy(button) {
+  if (!button) return;
+  button.disabled = false;
+  button.textContent = button.dataset.originalText || button.textContent || '';
+  delete button.dataset.busy;
+  delete button.dataset.originalText;
+}
+
+const pendingAdminPaymentActions = new Set();
+
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const secciones = ['dashboard','operaciones','ia','analitica','experimentos','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
 const TITULOS = {
@@ -2405,6 +2424,8 @@ async function notificarCambioClase(payload, previous, id) {
 }
 
 document.getElementById('btn-guardar-clase').addEventListener('click', async () => {
+  const button = document.getElementById('btn-guardar-clase');
+  if (!setActionBusy(button, 'Guardando...')) return;
   const id        = document.getElementById('clase-id').value;
   const profesor  = document.getElementById('clase-profesor').value;
   const alumno    = document.getElementById('clase-alumno').value;
@@ -2417,6 +2438,7 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
   const estado    = document.getElementById('clase-estado').value;
   const obs       = document.getElementById('clase-observaciones').value.trim();
 
+  try {
   if (!profesor || !alumno || !fecha || !materia || !horaIni || !horaFin) {
     showToast('Faltan campos', 'Completa los campos obligatorios.', 'warning'); return;
   }
@@ -2468,6 +2490,11 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
   closeModal('modal-clase');
   showToast('Guardado', id ? 'Clase actualizada.' : 'Clase creada.', 'success');
   cargarClases();
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo guardar la clase.', 'error');
+  } finally {
+    clearActionBusy(button);
+  }
 });
 
 document.getElementById('btn-export-clases').addEventListener('click', async () => {
@@ -5450,6 +5477,13 @@ async function refreshPaymentRelatedAdminViews(options = {}) {
 }
 
 window.validarPago = async (id, estado, options = {}) => {
+  const actionKey = String(id);
+  if (pendingAdminPaymentActions.has(actionKey)) {
+    if (!options.silent) showToast('Accion en curso', 'Ya estamos actualizando ese pago.', 'info');
+    return;
+  }
+  pendingAdminPaymentActions.add(actionKey);
+  try {
   const { data: pagoActual, error: pagoError } = await db.from('pagos').select('*').eq('id', id).single();
   if (pagoError) { if (!options.silent) showToast('Error', pagoError.message, 'error'); return; }
 
@@ -5527,6 +5561,11 @@ window.validarPago = async (id, estado, options = {}) => {
 
   if (!options.silent) showToast('Pago ' + estado, '', 'success');
   if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
+  } catch (error) {
+    if (!options.silent) showToast('Error', error.message || 'No se pudo actualizar el pago.', 'error');
+  } finally {
+    pendingAdminPaymentActions.delete(actionKey);
+  }
 };
 
 // ── DOCUMENTOS ───────────────────────────────────────────────────

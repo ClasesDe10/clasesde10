@@ -704,6 +704,23 @@ let familiaData = familiaFirestoreExists
     });
 const familiaId = familiaLegacy?.id || familiaData?.id || familiaFirestoreId;
 
+function setActionBusy(button, label = 'Procesando...') {
+  if (!button || button.dataset.busy === 'true') return false;
+  button.dataset.busy = 'true';
+  button.dataset.originalText = button.textContent || '';
+  button.disabled = true;
+  button.textContent = label;
+  return true;
+}
+
+function clearActionBusy(button) {
+  if (!button) return;
+  button.disabled = false;
+  button.textContent = button.dataset.originalText || button.textContent || '';
+  delete button.dataset.busy;
+  delete button.dataset.originalText;
+}
+
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
                   alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Justificantes', chat:'Chat', perfil:'Mi perfil' };
@@ -1898,31 +1915,33 @@ document.addEventListener('click', (e) => {
 });
 
 document.getElementById('btn-guardar-plan-pago')?.addEventListener('click', async () => {
+  const button = document.getElementById('btn-guardar-plan-pago');
+  if (!setActionBusy(button, 'Guardando...')) return;
   const assignmentId = document.getElementById('plan-pago-assignment-id').value;
   const teacherUid = document.getElementById('plan-pago-teacher-id').value;
   const studentId = document.getElementById('plan-pago-student-id').value;
   const dayOfWeek = Number(document.getElementById('plan-pago-dia').value);
   const time = document.getElementById('plan-pago-hora').value || '20:00';
-  if (!teacherUid || !studentId) {
-    showToast('Falta relacion', 'No se encontro profesor o alumno para este plan semanal.', 'error');
-    return;
-  }
-  const payload = buildWeeklyPaymentSchedulePayload({
-    ownerUid: ownerUid(),
-    familyUid: familiaId,
-    familia_id: familiaId,
-    teacherUid,
-    profesor_id: teacherUid,
-    studentId,
-    alumno_id: studentId,
-    assignmentId,
-    asignacion_id: assignmentId,
-    dayOfWeek,
-    time,
-    notes: document.getElementById('plan-pago-notas').value,
-  });
-  const id = paymentScheduleDocumentId(payload);
   try {
+    if (!teacherUid || !studentId) {
+      showToast('Falta relacion', 'No se encontro profesor o alumno para este plan semanal.', 'error');
+      return;
+    }
+    const payload = buildWeeklyPaymentSchedulePayload({
+      ownerUid: ownerUid(),
+      familyUid: familiaId,
+      familia_id: familiaId,
+      teacherUid,
+      profesor_id: teacherUid,
+      studentId,
+      alumno_id: studentId,
+      assignmentId,
+      asignacion_id: assignmentId,
+      dayOfWeek,
+      time,
+      notes: document.getElementById('plan-pago-notas').value,
+    });
+    const id = paymentScheduleDocumentId(payload);
     const ref = firestoreDoc(firebaseDb, 'paymentSchedules', id);
     const existing = await getDoc(ref).catch(() => null);
     const timestamps = existing?.exists()
@@ -1948,6 +1967,8 @@ document.getElementById('btn-guardar-plan-pago')?.addEventListener('click', asyn
     if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
   } catch (error) {
     showToast('Error', error.message || 'No se pudo guardar el plan semanal.', 'error');
+  } finally {
+    clearActionBusy(button);
   }
 });
 
@@ -2029,11 +2050,17 @@ document.getElementById('btn-nuevo-hijo').addEventListener('click', () => {
 });
 
 document.getElementById('btn-guardar-hijo').addEventListener('click', async () => {
+  const button = document.getElementById('btn-guardar-hijo');
+  if (!setActionBusy(button, 'Guardando...')) return;
   const id       = document.getElementById('hijo-id').value;
   const isNew    = !id;
   const nombre   = document.getElementById('h-nombre').value.trim();
   const apellidos = document.getElementById('h-apellidos').value.trim();
-  if (!nombre || !apellidos) { showToast('Atención','Nombre y apellidos son obligatorios.','warning'); return; }
+  if (!nombre || !apellidos) {
+    showToast('Atención','Nombre y apellidos son obligatorios.','warning');
+    clearActionBusy(button);
+    return;
+  }
 
   const payload = {
     nombre, apellidos,
@@ -2044,22 +2071,28 @@ document.getElementById('btn-guardar-hijo').addEventListener('click', async () =
     familia_id:      familiaId,
   };
 
-  const { data: saved, error } = id
-    ? await db.from('alumnos').update(payload).eq('id', id).select('id').single()
-    : await db.from('alumnos').insert(payload).select('id').single();
+  try {
+    const { data: saved, error } = id
+      ? await db.from('alumnos').update(payload).eq('id', id).select('id').single()
+      : await db.from('alumnos').insert(payload).select('id').single();
 
-  if (error) { showToast('Error', error.message, 'error'); return; }
-  document.getElementById('modal-hijo').classList.remove('open');
-  await cargarHijos();
-  await cargarInicio();
-  if (isNew) {
-    await cargarSolicitudes();
-    if (saved?.id) document.getElementById('sol-alumno').value = saved.id;
-    renderSolicitudDisponibilidadHint();
-    document.getElementById('modal-solicitud').classList.add('open');
-    showToast('Hijo/a añadido/a', 'Ahora indica materia y horario para pedir profesor.', 'success');
-  } else {
-    showToast('Guardado', 'Datos actualizados.', 'success');
+    if (error) { showToast('Error', error.message, 'error'); return; }
+    document.getElementById('modal-hijo').classList.remove('open');
+    await cargarHijos();
+    await cargarInicio();
+    if (isNew) {
+      await cargarSolicitudes();
+      if (saved?.id) document.getElementById('sol-alumno').value = saved.id;
+      renderSolicitudDisponibilidadHint();
+      document.getElementById('modal-solicitud').classList.add('open');
+      showToast('Hijo/a añadido/a', 'Ahora indica materia y horario para pedir profesor.', 'success');
+    } else {
+      showToast('Guardado', 'Datos actualizados.', 'success');
+    }
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo guardar el alumno.', 'error');
+  } finally {
+    clearActionBusy(button);
   }
 });
 
@@ -2145,8 +2178,11 @@ async function cargarSolicitudes() {
 });
 
 document.getElementById('btn-enviar-solicitud').addEventListener('click', async () => {
+  const button = document.getElementById('btn-enviar-solicitud');
+  if (!setActionBusy(button, 'Enviando...')) return;
   const alumnoId   = document.getElementById('sol-alumno').value;
   const materia    = document.getElementById('sol-materia').value.trim();
+  try {
   if (!alumnoId || !materia) { showToast('Atención','Selecciona un hijo/a e indica la materia.','warning'); return; }
 
   const { error } = await db.from('solicitudes').insert({
@@ -2166,6 +2202,11 @@ document.getElementById('btn-enviar-solicitud').addEventListener('click', async 
   showToast('Solicitud enviada', 'Siguiente paso: revisaremos el matching y te avisaremos cuando haya profesor, chat y horario.', 'success');
   await cargarSolicitudes();
   irA('inicio');
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo enviar la solicitud.', 'error');
+  } finally {
+    clearActionBusy(button);
+  }
 });
 
 // ── PAGOS ────────────────────────────────────────────────────────
@@ -2445,6 +2486,7 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
   if (file && file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
   btn.disabled = true;
   btn.textContent = 'Enviando...';
+  try {
   if (file) {
     const ext  = (file.name.split('.').pop() || '').toLowerCase();
     if (!UPLOAD_EXT_PERMITIDAS.includes(ext) || (file.type && !UPLOAD_MIME_PERMITIDOS.includes(file.type))) {
@@ -2512,6 +2554,12 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
   await cargarPagos();
   await cargarInicio();
   if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
+  } catch (error) {
+    showToast('Error', error.message || 'No se pudo confirmar el pago.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 });
 
 // ── PERFIL ───────────────────────────────────────────────────────

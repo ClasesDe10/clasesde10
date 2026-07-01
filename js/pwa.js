@@ -9,6 +9,7 @@
   let commandPaletteActions = [];
   let commandPaletteSelection = 0;
   const pendingButtonTimers = new WeakMap();
+  const pendingFormTimers = new WeakMap();
   let pageProgressTimer = 0;
 
   const isStandalone = () =>
@@ -1399,13 +1400,40 @@
     const timer = pendingButtonTimers.get(button);
     if (timer) clearTimeout(timer);
     pendingButtonTimers.delete(button);
+    delete button.dataset.cd10ActionLockUntil;
     button.classList.remove('cd10-is-loading');
     button.removeAttribute('aria-busy');
     button.querySelector?.('.cd10-button-spinner')?.remove();
   }
 
+  function clearFormPending(form) {
+    if (!(form instanceof HTMLFormElement)) return;
+    const timer = pendingFormTimers.get(form);
+    if (timer) clearTimeout(timer);
+    pendingFormTimers.delete(form);
+    delete form.dataset.cd10SubmitLockUntil;
+  }
+
+  function timestampLockActive(node, key) {
+    if (!(node instanceof HTMLElement)) return false;
+    const until = Number(node.dataset[key] || 0);
+    if (!until) return false;
+    if (Date.now() <= until) return true;
+    delete node.dataset[key];
+    return false;
+  }
+
+  function isActionLocked(button) {
+    return timestampLockActive(button, 'cd10ActionLockUntil');
+  }
+
+  function isSubmitLocked(form) {
+    return timestampLockActive(form, 'cd10SubmitLockUntil');
+  }
+
   function setButtonPending(button, timeout = 1600) {
     if (!(button instanceof HTMLElement) || button.disabled || button.dataset.cd10Ux === 'off') return;
+    button.dataset.cd10ActionLockUntil = String(Date.now() + timeout);
     button.classList.add('cd10-is-loading');
     button.setAttribute('aria-busy', 'true');
     if (button.tagName === 'BUTTON' && !button.querySelector('.cd10-button-spinner')) {
@@ -1417,6 +1445,14 @@
     const previous = pendingButtonTimers.get(button);
     if (previous) clearTimeout(previous);
     pendingButtonTimers.set(button, window.setTimeout(() => clearButtonPending(button), timeout));
+  }
+
+  function setFormPending(form, timeout = 6500) {
+    if (!(form instanceof HTMLFormElement) || form.dataset.cd10Ux === 'off') return;
+    form.dataset.cd10SubmitLockUntil = String(Date.now() + timeout);
+    const previous = pendingFormTimers.get(form);
+    if (previous) clearTimeout(previous);
+    pendingFormTimers.set(form, window.setTimeout(() => clearFormPending(form), timeout));
   }
 
   function isActionFeedbackTarget(node) {
@@ -1432,6 +1468,12 @@
     document.addEventListener('click', (event) => {
       const target = event.target.closest?.('button, [role="button"], .btn, input[type="submit"]');
       if (!isActionFeedbackTarget(target)) return;
+      if (isActionLocked(target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        announce('Accion ya en curso');
+        return;
+      }
       setButtonPending(target, target.matches?.('button[type="submit"], input[type="submit"]') ? 5200 : 1300);
       announce(visibleText(target) ? `${visibleText(target)} en curso` : 'Accion en curso');
     }, true);
@@ -1444,6 +1486,13 @@
         finishPageProgress();
         return;
       }
+      if (isSubmitLocked(form)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        announce('Accion ya en curso');
+        return;
+      }
+      setFormPending(form, 6500);
       const submitter = event.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
       if (submitter instanceof HTMLElement) setButtonPending(submitter, 6500);
     }, true);
@@ -1456,6 +1505,8 @@
     window.addEventListener('cd10:action-complete', (event) => {
       const button = event.detail?.button;
       if (button instanceof HTMLElement) clearButtonPending(button);
+      const form = event.detail?.form;
+      if (form instanceof HTMLFormElement) clearFormPending(form);
       finishPageProgress(event.detail?.message || '');
     });
   }
