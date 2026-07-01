@@ -281,6 +281,19 @@
   min-height: 42px;
 }
 
+.family-journey-actions .family-journey-secondary {
+  border: 1px solid rgba(15, 31, 61, .14);
+  background: rgba(255,255,255,.82);
+  color: var(--navy);
+  justify-content: center;
+}
+
+.family-journey-actions .family-journey-secondary:hover {
+  border-color: rgba(15, 31, 61, .28);
+  background: var(--white);
+  color: var(--navy);
+}
+
 .family-journey-reassurance {
   margin-top: 12px;
   color: var(--gray-mid);

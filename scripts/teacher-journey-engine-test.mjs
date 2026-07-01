@@ -42,10 +42,12 @@ assert.equal(waiting.stage, 'waiting_students');
 assert.equal(waiting.primaryAction.id, 'open_profile');
 
 const scheduleNeeded = state({
-  relationships: [{ id: 'r1', stage: 'pendiente_horario', assignment: { id: 'as1' }, chat: { id: 'as1' }, counts: {} }],
+  relationships: [{ id: 'r1', stage: 'pendiente_horario', title: 'G', subject: 'Matematicas', assignment: { id: 'as1' }, chat: { id: 'as1' }, counts: {} }],
 });
 assert.equal(scheduleNeeded.stage, 'schedule_needed');
 assert.equal(scheduleNeeded.primaryAction.id, 'open_chat');
+assert.match(scheduleNeeded.body, /Matematicas/);
+assert.doesNotMatch(scheduleNeeded.body, /para G/);
 
 const confirmation = state({
   relationships: [{ id: 'r1', stage: 'pendiente_confirmacion', counts: { classes: 1, scheduledClasses: 1 } }],

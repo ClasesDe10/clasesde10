@@ -59,8 +59,78 @@ function number(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function first(...values) {
+  return values.find((value) => value !== undefined && value !== null && clean(value) !== '');
+}
+
 function clamp(value, min = 0, max = 100) {
   return Math.max(min, Math.min(max, value));
+}
+
+function usefulLabel(value, {
+  max = 120,
+  minLetters = 3,
+  reject = [],
+} = {}) {
+  const text = clean(value, max).replace(/\s+/g, ' ');
+  if (!text) return '';
+  const letters = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/g, '');
+  const lowerText = lower(text, max);
+  const rejected = new Set([
+    'sin materia',
+    'profesor',
+    'profesor asignado',
+    'familia',
+    'alumno',
+    'alumno/a',
+    'expediente',
+    ...reject.map((item) => lower(item, max)),
+  ]);
+  if (letters.length < minLetters || rejected.has(lowerText)) return '';
+  return text;
+}
+
+function personName(person = {}, fallback = '') {
+  return usefulLabel(first(
+    [person.nombre, person.apellidos].filter(Boolean).join(' '),
+    person.displayName,
+    person.fullName,
+    person.name,
+    fallback,
+  ), { minLetters: 4 });
+}
+
+function familyRelationshipContext(relationship = {}) {
+  const subject = usefulLabel(first(
+    relationship.subject,
+    relationship.assignment?.materia,
+    relationship.assignment?.subject,
+    relationship.chat?.materia,
+    relationship.chat?.subject,
+    relationship.request?.materia,
+    relationship.request?.subject,
+  ), { minLetters: 4 });
+  const teacher = personName(relationship.teacher || {}, relationship.chat?.teacherName);
+  const student = usefulLabel(first(
+    relationship.student?.nombre,
+    relationship.student?.displayName,
+    relationship.chat?.studentName,
+    relationship.request?.studentName,
+    relationship.title,
+  ), { minLetters: 4, reject: [subject] });
+
+  const pieces = [];
+  if (subject) pieces.push(`de ${subject}`);
+  if (teacher) pieces.push(`con ${teacher}`);
+  if (!teacher && !subject && student) pieces.push(`del alumno ${student}`);
+
+  return {
+    chatTarget: pieces.length ? ` ${pieces.join(' ')}` : ' con el profesor asignado',
+    assignedText: [
+      teacher ? ` (${teacher})` : '',
+      subject ? ` para ${subject}` : '',
+    ].join(''),
+  };
 }
 
 function studentIsActive(student = {}) {
@@ -153,8 +223,7 @@ function checklistItem(id, label, done, actionId = '') {
 }
 
 function stageCopy(stage, context = {}) {
-  const relationshipTitle = clean(context.relationship?.title || context.relationship?.subject || '', 120);
-  const suffix = relationshipTitle ? ` para ${relationshipTitle}` : '';
+  const relationshipContext = familyRelationshipContext(context.relationship || {});
   const copy = {
     no_student: {
       title: 'Anade el primer alumno',
@@ -173,12 +242,12 @@ function stageCopy(stage, context = {}) {
     },
     chat_needed: {
       title: 'Abre el chat y acuerda el primer horario',
-      body: `Ya hay profesor asignado${suffix}. El siguiente paso es concretar la primera clase desde el chat.`,
+      body: `Ya hay profesor asignado${relationshipContext.assignedText}. El siguiente paso es concretar la primera clase desde el chat.`,
       primary: buildAction('open_chat', 'Abrir chat', 'Es el punto unico para mensajes, horarios y avisos.', 'chat'),
     },
     schedule_needed: {
       title: 'Falta cerrar la hora de la clase',
-      body: `Usa el chat${suffix} para proponer o confirmar el horario. En cuanto se cierre, aparecera en calendario.`,
+      body: `Usa el chat${relationshipContext.chatTarget} para proponer o confirmar el horario. En cuanto se cierre, aparecera en calendario.`,
       primary: buildAction('open_chat', 'Coordinar horario', 'Abre el chat con el profesor.', 'chat'),
     },
     class_scheduled: {

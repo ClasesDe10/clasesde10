@@ -35,6 +35,57 @@ function first(...values) {
   return values.find((value) => value !== undefined && value !== null && clean(value) !== '');
 }
 
+function usefulLabel(value, {
+  max = 120,
+  minLetters = 3,
+  reject = [],
+} = {}) {
+  const text = clean(value, max).replace(/\s+/g, ' ');
+  if (!text) return '';
+  const letters = text.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ]/g, '');
+  const lowerText = lower(text, max);
+  const rejected = new Set([
+    'sin materia',
+    'profesor',
+    'familia',
+    'alumno',
+    'alumno/a',
+    'expediente',
+    ...reject.map((item) => lower(item, max)),
+  ]);
+  if (letters.length < minLetters || rejected.has(lowerText)) return '';
+  return text;
+}
+
+function personName(person = {}, fallback = '') {
+  return usefulLabel(first(
+    [person.nombre, person.apellidos].filter(Boolean).join(' '),
+    person.displayName,
+    person.fullName,
+    person.name,
+    fallback,
+  ), { minLetters: 4 });
+}
+
+function teacherRelationshipContext(relationship = {}) {
+  const subject = usefulLabel(first(
+    relationship.subject,
+    relationship.assignment?.materia,
+    relationship.assignment?.subject,
+    relationship.chat?.materia,
+    relationship.chat?.subject,
+  ), { minLetters: 4 });
+  const student = personName(relationship.student || {}, first(
+    relationship.chat?.studentName,
+    relationship.request?.studentName,
+    relationship.title,
+  ));
+  const pieces = [];
+  if (student) pieces.push(`con ${student}`);
+  if (subject) pieces.push(`de ${subject}`);
+  return pieces.length ? ` ${pieces.join(' ')}` : ' con tu alumno asignado';
+}
+
 function profilePercentFrom(input = {}) {
   const profileEvaluation = input.profileEvaluation || {};
   const profile = input.teacher || input.profile || {};
@@ -135,8 +186,7 @@ function checklistItem(id, label, done, actionId = '') {
 }
 
 function stageCopy(stage, context = {}) {
-  const subject = clean(context.relationship?.subject || context.relationship?.title || '', 120);
-  const suffix = subject ? ` para ${subject}` : '';
+  const suffix = teacherRelationshipContext(context.relationship || {});
   const copy = {
     profile_needed: {
       title: 'Completa tu perfil profesional',

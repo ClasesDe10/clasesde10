@@ -34,10 +34,12 @@ assert.equal(chatNeeded.primaryAction.id, 'open_chat');
 
 const scheduleNeeded = state({
   students: [{ id: 'a1', activo: true }],
-  relationships: [{ id: 'r1', stage: 'pendiente_horario', assignment: { id: 'as1' }, chat: { id: 'c1' }, modules: { chat: true }, counts: {} }],
+  relationships: [{ id: 'r1', stage: 'pendiente_horario', title: 'G', subject: 'Matematicas', assignment: { id: 'as1' }, chat: { id: 'c1' }, modules: { chat: true }, counts: {} }],
 });
 assert.equal(scheduleNeeded.stage, 'schedule_needed');
 assert.equal(scheduleNeeded.primaryAction.id, 'open_chat');
+assert.match(scheduleNeeded.body, /chat de Matematicas/);
+assert.doesNotMatch(scheduleNeeded.body, /para G/);
 
 const paymentDue = state({
   students: [{ id: 'a1', activo: true }],
@@ -80,5 +82,8 @@ assert.match(registerPage, /Despues de crear la cuenta/);
 const loginPage = readFileSync(new URL('../pages/login.html', import.meta.url), 'utf8');
 assert.doesNotMatch(loginPage, /auth-guide-note/);
 assert.doesNotMatch(loginPage, /siguiente paso exacto/);
+
+const dashboardCss = readFileSync(new URL('../css/dashboard.css', import.meta.url), 'utf8');
+assert.match(dashboardCss, /\.family-journey-actions \.family-journey-secondary/);
 
 console.log('family journey engine and integration OK');
