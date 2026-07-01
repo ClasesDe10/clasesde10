@@ -58,6 +58,10 @@ assert(chat.includes('data-chat-open-panel="chats"'), 'Secondary notification ac
 assert(!chat.includes('data-chat-tab="chats">Ver chats'), 'Only real tabs should use data-chat-tab to avoid ambiguous chat controls.');
 assert(chat.includes('weekly_recurring'), 'Chat widget must support fixed weekly class schedules.');
 assert(chat.includes('one_off'), 'Chat widget must support one-off class exceptions.');
+assert(chat.includes('data-schedule-weekday'), 'Weekly fixed schedules must ask for a weekday, not a numeric calendar date.');
+assert(chat.includes('nextDateForWeekday'), 'Weekly fixed schedules must calculate the first real class date automatically.');
+assert(chat.includes('dayOfWeek: selectedWeekday'), 'Weekly schedules must store the selected weekday in recurrence metadata.');
+assert(chat.includes('readScheduleDraft'), 'Schedule planner must preserve user-entered draft values across async rerenders.');
 assert(chat.includes('recurrenceLabelFromFields'), 'Weekly schedules must render a compact recurring label.');
 assert(!chat.includes('data-chat-layout-mode'), 'Chat widget must not expose the old mixed chat/classes layout selector.');
 assert(chat.includes("doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid)"), 'Chat widget must load per-user chat preferences.');

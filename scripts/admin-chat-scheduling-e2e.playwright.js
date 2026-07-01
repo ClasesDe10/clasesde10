@@ -95,14 +95,16 @@ async (page) => {
     await page.locator('[data-open-schedule-planner]').filter({ hasText: 'Proponer semanal' }).first().click();
     await page.waitForSelector('[data-schedule-form]', { timeout: 20000 });
 
-    const date = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    await page.locator('[data-schedule-date]').fill(date);
+    await page.locator('[data-schedule-weekday]').selectOption('2');
     await page.locator('[data-schedule-start]').fill('18:00');
     await page.locator('[data-schedule-end]').fill('19:00');
     await page.locator('[data-schedule-modality]').selectOption('online');
     await page.locator('[data-schedule-notes]').fill('Smoke test temporal');
     await page.locator('[data-schedule-form]').evaluate((form) => form.requestSubmit());
-    await page.waitForSelector('[data-schedule-proposal-id]', { timeout: 20000 });
+    await page.waitForSelector('[data-schedule-proposal-id]', { timeout: 20000 }).catch(async () => {
+      const message = await page.locator('.toast').allTextContents().then((items) => items.join(' | ')).catch(() => '');
+      throw new Error(message || await page.locator('[data-chat-schedule-panel]').textContent().catch(() => 'Schedule proposal was not created.'));
+    });
     await page.locator('[data-accept-schedule]').first().click();
     await page.waitForTimeout(2500);
 

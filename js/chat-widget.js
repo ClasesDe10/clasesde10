@@ -127,17 +127,60 @@ function isWeeklyRecurringProposal(proposal = {}) {
   return proposalScheduleKind(proposal) === SCHEDULE_KIND_WEEKLY;
 }
 
-function recurrenceLabelFromFields(fecha = '', start = '', end = '') {
-  const dayIndex = weekdayIndexFromDate(fecha);
+function normalizeScheduleWeekdayIndex(value) {
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric >= 0 && numeric <= 6) return numeric;
+  return weekdayIndexFromDate(value);
+}
+
+function recurrenceLabelFromFields(dayOrDate = '', start = '', end = '') {
+  const dayIndex = normalizeScheduleWeekdayIndex(dayOrDate);
   const dayLabel = Number.isInteger(dayIndex) ? WEEKDAY_LABELS[dayIndex] : 'dia acordado';
   return `Todos los ${dayLabel} ${start}-${end}`;
 }
 
 function scheduleProposalDisplayLabel(proposal = {}) {
   if (isWeeklyRecurringProposal(proposal)) {
-    return proposal.recurrenceLabel || recurrenceLabelFromFields(proposal.fecha, proposal.hora_inicio, proposal.hora_fin);
+    const dayOfWeek = proposal.recurrence?.dayOfWeek ?? proposal.fecha;
+    return proposal.recurrenceLabel || recurrenceLabelFromFields(dayOfWeek, proposal.hora_inicio, proposal.hora_fin);
   }
   return `${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}`;
+}
+
+function dateInputValue(date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function todayWeekdayIndex(now = new Date()) {
+  return (now.getDay() + 6) % 7;
+}
+
+function nextDateForWeekday(dayOfWeek, startTime = '', now = new Date()) {
+  const normalizedDay = normalizeScheduleWeekdayIndex(dayOfWeek);
+  if (!Number.isInteger(normalizedDay)) return '';
+  const target = new Date(now);
+  target.setHours(0, 0, 0, 0);
+  let dayOffset = normalizedDay - todayWeekdayIndex(now);
+  if (dayOffset < 0) dayOffset += 7;
+  const timeMatch = clean(startTime, 8).match(/^(\d{2}):(\d{2})$/);
+  if (dayOffset === 0 && timeMatch) {
+    const startMinutes = Number(timeMatch[1]) * 60 + Number(timeMatch[2]);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    if (startMinutes <= currentMinutes) dayOffset = 7;
+  }
+  target.setDate(target.getDate() + dayOffset);
+  return dateInputValue(target);
+}
+
+function weekdayOptions(selectedDay = todayWeekdayIndex()) {
+  const day = normalizeScheduleWeekdayIndex(selectedDay);
+  return WEEKDAY_LABELS.map((label, index) => (
+    `<option value="${index}" ${day === index ? 'selected' : ''}>${escapeHtml(label)}</option>`
+  )).join('');
 }
 
 function fullName(...parts) {
@@ -848,6 +891,31 @@ function availabilityForRole(role, availability = {}) {
   };
 }
 
+function defaultScheduleWeekday(availability = {}, role = '') {
+  const roleContext = availabilityForRole(role, availability);
+  const preferredSlot = roleContext.targetSlots?.[0] || roleContext.ownSlots?.[0];
+  const slotDay = normalizeScheduleWeekdayIndex(preferredSlot?.dia_semana ?? preferredSlot?.dayIndex);
+  return Number.isInteger(slotDay) ? slotDay : todayWeekdayIndex();
+}
+
+function focusSchedulePrimaryField(panel) {
+  panel?.querySelector('[data-schedule-weekday], [data-schedule-date], [data-schedule-start]')?.focus();
+}
+
+function readScheduleDraft(panel) {
+  const form = panel?.querySelector('[data-schedule-form]');
+  if (!form) return {};
+  return {
+    kind: form.querySelector('[data-schedule-kind]')?.value || '',
+    weekday: form.querySelector('[data-schedule-weekday]')?.value || '',
+    date: form.querySelector('[data-schedule-date]')?.value || '',
+    start: form.querySelector('[data-schedule-start]')?.value || '',
+    end: form.querySelector('[data-schedule-end]')?.value || '',
+    modality: form.querySelector('[data-schedule-modality]')?.value || '',
+    notes: form.querySelector('[data-schedule-notes]')?.value || '',
+  };
+}
+
 function renderAvailabilitySummary(availability = {}, role = '') {
   if (availability.loading) {
     return '<div class="schedule-availability-note">Cargando disponibilidad de la asignacion...</div>';
@@ -1023,7 +1091,9 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   if (!panel || !chat) return;
   panel.style.display = '';
   const plannerOpen = panel.dataset.schedulePlannerOpen === 'true';
-  const selectedKind = normalizeScheduleKind(panel.dataset.scheduleKind || SCHEDULE_KIND_WEEKLY);
+  const draft = readScheduleDraft(panel);
+  const selectedKind = normalizeScheduleKind(draft.kind || panel.dataset.scheduleKind || SCHEDULE_KIND_WEEKLY);
+  panel.dataset.scheduleKind = selectedKind;
   panel.classList.toggle('is-open', plannerOpen);
   const activeProposal = proposals.find((proposal) => proposal.status === 'propuesta');
   const accepted = proposals.find((proposal) => proposal.status === 'aceptada');
@@ -1081,6 +1151,12 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   const visibleProposalList = !plannerOpen && proposals.length
     ? `<div class="schedule-proposal-list chat-schedule-visible-proposals">${proposalRows}</div>`
     : '';
+  const dateOrWeekdayControl = selectedKind === SCHEDULE_KIND_WEEKLY
+    ? `<select class="form-control" data-schedule-weekday required aria-label="Dia semanal" ${disabledAttr}>
+        ${weekdayOptions(draft.weekday || defaultScheduleWeekday(availability, role))}
+      </select>`
+    : `<input class="form-control" type="date" data-schedule-date required aria-label="Fecha de clase puntual" value="${escapeHtml(draft.date)}" ${disabledAttr}>`;
+  const modalityValue = clean(draft.modality, 40) || 'por_acordar';
 
   panel.innerHTML = `
     <div class="chat-schedule-summary">
@@ -1102,15 +1178,15 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
             <option value="${SCHEDULE_KIND_WEEKLY}" ${selectedKind === SCHEDULE_KIND_WEEKLY ? 'selected' : ''}>Semanal fija</option>
             <option value="${SCHEDULE_KIND_ONE_OFF}" ${selectedKind === SCHEDULE_KIND_ONE_OFF ? 'selected' : ''}>Puntual</option>
           </select>
-          <input class="form-control" type="date" data-schedule-date required aria-label="Fecha de primera clase o clase puntual" ${disabledAttr}>
-          <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio" ${disabledAttr}>
-          <input class="form-control" type="time" data-schedule-end required aria-label="Hora de fin" ${disabledAttr}>
+          ${dateOrWeekdayControl}
+          <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio" value="${escapeHtml(draft.start)}" ${disabledAttr}>
+          <input class="form-control" type="time" data-schedule-end required aria-label="Hora de fin" value="${escapeHtml(draft.end)}" ${disabledAttr}>
           <select class="form-control" data-schedule-modality aria-label="Modalidad" ${disabledAttr}>
-            <option value="por_acordar">Modalidad por acordar</option>
-            <option value="online">Online</option>
-            <option value="presencial">Presencial</option>
+            <option value="por_acordar" ${modalityValue === 'por_acordar' ? 'selected' : ''}>Modalidad por acordar</option>
+            <option value="online" ${modalityValue === 'online' ? 'selected' : ''}>Online</option>
+            <option value="presencial" ${modalityValue === 'presencial' ? 'selected' : ''}>Presencial</option>
           </select>
-          <input class="form-control" type="text" maxlength="300" data-schedule-notes placeholder="Notas: lugar, material, excepcion..." ${disabledAttr}>
+          <input class="form-control" type="text" maxlength="300" data-schedule-notes placeholder="Notas: lugar, material, excepcion..." value="${escapeHtml(draft.notes)}" ${disabledAttr}>
           <button class="btn btn-primary btn-sm" type="submit" ${disabledAttr}>Proponer</button>
         </form>
         <div class="schedule-proposal-list">${proposalRows}</div>
@@ -1595,7 +1671,7 @@ export async function initChatWidget({
         panel.dataset.schedulePlannerOpen = 'true';
         panel.dataset.scheduleKind = normalizeScheduleKind(openSchedulePlanner.dataset.openSchedulePlanner);
         renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
-        panel.querySelector('[data-schedule-date]')?.focus();
+        focusSchedulePrimaryField(panel);
       }
       return;
     }
@@ -1708,7 +1784,17 @@ export async function initChatWidget({
     panel.dataset.schedulePlannerOpen = 'true';
     panel.dataset.scheduleKind = normalizeScheduleKind(event.detail?.kind || SCHEDULE_KIND_ONE_OFF);
     renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
-    setTimeout(() => panel.querySelector('[data-schedule-date]')?.focus(), 50);
+    setTimeout(() => focusSchedulePrimaryField(panel), 50);
+  });
+
+  container.addEventListener('change', (event) => {
+    const kindSelect = event.target.closest('[data-schedule-kind]');
+    if (!kindSelect || !state.selectedChat) return;
+    const panel = container.querySelector('[data-chat-schedule-panel]');
+    if (!panel) return;
+    panel.dataset.scheduleKind = normalizeScheduleKind(kindSelect.value);
+    renderSchedulePanel(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
+    setTimeout(() => focusSchedulePrimaryField(panel), 0);
   });
 
   container.addEventListener('submit', async (event) => {
@@ -1749,14 +1835,21 @@ export async function initChatWidget({
     event.preventDefault();
     if (!state.selectedChat) return;
     const scheduleKind = normalizeScheduleKind(scheduleForm.querySelector('[data-schedule-kind]')?.value);
-    const fecha = clean(scheduleForm.querySelector('[data-schedule-date]')?.value, 20);
+    const selectedWeekday = normalizeScheduleWeekdayIndex(scheduleForm.querySelector('[data-schedule-weekday]')?.value);
     const horaInicio = clean(scheduleForm.querySelector('[data-schedule-start]')?.value, 8);
     const horaFin = clean(scheduleForm.querySelector('[data-schedule-end]')?.value, 8);
+    const fecha = scheduleKind === SCHEDULE_KIND_WEEKLY
+      ? nextDateForWeekday(selectedWeekday, horaInicio)
+      : clean(scheduleForm.querySelector('[data-schedule-date]')?.value, 20);
     const modalidad = clean(scheduleForm.querySelector('[data-schedule-modality]')?.value, 40);
     const notas = clean(scheduleForm.querySelector('[data-schedule-notes]')?.value, 300);
+    if (scheduleKind === SCHEDULE_KIND_WEEKLY && !Number.isInteger(selectedWeekday)) {
+      showToast('Dia no valido', 'Elige el dia de la semana de la clase fija.', 'warning');
+      return;
+    }
     const validation = validateClassTimeRange(fecha, horaInicio, horaFin);
     if (!validation.valid) {
-      showToast('Horario no valido', 'La fecha y la hora de fin deben ser correctas.', 'warning');
+      showToast('Horario no valido', scheduleKind === SCHEDULE_KIND_WEEKLY ? 'El dia semanal y la hora de fin deben ser correctos.' : 'La fecha y la hora de fin deben ser correctas.', 'warning');
       return;
     }
     const availability = state.availabilityByChat[state.selectedChat.id] || { loading: true };
@@ -1824,12 +1917,12 @@ export async function initChatWidget({
       if (scheduleKind === SCHEDULE_KIND_WEEKLY) {
         proposal.recurrence = {
           frequency: 'weekly',
-          dayOfWeek: weekdayIndexFromDate(fecha),
+          dayOfWeek: selectedWeekday,
           startTime: horaInicio,
           endTime: horaFin,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid',
         };
-        proposal.recurrenceLabel = recurrenceLabelFromFields(fecha, horaInicio, horaFin);
+        proposal.recurrenceLabel = recurrenceLabelFromFields(selectedWeekday, horaInicio, horaFin);
       }
       await addDoc(collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones'), proposal);
       await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
@@ -1841,7 +1934,7 @@ export async function initChatWidget({
         updatedAt: serverTimestamp(),
       });
       scheduleForm.reset();
-      await addSystemChatMessage(state.selectedChat, `${scheduleKindLabel(scheduleKind)} propuesto: ${scheduleKind === SCHEDULE_KIND_WEEKLY ? recurrenceLabelFromFields(fecha, horaInicio, horaFin) : `${formatDate(fecha)} de ${horaInicio} a ${horaFin}`}.`);
+      await addSystemChatMessage(state.selectedChat, `${scheduleKindLabel(scheduleKind)} propuesto: ${scheduleKind === SCHEDULE_KIND_WEEKLY ? recurrenceLabelFromFields(selectedWeekday, horaInicio, horaFin) : `${formatDate(fecha)} de ${horaInicio} a ${horaFin}`}.`);
       showToast('Horario propuesto', scheduleKind === SCHEDULE_KIND_WEEKLY ? 'La otra parte puede aceptar el horario semanal fijo.' : 'La otra parte puede aceptar la clase puntual.', 'success');
     } catch (error) {
       showToast('No se pudo proponer', error.message || 'Revisa permisos de chat.', 'error');
@@ -1867,7 +1960,7 @@ export async function initChatWidget({
       relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    await addSystemChatMessage(state.selectedChat, `Horario rechazado: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`);
+    await addSystemChatMessage(state.selectedChat, `Horario rechazado: ${scheduleProposalDisplayLabel(proposal)}.`);
     showToast('Horario rechazado', 'Podéis proponer otra alternativa.', 'info');
   }
 
