@@ -91,6 +91,10 @@ assert(rules.includes('validScheduleRecurrence'), 'Firestore rules must validate
 assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must validate proposal responses.');
 assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
 assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');
+assert(rules.includes('validClassResetMarkers'), 'Firestore rules must validate class reset markers written by class scheduling.');
+assert(rules.includes("'classResetGeneration'"), 'Firestore rules must allow class reset generation on classes, proposals and busy slots.');
+assert(rules.includes("'createdAfterClassReset'"), 'Firestore rules must allow class reset boolean markers on class scheduling writes.');
+assert(rules.includes("'classResetCutoffIso'"), 'Firestore rules must allow class reset cutoff markers on class scheduling writes.');
 assert(rules.includes('chatTeacherUid(get(chatPath).data)'), 'Class creation rules must accept canonical or legacy chat teacher ids.');
 assert(rules.includes("request.resource.data.participantUids[request.auth.uid] == true"), 'Class creation rules must require the creator in participantUids.');
 assert(rules.includes('match /preferencias/{userUid}'), 'Firestore rules must protect per-user chat preferences.');

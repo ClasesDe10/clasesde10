@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getCountFromServer,
   getDocs,
   limit,
   orderBy,
@@ -14,6 +13,7 @@ import { firebaseDb } from '../firebase-client.js';
 import { adapterError, adapterResult } from './contracts.js';
 
 const COLLECTION = 'leadsPublicos';
+const BADGE_COUNT_LIMIT = 300;
 
 function firestoreDate(value) {
   if (!value) return null;
@@ -49,11 +49,13 @@ export const leadsAdapter = {
 
   async countNew() {
     try {
-      const snap = await getCountFromServer(query(
+      const snap = await getDocs(query(
         collection(firebaseDb, COLLECTION),
         where('estado', '==', 'nuevo'),
+        orderBy('createdAt', 'desc'),
+        limit(BADGE_COUNT_LIMIT),
       ));
-      return adapterResult(snap.data().count || 0, null);
+      return adapterResult(snap.size || 0, null);
     } catch (error) {
       return adapterResult(0, adapterError(error));
     }

@@ -15,9 +15,9 @@ import solicitudes from './solicitudes-adapter.js';
 import clases from './clases-adapter.js';
 import pagos from './pagos-adapter.js';
 import documentos from './documentos-adapter.js';
-import notificaciones from './notificaciones-adapter.js';
+import notificaciones from './notificaciones-adapter.js?v=20260701-no-aggregate-counts';
 import configuracion from './configuracion-adapter.js';
-import leads from './leads-adapter.js';
+import leads from './leads-adapter.js?v=20260701-no-aggregate-counts';
 
 export {
   auth,

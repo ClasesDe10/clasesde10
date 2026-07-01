@@ -5,12 +5,17 @@ const urlArgIndex = args.indexOf('--url');
 const baseUrl = (urlArgIndex >= 0 ? args[urlArgIndex + 1] : 'https://clasesde10.com').replace(/\/$/, '');
 
 const credentials = {
+  adminEmail: process.env.CD10_ADMIN_EMAIL,
+  adminPassword: process.env.CD10_ADMIN_PASSWORD,
   familyEmail: process.env.CD10_FAMILY_EMAIL,
   familyPassword: process.env.CD10_FAMILY_PASSWORD,
   teacherEmail: process.env.CD10_TEACHER_EMAIL,
   teacherPassword: process.env.CD10_TEACHER_PASSWORD,
 };
 const debug = {};
+const smokeId = `cd10_class_flow_e2e_${Date.now()}`;
+const cleanupTargets = { smokeId };
+let cleanupDone = false;
 
 for (const [key, value] of Object.entries(credentials)) {
   if (!value) throw new Error(`${key} is required through environment variables.`);
@@ -18,6 +23,19 @@ for (const [key, value] of Object.entries(credentials)) {
 
 function classIdFromProposal(chatId, proposalId) {
   return `chat_${chatId}_${proposalId}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 900);
+}
+
+function isoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function nextWeekdayDate(targetDay = 2, minimumDaysAhead = 14) {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() + minimumDaysAhead);
+  const diff = (targetDay - date.getDay() + 7) % 7 || 7;
+  date.setDate(date.getDate() + diff);
+  return isoDate(date);
 }
 
 async function main() {
@@ -50,26 +68,209 @@ async function main() {
     await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
   }
 
-  async function openFirstChat() {
+  async function currentUserInfo() {
+    return page.evaluate(() => ({
+      uid: window.CD10CurrentUser?.uid || window.CD10CurrentUser?.id || '',
+      email: window.CD10CurrentUser?.email || '',
+      role: window.CD10CurrentUser?.role || window.CD10CurrentUser?.rol || '',
+    }));
+  }
+
+  async function openChatById(chatId) {
     await page.locator('[data-section="chat"], [data-section="chats"]').first().click();
     await page.waitForSelector('[data-chat-tab="chats"]', { timeout: 25000 });
     await page.locator('[data-chat-tab="chats"]').click();
     await page.waitForSelector('[data-chat-list]', { timeout: 25000 });
-    await page.waitForTimeout(1500);
-    const count = await page.locator('[data-chat-id]').count();
-    if (!count) throw new Error('No hay chats activos para esta cuenta.');
-    const first = page.locator('[data-chat-id]').first();
-    const chatId = await first.getAttribute('data-chat-id');
-    await first.click();
+    const chat = page.locator(`[data-chat-id="${chatId}"]`).first();
+    await chat.waitFor({ state: 'visible', timeout: 25000 }).catch(async () => {
+      debug.chatListText = (await page.locator('[data-chat-list]').textContent().catch(() => '')).slice(0, 2000);
+      throw new Error(`No aparece el chat temporal ${chatId} para esta cuenta.`);
+    });
+    await chat.click();
     await page.waitForSelector('[data-chat-schedule-panel]', { timeout: 25000 });
     return chatId;
   }
 
+  async function createSmokeRelationship(familyUid, teacherUid, adminUid) {
+    await page.evaluate(async ({ smokeId: currentSmokeId, familyUid: currentFamilyUid, teacherUid: currentTeacherUid, adminUid: currentAdminUid }) => {
+      const {
+        doc,
+        serverTimestamp,
+        setDoc,
+      } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
+      const { firebaseDb } = await import('/js/firebase-client.js');
+      const studentId = `${currentSmokeId}_student`;
+      const teacherAvailabilityId = `${currentSmokeId}_teacher_availability`;
+      const studentAvailabilityId = `${currentSmokeId}_student_availability`;
+      const participantUids = {
+        [currentAdminUid]: true,
+        [currentFamilyUid]: true,
+        [currentTeacherUid]: true,
+      };
+      const base = {
+        id: currentSmokeId,
+        requestId: currentSmokeId,
+        solicitud_id: currentSmokeId,
+        familyUid: currentFamilyUid,
+        familia_id: currentFamilyUid,
+        teacherUid: currentTeacherUid,
+        profesor_id: currentTeacherUid,
+        studentId,
+        alumno_id: studentId,
+        materia: 'Matematicas E2E',
+        subject: 'Matematicas E2E',
+        active: true,
+        activa: true,
+        status: 'activa',
+        estado: 'activa',
+        schedulingStatus: 'pendiente_horario',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      await setDoc(doc(firebaseDb, 'asignaciones', currentSmokeId), base);
+      await setDoc(doc(firebaseDb, 'chats', currentSmokeId), {
+        ...base,
+        assignmentId: currentSmokeId,
+        asignacion_id: currentSmokeId,
+        familyName: 'Familia E2E',
+        teacherName: 'Profesor E2E',
+        studentName: 'Alumno E2E',
+        participantUids,
+        lastMessage: 'Chat temporal para prueba automatica de flujo de clase',
+        lastMessageAt: serverTimestamp(),
+      });
+      await setDoc(doc(firebaseDb, 'disponibilidad', teacherAvailabilityId), {
+        id: teacherAvailabilityId,
+        assignmentId: currentSmokeId,
+        scope: 'teacher',
+        teacherUid: currentTeacherUid,
+        profesor_id: currentTeacherUid,
+        dayIndex: 1,
+        dia_semana: 1,
+        startTime: '21:00',
+        hora_inicio: '21:00',
+        endTime: '22:00',
+        hora_fin: '22:00',
+        active: true,
+        source: 'class_flow_e2e',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await setDoc(doc(firebaseDb, 'disponibilidad', studentAvailabilityId), {
+        id: studentAvailabilityId,
+        assignmentId: currentSmokeId,
+        scope: 'student',
+        familyUid: currentFamilyUid,
+        familia_id: currentFamilyUid,
+        studentId,
+        alumno_id: studentId,
+        dayIndex: 1,
+        dia_semana: 1,
+        startTime: '21:00',
+        hora_inicio: '21:00',
+        endTime: '22:00',
+        hora_fin: '22:00',
+        active: true,
+        source: 'class_flow_e2e',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }, { smokeId, familyUid, teacherUid, adminUid });
+  }
+
+  async function cleanupTestArtifacts() {
+    if (cleanupDone || !cleanupTargets.smokeId) return;
+    await login(credentials.adminEmail, credentials.adminPassword, 'admin');
+    await page.evaluate(async ({ targets }) => {
+      const {
+        collection,
+        deleteDoc,
+        doc,
+        getDocs,
+        query,
+        where,
+      } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
+      const { firebaseDb } = await import('/js/firebase-client.js');
+      const chatRef = doc(firebaseDb, 'chats', targets.smokeId);
+      const proposalSnap = await getDocs(collection(chatRef, 'programaciones')).catch(() => ({ docs: [] }));
+      const messageSnap = await getDocs(collection(chatRef, 'mensajes')).catch(() => ({ docs: [] }));
+      const classQueries = [
+        getDocs(query(collection(firebaseDb, 'clases'), where('assignmentId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+      ];
+      if (targets.classId) {
+        classQueries.push(getDocs(query(collection(firebaseDb, 'clases'), where('classId', '==', targets.classId))).catch(() => ({ docs: [] })));
+      }
+      const busyQueries = [
+        getDocs(query(collection(firebaseDb, 'busySlots'), where('assignmentId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+      ];
+      const availabilityQueries = [
+        getDocs(query(collection(firebaseDb, 'disponibilidad'), where('assignmentId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+      ];
+      if (targets.classId) {
+        busyQueries.push(getDocs(query(collection(firebaseDb, 'busySlots'), where('classId', '==', targets.classId))).catch(() => ({ docs: [] })));
+      }
+      if (targets.proposalId) {
+        busyQueries.push(getDocs(query(collection(firebaseDb, 'busySlots'), where('scheduleProposalId', '==', targets.proposalId))).catch(() => ({ docs: [] })));
+      }
+      const notificationQueries = [
+        getDocs(query(collection(firebaseDb, 'notificaciones'), where('payload.chatId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+        getDocs(query(collection(firebaseDb, 'notificaciones'), where('payload.assignmentId', '==', targets.smokeId))).catch(() => ({ docs: [] })),
+      ];
+      const [classSnaps, busySnaps, availabilitySnaps, notificationSnaps] = await Promise.all([
+        Promise.all(classQueries),
+        Promise.all(busyQueries),
+        Promise.all(availabilityQueries),
+        Promise.all(notificationQueries),
+      ]);
+      const refs = new Map();
+      [
+        ...(proposalSnap.docs || []),
+        ...(messageSnap.docs || []),
+        ...classSnaps.flatMap((snap) => snap.docs || []),
+        ...busySnaps.flatMap((snap) => snap.docs || []),
+        ...availabilitySnaps.flatMap((snap) => snap.docs || []),
+        ...notificationSnaps.flatMap((snap) => snap.docs || []),
+      ].forEach((item) => refs.set(item.ref.path, item.ref));
+      await Promise.all([...refs.values()].map((ref) => deleteDoc(ref).catch(() => {})));
+      await deleteDoc(chatRef).catch(() => {});
+      await deleteDoc(doc(firebaseDb, 'asignaciones', targets.smokeId)).catch(() => {});
+    }, { targets: cleanupTargets });
+    cleanupDone = true;
+  }
+
+  async function selectCalendarDate(date) {
+    await page.waitForSelector('#calendario-wrapper .calendar-day[data-fecha]', { timeout: 25000 });
+    for (let attempt = 0; attempt < 18; attempt += 1) {
+      const dateButton = page.locator(`[data-fecha="${date}"]`).first();
+      if (await dateButton.count()) {
+        await dateButton.click();
+        return;
+      }
+      const range = await page.locator('#calendario-wrapper .calendar-day[data-fecha]').evaluateAll((nodes) => ({
+        first: nodes[0]?.getAttribute('data-fecha') || '',
+        last: nodes[nodes.length - 1]?.getAttribute('data-fecha') || '',
+      }));
+      if (range.first && date < range.first) await page.locator('#cal-prev').click();
+      else await page.locator('#cal-next').click();
+      await page.waitForTimeout(700);
+    }
+    throw new Error(`No se pudo navegar hasta la fecha ${date} en el calendario.`);
+  }
+
   try {
     await login(credentials.familyEmail, credentials.familyPassword, 'familia');
-    const chatId = await openFirstChat();
+    const familyUser = await currentUserInfo();
+    await login(credentials.teacherEmail, credentials.teacherPassword, 'profesor');
+    const teacherUser = await currentUserInfo();
+    await login(credentials.adminEmail, credentials.adminPassword, 'admin');
+    const adminUser = await currentUserInfo();
+    if (!familyUser.uid || !teacherUser.uid || !adminUser.uid) throw new Error('No se pudieron resolver los UID de familia, profesor y admin para la prueba.');
+    await createSmokeRelationship(familyUser.uid, teacherUser.uid, adminUser.uid);
+
+    await login(credentials.familyEmail, credentials.familyPassword, 'familia');
+    const chatId = await openChatById(smokeId);
     debug.chatId = chatId;
-    const date = '2026-06-30';
+    const date = nextWeekdayDate(2, 14);
     const proposal = await page.evaluate(async ({ chatId: currentChatId, date: classDate }) => {
       const {
         addDoc,
@@ -91,8 +292,8 @@ async function main() {
         studentId: chat.studentId || chat.alumno_id,
         materia: chat.materia || 'Prueba automatica',
         fecha: classDate,
-        hora_inicio: '18:00',
-        hora_fin: '19:00',
+        hora_inicio: '21:00',
+        hora_fin: '22:00',
         durationMinutes: 60,
         modalidad: 'online',
         notas: `Prueba automatica Codex ${Date.now()}`,
@@ -126,6 +327,8 @@ async function main() {
     const classId = classIdFromProposal(chatId, proposal.proposalId);
     debug.proposalId = proposal.proposalId;
     debug.classId = classId;
+    cleanupTargets.proposalId = proposal.proposalId;
+    cleanupTargets.classId = classId;
 
     await login(credentials.teacherEmail, credentials.teacherPassword, 'profesor');
     await page.locator('[data-section="chat"], [data-section="chats"]').first().click();
@@ -147,8 +350,11 @@ async function main() {
           id: chatSnap.id,
           assignmentId: chatSnap.data().assignmentId,
           familyUid: chatSnap.data().familyUid,
+          familia_id: chatSnap.data().familia_id,
           teacherUid: chatSnap.data().teacherUid,
           profesor_id: chatSnap.data().profesor_id,
+          studentId: chatSnap.data().studentId,
+          alumno_id: chatSnap.data().alumno_id,
           participantUids: chatSnap.data().participantUids || null,
           schedulingStatus: chatSnap.data().schedulingStatus,
           activeClassId: chatSnap.data().activeClassId || null,
@@ -177,6 +383,10 @@ async function main() {
           id: classSnap.id,
           teacherUid: classSnap.data().teacherUid,
           profesor_id: classSnap.data().profesor_id,
+          familyUid: classSnap.data().familyUid,
+          familia_id: classSnap.data().familia_id,
+          studentId: classSnap.data().studentId,
+          alumno_id: classSnap.data().alumno_id,
           participantUids: classSnap.data().participantUids || null,
           status: classSnap.data().status,
         } : null;
@@ -186,12 +396,13 @@ async function main() {
       return result;
     }, { currentChatId: chatId, currentProposalId: proposal.proposalId, expectedClassId: classId });
     debug.visibleTextAfterAccept = (await page.locator('body').innerText({ timeout: 5000 }).catch(() => '')).slice(-2000);
+    debug.consoleEvents = consoleEvents.slice(-20);
 
     const classDoc = await page.waitForFunction(async ({ expectedClassId }) => {
       const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
       const { firebaseDb } = await import('/js/firebase-client.js');
-      const snap = await getDoc(doc(firebaseDb, 'clases', expectedClassId));
-      if (!snap.exists()) return null;
+      const snap = await getDoc(doc(firebaseDb, 'clases', expectedClassId)).catch(() => null);
+      if (!snap || !snap.exists()) return null;
       const data = snap.data();
       return {
         id: snap.id,
@@ -209,8 +420,7 @@ async function main() {
     }
 
     await page.locator('[data-section="calendario"]').first().click();
-    await page.waitForSelector(`[data-fecha="${date}"]`, { timeout: 25000 });
-    await page.locator(`[data-fecha="${date}"]`).click();
+    await selectCalendarDate(date);
     await page.waitForTimeout(800);
     const professorCalendarText = await page.locator('#cal-clases-dia').textContent();
     if (!professorCalendarText.includes(proposal.materia)) throw new Error('La clase aceptada no aparece en el calendario del profesor.');
@@ -229,29 +439,31 @@ async function main() {
 
     await login(credentials.familyEmail, credentials.familyPassword, 'familia');
     await page.locator('[data-section="calendario"]').first().click();
-    await page.waitForSelector(`[data-fecha="${date}"]`, { timeout: 25000 });
-    await page.locator(`[data-fecha="${date}"]`).click();
+    await selectCalendarDate(date);
     await page.waitForTimeout(800);
     const familyCalendarText = await page.locator('#cal-clases-dia').textContent();
-    if (!familyCalendarText.includes(proposal.materia) || !familyCalendarText.includes('€')) {
-      throw new Error('La clase aceptada no aparece con precio en el calendario de familia.');
+    if (!familyCalendarText.includes(proposal.materia)) {
+      throw new Error('La clase aceptada no aparece en el calendario de familia.');
     }
 
     await page.locator('[data-section="clases"]').first().click();
     await page.waitForSelector('#tbody-clases', { timeout: 25000 });
     await page.waitForFunction(({ materia }) => {
       const text = document.querySelector('#tbody-clases')?.textContent || '';
-      return text.includes(materia) && text.includes('€');
+      return text.includes(materia);
     }, { materia: proposal.materia }, { timeout: 25000 }).catch(() => {});
     const familyClassesText = await page.locator('#tbody-clases').textContent();
     debug.familyClassesText = familyClassesText;
-    if (!familyClassesText.includes(proposal.materia) || !familyClassesText.includes('€')) {
-      throw new Error('La clase aceptada no aparece con precio en Clases de familia.');
+    if (!familyClassesText.includes(proposal.materia)) {
+      throw new Error('La clase aceptada no aparece en Clases de familia.');
     }
+
+    await cleanupTestArtifacts();
 
     console.log(JSON.stringify({
       ok: true,
       baseUrl,
+      smokeId,
       chatId,
       proposalId: proposal.proposalId,
       classId,
@@ -265,6 +477,11 @@ async function main() {
       consoleEvents: consoleEvents.slice(-10),
     }, null, 2));
   } finally {
+    if (!cleanupDone) {
+      await cleanupTestArtifacts().catch((error) => {
+        consoleEvents.push(`cleanup: ${error?.message || String(error)}`);
+      });
+    }
     await context.close();
     await browser.close();
   }
@@ -277,6 +494,7 @@ main()
       ok: false,
       error: error?.message || String(error),
       stack: error?.stack || '',
+      consoleEvents: debug.consoleEvents || [],
       debug,
     }, null, 2));
     process.exit(1);

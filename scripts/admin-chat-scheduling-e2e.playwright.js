@@ -91,6 +91,8 @@ async (page) => {
     await page.waitForSelector('[data-chat-list]', { timeout: 20000 });
     await page.waitForTimeout(1500);
     await page.locator('[data-chat-id]').filter({ hasText: 'Smoke horario' }).first().click();
+    await page.waitForSelector('[data-open-schedule-planner]', { timeout: 20000 });
+    await page.locator('[data-open-schedule-planner]').filter({ hasText: 'Proponer semanal' }).first().click();
     await page.waitForSelector('[data-schedule-form]', { timeout: 20000 });
 
     const date = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);

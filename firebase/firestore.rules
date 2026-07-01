@@ -100,6 +100,12 @@ service cloud.firestore {
         );
     }
 
+    function validClassResetMarkers(data) {
+      return (!data.keys().hasAny(['classResetGeneration']) || data.classResetGeneration == 'class-reset-20260629')
+        && (!data.keys().hasAny(['createdAfterClassReset']) || data.createdAfterClassReset == true)
+        && (!data.keys().hasAny(['classResetCutoffIso']) || data.classResetCutoffIso == '2026-06-29T19:26:00.000Z');
+    }
+
     function validClientTimestampsOnCreate() {
       return request.resource.data.createdAt == request.time
         && (
@@ -915,6 +921,9 @@ service cloud.firestore {
           'endTime',
           'durationMinutes',
           'duracion_minutos',
+          'classResetGeneration',
+          'createdAfterClassReset',
+          'classResetCutoffIso',
           'status',
           'estado',
           'lifecycleStatus',
@@ -948,6 +957,7 @@ service cloud.firestore {
         && data.durationMinutes > 0
         && data.durationMinutes <= 480
         && data.duracion_minutos == data.durationMinutes
+        && validClassResetMarkers(data)
         && data.status in ['pendiente', 'confirmada', 'programada', 'reprogramada', 'scheduled', 'confirmed', 'pendiente_confirmacion', 'clase_programada']
         && data.estado == data.status
         && data.lifecycleStatus in ['clase_programada', 'recordatorio_enviado', 'clase_en_curso', 'reprogramada']
@@ -1580,6 +1590,9 @@ service cloud.firestore {
           'respondedByRole',
           'respondedAt',
           'rejectionReason',
+          'classResetGeneration',
+          'createdAfterClassReset',
+          'classResetCutoffIso',
           'updatedAt'
         ])
         && request.resource.data.status in ['aceptada', 'rechazada', 'cancelada']
@@ -1591,6 +1604,7 @@ service cloud.firestore {
           || canRespondToScheduleProposal(resource.data)
         )
         && (!request.resource.data.keys().hasAny(['classId']) || request.resource.data.classId is string)
+        && validClassResetMarkers(request.resource.data)
         && optionalString('rejectionReason', 300)
         && request.resource.data.respondedAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -1643,6 +1657,9 @@ service cloud.firestore {
           'calendarSync',
           'previousSchedule',
           'lastScheduleChangeAt',
+          'classResetGeneration',
+          'createdAfterClassReset',
+          'classResetCutoffIso',
           'assignmentId',
           'asignacion_id',
           'scheduleProposalId',
@@ -1668,6 +1685,7 @@ service cloud.firestore {
         && request.resource.data.status == 'confirmada'
         && request.resource.data.lifecycleStatus == 'clase_programada'
         && request.resource.data.attendanceStatus == 'pendiente'
+        && validClassResetMarkers(request.resource.data)
         && request.resource.data.assignmentId == request.resource.data.asignacion_id
         && exists(chatPath)
         && exists(proposalPath)

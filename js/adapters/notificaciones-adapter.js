@@ -1,6 +1,7 @@
 import {
   collection,
-  getCountFromServer,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -12,6 +13,7 @@ import { makeFirestoreAdapter } from './firebase-firestore-adapter.js';
 import { adapterError, adapterResult, COLLECTIONS } from './contracts.js';
 
 const base = makeFirestoreAdapter(COLLECTIONS.notificaciones);
+const UNREAD_COUNT_LIMIT = 300;
 
 function userNotificationsQuery(userUid, unreadOnly = false) {
   const constraints = [
@@ -48,8 +50,8 @@ export const notificacionesAdapter = {
 
   async countUnread(userUid) {
     try {
-      const snap = await getCountFromServer(userNotificationsQuery(userUid, true));
-      return adapterResult(snap.data().count || 0, null);
+      const snap = await getDocs(query(userNotificationsQuery(userUid, true), limit(UNREAD_COUNT_LIMIT)));
+      return adapterResult(snap.size || 0, null);
     } catch (error) {
       return adapterResult(0, adapterError(error));
     }

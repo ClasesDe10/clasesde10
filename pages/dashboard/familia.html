@@ -1045,6 +1045,42 @@ async function cargarClasesPorAlumnos(ids = [], options = {}) {
   return rows;
 }
 
+function familyClassMatches(clase = {}, familyIds = []) {
+  const ids = new Set(familyIds.map(String));
+  return ids.has(String(clase.familyUid || '')) || ids.has(String(clase.familia_id || ''));
+}
+
+async function cargarClasesFamilia(options = {}) {
+  const hijos = options.hijos || [];
+  const hijosPorId = options.hijosPorId || new Map((hijos || []).map((hijo) => [
+    hijo.id,
+    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
+  ]));
+  const studentIds = [...new Set((options.ids || hijos.map((hijo) => hijo.id)).filter(Boolean))];
+  const familyIds = familyPaymentQueryIds();
+  const [byStudent, byFamilyUid, byFamiliaId] = await Promise.all([
+    studentIds.length ? cargarClasesPorAlumnos(studentIds, { ...options, hijosPorId }) : Promise.resolve([]),
+    cargarFirestoreIn('clases', 'familyUid', familyIds),
+    cargarFirestoreIn('clases', 'familia_id', familyIds),
+  ]);
+  let rows = mergeById([
+    ...byStudent,
+    ...byFamilyUid,
+    ...byFamiliaId,
+  ]).map((clase) => normalizeClassRow(clase, hijosPorId));
+
+  if (options.strictStudentFilter && studentIds.length) {
+    rows = rows.filter((clase) => studentIds.includes(clase.studentId || clase.alumno_id));
+  } else if (studentIds.length) {
+    rows = rows.filter((clase) => studentIds.includes(clase.studentId || clase.alumno_id) || familyClassMatches(clase, familyIds));
+  } else {
+    rows = rows.filter((clase) => familyClassMatches(clase, familyIds));
+  }
+  if (options.desde) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') >= options.desde);
+  if (options.hasta) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') <= options.hasta);
+  return rows;
+}
+
 function renderFamilyRelationshipDigest({ hijos = [], asignaciones = [], clases = [], pagos = [], solicitudes = [], documentos = [], chats = [], profesores = [] } = {}) {
   const container = document.getElementById('family-relationship-digest');
   if (!container) return [];
@@ -1109,7 +1145,7 @@ async function cargarInicio() {
       [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
     ]));
     const [clasesFamilia, { data: asig }, pagosRelacion, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
-      cargarClasesPorAlumnos(ids, { hijosPorId, desde: mesInicio, limit: 160 }),
+      cargarClasesFamilia({ hijos, ids, hijosPorId, desde: mesInicio, limit: 160 }),
       db.from('asignaciones').select('*').in('alumno_id', ids).eq('activa', true),
       Promise.resolve(pagosResumenInicio),
       cargarFirestoreWhere('solicitudes', 'familyUid', '==', familiaId),
@@ -1281,16 +1317,16 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   await cargarPaymentSchedulesFamilia();
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
-  if (!hijos?.length) return;
-  const ids = hijos.map(h => h.id);
-  const hijosPorId = new Map(hijos.map((hijo) => [
+  const hijosFamilia = hijos || [];
+  const ids = hijosFamilia.map(h => h.id);
+  const hijosPorId = new Map(hijosFamilia.map((hijo) => [
     hijo.id,
     [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
   ]));
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
   const [data, pagos] = await Promise.all([
-    cargarClasesPorAlumnos(ids, { hijosPorId, desde, hasta, limit: 240 }),
+    cargarClasesFamilia({ hijos: hijosFamilia, ids, hijosPorId, desde, hasta, limit: 240 }),
     cargarPagosFamiliaFirestore(),
   ]);
   cal.setClases(applyClassPaymentContext(data, pagos));
@@ -1300,8 +1336,30 @@ async function cargarClasesCalendario(anio, mes) {
 async function cargarClases() {
   if (!familiaId) return;
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
+  const hijosFamilia = hijos || [];
   const tbody = document.getElementById('tbody-clases');
-  if (!hijos?.length) {
+  // Rellenar filtro hijo
+  const sel = document.getElementById('filtro-cl-alumno');
+  sel.innerHTML = '<option value="">Todos los hijos</option>' +
+    hijosFamilia.map(h => `<option value="${h.id}">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</option>`).join('');
+
+  const hijoSel = sel.value;
+  const estado  = document.getElementById('filtro-cl-estado').value;
+  const mes     = document.getElementById('filtro-cl-mes').value;
+  const ids     = hijoSel ? [hijoSel] : hijosFamilia.map(h => h.id);
+  const hijosPorId = new Map(hijosFamilia.map((hijo) => [
+    hijo.id,
+    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
+  ]));
+
+  let filtered = await cargarClasesFamilia({
+    hijos: hijosFamilia,
+    ids,
+    hijosPorId,
+    limit: 220,
+    strictStudentFilter: Boolean(hijoSel),
+  });
+  if (!hijosFamilia.length && !filtered.length) {
     tbody.innerHTML = renderTableEmptyState(9, {
       icon: '👧',
       title: 'Primero añade un alumno',
@@ -1310,22 +1368,6 @@ async function cargarClases() {
     });
     return;
   }
-
-  // Rellenar filtro hijo
-  const sel = document.getElementById('filtro-cl-alumno');
-  sel.innerHTML = '<option value="">Todos los hijos</option>' +
-    hijos.map(h => `<option value="${h.id}">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</option>`).join('');
-
-  const hijoSel = sel.value;
-  const estado  = document.getElementById('filtro-cl-estado').value;
-  const mes     = document.getElementById('filtro-cl-mes').value;
-  const ids     = hijoSel ? [hijoSel] : hijos.map(h => h.id);
-  const hijosPorId = new Map(hijos.map((hijo) => [
-    hijo.id,
-    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
-  ]));
-
-  let filtered = await cargarClasesPorAlumnos(ids, { hijosPorId, limit: 220 });
   if (estado && estado !== 'confirmada') {
     filtered = filtered.filter((clase) => classStatusForBadge(clase) === estado || clase.estado === estado || clase.status === estado);
   }
@@ -2271,12 +2313,15 @@ async function cargarPagos() {
     hijo.id,
     [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim() || 'Alumno/a',
   ]));
-  const clases = hijos?.length
-    ? await cargarClasesPorAlumnos(hijos.map((hijo) => hijo.id), { hijosPorId, limit: 320 })
-    : [];
+  const clases = await cargarClasesFamilia({
+    hijos: hijos || [],
+    ids: (hijos || []).map((hijo) => hijo.id),
+    hijosPorId,
+    limit: 320,
+  });
   const groups = buildFamilyPaymentConfirmationGroups(clases, pagos, paymentScheduleIndexFamilia());
   familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
-  renderFamilyPaymentWorkbench(groups, pagos, Boolean(hijos?.length));
+  renderFamilyPaymentWorkbench(groups, pagos, Boolean((hijos || []).length || clases.length));
 
   const tbody = document.getElementById('tbody-pagos');
   if (!pagos.length) {
