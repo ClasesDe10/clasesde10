@@ -2078,6 +2078,238 @@ function isRecentChatEventForBackfill(data = {}, fields = [], lookbackMs = 48 * 
   return Date.now() - date.getTime() <= lookbackMs;
 }
 
+function recentEntityDate(data = {}) {
+  return dateFromFirestore(data.updatedAt || data.updated_at || data.createdAt || data.created_at || data.fecha || data.date);
+}
+
+function isRecentEntityForBackfill(data = {}, lookbackMs = 72 * 60 * 60 * 1000) {
+  const date = recentEntityDate(data);
+  if (!date) return true;
+  return Date.now() - date.getTime() <= lookbackMs;
+}
+
+function documentAutomationStatus(data = {}) {
+  return lower(data.status || data.estado || data.verificationStatus || data.estado_verificacion);
+}
+
+function documentStatusAutomationType(data = {}) {
+  const status = documentAutomationStatus(data);
+  if (['verified', 'verificado', 'validado', 'aprobado', 'approved'].includes(status)) return 'document.verified';
+  if (['rejected', 'rechazado', 'denegado', 'corregir', 'needs_correction'].includes(status)) return 'document.rejected';
+  if (['expired', 'caducado'].includes(status)) return 'document.expired';
+  return '';
+}
+
+function incidentResolved(data = {}) {
+  const status = lower(data.status || data.estado);
+  return ['resolved', 'resuelta', 'cerrada', 'closed', 'archived', 'archivada'].includes(status);
+}
+
+function paymentBackfillType(data = {}) {
+  const status = normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
+  if (['validado', 'pagado'].includes(status) || isPaymentVerified(data)) return 'payment.verified';
+  if (isPaymentOverdue(data) || status === 'vencido') return 'payment.overdue';
+  return 'payment.created';
+}
+
+function classBackfillType(data = {}) {
+  const status = normalizeClassStatus(data.estado || data.status || data.lifecycleStatus || '');
+  if (['realizada', 'completada', 'completed'].includes(status)) return 'class.completed';
+  if (['cancelada', 'cancelled', 'canceled'].includes(status)) return 'class.cancelled';
+  if (isScheduledClassStatus(status)) return 'class.scheduled';
+  return '';
+}
+
+function requestBackfillShouldRun(data = {}) {
+  const status = lower(data.status || data.estado || 'nueva');
+  if (data.matchStatus === 'ready') return false;
+  if (data.assignedTeacherUid || data.profesor_asignado_id) return false;
+  return ['nueva', 'pendiente', 'pending', ''].includes(status);
+}
+
+function profileBackfillShouldRun(data = {}) {
+  if (data.active === false || data.activo === false) return false;
+  return true;
+}
+
+function profileIsVerified(data = {}) {
+  const status = normalizeStatus(data);
+  return ['verificado', 'validado', 'verified', 'active', 'activo'].includes(status);
+}
+
+async function processEntityAutomationBackfill(db, stats) {
+  if (!runtimeBoolean('automation.entityBackfillEnabled', true)) return;
+  const scanLimit = runtimeNumber('automation.entityBackfillScanLimit', limit, 10, 1000);
+  const lookbackHours = runtimeNumber('automation.entityBackfillLookbackHours', 72, 1, 720);
+  const lookbackMs = lookbackHours * 60 * 60 * 1000;
+  const [
+    users,
+    teachers,
+    families,
+    requests,
+    assignments,
+    classes,
+    payments,
+    documents,
+    incidents,
+    reviews,
+  ] = await Promise.all([
+    listCollection(db, 'users', scanLimit).catch(() => []),
+    listCollection(db, 'profesores', scanLimit).catch(() => []),
+    listCollection(db, 'familias', scanLimit).catch(() => []),
+    listCollection(db, 'solicitudes', scanLimit).catch(() => []),
+    listCollection(db, 'asignaciones', scanLimit).catch(() => []),
+    listCollection(db, 'clases', scanLimit).catch(() => []),
+    listCollection(db, 'pagos', scanLimit).catch(() => []),
+    listCollection(db, 'documentos', scanLimit).catch(() => []),
+    listCollection(db, 'incidencias', scanLimit).catch(() => []),
+    listCollection(db, 'valoraciones', scanLimit).catch(() => []),
+  ]);
+
+  const materializeRecent = async (event) => {
+    stats.entityBackfillEventsChecked += 1;
+    if (!isRecentEntityForBackfill(event.data || {}, lookbackMs)) {
+      stats.entityBackfillSkippedOld += 1;
+      return false;
+    }
+    await materializeWorkerAutomationPlan(db, event, stats);
+    stats.entityBackfillEventsMaterialized += 1;
+    return true;
+  };
+
+  for (const user of users) {
+    await materializeRecent({
+      type: 'user.registered',
+      entityType: 'users',
+      entityId: user.id,
+      data: { id: user.id, ...user },
+      source: 'github_actions_worker.users_backfill',
+    });
+  }
+
+  for (const teacher of teachers) {
+    if (!profileBackfillShouldRun(teacher)) continue;
+    await materializeRecent({
+      type: 'profile.updated',
+      entityType: 'profesores',
+      entityId: teacher.id,
+      data: { id: teacher.id, userType: 'profesores', ...teacher },
+      source: 'github_actions_worker.professors_profile_backfill',
+    });
+    if (profileIsVerified(teacher)) {
+      await materializeRecent({
+        type: 'teacher.verified',
+        entityType: 'profesores',
+        entityId: teacher.id,
+        data: { id: teacher.id, userType: 'profesores', ...teacher },
+        source: 'github_actions_worker.professors_verified_backfill',
+      });
+    }
+  }
+
+  for (const family of families) {
+    if (!profileBackfillShouldRun(family)) continue;
+    await materializeRecent({
+      type: 'profile.updated',
+      entityType: 'familias',
+      entityId: family.id,
+      data: { id: family.id, userType: 'familias', ...family },
+      source: 'github_actions_worker.families_profile_backfill',
+    });
+  }
+
+  for (const request of requests) {
+    if (!requestBackfillShouldRun(request)) continue;
+    await materializeRecent({
+      type: 'request.created',
+      entityType: 'solicitudes',
+      entityId: request.id,
+      data: { id: request.id, ...request },
+      source: 'github_actions_worker.requests_backfill',
+    });
+  }
+
+  for (const assignment of assignments) {
+    const [teacherUserUid, familyUserUid] = await Promise.all([
+      resolveProfileUserUid(db, 'profesores', assignment.teacherUid || assignment.profesor_id, assignment.teacherUserUid),
+      resolveProfileUserUid(db, 'familias', assignment.familyUid || assignment.familia_id, assignment.familyUserUid),
+    ]);
+    await materializeRecent({
+      type: 'assignment.created',
+      entityType: 'asignaciones',
+      entityId: assignment.id,
+      data: { id: assignment.id, ...assignment, teacherUserUid, familyUserUid },
+      source: 'github_actions_worker.assignments_backfill',
+    });
+  }
+
+  for (const classData of classes) {
+    if (!isAfterClassReset(classData)) continue;
+    const type = classBackfillType(classData);
+    if (!type) continue;
+    const enriched = await enrichWorkerClassData(db, classData);
+    await materializeRecent({
+      type,
+      entityType: 'clases',
+      entityId: classData.id,
+      data: { id: classData.id, ...enriched },
+      source: 'github_actions_worker.classes_backfill',
+    });
+  }
+
+  for (const payment of payments) {
+    const enriched = await enrichWorkerPaymentData(db, payment);
+    await materializeRecent({
+      type: paymentBackfillType(payment),
+      entityType: 'pagos',
+      entityId: payment.id,
+      data: { id: payment.id, ...enriched },
+      source: 'github_actions_worker.payments_backfill',
+    });
+  }
+
+  for (const document of documents) {
+    const normalized = normalizeDocumentRecord({ id: document.id, ...document });
+    await materializeRecent({
+      type: 'document.created',
+      entityType: 'documentos',
+      entityId: document.id,
+      data: { id: document.id, ...normalized, ...document },
+      source: 'github_actions_worker.documents_backfill',
+    });
+    const statusType = documentStatusAutomationType(document);
+    if (statusType) {
+      await materializeRecent({
+        type: statusType,
+        entityType: 'documentos',
+        entityId: document.id,
+        data: { id: document.id, ...normalized, ...document },
+        source: 'github_actions_worker.documents_status_backfill',
+      });
+    }
+  }
+
+  for (const incident of incidents) {
+    await materializeRecent({
+      type: incidentResolved(incident) ? 'incident.resolved' : 'incident.created',
+      entityType: 'incidencias',
+      entityId: incident.id,
+      data: { id: incident.id, ...incident },
+      source: 'github_actions_worker.incidents_backfill',
+    });
+  }
+
+  for (const review of reviews) {
+    await materializeRecent({
+      type: 'review.created',
+      entityType: 'valoraciones',
+      entityId: review.id,
+      data: { id: review.id, ...review },
+      source: 'github_actions_worker.reviews_backfill',
+    });
+  }
+}
+
 async function processChatAutomationBackfill(db, stats) {
   const scanLimit = runtimeNumber('automation.chatBackfillScanLimit', limit, 10, 2000);
   const lookbackHours = runtimeNumber('automation.chatBackfillLookbackHours', 48, 1, 720);
@@ -4945,6 +5177,9 @@ async function main() {
     chatScheduleProposalsChecked: 0,
     chatScheduleEventsBackfilled: 0,
     chatBackfillSkippedOld: 0,
+    entityBackfillEventsChecked: 0,
+    entityBackfillEventsMaterialized: 0,
+    entityBackfillSkippedOld: 0,
     platformFinanceEvents: 0,
     financeAnomaliesDetected: 0,
     financeIncidentsCreated: 0,
@@ -5056,6 +5291,7 @@ async function main() {
   await processPendingRequests(db, stats);
   await processActiveMatchingInterventions(db, stats);
   await processAssignedRequests(db, stats);
+  await processEntityAutomationBackfill(db, stats);
   await processChatAutomationBackfill(db, stats);
   await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);

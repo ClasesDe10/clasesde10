@@ -79,6 +79,24 @@ assert(automationWorker.includes('ensureChatForAssignmentWorker'), 'Worker must 
 assert(automationWorker.includes("'relationship.ensure_chat'"), 'Worker must dispatch relationship.ensure_chat system jobs.');
 assert(automationWorker.includes('createPaymentRequestForClassWorker'), 'Worker must be able to create payment requests from completed classes.');
 assert(automationWorker.includes("'payment.request_for_class'"), 'Worker must dispatch payment.request_for_class system jobs.');
+assert(automationWorker.includes('processEntityAutomationBackfill'), 'Worker must backfill entity automation events when Functions are not deployed.');
+assert(automationWorker.includes('entityBackfillLookbackHours'), 'Worker entity backfill must avoid turning old history into new notifications.');
+assert(automationWorker.includes('entityBackfillEventsMaterialized'), 'Worker must report materialized entity automation events.');
+for (const eventType of [
+  'user.registered',
+  'profile.updated',
+  'teacher.verified',
+  'request.created',
+  'assignment.created',
+  'class.scheduled',
+  'payment.created',
+  'payment.verified',
+  'document.created',
+  'incident.created',
+  'review.created',
+]) {
+  assert(automationWorker.includes(`'${eventType}'`), `Worker entity backfill must materialize ${eventType}.`);
+}
 assert(automationWorker.includes('processChatAutomationBackfill'), 'Worker must backfill chat automation events when Functions are not deployed.');
 assert(automationWorker.includes('recipientUidsForChat'), 'Worker message backfill must notify participants and admins like Functions.');
 assert(automationWorker.includes("listCollectionGroup(db, 'mensajes'"), 'Worker must scan chat messages for notification backfill.');
@@ -88,6 +106,7 @@ assert(automationWorker.includes("'schedule.proposed'"), 'Worker must materializ
 assert(automationWorker.includes("'schedule.accepted'"), 'Worker must materialize schedule.accepted automation events from accepted proposals.');
 assert(automationWorker.includes('chatBackfillLookbackHours'), 'Worker chat backfill must avoid turning old history into new notifications.');
 assert(automationWorker.includes('chatBackfillSkippedOld'), 'Worker must report old chat events skipped by backfill.');
+assert(automationWorker.indexOf('await processEntityAutomationBackfill(db, stats);') < automationWorker.indexOf('await processChatAutomationBackfill(db, stats);'), 'Entity automation backfill must run before chat backfill and downstream follow-ups.');
 assert(automationWorker.indexOf('await processChatAutomationBackfill(db, stats);') < automationWorker.indexOf('await processRelationshipFollowups(db, stats);'), 'Chat automation backfill must run before relationship follow-ups consume signals.');
 
 assert(rules.includes('match /programaciones/{proposalId}'), 'Firestore rules must protect chat schedule proposals.');

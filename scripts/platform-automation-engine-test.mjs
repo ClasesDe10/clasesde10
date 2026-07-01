@@ -49,6 +49,21 @@ assertHas(requestPlan.auditLogs, (item) => item.action === 'request.created', 'r
 assertHas(requestPlan.ruleRuns, (item) => item.ruleId === 'request.created.core' && item.engineVersion === RULE_ENGINE_VERSION, 'request.created must record the rule that fired');
 assertOnlySupportedJobs(requestPlan);
 
+const userRegisteredPlan = buildAutomationPlan({
+  type: 'user.registered',
+  entityType: 'users',
+  entityId: 'user_1',
+  data: {
+    id: 'user_1',
+    nombre: 'Nuevo Usuario',
+    role: 'familia',
+  },
+});
+assertHas(userRegisteredPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'user_registered', 'registered users must notify admin');
+assertHas(userRegisteredPlan.systemJobs, (item) => item.type === 'metrics.snapshot', 'registered users must refresh metrics');
+assertHas(userRegisteredPlan.auditLogs, (item) => item.action === 'user.registered', 'registered users must create audit log');
+assertOnlySupportedJobs(userRegisteredPlan);
+
 const assignmentPlan = buildAutomationPlan({
   type: 'assignment.created',
   entityType: 'asignaciones',
@@ -121,6 +136,24 @@ assertHas(paymentPlan.opsAlerts, (item) => item.type === 'payment_overdue', 'pay
 assertHas(paymentPlan.patches, (item) => item.collection === 'pagos' && item.data.status === 'vencido', 'payment.overdue must patch payment status');
 assertOnlySupportedJobs(paymentPlan);
 
+const paymentCreatedPlan = buildAutomationPlan({
+  type: 'payment.created',
+  entityType: 'pagos',
+  entityId: 'pay_new_1',
+  data: {
+    id: 'pay_new_1',
+    familyUserUid: 'family_user_1',
+    familyUid: 'family_profile_1',
+    amount: 45,
+    paymentType: 'family_payment',
+    status: 'pendiente',
+  },
+});
+assertHas(paymentCreatedPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'family_payment_pending', 'new family payments must notify admin');
+assertHas(paymentCreatedPlan.notifications, (item) => item.userUid === 'family_user_1' && item.type === 'family_payment_pending', 'new family payments must notify family');
+assertHas(paymentCreatedPlan.auditLogs, (item) => item.action === 'payment.created', 'new payments must create audit log');
+assertOnlySupportedJobs(paymentCreatedPlan);
+
 const profilePlan = buildAutomationPlan({
   type: 'profile.updated',
   entityType: 'profesores',
@@ -173,6 +206,22 @@ assertHas(documentVerifiedPlan.notifications, (item) => item.userUid === 'teache
 assertHas(documentVerifiedPlan.automationEvents, (item) => item.type === 'trust.recalculation_requested', 'verified documents must request trust recalculation');
 assertHas(documentVerifiedPlan.auditLogs, (item) => item.action === 'document.verified', 'verified documents must create audit log');
 assertOnlySupportedJobs(documentVerifiedPlan);
+
+const documentCreatedPlan = buildAutomationPlan({
+  type: 'document.created',
+  entityType: 'documentos',
+  entityId: 'doc_new_1',
+  data: {
+    id: 'doc_new_1',
+    ownerUid: 'teacher_user_1',
+    role: 'profesor',
+    nombre: 'DNI',
+    tipo: 'dni',
+  },
+});
+assertHas(documentCreatedPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'document_review_pending', 'new documents must notify admin for review');
+assertHas(documentCreatedPlan.auditLogs, (item) => item.action === 'document.created', 'new documents must create audit log');
+assertOnlySupportedJobs(documentCreatedPlan);
 
 const schedulePlan = buildAutomationPlan({
   type: 'schedule.proposed',
@@ -236,6 +285,22 @@ assertHas(scheduleRejectedPlan.crmTasks, (item) => item.tags.includes('calendari
 assertHas(scheduleRejectedPlan.auditLogs, (item) => item.action === 'schedule.rejected', 'rejected schedules must create audit log');
 assertOnlySupportedJobs(scheduleRejectedPlan);
 
+const incidentCreatedPlan = buildAutomationPlan({
+  type: 'incident.created',
+  entityType: 'incidencias',
+  entityId: 'inc_new_1',
+  data: {
+    id: 'inc_new_1',
+    titulo: 'Problema de pago',
+    priority: 'high',
+    status: 'abierta',
+  },
+});
+assertHas(incidentCreatedPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'class_incident', 'new incidents must notify admin');
+assertHas(incidentCreatedPlan.crmTasks, (item) => item.tags.includes('incidencias'), 'new incidents must create CRM follow-up');
+assertHas(incidentCreatedPlan.auditLogs, (item) => item.action === 'incident.created', 'new incidents must create audit log');
+assertOnlySupportedJobs(incidentCreatedPlan);
+
 const incidentResolvedPlan = buildAutomationPlan({
   type: 'incident.resolved',
   entityType: 'incidencias',
@@ -249,6 +314,21 @@ const incidentResolvedPlan = buildAutomationPlan({
 assertHas(incidentResolvedPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'incident_resolved', 'resolved incidents must notify admin');
 assertHas(incidentResolvedPlan.auditLogs, (item) => item.action === 'incident.resolved', 'resolved incidents must create audit log');
 assertOnlySupportedJobs(incidentResolvedPlan);
+
+const reviewPlan = buildAutomationPlan({
+  type: 'review.created',
+  entityType: 'valoraciones',
+  entityId: 'review_1',
+  data: {
+    id: 'review_1',
+    teacherUid: 'teacher_user_1',
+    rating: 5,
+  },
+});
+assertHas(reviewPlan.automationEvents, (item) => item.type === 'trust.recalculation_requested', 'new reviews must request trust recalculation');
+assertHas(reviewPlan.systemJobs, (item) => item.type === 'metrics.snapshot', 'new reviews must refresh metrics');
+assertHas(reviewPlan.auditLogs, (item) => item.action === 'review.created', 'new reviews must create audit log');
+assertOnlySupportedJobs(reviewPlan);
 
 const eventIds = new Set(requestPlan.automationEvents.map((item) => item.id));
 assert.equal(eventIds.size, requestPlan.automationEvents.length, 'automation event IDs must be unique per plan');
