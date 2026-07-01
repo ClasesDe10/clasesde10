@@ -1229,7 +1229,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260630-matching-active-v1';
+import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260701-mobility-v1';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -4849,7 +4849,15 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
     const profileIssues = (m.profileIssues || profileQuality?.issueLabels || []).slice(0, 3).map(sanitize).join(', ');
     const travelEstimate = m.locationEstimate || m.scoreBreakdown?.location?.locationEstimate || null;
     const travelText = travelEstimate?.available
-      ? `${travelEstimate.drivingKm} km / ${travelEstimate.drivingMinutes} min en coche (${travelEstimate.confidence || 'estimado'})`
+      ? formatTravelEstimateForDisplay(travelEstimate)
+      : '';
+    const travelBadges = travelEstimate?.available
+      ? (travelEstimate.displayOptions || [])
+        .map((option) => `<span class="badge ${option.withinLimit === false ? 'badge-warning' : 'badge-gray'}">${sanitize(option.label)}: ${sanitize(option.km)} km / ${sanitize(option.minutes)} min</span>`)
+        .join('')
+      : '';
+    const mobilityMode = travelEstimate?.available
+      ? `<span class="badge badge-gray">${travelEstimate.hasCar === true ? 'Tiene coche' : travelEstimate.hasCar === false ? 'Sin coche: transporte publico' : 'Movilidad no indicada'}</span>`
       : '';
     const notes = [travelText && `Desplazamiento: ${travelText}`, reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
     const quote = profesor ? buildAssignmentPricingQuote(window.solicitudAsignacionActual || {}, profesor) : null;
@@ -4881,9 +4889,9 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
           <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
         ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
-        ${travelText ? `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap">
-          <span class="badge badge-gray">Coche: ${sanitize(travelEstimate.hasCar === true ? 'si' : travelEstimate.hasCar === false ? 'no' : 'no indicado')}</span>
-          <span class="badge badge-gray">${sanitize(travelText)}</span>
+        ${travelText ? `<div style="margin-top:7px;display:flex;gap:6px;flex-wrap:wrap" title="${sanitize(travelText)}">
+          ${mobilityMode}
+          ${travelBadges}
         </div>` : ''}
         ${trust ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px">
           ${renderTrustBadge(trust.score, trust.level)}

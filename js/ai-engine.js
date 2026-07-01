@@ -10,19 +10,23 @@ import {
   minutesFromTime,
   normalizeAvailabilitySlots as normalizeStructuredAvailabilitySlots,
 } from './availability-engine.js';
+import {
+  buildMobilityEstimate,
+  formatMobilityEstimate,
+} from './geo-distance-engine.js';
 import { buildTeacherTrustProfile } from './trust-engine.js';
 
-export const MATCHING_VERSION = 'professional_matching_v4';
+export const MATCHING_VERSION = 'professional_matching_v5_mobility';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
 export const ACTIVE_MATCHING_VERSION = 'active_matching_v1';
 
 export const MATCHING_WEIGHTS = Object.freeze({
-  subject: 22,
-  level: 10,
-  modality: 10,
-  location: 11,
+  subject: 20,
+  level: 9,
+  modality: 9,
+  location: 16,
   availability: 13,
-  experience: 8,
+  experience: 7,
   reputation: 10,
   capacity: 6,
   fitConfidence: 7,
@@ -186,124 +190,12 @@ function yearsFromText(value) {
   return any ? Number(any[1]) : 0;
 }
 
-function coordinatePair(entity = {}) {
-  const source = entity.location || entity.coordinates || entity.geo || {};
-  const lat = firstNumber(
-    entity.lat,
-    entity.latitude,
-    entity.locationLat,
-    entity.geoLat,
-    source.lat,
-    source.latitude,
-  );
-  const lng = firstNumber(
-    entity.lng,
-    entity.lon,
-    entity.long,
-    entity.longitude,
-    entity.locationLng,
-    entity.geoLng,
-    source.lng,
-    source.lon,
-    source.long,
-    source.longitude,
-  );
-  if (lat === null || lng === null) return null;
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat, lng };
-}
-
-function distanceKmBetween(a, b) {
-  const radiusKm = 6371;
-  const toRad = (value) => (value * Math.PI) / 180;
-  const dLat = toRad(b.lat - a.lat);
-  const dLng = toRad(b.lng - a.lng);
-  const lat1 = toRad(a.lat);
-  const lat2 = toRad(b.lat);
-  const h = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return round(2 * radiusKm * Math.asin(Math.sqrt(h)), 1);
-}
-
-function postalDistanceEstimateKm(requestPostal, teacherPostal) {
-  const req = clean(requestPostal);
-  const teacher = clean(teacherPostal);
-  if (!/^\d{5}$/.test(req) || !/^\d{5}$/.test(teacher)) return null;
-  if (req === teacher) return 1.2;
-  if (req.slice(0, 3) === teacher.slice(0, 3)) {
-    return round(Math.min(7.5, 1.8 + Math.abs(Number(req.slice(3)) - Number(teacher.slice(3))) * 0.38), 1);
-  }
-  if (req.slice(0, 2) === teacher.slice(0, 2)) {
-    return round(Math.min(22, 7 + Math.abs(Number(req.slice(2)) - Number(teacher.slice(2))) * 0.18), 1);
-  }
-  return round(35 + Math.abs(Number(req.slice(0, 2)) - Number(teacher.slice(0, 2))) * 18, 1);
-}
-
-function sameStreetConfidence(requestAddress, teacherAddress) {
-  const reqTokens = tokenize(requestAddress).filter((token) => !['calle', 'avenida', 'avda', 'plaza', 'paseo', 'numero', 'piso'].includes(token));
-  const teacherTokens = tokenize(teacherAddress).filter((token) => !['calle', 'avenida', 'avda', 'plaza', 'paseo', 'numero', 'piso'].includes(token));
-  if (!reqTokens.length || !teacherTokens.length) return false;
-  return overlapCount(new Set(reqTokens), new Set(teacherTokens)) >= Math.min(2, reqTokens.length);
-}
-
 export function estimateTravelForMatch(requestProfile = {}, teacherProfile = {}) {
-  const requestCoords = coordinatePair(requestProfile);
-  const teacherCoords = coordinatePair(teacherProfile);
-  const requestPostal = clean(requestProfile.postalCode);
-  const teacherPostal = clean(teacherProfile.postalCode);
-  const requestZone = normalizeText([requestProfile.zone, requestProfile.city].filter(Boolean).join(' '));
-  const teacherZone = normalizeText([teacherProfile.zone, teacherProfile.city].filter(Boolean).join(' '));
-  const requestAddress = clean(requestProfile.address, 240);
-  const teacherAddress = clean(teacherProfile.address, 240);
-  const hasCar = teacherProfile.hasCar;
-  let straightKm = null;
-  let confidence = 'none';
+  return buildMobilityEstimate(requestProfile, teacherProfile);
+}
 
-  if (requestCoords && teacherCoords) {
-    straightKm = distanceKmBetween(requestCoords, teacherCoords);
-    confidence = 'coordinates';
-  } else {
-    const postalKm = postalDistanceEstimateKm(requestPostal, teacherPostal);
-    if (postalKm !== null) {
-      straightKm = postalKm;
-      confidence = 'postal_code';
-    } else if (requestAddress && teacherAddress && sameStreetConfidence(requestAddress, teacherAddress)) {
-      straightKm = 1.1;
-      confidence = 'street_text';
-    } else if (requestZone && teacherZone && (teacherZone.includes(requestZone) || requestZone.includes(teacherZone))) {
-      straightKm = 3.2;
-      confidence = 'zone_text';
-    } else if (requestZone && teacherZone && overlapCount(new Set(tokenize(requestZone)), new Set(tokenize(teacherZone))) > 0) {
-      straightKm = 6.5;
-      confidence = 'zone_partial';
-    }
-  }
-
-  if (straightKm === null) {
-    return {
-      available: false,
-      confidence,
-      hasCar,
-      needsCar: true,
-      detail: 'Sin datos suficientes para estimar km/tiempo.',
-    };
-  }
-
-  const drivingKm = round(Math.max(0.8, straightKm * 1.35), 1);
-  const speedKmh = drivingKm <= 8 ? 18 : drivingKm <= 20 ? 25 : 35;
-  const parkingMinutes = drivingKm <= 3 ? 4 : drivingKm <= 12 ? 6 : 8;
-  const drivingMinutes = Math.max(5, Math.round((drivingKm / speedKmh) * 60 + parkingMinutes));
-  const needsCar = drivingKm > 5;
-  return {
-    available: true,
-    confidence,
-    hasCar,
-    needsCar,
-    straightKm,
-    drivingKm,
-    drivingMinutes,
-    detail: `${drivingKm} km aprox. en coche, ${drivingMinutes} min aprox.`,
-  };
+export function formatTravelEstimateForDisplay(estimate = {}) {
+  return formatMobilityEstimate(estimate);
 }
 
 export function getTeacherName(teacher) {
@@ -808,24 +700,15 @@ function scoreLocation(requestProfile, teacherProfile) {
   const teacherPostal = normalizeText(teacherProfile.postalCode);
   const estimate = estimateTravelForMatch(requestProfile, teacherProfile);
   if (estimate.available) {
-    let ratio = 0.18;
-    if (estimate.drivingKm <= 2.5) ratio = 1;
-    else if (estimate.drivingKm <= 5) ratio = 0.9;
-    else if (estimate.drivingKm <= 8) ratio = 0.76;
-    else if (estimate.drivingKm <= 12) ratio = 0.58;
-    else if (estimate.drivingKm <= 18) ratio = 0.38;
-
-    const reasons = [`Desplazamiento estimado: ${estimate.detail}.`];
-    const risks = [];
-    if (estimate.confidence !== 'coordinates') risks.push('Distancia estimada sin coordenadas exactas; confirmar direccion antes de asignar.');
-    if (estimate.hasCar === false && estimate.drivingKm > 5) {
-      ratio = Math.min(ratio, estimate.drivingKm > 10 ? 0.25 : 0.42);
-      risks.push('El profesor no ha marcado coche para un desplazamiento presencial largo.');
-    } else if (estimate.hasCar === null && estimate.drivingKm > 8) {
-      ratio = Math.min(ratio, 0.62);
-      risks.push('El profesor no ha indicado si tiene coche.');
-    } else if (estimate.hasCar === true && estimate.needsCar) {
-      reasons.push('Tiene coche declarado para desplazamientos.');
+    const ratio = Number.isFinite(Number(estimate.scoreRatio)) ? estimate.scoreRatio : 0.18;
+    const reasons = [`Desplazamiento calculado: ${estimate.detail}.`];
+    const risks = [...(estimate.risks || [])];
+    if (estimate.hasCar === true) {
+      reasons.push(estimate.withinRecommendedRange
+        ? 'Tiene coche y queda dentro del limite operativo de 20 minutos.'
+        : 'Tiene coche, pero el desplazamiento supera el limite operativo.');
+    } else if (estimate.hasCar === false) {
+      reasons.push('Sin coche declarado: se prioriza transporte publico.');
     }
     return component('location', ratio, estimate.detail, reasons, risks, { locationEstimate: estimate });
   }
@@ -1158,10 +1041,15 @@ export function scoreTeacherForRequest(request, teacher) {
   if (!teacherProfile.teacherUid) hardBlocks.push('Profesor sin identificador');
   if (components.find((part) => part.name === 'subject')?.points === 0 && requestProfile.subject) hardBlocks.push('Materia no compatible');
   if (components.find((part) => part.name === 'modality')?.points === 0) hardBlocks.push('Modalidad incompatible');
+  const locationEstimate = components.find((part) => part.name === 'location')?.locationEstimate || null;
+  if (modalitySet(requestProfile.modality).has('presencial') && locationEstimate?.hardDistanceRisk) {
+    hardBlocks.push('Desplazamiento en coche superior a 20 min');
+  }
 
   let score = components.reduce((sum, part) => sum + part.points, 0);
   score = capScore(score, 45, hardBlocks.includes('Materia no compatible'));
   score = capScore(score, 55, hardBlocks.includes('Modalidad incompatible'));
+  score = capScore(score, 60, hardBlocks.includes('Desplazamiento en coche superior a 20 min'));
   score = capScore(score, 58, components.find((part) => part.name === 'capacity')?.points === 0);
   score = capScore(score, 68, !['verificado', 'verified', 'activo', 'active'].includes(teacherProfile.status));
   score = capScore(score, 72, teacherQuality.score < 85);

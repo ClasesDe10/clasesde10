@@ -45,6 +45,10 @@ assert.ok(professorDashboard.includes('Colegio donde estudiaste'), 'Teacher prof
 assert.ok(professorDashboard.includes('Universidad o centro superior'), 'Teacher profile must require university or higher education center separately');
 assert.ok(aiEngine.includes('estimateTravelForMatch'), 'Matching engine must estimate travel distance/time');
 assert.ok(aiEngine.includes('locationEstimate'), 'Matching results must expose location estimate');
+assert.ok(aiEngine.includes('formatTravelEstimateForDisplay'), 'Matching engine must expose formatted travel estimates');
+assert.ok(adminDashboard.includes('formatTravelEstimateForDisplay'), 'Admin recommendations must display formatted mobility estimates');
+assert.ok(adminDashboard.includes('Tiene coche'), 'Admin recommendations must show car mobility state');
+assert.ok(adminDashboard.includes('Sin coche: transporte publico'), 'Admin recommendations must show transit-only mobility state');
 
 for (const removed of [
   'p-tarifa',

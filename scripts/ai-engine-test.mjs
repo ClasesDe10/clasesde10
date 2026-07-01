@@ -11,7 +11,9 @@ import {
   buildTeacherMatchingSignals,
   buildTeacherProfileRecommendations,
   classifyIncident,
+  estimateTravelForMatch,
   evaluateTeacherProfile,
+  formatTravelEstimateForDisplay,
   getAiExecutionPolicy,
   mergeAiRanking,
   moderateContent,
@@ -133,14 +135,14 @@ assert.equal(presencialRanking[0].teacherUid, 'teacher_local');
 assert.ok(presencialRanking[0].scoreBreakdown.location.points > presencialRanking[1].scoreBreakdown.location.points);
 assert.ok(presencialRanking[0].scoreBreakdown.availability.points > presencialRanking[1].scoreBreakdown.availability.points);
 assert.ok(presencialRanking[0].locationEstimate.drivingMinutes > 0);
-assert.ok(presencialRanking[0].reasons.some((reason) => reason.includes('Desplazamiento estimado')));
+assert.ok(presencialRanking[0].reasons.some((reason) => reason.includes('Desplazamiento calculado')));
 
 const noCarTeacher = {
   ...completeTeacher,
   id: 'teacher_no_car',
   teacherUid: 'teacher_no_car',
   modalidad: 'presencial',
-  codigo_postal: '28045',
+  codigo_postal: '28005',
   zona: 'Arganzuela',
   hasCar: false,
   tiene_coche: false,
@@ -155,7 +157,29 @@ const carTeacher = {
 const travelRanking = rankTeachersForRequest(presencialRequest, [noCarTeacher, carTeacher], { limit: 2, includeZeroScore: true });
 assert.equal(travelRanking[0].teacherUid, 'teacher_with_car');
 assert.ok(travelRanking[0].scoreBreakdown.location.points > travelRanking[1].scoreBreakdown.location.points);
-assert.ok(travelRanking[1].risks.some((risk) => risk.toLowerCase().includes('coche')));
+assert.equal(travelRanking[0].locationEstimate.displayOptions.length, 2);
+assert.ok(formatTravelEstimateForDisplay(travelRanking[0].locationEstimate).includes('coche'));
+assert.ok(formatTravelEstimateForDisplay(travelRanking[0].locationEstimate).includes('transporte publico'));
+assert.equal(travelRanking[1].locationEstimate.displayOptions.length, 1);
+assert.equal(travelRanking[1].locationEstimate.displayOptions[0].mode, 'transit');
+assert.ok(formatTravelEstimateForDisplay(travelRanking[1].locationEstimate).includes('transporte publico'));
+
+const farCarTeacher = {
+  ...carTeacher,
+  id: 'teacher_far_car',
+  teacherUid: 'teacher_far_car',
+  codigo_postal: '28045',
+  zona: 'Usera',
+};
+const farCarMatch = scoreTeacherForRequest(presencialRequest, farCarTeacher);
+assert.equal(farCarMatch.assignable, false);
+assert.ok(farCarMatch.hardBlocks.some((item) => item.includes('20 min')));
+assert.ok(farCarMatch.locationEstimate.hardDistanceRisk);
+
+const rawTravel = estimateTravelForMatch(presencialRequest, carTeacher);
+assert.equal(rawTravel.available, true);
+assert.ok(rawTravel.mobilityOptions.driving.minutes > 0);
+assert.ok(rawTravel.mobilityOptions.transit.minutes > 0);
 
 const structuredRequest = {
   ...presencialRequest,
