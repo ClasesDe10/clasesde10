@@ -1957,6 +1957,224 @@ async function resolveClassRecipients(db, data) {
   return { teacherUid, familyUid, studentId };
 }
 
+function participantUidsFromChat(chat = {}) {
+  const map = chat.participantUids && typeof chat.participantUids === 'object'
+    ? Object.keys(chat.participantUids).filter((uid) => chat.participantUids[uid] !== false)
+    : [];
+  return uniq([
+    ...map,
+    chat.familyUserUid,
+    chat.familyUid,
+    chat.familia_user_uid,
+    chat.familia_id,
+    chat.teacherUserUid,
+    chat.teacherUid,
+    chat.profesor_user_uid,
+    chat.profesor_id,
+    chat.adminUid,
+  ].map((uid) => clean(uid, 180)).filter(Boolean));
+}
+
+async function recipientUidsForChat(db, chat = {}, senderUid = '') {
+  const admins = await getAdminUsers(db).catch(() => []);
+  return uniq([
+    ...participantUidsFromChat(chat),
+    ...admins.map((user) => user.id),
+  ]).filter((uid) => uid && uid !== clean(senderUid, 180));
+}
+
+async function roleForChatParticipant(db, uid, chat = {}) {
+  const target = clean(uid, 180);
+  if (!target) return '';
+  const familyIds = new Set([
+    chat.familyUserUid,
+    chat.familyUid,
+    chat.familia_user_uid,
+    chat.familia_id,
+    chat.ownerUid,
+  ].map((item) => clean(item, 180)).filter(Boolean));
+  const teacherIds = new Set([
+    chat.teacherUserUid,
+    chat.teacherUid,
+    chat.profesor_user_uid,
+    chat.profesor_id,
+  ].map((item) => clean(item, 180)).filter(Boolean));
+  if (familyIds.has(target)) return 'familia';
+  if (teacherIds.has(target)) return 'profesor';
+
+  const userSnap = await db.collection('users').doc(target).get().catch(() => null);
+  if (userSnap?.exists) {
+    const user = userSnap.data();
+    return clean(user.role || user.rol || '', 40);
+  }
+  return '';
+}
+
+function scheduleProposalLabel(data = {}) {
+  const date = clean(data.fecha || data.date, 20);
+  const start = clean(data.hora_inicio || data.startTime || data.hora, 8);
+  const end = clean(data.hora_fin || data.endTime, 8);
+  return [clean(data.materia || data.subject || 'Clase', 120), date, [start, end].filter(Boolean).join(' - ')].filter(Boolean).join(' - ');
+}
+
+function scheduleProposalPayload(chatId, proposalId, proposal = {}, chat = {}) {
+  return {
+    id: proposalId,
+    chatId,
+    proposalId,
+    assignmentId: chat.assignmentId || chat.asignacion_id || proposal.assignmentId || proposal.asignacion_id || chatId,
+    familyUid: chat.familyUid || chat.familia_id || proposal.familyUid || proposal.familia_id || '',
+    familyUserUid: chat.familyUserUid || '',
+    teacherUid: chat.teacherUid || chat.profesor_id || proposal.teacherUid || proposal.profesor_id || '',
+    teacherUserUid: chat.teacherUserUid || '',
+    studentId: chat.studentId || chat.alumno_id || proposal.studentId || proposal.alumno_id || '',
+    classId: proposal.classId || proposal.clase_id || '',
+    proposedByUid: proposal.proposedByUid || proposal.createdByUid || '',
+    proposedByRole: proposal.proposedByRole || proposal.createdByRole || '',
+    respondedByUid: proposal.respondedByUid || '',
+    respondedByRole: proposal.respondedByRole || '',
+    status: proposal.status || proposal.estado || '',
+    materia: proposal.materia || proposal.subject || chat.materia || chat.subject || '',
+    subject: proposal.subject || proposal.materia || chat.subject || chat.materia || '',
+    fecha: proposal.fecha || proposal.date || '',
+    date: proposal.date || proposal.fecha || '',
+    hora_inicio: proposal.hora_inicio || proposal.startTime || '',
+    startTime: proposal.startTime || proposal.hora_inicio || '',
+    hora_fin: proposal.hora_fin || proposal.endTime || '',
+    endTime: proposal.endTime || proposal.hora_fin || '',
+    scheduleKind: proposal.scheduleKind || proposal.kind || '',
+    recurrenceLabel: proposal.recurrenceLabel || '',
+    preview: scheduleProposalLabel({ ...chat, ...proposal }),
+  };
+}
+
+async function chatById(db, chatCache, chatId) {
+  const id = clean(chatId, 180);
+  if (!id) return null;
+  if (chatCache.has(id)) return chatCache.get(id);
+  const snap = await db.collection('chats').doc(id).get().catch(() => null);
+  const chat = snap?.exists ? { id: snap.id, ...snap.data() } : null;
+  chatCache.set(id, chat);
+  return chat;
+}
+
+function isSystemChatMessage(message = {}) {
+  const role = lower(message.senderRole || message.role);
+  const uid = clean(message.senderUid || message.createdByUid, 180);
+  return role === 'system' || uid === 'system' || message.fromAutomation === true;
+}
+
+function chatEventBackfillDate(data = {}, fields = []) {
+  for (const field of fields) {
+    const date = dateFromFirestore(data[field]);
+    if (date) return date;
+  }
+  return null;
+}
+
+function isRecentChatEventForBackfill(data = {}, fields = [], lookbackMs = 48 * 60 * 60 * 1000) {
+  const date = chatEventBackfillDate(data, fields);
+  if (!date) return true;
+  return Date.now() - date.getTime() <= lookbackMs;
+}
+
+async function processChatAutomationBackfill(db, stats) {
+  const scanLimit = runtimeNumber('automation.chatBackfillScanLimit', limit, 10, 2000);
+  const lookbackHours = runtimeNumber('automation.chatBackfillLookbackHours', 48, 1, 720);
+  const lookbackMs = lookbackHours * 60 * 60 * 1000;
+  const [messages, proposals] = await Promise.all([
+    listCollectionGroup(db, 'mensajes', scanLimit).catch(() => []),
+    listCollectionGroup(db, 'programaciones', scanLimit).catch(() => []),
+  ]);
+  const chatCache = new Map();
+
+  for (const message of messages) {
+    if (!message.__ref || isSystemChatMessage(message)) continue;
+    if (!isRecentChatEventForBackfill(message, ['createdAt', 'created_at', 'sentAt', 'updatedAt'], lookbackMs)) {
+      stats.chatBackfillSkippedOld += 1;
+      continue;
+    }
+    const chat = await chatById(db, chatCache, message.chatId);
+    if (!chat) continue;
+    const senderUid = clean(message.senderUid || message.createdByUid, 180);
+    const recipients = await recipientUidsForChat(db, chat, senderUid);
+    stats.chatMessagesChecked += 1;
+    for (const uid of recipients) {
+      const eventId = `${message.chatId}_${message.id}`;
+      await materializeWorkerAutomationPlan(db, {
+        type: 'message.received',
+        entityType: 'chats',
+        entityId: eventId,
+        data: {
+          id: eventId,
+          chatId: message.chatId,
+          messageId: message.id,
+          assignmentId: chat.assignmentId || chat.asignacion_id || '',
+          recipientUid: uid,
+          recipientRole: await roleForChatParticipant(db, uid, chat),
+          senderUid,
+          senderRole: message.senderRole || '',
+          senderName: message.senderName || message.senderRole || 'ClasesDe10',
+          body: message.body || message.text || '',
+          preview: clean(message.body || message.text, 240),
+        },
+        source: 'github_actions_worker.chat_message_backfill',
+      }, stats);
+      stats.chatMessageEventsBackfilled += 1;
+    }
+  }
+
+  for (const proposal of proposals) {
+    if (!proposal.__ref) continue;
+    if (!isRecentChatEventForBackfill(proposal, ['respondedAt', 'updatedAt', 'proposedAt', 'createdAt', 'created_at'], lookbackMs)) {
+      stats.chatBackfillSkippedOld += 1;
+      continue;
+    }
+    const chat = await chatById(db, chatCache, proposal.chatId);
+    if (!chat) continue;
+    const status = lower(proposal.status || proposal.estado);
+    const base = scheduleProposalPayload(proposal.chatId, proposal.id, proposal, chat);
+    const actorUid = clean(base.proposedByUid, 180);
+    stats.chatScheduleProposalsChecked += 1;
+
+    if (!status || status === 'propuesta' || status === 'pending' || status === 'proposed') {
+      const recipients = participantUidsFromChat(chat).filter((uid) => uid && uid !== actorUid);
+      for (const uid of recipients) {
+        const eventId = `${proposal.chatId}_${proposal.id}`;
+        await materializeWorkerAutomationPlan(db, {
+          type: 'schedule.proposed',
+          entityType: 'chats.programaciones',
+          entityId: eventId,
+          data: {
+            ...base,
+            recipientUid: uid,
+            recipientRole: await roleForChatParticipant(db, uid, chat),
+          },
+          source: 'github_actions_worker.schedule_proposed_backfill',
+        }, stats);
+        stats.chatScheduleEventsBackfilled += 1;
+      }
+      continue;
+    }
+
+    const type = ['aceptada', 'accepted', 'confirmada', 'confirmed'].includes(status)
+      ? 'schedule.accepted'
+      : ['rechazada', 'rejected', 'cancelada', 'cancelled', 'canceled'].includes(status)
+        ? 'schedule.rejected'
+        : '';
+    if (!type) continue;
+
+    await materializeWorkerAutomationPlan(db, {
+      type,
+      entityType: 'chats.programaciones',
+      entityId: `${proposal.chatId}_${proposal.id}`,
+      data: base,
+      source: 'github_actions_worker.schedule_status_backfill',
+    }, stats);
+    stats.chatScheduleEventsBackfilled += 1;
+  }
+}
+
 async function resolveProfileUserUid(db, collectionName, profileId, fallback = '') {
   const id = clean(profileId, 180);
   if (!id) return clean(fallback, 180);
@@ -4722,6 +4940,11 @@ async function main() {
     platformIncidentEvents: 0,
     platformTeachersChecked: 0,
     platformTeacherEvents: 0,
+    chatMessagesChecked: 0,
+    chatMessageEventsBackfilled: 0,
+    chatScheduleProposalsChecked: 0,
+    chatScheduleEventsBackfilled: 0,
+    chatBackfillSkippedOld: 0,
     platformFinanceEvents: 0,
     financeAnomaliesDetected: 0,
     financeIncidentsCreated: 0,
@@ -4833,6 +5056,7 @@ async function main() {
   await processPendingRequests(db, stats);
   await processActiveMatchingInterventions(db, stats);
   await processAssignedRequests(db, stats);
+  await processChatAutomationBackfill(db, stats);
   await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);
   await processUpcomingClassReminders(db, stats);

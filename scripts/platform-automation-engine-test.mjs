@@ -195,6 +195,47 @@ assertHas(schedulePlan.crmTasks, (item) => item.tags.includes('calendario'), 'sc
 assertHas(schedulePlan.auditLogs, (item) => item.action === 'schedule.proposed', 'schedule proposals must create audit log');
 assertOnlySupportedJobs(schedulePlan);
 
+const scheduleAcceptedPlan = buildAutomationPlan({
+  type: 'schedule.accepted',
+  entityType: 'chats.programaciones',
+  entityId: 'chat_1_prop_1',
+  data: {
+    id: 'prop_1',
+    chatId: 'chat_1',
+    classId: 'class_1',
+    proposedByUid: 'family_user_1',
+    proposedByRole: 'familia',
+    materia: 'Matematicas',
+    fecha: '2026-07-01',
+    hora_inicio: '18:00',
+    hora_fin: '19:00',
+  },
+});
+assertHas(scheduleAcceptedPlan.notifications, (item) => item.userUid === 'family_user_1' && item.type === 'schedule_accepted', 'accepted schedules must notify the proposer');
+assertHas(scheduleAcceptedPlan.notifications, (item) => item.targetRole === 'admin' && item.type === 'schedule_accepted', 'accepted schedules must notify admin');
+assertHas(scheduleAcceptedPlan.auditLogs, (item) => item.action === 'schedule.accepted', 'accepted schedules must create audit log');
+assertOnlySupportedJobs(scheduleAcceptedPlan);
+
+const scheduleRejectedPlan = buildAutomationPlan({
+  type: 'schedule.rejected',
+  entityType: 'chats.programaciones',
+  entityId: 'chat_1_prop_2',
+  data: {
+    id: 'prop_2',
+    chatId: 'chat_1',
+    proposedByUid: 'teacher_user_1',
+    proposedByRole: 'profesor',
+    materia: 'Fisica',
+    fecha: '2026-07-02',
+    hora_inicio: '17:00',
+    hora_fin: '18:00',
+  },
+});
+assertHas(scheduleRejectedPlan.notifications, (item) => item.userUid === 'teacher_user_1' && item.type === 'schedule_rejected', 'rejected schedules must notify the proposer');
+assertHas(scheduleRejectedPlan.crmTasks, (item) => item.tags.includes('calendario'), 'rejected schedules must create calendar follow-up task');
+assertHas(scheduleRejectedPlan.auditLogs, (item) => item.action === 'schedule.rejected', 'rejected schedules must create audit log');
+assertOnlySupportedJobs(scheduleRejectedPlan);
+
 const incidentResolvedPlan = buildAutomationPlan({
   type: 'incident.resolved',
   entityType: 'incidencias',
