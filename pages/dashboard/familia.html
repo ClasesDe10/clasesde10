@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260701-journey-clarity">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260701-role-ux">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -175,7 +175,7 @@
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
             <option value="confirmada">Confirmada</option>
-            <option value="programada">Programada legacy</option>
+            <option value="programada">Programada</option>
             <option value="realizada">Realizada</option>
             <option value="cancelada">Cancelada</option>
             <option value="reprogramada">Reprogramada</option>
@@ -655,7 +655,7 @@ import {
   paymentStatusForBadge,
 } from '../../js/payment-engine.js?v=20260629-weekly-payments';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260701-notifications-first';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260701-user-clarity';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-family-finance-privacy';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260701-journey-clarity';
@@ -787,7 +787,7 @@ function renderQualityPanel(targetId, evaluation) {
     </div>` : '';
 
   panel.innerHTML = `
-    <div style="display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:18px;align-items:center">
+    <div class="profile-quality-grid">
       <div>
         <div style="font-size:2rem;font-weight:800;color:var(--navy);line-height:1">${evaluation.percent}%</div>
         <div style="font-size:.8rem;color:var(--gray-mid);font-weight:700;text-transform:uppercase;letter-spacing:.04em">perfil completado</div>
@@ -2132,9 +2132,20 @@ async function cargarSolicitudes() {
   if (!familiaId) return;
   await cargarDisponibilidadHijos();
   const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
+  const hijosLista = hijos || [];
+  const hijosPorId = new Map(hijosLista.map((hijo) => [
+    String(hijo.id),
+    [hijo.nombre, hijo.apellidos].filter(Boolean).join(' ').trim(),
+  ]));
+  const nombreAlumnoSolicitud = (solicitud = {}) => {
+    const nested = [solicitud.alumnos?.nombre, solicitud.alumnos?.apellidos].filter(Boolean).join(' ').trim();
+    const direct = solicitud.studentName || solicitud.alumno_nombre || solicitud.nombre_alumno;
+    const fromId = hijosPorId.get(String(solicitud.alumno_id || solicitud.studentId || ''));
+    return nested || direct || fromId || (hijosLista.length === 1 ? hijosPorId.values().next().value : '') || 'Alumno/a';
+  };
   const selSol = document.getElementById('sol-alumno');
   selSol.innerHTML = '<option value="">Seleccionar…</option>' +
-    (hijos||[]).map(h => `<option value="${h.id}">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</option>`).join('');
+    hijosLista.map(h => `<option value="${h.id}">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</option>`).join('');
 
   renderSolicitudDisponibilidadHint();
 
@@ -2147,10 +2158,10 @@ async function cargarSolicitudes() {
     tbody.innerHTML = renderTableEmptyState(8, {
       icon: '📝',
       title: 'Todavía no has enviado solicitudes',
-      description: hijos?.length
+      description: hijosLista.length
         ? 'Elige un alumno, indica materia y horario preferido. Nosotros revisamos el matching y te avisamos.'
         : 'Primero añade un alumno. Después te guiaremos directamente para solicitar profesor.',
-      actions: hijos?.length
+      actions: hijosLista.length
         ? [emptyAction('Crear solicitud', { 'data-action': 'abrir-modal-solicitud' }, 'gold')]
         : [emptyAction('Añadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
     });
@@ -2159,7 +2170,7 @@ async function cargarSolicitudes() {
 
   tbody.innerHTML = data.map(s => `<tr>
     <td>${formatFechaCorta(s.created_at)}</td>
-    <td>${sanitize(s.alumnos?.nombre||'—')} ${sanitize(s.alumnos?.apellidos||'')}</td>
+    <td>${sanitize(nombreAlumnoSolicitud(s))}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
     <td>${sanitize(s.nivel||'—')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'—')}</td>

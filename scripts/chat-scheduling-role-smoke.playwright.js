@@ -44,14 +44,19 @@ async (page) => {
     await page.locator('[data-chat-id]').first().click();
     await page.waitForTimeout(1200);
   }
+  const headerText = await page.locator('[data-chat-header]').textContent().catch(() => '');
+  const chatListText = await page.locator('[data-chat-list]').textContent().catch(() => '');
+  if (/Nombre real:\s*(Profesor|Familia)\b/i.test(`${headerText}\n${chatListText}`)) {
+    throw new Error('El chat muestra un nombre real generico que no ayuda al usuario.');
+  }
 
   return {
     url: page.url(),
     topbar: await page.locator('#topbar-title').textContent().catch(() => ''),
     currentUser,
     chatItems,
-    chatListText: await page.locator('[data-chat-list]').textContent().catch(() => ''),
-    headerText: await page.locator('[data-chat-header]').textContent().catch(() => ''),
+    chatListText,
+    headerText,
     consoleErrors: consoleErrors.slice(-8),
     schedulePanelVisible: await page.locator('[data-chat-schedule-panel]').isVisible().catch(() => false),
     scheduleFormVisible: await page.locator('[data-schedule-form]').isVisible().catch(() => false),

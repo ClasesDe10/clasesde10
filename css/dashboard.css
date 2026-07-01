@@ -2836,6 +2836,18 @@ tbody tr:hover { background: rgba(0,0,0,0.02); }
   gap: 12px;
 }
 
+.profile-quality-grid {
+  display: grid;
+  grid-template-columns: minmax(120px, 220px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  min-width: 0;
+}
+
+.profile-quality-grid > * {
+  min-width: 0;
+}
+
 .trust-panel-head {
   display: flex;
   align-items: center;
@@ -5148,6 +5160,10 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   }
   .trust-panel-head {
     align-items: flex-start;
+  }
+  .profile-quality-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
   }
   .trust-public-stats,
   .trust-public-stats-compact,

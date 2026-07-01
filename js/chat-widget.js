@@ -293,10 +293,17 @@ function chatTitle(chat, role, preference = {}) {
   return reliableName(preference.displayNameOverride, '') || defaultChatTitle(chat, role);
 }
 
+function isUsefulChatIdentity(value) {
+  const normalized = clean(value, 120).toLowerCase();
+  return normalized
+    && !['profesor', 'familia', 'alumno', 'alumno/a', 'profesor asignado'].includes(normalized);
+}
+
 function chatSubtitle(chat, role, preference = {}) {
   const parts = [];
-  if (preference.displayNameOverride) parts.push(`Nombre real: ${defaultChatTitle(chat, role)}`);
-  if (role === 'profesor' && chat.familyName && chat.familyName !== defaultChatTitle(chat, role)) parts.push(`Familia: ${chat.familyName}`);
+  const defaultTitle = defaultChatTitle(chat, role);
+  if (preference.displayNameOverride && isUsefulChatIdentity(defaultTitle)) parts.push(`Nombre real: ${defaultTitle}`);
+  if (role === 'profesor' && isUsefulChatIdentity(chat.familyName) && chat.familyName !== defaultTitle) parts.push(`Familia: ${chat.familyName}`);
   if (role !== 'profesor' && chat.studentName) parts.push(`Alumno/a: ${chat.studentName}`);
   if (chat.materia) parts.push(chat.materia);
   return parts.join(' · ') || 'Asignacion activa';

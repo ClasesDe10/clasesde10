@@ -21,7 +21,7 @@ async (page) => {
   await page.waitForURL(/\/pages\/dashboard\/familia(?:\.html)?(?:#.*)?$/, { timeout: 30000 });
   await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
 
-  await page.locator('[data-section="solicitudes"]').click();
+  await page.locator('button.sidebar-link[data-section="solicitudes"]').click();
   await page.locator('#section-solicitudes').waitFor({ state: 'visible', timeout: 15000 });
   await page.waitForFunction(() => {
     const text = document.querySelector('#tbody-solicitudes')?.textContent || '';
@@ -39,12 +39,18 @@ async (page) => {
   if (tableText.includes('Cargando')) {
     throw new Error('La tabla de solicitudes se queda cargando.');
   }
+  const childCells = await page.locator('#tbody-solicitudes tr td:nth-child(2)').allTextContents().catch(() => []);
+  const emptyChildCells = childCells.filter((text) => !text.trim() || ['—', '-'].includes(text.trim()));
+  if (childCells.length && emptyChildCells.length) {
+    throw new Error(`La tabla de solicitudes muestra hijo/a vacio: ${JSON.stringify(childCells)}`);
+  }
 
   return {
     url: page.url(),
     topbar: await page.locator('#topbar-title').textContent().catch(() => ''),
     headers: headerText.replace(/\s+/g, ' ').trim(),
     rowCount: await page.locator('#tbody-solicitudes tr').count().catch(() => 0),
+    childCells,
     sample: tableText.replace(/\s+/g, ' ').trim().slice(0, 220),
     consoleErrors: consoleErrors.slice(-8),
   };
