@@ -1,4 +1,4 @@
-export const PLATFORM_SUPERVISION_VERSION = 'platform-supervision-2026-06-30';
+export const PLATFORM_SUPERVISION_VERSION = 'platform-supervision-2026-07-01-consistency';
 
 const CLOSED_STATUSES = new Set(['cerrada', 'cerrado', 'resuelta', 'resolved', 'done', 'completada', 'archivada', 'archived', 'cancelada', 'cancelled', 'rechazada', 'rejected']);
 const ACTIVE_STATUSES = new Set(['', 'active', 'activa', 'open', 'abierta', 'pendiente', 'pending', 'en_proceso', 'revision', 'asignada', 'assigned']);
@@ -7,6 +7,118 @@ const COMPLETED_CLASS_STATUSES = new Set(['realizada', 'completed', 'completada'
 const SCHEDULED_CLASS_STATUSES = new Set(['programada', 'scheduled', 'confirmada', 'confirmed', 'pendiente', 'pending']);
 const PAID_STATUSES = new Set(['pagado', 'paid', 'validado', 'validated', 'succeeded', 'cobrado', 'liquidado']);
 const PAYMENT_OPEN_STATUSES = new Set(['pendiente', 'pending', 'open', 'abierta', 'solicitado', 'requested', 'en_revision', 'needs_review', 'vencido', 'overdue']);
+const CLASS_OPERATIONAL_STATUSES = new Set(['pendiente', 'confirmada', 'realizada', 'cancelada', 'reprogramada', 'pagada']);
+const CLASS_OPERATIONAL_ALIASES = Object.freeze({
+  scheduled: 'confirmada',
+  programada: 'confirmada',
+  confirmed: 'confirmada',
+  completed: 'realizada',
+  completada: 'realizada',
+  finalizada: 'realizada',
+  done: 'realizada',
+  dada: 'realizada',
+  paid: 'pagada',
+  validado: 'pagada',
+  validated: 'pagada',
+  cancelled: 'cancelada',
+  canceled: 'cancelada',
+});
+const CLASS_LIFECYCLE_STATES = new Set([
+  'solicitud_enviada',
+  'solicitud_aceptada',
+  'clase_programada',
+  'clase_proxima',
+  'recordatorio_enviado',
+  'clase_iniciada',
+  'clase_finalizada',
+  'pendiente_confirmacion',
+  'pendiente_pago',
+  'pago_en_revision',
+  'pago_recibido',
+  'comision_liquidada',
+  'valoracion_pendiente',
+  'clase_archivada',
+  'cancelada',
+  'reprogramada',
+  'incidencia_abierta',
+]);
+const CLASS_LIFECYCLE_ALIASES = Object.freeze({
+  nueva: 'solicitud_enviada',
+  new: 'solicitud_enviada',
+  asignada: 'solicitud_aceptada',
+  assigned: 'solicitud_aceptada',
+  pendiente: 'clase_programada',
+  confirmada: 'clase_programada',
+  programada: 'clase_programada',
+  scheduled: 'clase_programada',
+  proxima: 'clase_proxima',
+  upcoming: 'clase_proxima',
+  started: 'clase_iniciada',
+  iniciada: 'clase_iniciada',
+  finished: 'clase_finalizada',
+  finalizada: 'clase_finalizada',
+  realizada: 'pendiente_confirmacion',
+  completada: 'pendiente_confirmacion',
+  completed: 'pendiente_confirmacion',
+  pagada: 'pago_recibido',
+  pagado: 'pago_recibido',
+  paid: 'pago_recibido',
+  en_revision: 'pago_en_revision',
+  revision: 'pago_en_revision',
+  in_review: 'pago_en_revision',
+  validado: 'pago_recibido',
+  validated: 'pago_recibido',
+  archived: 'clase_archivada',
+  archivada: 'clase_archivada',
+});
+const PAYMENT_STATUSES = new Set(['pendiente', 'solicitado', 'procesando', 'requiere_accion', 'validado', 'pagado', 'vencido', 'rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado']);
+const PAYMENT_STATUS_ALIASES = Object.freeze({
+  pending: 'pendiente',
+  requested: 'solicitado',
+  processing: 'procesando',
+  requires_action: 'requiere_accion',
+  requires_payment_method: 'requiere_accion',
+  validated: 'validado',
+  validada: 'validado',
+  paid: 'pagado',
+  succeeded: 'pagado',
+  captured: 'pagado',
+  overdue: 'vencido',
+  expired: 'vencido',
+  rejected: 'rechazado',
+  failed: 'fallido',
+  refunded: 'devuelto',
+  cancelled: 'cancelado',
+  canceled: 'cancelado',
+});
+const INCIDENT_STATUSES = new Set(['abierta', 'en_proceso', 'esperando_usuario', 'resuelta', 'cerrada']);
+const INCIDENT_STATUS_ALIASES = Object.freeze({
+  open: 'abierta',
+  pendiente: 'abierta',
+  nueva: 'abierta',
+  nuevo: 'abierta',
+  in_progress: 'en_proceso',
+  progreso: 'en_proceso',
+  waiting: 'esperando_usuario',
+  waiting_user: 'esperando_usuario',
+  resolved: 'resuelta',
+  solucionada: 'resuelta',
+  solucionado: 'resuelta',
+  closed: 'cerrada',
+  archived: 'cerrada',
+  archivada: 'cerrada',
+});
+const USER_ROLE_ALIASES = Object.freeze({
+  teacher: 'profesor',
+  profesor: 'profesor',
+  profe: 'profesor',
+  family: 'familia',
+  familia: 'familia',
+  padre: 'familia',
+  madre: 'familia',
+  admin: 'admin',
+  administrador: 'admin',
+});
 
 function clean(value, max = 500) {
   return String(value ?? '').trim().slice(0, max);
@@ -116,7 +228,117 @@ function amountOf(item = {}) {
 }
 
 function paymentStatus(item = {}) {
-  return lower(first(item.status, item.estado, item.paymentStatus, item.familyPaymentStatus, item.reconciliationStatus));
+  return normalizedPaymentStatusValue(first(item.status, item.estado, item.paymentStatus, item.familyPaymentStatus, item.reconciliationStatus));
+}
+
+function normalizeWithAliases(value, aliases = {}, allowed = null) {
+  const raw = lower(value);
+  if (!raw) return '';
+  const normalized = aliases[raw] || raw;
+  if (!allowed) return normalized;
+  return allowed.has(normalized) ? normalized : raw;
+}
+
+function rawClassStatus(item = {}) {
+  return lower(first(item.status, item.estado));
+}
+
+function normalizedClassStatus(item = {}) {
+  return normalizeWithAliases(rawClassStatus(item), CLASS_OPERATIONAL_ALIASES, CLASS_OPERATIONAL_STATUSES);
+}
+
+function rawClassLifecycleStatus(item = {}) {
+  return lower(first(item.lifecycleStatus, item.lifecycleState));
+}
+
+function normalizedClassLifecycleStatus(item = {}) {
+  return normalizeWithAliases(rawClassLifecycleStatus(item), CLASS_LIFECYCLE_ALIASES, CLASS_LIFECYCLE_STATES);
+}
+
+function normalizedPaymentStatusValue(value) {
+  return normalizeWithAliases(value, PAYMENT_STATUS_ALIASES, PAYMENT_STATUSES);
+}
+
+function normalizedIncidentStatusValue(item = {}) {
+  return normalizeWithAliases(first(item.status, item.estado), INCIDENT_STATUS_ALIASES, INCIDENT_STATUSES);
+}
+
+function normalizedUserRole(item = {}) {
+  return normalizeWithAliases(first(item.role, item.rol, item.tipo), USER_ROLE_ALIASES);
+}
+
+function isFamilyPaymentRecord(payment = {}) {
+  const type = lower(first(payment.paymentType, payment.tipo, payment.type));
+  return !['teacher_payout', 'pago_profesor', 'refund', 'adjustment'].includes(type);
+}
+
+function participantUidSet(chat = {}) {
+  return new Set(asArray(first(chat.participantUids, chat.participants, chat.usuarios, chat.miembros)));
+}
+
+function lifecycleCompatibleWithClassStatus(status, lifecycle) {
+  if (!status || !lifecycle) return true;
+  if (status === 'cancelada') return ['cancelada', 'incidencia_abierta'].includes(lifecycle);
+  if (status === 'reprogramada') return ['reprogramada', 'clase_programada', 'clase_proxima', 'recordatorio_enviado', 'incidencia_abierta'].includes(lifecycle);
+  if (status === 'pagada') return ['pago_recibido', 'comision_liquidada', 'valoracion_pendiente', 'clase_archivada', 'incidencia_abierta'].includes(lifecycle);
+  if (status === 'realizada') return [
+    'pendiente_confirmacion',
+    'pendiente_pago',
+    'pago_en_revision',
+    'pago_recibido',
+    'comision_liquidada',
+    'valoracion_pendiente',
+    'clase_archivada',
+    'incidencia_abierta',
+  ].includes(lifecycle);
+  if (['pendiente', 'confirmada'].includes(status)) {
+    return [
+      'solicitud_aceptada',
+      'clase_programada',
+      'clase_proxima',
+      'recordatorio_enviado',
+      'clase_iniciada',
+      'clase_finalizada',
+      'reprogramada',
+      'incidencia_abierta',
+    ].includes(lifecycle);
+  }
+  return true;
+}
+
+function dateFromDateAndTime(dateValue, timeValue) {
+  const date = clean(dateValue, 20).slice(0, 10);
+  const time = clean(timeValue, 8).slice(0, 5);
+  if (!date || !time) return null;
+  const parsed = new Date(`${date}T${time}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function classTimeWindow(item = {}) {
+  const explicitStart = toDate(first(item.startAtIso, item.startAt, item.start_at));
+  let explicitEnd = toDate(first(item.endAtIso, item.endAt, item.end_at));
+  const start = explicitStart || dateFromDateAndTime(first(item.fecha, item.date), first(item.hora_inicio, item.startTime));
+  const duration = asNumber(first(item.durationMinutes, item.duracion_minutos));
+  if (!explicitEnd && start && duration > 0) {
+    explicitEnd = new Date(start.getTime() + duration * 60000);
+  }
+  const end = explicitEnd || dateFromDateAndTime(first(item.fecha, item.date), first(item.hora_fin, item.endTime));
+  return {
+    start,
+    end,
+    hasAnyTimeField: Boolean(first(item.startAtIso, item.startAt, item.fecha, item.date, item.hora_inicio, item.startTime, item.hora_fin, item.endTime)),
+    durationMinutes: start && end ? Math.round((end.getTime() - start.getTime()) / 60000) : duration,
+  };
+}
+
+function firstPayloadRef(item = {}, ...fields) {
+  const payload = item.payload && typeof item.payload === 'object' ? item.payload : {};
+  const data = item.data && typeof item.data === 'object' ? item.data : {};
+  return clean(first(
+    ...fields.map((field) => item[field]),
+    ...fields.map((field) => payload[field]),
+    ...fields.map((field) => data[field]),
+  ), 220);
 }
 
 function isOpenStatus(item = {}) {
@@ -321,10 +543,40 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
     if (key && isActiveAssignment(assignment)) assignmentsByRequest.set(key, assignment);
   }
   const assignmentsByPair = new Map();
+  const activeAssignmentGroups = new Map();
   for (const assignment of assignments) {
     if (!isActiveAssignment(assignment)) continue;
     const key = `${familyUid(assignment)}__${teacherUid(assignment)}__${studentId(assignment)}`;
-    if (key.replaceAll('_', '')) assignmentsByPair.set(key, assignment);
+    if (key.replaceAll('_', '') && !assignmentsByPair.has(key)) assignmentsByPair.set(key, assignment);
+    const groupedKey = `${familyUid(assignment)}__${teacherUid(assignment)}__${studentId(assignment)}__${lower(first(assignment.subject, assignment.materia))}`;
+    if (groupedKey.replaceAll('_', '')) {
+      if (!activeAssignmentGroups.has(groupedKey)) activeAssignmentGroups.set(groupedKey, []);
+      activeAssignmentGroups.get(groupedKey).push(assignment);
+    }
+  }
+
+  for (const group of activeAssignmentGroups.values()) {
+    if (group.length <= 1) continue;
+    const primary = group[0];
+    const ids = group.map((item) => assignmentId(item)).filter(Boolean);
+    addUnique(findings, seen, makeFinding({
+      type: 'duplicate_active_assignment',
+      category: 'consistency',
+      severity: 'high',
+      entityType: 'asignaciones',
+      entityId: ids[0],
+      assignmentId: ids[0],
+      familyUid: familyUid(primary),
+      teacherUid: teacherUid(primary),
+      studentId: studentId(primary),
+      title: 'Relacion familia-profesor duplicada',
+      description: 'Hay mas de una asignacion activa para la misma familia, profesor, alumno y materia.',
+      whyDetected: [`Asignaciones activas duplicadas: ${ids.join(', ')}`],
+      consequence: 'Chat, calendario, pagos y metricas pueden duplicarse o apuntar a la relacion incorrecta.',
+      recommendedAction: 'Conservar una relacion activa y archivar las duplicadas desde el CRM.',
+      related: { assignmentIds: ids },
+      detectedAt: nowIso,
+    }));
   }
 
   for (const request of requests) {
@@ -404,9 +656,64 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
     }
   }
 
+  for (const chat of chats) {
+    const id = clean(first(chat.id, chat.chatId), 220);
+    const linkedAssignmentId = assignmentId(chat);
+    if (id && linkedAssignmentId && assignmentsById.size && !assignmentsById.has(linkedAssignmentId)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'chat_references_missing_assignment',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'chats',
+        entityId: id,
+        chatId: id,
+        assignmentId: linkedAssignmentId,
+        familyUid: familyUid(chat),
+        teacherUid: teacherUid(chat),
+        studentId: studentId(chat),
+        title: 'Chat enlazado a una asignacion inexistente',
+        description: 'El chat tiene assignmentId, pero esa asignacion ya no existe en el conjunto activo.',
+        whyDetected: [`assignmentId=${linkedAssignmentId}`, 'No existe documento asignaciones equivalente'],
+        consequence: 'Los mensajes pueden quedar separados del calendario, pagos y seguimiento de relacion.',
+        recommendedAction: 'Reenlazar el chat a la asignacion correcta o archivar el chat huerfano.',
+        detectedAt: nowIso,
+      }));
+    }
+
+    const participants = participantUidSet(chat);
+    const missingParticipants = [
+      familyUid(chat) && participants.size && !participants.has(familyUid(chat)) ? 'familia' : '',
+      teacherUid(chat) && participants.size && !participants.has(teacherUid(chat)) ? 'profesor' : '',
+    ].filter(Boolean);
+    if (id && missingParticipants.length) {
+      addUnique(findings, seen, makeFinding({
+        type: 'chat_missing_participant_uid',
+        category: 'consistency',
+        severity: 'critical',
+        entityType: 'chats',
+        entityId: id,
+        chatId: id,
+        assignmentId: linkedAssignmentId,
+        familyUid: familyUid(chat),
+        teacherUid: teacherUid(chat),
+        studentId: studentId(chat),
+        title: 'Chat con lista de participantes incompleta',
+        description: `El chat conoce la relacion, pero participantUids no incluye a: ${missingParticipants.join(', ')}.`,
+        whyDetected: ['participantUids no contiene todos los UIDs operativos'],
+        consequence: 'Puede bloquear lectura/escritura del chat o dejar fuera a una de las partes.',
+        recommendedAction: 'Reparar participantUids con familia y profesor antes de seguir usando el chat.',
+        detectedAt: nowIso,
+      }));
+    }
+  }
+
   for (const klass of classes) {
     const id = classId(klass);
     const status = statusOf(klass);
+    const rawOperationalStatus = rawClassStatus(klass);
+    const classStatus = normalizedClassStatus(klass);
+    const rawLifecycleStatus = rawClassLifecycleStatus(klass);
+    const lifecycleStatus = normalizedClassLifecycleStatus(klass);
     const amount = amountOf(klass);
     const missing = [
       !teacherUid(klass) ? 'profesor' : '',
@@ -414,6 +721,122 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
       !studentId(klass) ? 'alumno' : '',
       !first(klass.startAtIso, klass.fecha, klass.date, klass.startAt) ? 'fecha' : '',
     ].filter(Boolean);
+
+    if (id && rawOperationalStatus && !CLASS_OPERATIONAL_STATUSES.has(classStatus)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'class_invalid_status',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'clases',
+        entityId: id,
+        classId: id,
+        familyUid: familyUid(klass),
+        teacherUid: teacherUid(klass),
+        studentId: studentId(klass),
+        title: 'Clase con estado operativo no reconocido',
+        description: `La clase usa un estado que no pertenece al modelo canonico: ${rawOperationalStatus}.`,
+        whyDetected: ['status/estado fuera del catalogo de clases'],
+        consequence: 'Calendario, pagos y lifecycle pueden interpretar la clase de forma distinta.',
+        recommendedAction: 'Normalizar el estado a pendiente, confirmada, realizada, cancelada, reprogramada o pagada.',
+        related: { rawStatus: rawOperationalStatus },
+        detectedAt: nowIso,
+      }));
+    }
+
+    if (id && rawLifecycleStatus && !CLASS_LIFECYCLE_STATES.has(lifecycleStatus)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'class_invalid_lifecycle_status',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'clases',
+        entityId: id,
+        classId: id,
+        familyUid: familyUid(klass),
+        teacherUid: teacherUid(klass),
+        studentId: studentId(klass),
+        title: 'Clase con lifecycle no reconocido',
+        description: `El estado interno de ciclo de vida no pertenece al flujo soportado: ${rawLifecycleStatus}.`,
+        whyDetected: ['lifecycleStatus fuera del catalogo de lifecycle'],
+        consequence: 'Las automatizaciones pueden saltarse recordatorios, confirmaciones o pagos.',
+        recommendedAction: 'Recalcular lifecycleStatus desde el estado operativo y el estado economico.',
+        related: { rawLifecycleStatus },
+        detectedAt: nowIso,
+      }));
+    }
+
+    if (
+      id
+      && CLASS_OPERATIONAL_STATUSES.has(classStatus)
+      && CLASS_LIFECYCLE_STATES.has(lifecycleStatus)
+      && !lifecycleCompatibleWithClassStatus(classStatus, lifecycleStatus)
+    ) {
+      addUnique(findings, seen, makeFinding({
+        type: 'class_status_lifecycle_mismatch',
+        category: 'consistency',
+        severity: 'medium',
+        entityType: 'clases',
+        entityId: id,
+        classId: id,
+        familyUid: familyUid(klass),
+        teacherUid: teacherUid(klass),
+        studentId: studentId(klass),
+        title: 'Estado de clase y lifecycle no coinciden',
+        description: `La clase esta en estado ${classStatus}, pero su lifecycle indica ${lifecycleStatus}.`,
+        whyDetected: ['status/estado y lifecycleStatus representan fases incompatibles'],
+        consequence: 'Puede aparecer en un panel como pendiente y en otro como cerrada o pagada.',
+        recommendedAction: 'Recalcular lifecycleStatus y sincronizar calendarios, pagos y auditoria.',
+        related: { status: classStatus, lifecycleStatus },
+        detectedAt: nowIso,
+      }));
+    }
+
+    const timeWindow = classTimeWindow(klass);
+    if (id && timeWindow.hasAnyTimeField && (!timeWindow.start || !timeWindow.end || timeWindow.durationMinutes <= 0 || timeWindow.durationMinutes > 8 * 60)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'class_invalid_time_range',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'clases',
+        entityId: id,
+        classId: id,
+        familyUid: familyUid(klass),
+        teacherUid: teacherUid(klass),
+        studentId: studentId(klass),
+        title: 'Clase con horario imposible',
+        description: 'La clase tiene fecha u horas incoherentes: falta inicio/fin valido, dura cero minutos o supera ocho horas.',
+        whyDetected: ['Rango horario invalido en fecha/start/end/duration'],
+        consequence: 'Puede no bloquear disponibilidad, no aparecer en calendario o generar pagos erroneos.',
+        recommendedAction: 'Corregir fecha, hora de inicio y hora de fin desde calendario o recrear la clase.',
+        related: { durationMinutes: timeWindow.durationMinutes },
+        detectedAt: nowIso,
+      }));
+    }
+
+    const orphanRelations = [
+      teacherUid(klass) && teachersById.size && !teachersById.has(teacherUid(klass)) ? 'profesor' : '',
+      familyUid(klass) && familiesById.size && !familiesById.has(familyUid(klass)) ? 'familia' : '',
+      studentId(klass) && studentsById.size && !studentsById.has(studentId(klass)) ? 'alumno' : '',
+    ].filter(Boolean);
+    if (id && orphanRelations.length) {
+      addUnique(findings, seen, makeFinding({
+        type: 'class_relation_orphan',
+        category: 'consistency',
+        severity: orphanRelations.includes('profesor') || orphanRelations.includes('familia') ? 'critical' : 'high',
+        entityType: 'clases',
+        entityId: id,
+        classId: id,
+        familyUid: familyUid(klass),
+        teacherUid: teacherUid(klass),
+        studentId: studentId(klass),
+        title: 'Clase con relacion huerfana',
+        description: `La clase apunta a documentos inexistentes: ${orphanRelations.join(', ')}.`,
+        whyDetected: ['UIDs de clase sin perfil equivalente en profesores/familias/alumnos'],
+        consequence: 'Calendario, chat, pagos o reputacion pueden no propagarse a la persona correcta.',
+        recommendedAction: 'Reenlazar la clase a la relacion activa correcta o archivarla si era de prueba.',
+        detectedAt: nowIso,
+      }));
+    }
+
     if (id && isClassScheduled(klass) && missing.length) {
       addUnique(findings, seen, makeFinding({
         type: 'class_missing_core_relation',
@@ -430,6 +853,27 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
         whyDetected: missing.map((item) => `Falta ${item}`),
         consequence: 'La clase puede no aparecer correctamente o no generar recordatorios/pagos.',
         recommendedAction: 'Completar la clase o recrearla desde la relacion correcta.',
+        detectedAt: nowIso,
+      }));
+    }
+
+    const classPaymentState = normalizedPaymentStatusValue(first(klass.familyPaymentStatus, klass.estado_pago_familia, klass.paymentStatus, klass.estado_pago));
+    if (id && hasPaidPaymentForClass(klass, paymentsByClass) && !PAID_STATUSES.has(classPaymentState) && classStatus !== 'pagada') {
+      addUnique(findings, seen, makeFinding({
+        type: 'class_paid_payment_not_propagated',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'clases',
+        entityId: id,
+        classId: id,
+        familyUid: familyUid(klass),
+        teacherUid: teacherUid(klass),
+        studentId: studentId(klass),
+        title: 'Pago validado no propagado a la clase',
+        description: 'Existe un pago validado para la clase, pero la clase no refleja estado economico pagado.',
+        whyDetected: ['Pago enlazado pagado/validado', 'familyPaymentStatus/estado_pago_familia no pagado'],
+        consequence: 'El calendario puede seguir amarillo/rojo y el profesor o admin ver deuda inexistente.',
+        recommendedAction: 'Ejecutar conciliacion de pago o sincronizar linkedFamilyPaymentStatus en la clase.',
         detectedAt: nowIso,
       }));
     }
@@ -480,6 +924,54 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
   for (const payment of payments) {
     const id = paymentId(payment);
     const classRefs = paymentClassIds(payment);
+    const rawStatus = lower(first(payment.status, payment.estado, payment.paymentStatus, payment.familyPaymentStatus, payment.providerPaymentStatus, payment.gatewayStatus));
+    const normalizedStatus = normalizedPaymentStatusValue(rawStatus);
+    if (id && rawStatus && !PAYMENT_STATUSES.has(normalizedStatus)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'payment_invalid_status',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'pagos',
+        entityId: id,
+        paymentId: id,
+        familyUid: familyUid(payment),
+        teacherUid: teacherUid(payment),
+        studentId: studentId(payment),
+        title: 'Pago con estado no reconocido',
+        description: `El pago usa un estado que no pertenece al modelo economico canonico: ${rawStatus}.`,
+        whyDetected: ['status/estado/paymentStatus fuera del catalogo de pagos'],
+        consequence: 'Conciliacion, calendario financiero y panel de ingresos pueden no interpretarlo bien.',
+        recommendedAction: 'Normalizar el pago a pendiente, solicitado, procesando, validado, pagado, vencido, rechazado, fallido, devuelto, disputado o cancelado.',
+        related: { rawStatus },
+        detectedAt: nowIso,
+      }));
+    }
+
+    const orphanRelations = [
+      familyUid(payment) && familiesById.size && !familiesById.has(familyUid(payment)) ? 'familia' : '',
+      teacherUid(payment) && teachersById.size && !teachersById.has(teacherUid(payment)) ? 'profesor' : '',
+      studentId(payment) && studentsById.size && !studentsById.has(studentId(payment)) ? 'alumno' : '',
+    ].filter(Boolean);
+    if (id && orphanRelations.length) {
+      addUnique(findings, seen, makeFinding({
+        type: 'payment_relation_orphan',
+        category: 'consistency',
+        severity: orphanRelations.includes('familia') ? 'critical' : 'high',
+        entityType: 'pagos',
+        entityId: id,
+        paymentId: id,
+        familyUid: familyUid(payment),
+        teacherUid: teacherUid(payment),
+        studentId: studentId(payment),
+        title: 'Pago con relacion huerfana',
+        description: `El pago apunta a documentos inexistentes: ${orphanRelations.join(', ')}.`,
+        whyDetected: ['UIDs de pago sin perfil equivalente en familias/profesores/alumnos'],
+        consequence: 'Puede bloquear conciliacion, avisos de deuda o ingresos del profesor.',
+        recommendedAction: 'Reenlazar el pago a la relacion correcta o moverlo a revision manual.',
+        detectedAt: nowIso,
+      }));
+    }
+
     if (id && isPaymentOpen(payment) && amountOf(payment) > 0 && !classRefs.length && !studentId(payment)) {
       addUnique(findings, seen, makeFinding({
         type: 'payment_without_class_link',
@@ -518,6 +1010,46 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
           detectedAt: nowIso,
         }));
       }
+    }
+  }
+
+  for (const [ref, relatedPayments] of paymentsByClass.entries()) {
+    const familyPayments = relatedPayments.filter(isFamilyPaymentRecord);
+    const open = familyPayments.filter(isPaymentOpen);
+    const paid = familyPayments.filter(isPaymentPaid);
+    if (open.length > 1) {
+      addUnique(findings, seen, makeFinding({
+        type: 'duplicate_open_payments_for_class',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'pagos',
+        entityId: ref,
+        classId: ref,
+        title: 'Clase con varias solicitudes de pago abiertas',
+        description: 'Hay mas de un pago familiar abierto enlazado a la misma clase.',
+        whyDetected: [`Pagos abiertos: ${open.map((item) => paymentId(item)).filter(Boolean).join(', ')}`],
+        consequence: 'La familia puede recibir cobros duplicados o el calendario mostrar deuda duplicada.',
+        recommendedAction: 'Dejar un unico pago abierto y cancelar o archivar los duplicados.',
+        related: { paymentIds: open.map((item) => paymentId(item)).filter(Boolean) },
+        detectedAt: nowIso,
+      }));
+    }
+    if (paid.length > 1) {
+      addUnique(findings, seen, makeFinding({
+        type: 'duplicate_paid_payments_for_class',
+        category: 'consistency',
+        severity: 'critical',
+        entityType: 'pagos',
+        entityId: ref,
+        classId: ref,
+        title: 'Clase con varios pagos familiares validados',
+        description: 'Hay mas de un pago familiar pagado o validado para la misma clase.',
+        whyDetected: [`Pagos validados: ${paid.map((item) => paymentId(item)).filter(Boolean).join(', ')}`],
+        consequence: 'Los ingresos pueden inflarse y la familia puede aparecer como si hubiera pagado dos veces.',
+        recommendedAction: 'Conciliar manualmente y marcar los duplicados como devueltos/cancelados si procede.',
+        related: { paymentIds: paid.map((item) => paymentId(item)).filter(Boolean) },
+        detectedAt: nowIso,
+      }));
     }
   }
 
@@ -602,6 +1134,67 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
 
   const userCheckEnabled = rawUsers.length > 0;
   if (userCheckEnabled) {
+    const emailsById = new Map();
+    for (const user of rawUsers) {
+      const id = userId(user);
+      const role = normalizedUserRole(user);
+      const email = lower(first(user.email, user.correo));
+      if (email && id) {
+        if (!emailsById.has(email)) emailsById.set(email, new Set());
+        emailsById.get(email).add(id);
+      }
+      if (id && role === 'profesor' && teachersById.size && !teachersById.has(id)) {
+        addUnique(findings, seen, makeFinding({
+          type: 'user_teacher_role_without_profile',
+          category: 'consistency',
+          severity: 'high',
+          entityType: 'users',
+          entityId: id,
+          teacherUid: id,
+          title: 'Usuario profesor sin perfil de profesor',
+          description: 'El usuario tiene rol de profesor, pero no existe perfil operativo en profesores.',
+          whyDetected: ['users.role=profesor', 'No existe profesores/{uid} equivalente'],
+          consequence: 'Puede iniciar sesion pero no completar disponibilidad, clases, documentos o ingresos.',
+          recommendedAction: 'Crear el perfil de profesor desde el onboarding o corregir el rol del usuario.',
+          detectedAt: nowIso,
+        }));
+      }
+      if (id && role === 'familia' && familiesById.size && !familiesById.has(id)) {
+        addUnique(findings, seen, makeFinding({
+          type: 'user_family_role_without_profile',
+          category: 'consistency',
+          severity: 'high',
+          entityType: 'users',
+          entityId: id,
+          familyUid: id,
+          title: 'Usuario familia sin perfil familiar',
+          description: 'El usuario tiene rol de familia, pero no existe perfil operativo en familias.',
+          whyDetected: ['users.role=familia', 'No existe familias/{uid} equivalente'],
+          consequence: 'Puede iniciar sesion pero no ver hijos, solicitudes, calendario o pagos.',
+          recommendedAction: 'Crear el perfil familiar desde el onboarding o corregir el rol del usuario.',
+          detectedAt: nowIso,
+        }));
+      }
+    }
+
+    for (const [email, ids] of emailsById.entries()) {
+      if (ids.size <= 1) continue;
+      addUnique(findings, seen, makeFinding({
+        type: 'duplicate_user_email',
+        category: 'consistency',
+        severity: 'medium',
+        entityType: 'users',
+        entityId: email,
+        title: 'Email duplicado en usuarios',
+        description: 'El mismo email aparece asociado a mas de un UID.',
+        whyDetected: [`Email ${email} aparece en ${ids.size} usuarios`],
+        consequence: 'Puede provocar confusion en login, permisos, CRM o comunicacion.',
+        recommendedAction: 'Unificar identidades o confirmar manualmente que son cuentas separadas.',
+        related: { userUids: Array.from(ids) },
+        detectedAt: nowIso,
+      }));
+    }
+
     for (const teacher of teachers) {
       const id = userId(teacher);
       if (id && !hasUser(usersById, id)) {
@@ -704,6 +1297,58 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
         detectedAt: nowIso,
       }));
     }
+
+    const referencedClass = firstPayloadRef(notification, 'classId', 'clase_id');
+    const referencedPayment = firstPayloadRef(notification, 'paymentId', 'pago_id');
+    const referencedChat = firstPayloadRef(notification, 'chatId');
+    if (referencedClass && classesById.size && !classesById.has(referencedClass)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'notification_references_missing_class',
+        category: 'consistency',
+        severity: 'medium',
+        entityType: 'notificaciones',
+        entityId: id,
+        classId: referencedClass,
+        title: 'Notificacion enlazada a clase inexistente',
+        description: 'La notificacion contiene classId, pero esa clase no existe en el conjunto auditado.',
+        whyDetected: [`classId=${referencedClass}`, 'No existe documento clases equivalente'],
+        consequence: 'El boton de abrir puede llevar a una pantalla vacia o a un estado imposible.',
+        recommendedAction: 'Actualizar el payload de la notificacion o marcarla como obsoleta.',
+        detectedAt: nowIso,
+      }));
+    }
+    if (referencedPayment && paymentsById.size && !paymentsById.has(referencedPayment)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'notification_references_missing_payment',
+        category: 'consistency',
+        severity: 'medium',
+        entityType: 'notificaciones',
+        entityId: id,
+        paymentId: referencedPayment,
+        title: 'Notificacion enlazada a pago inexistente',
+        description: 'La notificacion contiene paymentId, pero ese pago no existe en el conjunto auditado.',
+        whyDetected: [`paymentId=${referencedPayment}`, 'No existe documento pagos equivalente'],
+        consequence: 'El usuario puede intentar revisar un pago que ya no existe o fue recreado.',
+        recommendedAction: 'Actualizar el payload de la notificacion o marcarla como obsoleta.',
+        detectedAt: nowIso,
+      }));
+    }
+    if (referencedChat && chatsById.size && !chatsById.has(referencedChat)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'notification_references_missing_chat',
+        category: 'consistency',
+        severity: 'medium',
+        entityType: 'notificaciones',
+        entityId: id,
+        chatId: referencedChat,
+        title: 'Notificacion enlazada a chat inexistente',
+        description: 'La notificacion contiene chatId, pero ese chat no existe en el conjunto auditado.',
+        whyDetected: [`chatId=${referencedChat}`, 'No existe documento chats equivalente'],
+        consequence: 'El acceso desde notificaciones puede fallar o abrir un chat incorrecto.',
+        recommendedAction: 'Actualizar el payload de la notificacion o marcarla como obsoleta.',
+        detectedAt: nowIso,
+      }));
+    }
   }
 
   for (const document of documents) {
@@ -731,7 +1376,62 @@ export function buildPlatformSupervisionPlan(dataset = {}, options = {}) {
   const alertDecisionIds = new Set(alertDecisions.map((item) => clean(first(item.signalId, item.entityId, item.incidentId), 220)).filter(Boolean));
   for (const incident of incidents) {
     const id = entityId(incident, ['id', 'ticketId']);
-    if (!id || !isOpenStatus(incident)) continue;
+    if (!id) continue;
+    const rawIncidentStatus = lower(first(incident.status, incident.estado));
+    const normalizedIncidentStatus = normalizedIncidentStatusValue(incident);
+    if (rawIncidentStatus && !INCIDENT_STATUSES.has(normalizedIncidentStatus)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'incident_invalid_status',
+        category: 'consistency',
+        severity: 'medium',
+        entityType: 'incidencias',
+        entityId: id,
+        title: 'Incidencia con estado no reconocido',
+        description: `La incidencia usa un estado que no pertenece al flujo de tickets: ${rawIncidentStatus}.`,
+        whyDetected: ['status/estado fuera del catalogo de incidencias'],
+        consequence: 'Puede no aparecer en filtros, SLA o cierre automatico.',
+        recommendedAction: 'Normalizarla a abierta, en_proceso, esperando_usuario, resuelta o cerrada.',
+        related: { rawStatus: rawIncidentStatus },
+        detectedAt: nowIso,
+      }));
+    }
+
+    const incidentClass = classId(incident);
+    const incidentPayment = paymentId(incident);
+    if (incidentClass && classesById.size && !classesById.has(incidentClass)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'incident_references_missing_class',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'incidencias',
+        entityId: id,
+        classId: incidentClass,
+        title: 'Incidencia enlazada a clase inexistente',
+        description: 'La incidencia referencia una clase que no existe en el conjunto activo.',
+        whyDetected: [`classId=${incidentClass}`, 'No existe documento clases equivalente'],
+        consequence: 'El administrador no puede reconstruir el problema desde calendario/pagos.',
+        recommendedAction: 'Reenlazar la incidencia a la clase correcta o cerrarla como obsoleta.',
+        detectedAt: nowIso,
+      }));
+    }
+    if (incidentPayment && paymentsById.size && !paymentsById.has(incidentPayment)) {
+      addUnique(findings, seen, makeFinding({
+        type: 'incident_references_missing_payment',
+        category: 'consistency',
+        severity: 'high',
+        entityType: 'incidencias',
+        entityId: id,
+        paymentId: incidentPayment,
+        title: 'Incidencia enlazada a pago inexistente',
+        description: 'La incidencia referencia un pago que no existe en el conjunto activo.',
+        whyDetected: [`paymentId=${incidentPayment}`, 'No existe documento pagos equivalente'],
+        consequence: 'El administrador no puede conciliar o resolver el ticket financiero con seguridad.',
+        recommendedAction: 'Reenlazar la incidencia al pago correcto o cerrarla como obsoleta.',
+        detectedAt: nowIso,
+      }));
+    }
+
+    if (!isOpenStatus(incident)) continue;
     if (!incident.alertPriorityScore && !alertDecisionIds.has(id) && hoursSince(first(incident.createdAt, incident.updatedAt, incident.created_at), nowDate) > staleIncidentHours) {
       addUnique(findings, seen, makeFinding({
         type: 'incident_without_priority_decision',
