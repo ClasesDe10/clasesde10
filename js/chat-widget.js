@@ -15,6 +15,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseAuth, firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 import {
@@ -120,7 +121,9 @@ function scheduleKindLabel(value) {
 }
 
 function proposalScheduleKind(proposal = {}) {
-  return normalizeScheduleKind(proposal.kind || proposal.scheduleKind);
+  const explicitKind = proposal.kind || proposal.scheduleKind;
+  if (explicitKind) return normalizeScheduleKind(explicitKind);
+  return proposal.recurrence?.frequency === 'weekly' ? SCHEDULE_KIND_WEEKLY : SCHEDULE_KIND_ONE_OFF;
 }
 
 function isWeeklyRecurringProposal(proposal = {}) {
@@ -191,6 +194,60 @@ function classIdFromProposal(chatId, proposalId) {
   return `chat_${chatId}_${proposalId}`.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 900);
 }
 
+function addDaysToDateString(dateString, days = 0) {
+  const date = new Date(`${dateString}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  date.setDate(date.getDate() + Number(days || 0));
+  return dateInputValue(date);
+}
+
+function academicYearEndForDate(firstClassDate = '') {
+  const date = new Date(`${firstClassDate}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getMonth() >= 6 ? date.getFullYear() + 1 : date.getFullYear();
+  return `${year}-06-30`;
+}
+
+function classIdFromProposalOccurrence(chatId, proposalId, occurrenceDate, index = 0) {
+  const base = classIdFromProposal(chatId, proposalId);
+  if (!Number(index)) return base;
+  const suffix = String(occurrenceDate || '').replace(/[^0-9]+/g, '') || String(index).padStart(2, '0');
+  return `${base}_${suffix}`.slice(0, 900);
+}
+
+function buildWeeklyClassOccurrences(chatId, proposal = {}, options = {}) {
+  const firstDate = clean(proposal.fecha || proposal.firstClassDate, 20).slice(0, 10);
+  if (!firstDate) return [];
+  if (!isWeeklyRecurringProposal(proposal)) {
+    return [{
+      classId: classIdFromProposalOccurrence(chatId, proposal.id, firstDate, 0),
+      fecha: firstDate,
+      index: 0,
+      total: 1,
+      seriesStartDate: firstDate,
+      seriesEndDate: firstDate,
+      isRecurring: false,
+    }];
+  }
+  const seriesEndDate = clean(options.seriesEndDate || proposal.seriesEndDate || academicYearEndForDate(firstDate), 20).slice(0, 10);
+  const dates = [];
+  let currentDate = firstDate;
+  while (currentDate && currentDate <= seriesEndDate && dates.length < 60) {
+    dates.push(currentDate);
+    currentDate = addDaysToDateString(currentDate, 7);
+  }
+  if (!dates.length) dates.push(firstDate);
+  return dates.map((fecha, index) => ({
+    classId: classIdFromProposalOccurrence(chatId, proposal.id, fecha, index),
+    fecha,
+    index,
+    total: dates.length,
+    seriesStartDate: firstDate,
+    seriesEndDate,
+    isRecurring: true,
+  }));
+}
+
 function withTimeout(promise, timeoutMs = 8000, label = 'operacion', fallbackValue) {
   let timer;
   const timeout = new Promise((resolve) => {
@@ -233,6 +290,10 @@ function pickClassPriceFields(fields = {}) {
     familyAmount: fields.familyAmount ?? null,
     importe_profesor: fields.importe_profesor ?? null,
     teacherAmount: fields.teacherAmount ?? null,
+    precio_hora_familia: fields.precio_hora_familia ?? fields.familyHourlyRate ?? null,
+    familyHourlyRate: fields.familyHourlyRate ?? fields.precio_hora_familia ?? null,
+    importe_hora_profesor: fields.importe_hora_profesor ?? fields.teacherHourlyRate ?? null,
+    teacherHourlyRate: fields.teacherHourlyRate ?? fields.importe_hora_profesor ?? null,
     comision_clasesde10: fields.comision_clasesde10 ?? null,
     platformFee: fields.platformFee ?? null,
     marginPct: fields.marginPct ?? null,
@@ -254,6 +315,10 @@ function proratedPricingFromHourly(chat = {}, durationMinutes = 60) {
     familyAmount,
     importe_profesor: teacherAmount,
     teacherAmount,
+    precio_hora_familia: familyHourly,
+    familyHourlyRate: familyHourly,
+    importe_hora_profesor: teacherHourly,
+    teacherHourlyRate: teacherHourly,
     comision_clasesde10: platformFee,
     platformFee,
     marginPct,
@@ -490,7 +555,9 @@ async function ensureChatForAssignment(assignment, usuario, role) {
       'comision_clasesde10',
       'platformFee',
       'marginPct',
+      'precio_hora_familia',
       'familyHourlyRate',
+      'importe_hora_profesor',
       'teacherHourlyRate',
       'commissionPercent',
       'pricingRule',
@@ -2075,7 +2142,11 @@ export async function initChatWidget({
       actionButton.setAttribute('aria-busy', 'true');
       actionButton.textContent = 'Creando clase...';
     }
-    const classId = classIdFromProposal(state.selectedChat.id, proposal.id);
+    const occurrences = buildWeeklyClassOccurrences(state.selectedChat.id, proposal);
+    const firstOccurrence = occurrences[0];
+    const classId = firstOccurrence?.classId || classIdFromProposal(state.selectedChat.id, proposal.id);
+    const classIds = occurrences.map((occurrence) => occurrence.classId);
+    const classSeriesId = isWeeklyRecurringProposal(proposal) ? proposal.id : '';
     const proposalRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', proposal.id);
     const nowIso = new Date().toISOString();
     const availabilityFallback = state.availabilityByChat[state.selectedChat.id] || { teacherSlots: [], studentSlots: [], busySlots: [] };
@@ -2088,16 +2159,25 @@ export async function initChatWidget({
       availabilityFallback,
     );
     const busySlots = busySlotsForChatValidation(latestAvailability, state.scheduleProposals || [], state.selectedChat, proposal.id);
-    const conflict = findBusySlotConflict(
-      busySlots,
-      proposal.fecha,
-      proposal.hora_inicio,
-      proposal.hora_fin,
-      {
-        teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
-        studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
-      },
-    );
+    const conflictContext = {
+      teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
+      studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
+    };
+    const conflict = occurrences
+      .map((occurrence) => ({
+        occurrence,
+        slot: findBusySlotConflict(
+          busySlots,
+          occurrence.fecha,
+          proposal.hora_inicio,
+          proposal.hora_fin,
+          conflictContext,
+        ),
+      }))
+      .find((item) => item.slot);
+    if (conflict) {
+      throw new Error(`Ese horario ya esta ocupado el ${formatDate(conflict.occurrence.fecha)}. Ocupado: ${busySlotLabel(conflict.slot)}.`);
+    }
     const availabilityValidation = validateScheduleAvailability({
       role,
       fecha: proposal.fecha,
@@ -2109,15 +2189,16 @@ export async function initChatWidget({
       teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
       studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
     });
-    if (!availabilityValidation.valid) {
-      const details = conflict ? ` Ocupado: ${busySlotLabel(conflict)}.` : '';
+    const acceptanceOverrideOwnAvailability = availabilityValidation.reason === 'outside_own_availability';
+    if (!availabilityValidation.valid && !acceptanceOverrideOwnAvailability) {
+      const details = '';
       throw new Error(`${availabilityValidation.message || 'Ese horario ya no esta disponible.'}${details}`);
     }
     state.availabilityByChat[state.selectedChat.id] = {
       ...latestAvailability,
       busySlots,
     };
-    const input = {
+    const baseInput = {
       assignmentId: state.selectedChat.id,
       scheduleProposalId: proposal.id,
       profesor_id: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
@@ -2128,93 +2209,127 @@ export async function initChatWidget({
       studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
       materia: proposal.materia || state.selectedChat.materia || '',
       subject: proposal.materia || state.selectedChat.materia || '',
-      fecha: proposal.fecha,
       hora_inicio: proposal.hora_inicio,
       hora_fin: proposal.hora_fin,
       estado: 'confirmada',
       observaciones: proposal.notas || '',
-      calendarUid: classId,
     };
     setActionStage('Calculando precio...');
+    const pricingInput = { ...baseInput, fecha: firstOccurrence?.fecha || proposal.fecha, calendarUid: classId };
     const pricing = await withTimeout(
-      buildScheduleClassPricing(state.selectedChat, input),
+      buildScheduleClassPricing(state.selectedChat, pricingInput),
       8000,
       'calculo de precio para aceptar horario',
-      pickClassPriceFields(buildClassPricingQuote(input, {}, { config: globalThis.CD10PlatformConfig || {} })),
+      pickClassPriceFields(buildClassPricingQuote(pricingInput, {}, { config: globalThis.CD10PlatformConfig || {} })),
     );
-    Object.assign(input, pricing);
-    const classFields = buildAdminClassPayload(input, {}, { nowIso, calendarUid: classId });
+    Object.assign(baseInput, pricing);
+    const firstClassFields = buildAdminClassPayload({ ...baseInput, fecha: firstOccurrence?.fecha || proposal.fecha, calendarUid: classId }, {}, { nowIso, calendarUid: classId });
     const participantUids = { ...(state.selectedChat.participantUids || {}) };
     [
       currentUid,
-      classFields.familyUid,
-      classFields.familia_id,
-      classFields.teacherUid,
-      classFields.profesor_id,
+      firstClassFields.familyUid,
+      firstClassFields.familia_id,
+      firstClassFields.teacherUid,
+      firstClassFields.profesor_id,
     ].forEach((uid) => {
       const cleanUid = clean(uid, 180);
       if (cleanUid) participantUids[cleanUid] = true;
     });
-    const payload = {
-      ...classResetWriteFields(),
-      profesor_id: classFields.profesor_id,
-      teacherUid: classFields.teacherUid,
-      familia_id: classFields.familia_id,
-      familyUid: classFields.familyUid,
-      alumno_id: classFields.alumno_id,
-      studentId: classFields.studentId,
-      fecha: classFields.fecha,
-      date: classFields.date,
-      materia: classFields.materia,
-      subject: classFields.subject,
-      hora_inicio: classFields.hora_inicio,
-      startTime: classFields.startTime,
-      hora_fin: classFields.hora_fin,
-      endTime: classFields.endTime,
-      duracion_minutos: classFields.duracion_minutos,
-      durationMinutes: classFields.durationMinutes,
-      ...pickClassPriceFields(classFields),
-      estado: classFields.estado,
-      status: classFields.status,
-      lifecycleStatus: classFields.lifecycleStatus,
-      attendanceStatus: classFields.attendanceStatus,
-      paymentStatus: classFields.paymentStatus,
-      familyPaymentStatus: classFields.familyPaymentStatus,
-      estado_pago: classFields.estado_pago,
-      estado_pago_familia: classFields.estado_pago_familia,
-      teacherPaymentStatus: classFields.teacherPaymentStatus,
-      estado_pago_profesor: classFields.estado_pago_profesor,
-      observaciones: classFields.observaciones,
-      calendarUid: classFields.calendarUid,
-      updated_at: classFields.updated_at,
-      assignmentId: input.assignmentId,
-      asignacion_id: input.assignmentId,
-      scheduleProposalId: proposal.id,
-      createdFrom: 'chat_schedule_proposal',
-      schedulingStatus: 'confirmed',
-      modality: proposal.modalidad || 'por_acordar',
-      modalidad: proposal.modalidad || 'por_acordar',
-      familyName: clean(state.selectedChat.familyName, 160),
-      teacherName: clean(state.selectedChat.teacherName, 160),
-      studentName: clean(state.selectedChat.studentName, 160),
-      familia_nombre: clean(state.selectedChat.familyName, 160),
-      profesor_nombre: clean(state.selectedChat.teacherName, 160),
-      alumno_nombre: clean(state.selectedChat.studentName, 160),
-      participantUids,
-      createdByUid: currentUid,
-      createdByRole: role,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
+    const buildOccurrencePayload = (occurrence) => {
+      const occurrenceFields = buildAdminClassPayload({
+        ...baseInput,
+        fecha: occurrence.fecha,
+        calendarUid: occurrence.classId,
+      }, {}, { nowIso, calendarUid: occurrence.classId });
+      const seriesFields = occurrence.isRecurring ? {
+        classSeriesId,
+        seriesId: classSeriesId,
+        seriesIndex: occurrence.index,
+        seriesTotal: occurrence.total,
+        seriesStartDate: occurrence.seriesStartDate,
+        seriesEndDate: occurrence.seriesEndDate,
+        isRecurring: true,
+        recurrence: proposal.recurrence || {
+          frequency: 'weekly',
+          dayOfWeek: normalizeScheduleWeekdayIndex(proposal.fecha),
+          startTime: proposal.hora_inicio,
+          endTime: proposal.hora_fin,
+          timezone: 'Europe/Madrid',
+        },
+        recurrenceLabel: proposal.recurrenceLabel || scheduleProposalDisplayLabel(proposal),
+        parentClassId: classId,
+      } : {};
+      return {
+        ...classResetWriteFields(),
+        profesor_id: occurrenceFields.profesor_id,
+        teacherUid: occurrenceFields.teacherUid,
+        familia_id: occurrenceFields.familia_id,
+        familyUid: occurrenceFields.familyUid,
+        alumno_id: occurrenceFields.alumno_id,
+        studentId: occurrenceFields.studentId,
+        fecha: occurrenceFields.fecha,
+        date: occurrenceFields.date,
+        materia: occurrenceFields.materia,
+        subject: occurrenceFields.subject,
+        hora_inicio: occurrenceFields.hora_inicio,
+        startTime: occurrenceFields.startTime,
+        hora_fin: occurrenceFields.hora_fin,
+        endTime: occurrenceFields.endTime,
+        duracion_minutos: occurrenceFields.duracion_minutos,
+        durationMinutes: occurrenceFields.durationMinutes,
+        ...pickClassPriceFields(occurrenceFields),
+        estado: occurrenceFields.estado,
+        status: occurrenceFields.status,
+        lifecycleStatus: occurrenceFields.lifecycleStatus,
+        attendanceStatus: occurrenceFields.attendanceStatus,
+        paymentStatus: occurrenceFields.paymentStatus,
+        familyPaymentStatus: occurrenceFields.familyPaymentStatus,
+        estado_pago: occurrenceFields.estado_pago,
+        estado_pago_familia: occurrenceFields.estado_pago_familia,
+        teacherPaymentStatus: occurrenceFields.teacherPaymentStatus,
+        estado_pago_profesor: occurrenceFields.estado_pago_profesor,
+        observaciones: occurrenceFields.observaciones,
+        calendarUid: occurrenceFields.calendarUid,
+        updated_at: occurrenceFields.updated_at,
+        assignmentId: baseInput.assignmentId,
+        asignacion_id: baseInput.assignmentId,
+        scheduleProposalId: proposal.id,
+        ...seriesFields,
+        createdFrom: 'chat_schedule_proposal',
+        schedulingStatus: 'confirmed',
+        modality: proposal.modalidad || 'por_acordar',
+        modalidad: proposal.modalidad || 'por_acordar',
+        familyName: clean(state.selectedChat.familyName, 160),
+        teacherName: clean(state.selectedChat.teacherName, 160),
+        studentName: clean(state.selectedChat.studentName, 160),
+        familia_nombre: clean(state.selectedChat.familyName, 160),
+        profesor_nombre: clean(state.selectedChat.teacherName, 160),
+        alumno_nombre: clean(state.selectedChat.studentName, 160),
+        participantUids,
+        createdByUid: currentUid,
+        createdByRole: role,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
     };
-    const classRef = doc(firebaseDb, 'clases', classId);
-    setActionStage('Guardando clase...');
-    await withTimeoutReject(setDoc(classRef, payload), 12000, 'Creacion de la clase');
+    const occurrencePayloads = occurrences.map((occurrence) => ({
+      ...occurrence,
+      payload: buildOccurrencePayload(occurrence),
+    }));
+    setActionStage(occurrencePayloads.length > 1 ? 'Creando serie...' : 'Guardando clase...');
+    const classBatch = writeBatch(firebaseDb);
+    occurrencePayloads.forEach((occurrence) => {
+      classBatch.set(doc(firebaseDb, 'clases', occurrence.classId), occurrence.payload);
+    });
+    await withTimeoutReject(classBatch.commit(), 20000, 'Creacion de la serie de clases');
     setActionStage('Reservando horario...');
-    const createdBusySlots = await persistBusySlotsForClass(classId, payload, {
-      assignmentId: state.selectedChat.id,
-      createdByUid: currentUid,
-      createdByRole: role,
-    }).catch((error) => {
+    const createdBusySlots = await Promise.all(occurrencePayloads.map((occurrence) => (
+      persistBusySlotsForClass(occurrence.classId, occurrence.payload, {
+        assignmentId: state.selectedChat.id,
+        createdByUid: currentUid,
+        createdByRole: role,
+      })
+    ))).then((rows) => rows.flat()).catch((error) => {
       console.warn('No se pudieron materializar las franjas ocupadas desde el cliente', error);
       return [];
     });
@@ -2223,6 +2338,10 @@ export async function initChatWidget({
       ...classResetWriteFields(),
       status: 'aceptada',
       classId,
+      classIds,
+      classCount: classIds.length,
+      classSeriesId: classSeriesId || null,
+      seriesEndDate: firstOccurrence?.seriesEndDate || proposal.fecha,
       respondedByUid: currentUid,
       respondedByRole: role,
       respondedAt: serverTimestamp(),
@@ -2234,6 +2353,9 @@ export async function initChatWidget({
       relationshipStage: 'clase_programada',
       relationshipStatus: 'active',
       activeClassId: classId,
+      activeClassIds: classIds.slice(0, 60),
+      classSeriesId: classSeriesId || null,
+      seriesEndDate: firstOccurrence?.seriesEndDate || proposal.fecha,
       lastRelationshipEvent: 'class_scheduled_from_chat',
       relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -2248,7 +2370,7 @@ export async function initChatWidget({
       ]),
     };
     const scheduleText = isWeeklyRecurringProposal(proposal)
-      ? `Horario semanal aceptado (${scheduleProposalDisplayLabel(proposal)}). Primera clase creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`
+      ? `Horario semanal aceptado (${scheduleProposalDisplayLabel(proposal)}). Se han creado ${classIds.length} clases hasta el ${formatDate(firstOccurrence?.seriesEndDate)}. Primera clase: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`
       : `Clase puntual aceptada y creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`;
     setActionStage('Avisando a la otra parte...');
     await withTimeoutReject(addSystemChatMessage(state.selectedChat, scheduleText), 12000, 'Mensaje de sistema');

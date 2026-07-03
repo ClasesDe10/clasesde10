@@ -12,7 +12,7 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const [admin, chat, rules, functionsIndex, automationEngine, automationWorker, css] = await Promise.all([
+const [admin, chat, rules, functionsIndex, automationEngine, automationWorker, css, classCancellation] = await Promise.all([
   read('pages/dashboard/admin.html'),
   read('js/chat-widget.js'),
   read('firebase/firestore.rules'),
@@ -20,6 +20,7 @@ const [admin, chat, rules, functionsIndex, automationEngine, automationWorker, c
   read('functions/platform-automation-engine.js'),
   read('scripts/firebase-automation-worker.mjs'),
   read('css/dashboard.css'),
+  read('js/class-cancellation.js'),
 ]);
 
 assert(admin.includes('prepararFlujoAsignacion'), 'Admin assignment must prepare chat scheduling flow.');
@@ -39,6 +40,7 @@ assert(chat.includes('busySlotsForChatValidation'), 'Chat widget must combine pe
 assert(chat.includes('findBusySlotConflict'), 'Accepted proposals must be rechecked against occupied slots before class creation.');
 assert(chat.includes('persistBusySlotsForClass'), 'Accepted proposal classes must materialize occupied slots for future scheduling.');
 assert(chat.includes('repairBusySlotsFromVisibleClasses'), 'Chat widget must self-heal busy slots from visible existing classes when Functions are not available.');
+assert(chat.includes("availabilityValidation.reason === 'outside_own_availability'"), 'Acceptance must allow the accepting user to override their own availability while preserving counterparty/busy checks.');
 assert(chat.includes('availabilityStatus'), 'Schedule proposals must store availability validation status.');
 assert(chat.includes("collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones')"), 'Chat widget must persist schedule proposals.');
 assert(chat.includes('acceptScheduleProposal'), 'Chat widget must support accepting schedule proposals.');
@@ -46,7 +48,9 @@ assert(chat.includes("createdFrom: 'chat_schedule_proposal'"), 'Accepted proposa
 assert(chat.includes('buildAdminClassPayload'), 'Accepted proposals must reuse the shared class payload engine.');
 assert(chat.includes('buildClassPricingQuote'), 'Accepted proposals must price classes before creating them.');
 assert(chat.includes('proratedPricingFromHourly'), 'Chat scheduling must prorate assignment hourly pricing by class duration.');
-assert(chat.includes('pickClassPriceFields(classFields)'), 'Accepted proposals must persist family, teacher and platform amounts.');
+assert(chat.includes('precio_hora_familia: familyHourly'), 'Chat scheduling must preserve family hourly rate on accepted classes.');
+assert(chat.includes('importe_hora_profesor: teacherHourly'), 'Chat scheduling must preserve teacher hourly rate on accepted classes.');
+assert(chat.includes('pickClassPriceFields(occurrenceFields)'), 'Accepted proposals must persist family, teacher and platform amounts on every occurrence.');
 assert(chat.includes('participantUids'), 'Accepted proposal classes must store participant auth ids for legacy/id-compatible reads.');
 assert(chat.includes('updatedAt: serverTimestamp()'), 'Class creation must satisfy Firestore timestamp rules.');
 assert(chat.includes('data-chat-name-form'), 'Chat widget must let each participant save a private chat display name.');
@@ -63,6 +67,10 @@ assert(chat.includes('nextDateForWeekday'), 'Weekly fixed schedules must calcula
 assert(chat.includes('dayOfWeek: selectedWeekday'), 'Weekly schedules must store the selected weekday in recurrence metadata.');
 assert(chat.includes('readScheduleDraft'), 'Schedule planner must preserve user-entered draft values across async rerenders.');
 assert(chat.includes('recurrenceLabelFromFields'), 'Weekly schedules must render a compact recurring label.');
+assert(chat.includes('academicYearEndForDate'), 'Weekly accepted schedules must calculate the academic-year end in June.');
+assert(chat.includes('buildWeeklyClassOccurrences'), 'Weekly accepted schedules must create all calendar occurrences.');
+assert(chat.includes('writeBatch(firebaseDb)'), 'Weekly accepted schedules must persist the class series consistently.');
+assert(chat.includes('Se han creado ${classIds.length} clases'), 'Weekly accepted schedules must explain how many classes were created.');
 assert(!chat.includes('data-chat-layout-mode'), 'Chat widget must not expose the old mixed chat/classes layout selector.');
 assert(chat.includes("doc(firebaseDb, 'chats', chat.id, 'preferencias', currentUid)"), 'Chat widget must load per-user chat preferences.');
 assert(chat.includes("doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid)"), 'Chat widget must persist chat preferences per current user.');
@@ -127,6 +135,13 @@ assert(rules.includes('validScheduleRecurrence'), 'Firestore rules must validate
 assert(rules.includes('validClassScheduleProposalUpdate'), 'Firestore rules must validate proposal responses.');
 assert(rules.includes('validParticipantClassCreate'), 'Firestore rules must allow only accepted proposal classes.');
 assert(rules.includes("allow create: if isAdmin() || validParticipantClassCreate();"), 'Participants must create classes only through proposal validation.');
+assert(rules.includes("'familyHourlyRate'"), 'Participant class creation rules must allow family hourly rates.');
+assert(rules.includes("'teacherHourlyRate'"), 'Participant class creation rules must allow teacher hourly rates.');
+assert(rules.includes("'classSeriesId'"), 'Participant class creation rules must allow recurring class series metadata.');
+assert(rules.includes('validParticipantClassCancellationUpdate'), 'Firestore rules must validate participant calendar cancellations.');
+assert(rules.includes('validClassCancelledNotificationCreate'), 'Firestore rules must allow only class-linked cancellation notifications.');
+assert(rules.includes("request.resource.data.responsibilityPenalty.points == -3"), 'Calendar cancellation rules must enforce the responsibility penalty.');
+assert(rules.includes('validParticipantBusySlotDelete'), 'Firestore rules must let participants release occupied slots only after cancellation.');
 assert(rules.includes('validClassResetMarkers'), 'Firestore rules must validate class reset markers written by class scheduling.');
 assert(rules.includes("'classResetGeneration'"), 'Firestore rules must allow class reset generation on classes, proposals and busy slots.');
 assert(rules.includes("'createdAfterClassReset'"), 'Firestore rules must allow class reset boolean markers on class scheduling writes.');
@@ -148,5 +163,12 @@ assert(css.includes('.chat-schedule-visible-proposals'), 'Dashboard CSS must sty
 assert(css.includes('.schedule-availability-action'), 'Dashboard CSS must style availability recovery actions.');
 assert(css.includes('.chat-layout-notifications'), 'Dashboard CSS must isolate notification-only view.');
 assert(css.includes('.schedule-availability-busy'), 'Dashboard CSS must style occupied schedule slots.');
+assert(css.includes('.class-cancel-action'), 'Dashboard CSS must style calendar cancellation as a sensitive action.');
+
+assert(classCancellation.includes('CLASS_CANCELLATION_PENALTY_POINTS = -3'), 'Class cancellation helper must apply a clear responsibility penalty.');
+assert(classCancellation.includes('cancelClassFromCalendar'), 'Class cancellation helper must expose one shared cancellation flow.');
+assert(classCancellation.includes("type: 'class_cancelled'"), 'Class cancellation helper must notify the counterparty with a class cancellation event.');
+assert(classCancellation.includes('canCancelClassFromCalendar'), 'Class cancellation helper must hide cancellation when a class is already closed.');
+assert(classCancellation.includes("where('classId', '==', id)"), 'Class cancellation helper must release busy slots for the cancelled occurrence.');
 
 console.log('Chat scheduling system validation passed.');

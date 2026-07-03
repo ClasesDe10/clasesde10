@@ -45,7 +45,8 @@ assert(adminDashboard.includes("safeListFirestore('familias')"), 'Finance dashbo
 assert(adminDashboard.includes("safeListFirestore('alumnos')"), 'Finance dashboard must load student profiles for segmentation without new compat queries.');
 
 assert(adminDashboard.includes('buildAdminClassPayload'), 'Class save must use the calendar payload builder.');
-assert(adminDashboard.includes('importe_profesor: importeProfesor'), 'Class save must pass importe_profesor to the payload builder.');
+assert(adminDashboard.includes('familyHourlyRate: precioHoraFamilia'), 'Class save must pass family hourly rate to the payload builder.');
+assert(adminDashboard.includes('teacherHourlyRate: importeHoraProfesor'), 'Class save must pass teacher hourly rate to the payload builder.');
 assert(calendarEngine.includes('teacherAmount'), 'Class payload builder must persist Firebase-compatible teacherAmount.');
 assert(calendarEngine.includes('comision_clasesde10'), 'Class payload builder must persist platform fee.');
 assert(calendarEngine.includes('platformFee'), 'Class payload builder must persist Firebase-compatible platformFee.');

@@ -1011,6 +1011,14 @@ service cloud.firestore {
         && busySlotMatchesClass(data, get(busySlotClassPath(data)).data);
     }
 
+    function validParticipantBusySlotDelete(data) {
+      return signedIn()
+        && data.keys().hasAny(['classId'])
+        && exists(busySlotClassPath(data))
+        && isParticipant(get(busySlotClassPath(data)).data)
+        && get(busySlotClassPath(data)).data.estado == 'cancelada';
+    }
+
     function validTeacherPayoutCreate() {
       return hasRole('profesor')
         && request.resource.data.teacherUid == request.auth.uid
@@ -1317,6 +1325,51 @@ service cloud.firestore {
         );
     }
 
+    function validParticipantClassCancellationUpdate() {
+      return isParticipant(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'estado',
+          'status',
+          'lifecycleStatus',
+          'attendanceStatus',
+          'incidentStatus',
+          'cancelacion_motivo',
+          'cancellationReason',
+          'cancelledAt',
+          'canceledAt',
+          'cancelledByUid',
+          'cancelledByRole',
+          'cancelledByName',
+          'responsibilityPenalty',
+          'trustScoreDelta',
+          'trustPenaltyReason',
+          'updatedAt',
+          'updated_at'
+        ])
+        && resource.data.estado != 'cancelada'
+        && request.resource.data.estado == 'cancelada'
+        && request.resource.data.status == 'cancelada'
+        && request.resource.data.lifecycleStatus == 'cancelada'
+        && request.resource.data.attendanceStatus == 'incidencia'
+        && request.resource.data.incidentStatus == 'abierta'
+        && request.resource.data.cancelledByUid == request.auth.uid
+        && request.resource.data.cancelledByRole in ['familia', 'profesor']
+        && (
+          (request.resource.data.cancelledByRole == 'familia' && hasRole('familia'))
+          || (request.resource.data.cancelledByRole == 'profesor' && hasRole('profesor'))
+        )
+        && request.resource.data.responsibilityPenalty is map
+        && request.resource.data.responsibilityPenalty.points == -3
+        && request.resource.data.responsibilityPenalty.appliedToUid == request.auth.uid
+        && request.resource.data.responsibilityPenalty.appliedToRole == request.resource.data.cancelledByRole
+        && request.resource.data.responsibilityPenalty.reason == 'calendar_cancellation'
+        && request.resource.data.trustScoreDelta == -3
+        && request.resource.data.trustPenaltyReason == 'calendar_cancellation'
+        && request.resource.data.cancelledAt == request.time
+        && request.resource.data.canceledAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function validClassIncidentCreate() {
       return signedIn()
         && request.resource.data.keys().hasOnly([
@@ -1586,6 +1639,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status',
           'classId',
+          'classIds',
+          'classCount',
+          'classSeriesId',
+          'seriesEndDate',
           'respondedByUid',
           'respondedByRole',
           'respondedAt',
@@ -1604,6 +1661,10 @@ service cloud.firestore {
           || canRespondToScheduleProposal(resource.data)
         )
         && (!request.resource.data.keys().hasAny(['classId']) || request.resource.data.classId is string)
+        && (!request.resource.data.keys().hasAny(['classIds']) || request.resource.data.classIds is list)
+        && (!request.resource.data.keys().hasAny(['classCount']) || request.resource.data.classCount is number)
+        && (!request.resource.data.keys().hasAny(['classSeriesId']) || request.resource.data.classSeriesId == null || request.resource.data.classSeriesId is string)
+        && (!request.resource.data.keys().hasAny(['seriesEndDate']) || request.resource.data.seriesEndDate is string)
         && validClassResetMarkers(request.resource.data)
         && optionalString('rejectionReason', 300)
         && request.resource.data.respondedAt == request.time
@@ -1636,6 +1697,10 @@ service cloud.firestore {
           'familyAmount',
           'importe_profesor',
           'teacherAmount',
+          'precio_hora_familia',
+          'familyHourlyRate',
+          'importe_hora_profesor',
+          'teacherHourlyRate',
           'comision_clasesde10',
           'platformFee',
           'marginPct',
@@ -1663,6 +1728,16 @@ service cloud.firestore {
           'assignmentId',
           'asignacion_id',
           'scheduleProposalId',
+          'classSeriesId',
+          'seriesId',
+          'seriesIndex',
+          'seriesTotal',
+          'seriesStartDate',
+          'seriesEndDate',
+          'isRecurring',
+          'recurrence',
+          'recurrenceLabel',
+          'parentClassId',
           'createdFrom',
           'schedulingStatus',
           'modality',
@@ -1701,8 +1776,35 @@ service cloud.firestore {
         && request.resource.data.participantUids[request.auth.uid] == true
         && request.resource.data.participantUids[request.resource.data.familyUid] == true
         && request.resource.data.participantUids[request.resource.data.teacherUid] == true
-        && request.resource.data.fecha == get(proposalPath).data.fecha
-        && request.resource.data.date == get(proposalPath).data.fecha
+        && (
+          (
+            request.resource.data.fecha == get(proposalPath).data.fecha
+            && request.resource.data.date == get(proposalPath).data.fecha
+            && (
+              !request.resource.data.keys().hasAny(['seriesIndex'])
+              || request.resource.data.seriesIndex == 0
+            )
+          )
+          || (
+            get(proposalPath).data.scheduleKind == 'weekly_recurring'
+            && request.resource.data.classSeriesId == request.resource.data.scheduleProposalId
+            && request.resource.data.seriesId == request.resource.data.scheduleProposalId
+            && request.resource.data.seriesStartDate == get(proposalPath).data.fecha
+            && request.resource.data.seriesEndDate is string
+            && request.resource.data.seriesEndDate.size() == 10
+            && request.resource.data.seriesIndex is number
+            && request.resource.data.seriesIndex >= 0
+            && request.resource.data.seriesIndex < 60
+            && request.resource.data.seriesTotal is number
+            && request.resource.data.seriesTotal >= 1
+            && request.resource.data.seriesTotal <= 60
+            && request.resource.data.seriesIndex < request.resource.data.seriesTotal
+            && request.resource.data.isRecurring == true
+            && request.resource.data.recurrence is map
+            && request.resource.data.recurrenceLabel == get(proposalPath).data.recurrenceLabel
+            && request.resource.data.parentClassId is string
+          )
+        )
         && request.resource.data.hora_inicio == get(proposalPath).data.hora_inicio
         && request.resource.data.startTime == get(proposalPath).data.hora_inicio
         && request.resource.data.hora_fin == get(proposalPath).data.hora_fin
@@ -1813,6 +1915,61 @@ service cloud.firestore {
           )
         )
         && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() <= 140
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 1200
+        && request.resource.data.readAt == null
+        && request.resource.data.leida == false
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validClassCancelledNotificationCreate() {
+      let classPath = /databases/$(database)/documents/clases/$(request.resource.data.payload.classId);
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'userUid',
+          'usuario_id',
+          'title',
+          'titulo',
+          'body',
+          'cuerpo',
+          'type',
+          'category',
+          'priority',
+          'channels',
+          'payload',
+          'actionUrl',
+          'role',
+          'readAt',
+          'leida',
+          'fromRole',
+          'createdByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.userUid == request.resource.data.usuario_id
+        && request.resource.data.type == 'class_cancelled'
+        && request.resource.data.category == 'calendar'
+        && request.resource.data.priority in ['high', 'critical']
+        && request.resource.data.channels is list
+        && request.resource.data.payload is map
+        && request.resource.data.payload.keys().hasOnly(['type', 'classId', 'assignmentId', 'url'])
+        && request.resource.data.payload.type == 'class_cancelled'
+        && request.resource.data.payload.classId is string
+        && exists(classPath)
+        && isParticipant(get(classPath).data)
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.userUid != request.auth.uid
+        && (
+          request.resource.data.userUid == get(classPath).data.familyUid
+          || request.resource.data.userUid == get(classPath).data.familia_id
+          || request.resource.data.userUid == get(classPath).data.teacherUid
+          || request.resource.data.userUid == get(classPath).data.profesor_id
+        )
+        && validInternalUrl(request.resource.data.actionUrl)
+        && validInternalUrl(request.resource.data.payload.url)
         && request.resource.data.title is string
         && request.resource.data.title.size() <= 140
         && request.resource.data.body is string
@@ -2097,7 +2254,8 @@ service cloud.firestore {
     match /busySlots/{busySlotId} {
       allow create: if isAdmin() || validBusySlotCreate(request.resource.data);
       allow read: if canReadBusySlot(resource.data);
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || validParticipantBusySlotDelete(resource.data);
     }
 
     match /asignaciones/{assignmentId} {
@@ -2130,12 +2288,15 @@ service cloud.firestore {
             'lastMessage',
             'lastMessageAt',
             'schedulingStatus',
-            'relationshipStage',
-            'relationshipStatus',
-            'activeClassId',
-            'lastRelationshipEvent',
-            'relationshipUpdatedAt',
-            'updatedAt'
+          'relationshipStage',
+          'relationshipStatus',
+          'activeClassId',
+          'activeClassIds',
+          'classSeriesId',
+          'seriesEndDate',
+          'lastRelationshipEvent',
+          'relationshipUpdatedAt',
+          'updatedAt'
           ])
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['schedulingStatus'])
@@ -2155,6 +2316,19 @@ service cloud.firestore {
               request.resource.data.activeClassId is string
               && request.resource.data.activeClassId.size() <= 180
             )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeClassIds'])
+            || request.resource.data.activeClassIds is list
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['classSeriesId'])
+            || request.resource.data.classSeriesId == null
+            || request.resource.data.classSeriesId is string
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['seriesEndDate'])
+            || request.resource.data.seriesEndDate is string
           )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastRelationshipEvent'])
@@ -2214,7 +2388,8 @@ service cloud.firestore {
       allow read: if isAdmin() || isParticipant(resource.data);
       allow update: if isAdmin()
         || validTeacherClassUpdate()
-        || validFamilyClassConfirmationUpdate();
+        || validFamilyClassConfirmationUpdate()
+        || validParticipantClassCancellationUpdate();
     }
 
     match /incidencias/{incidentId} {
@@ -2262,7 +2437,7 @@ service cloud.firestore {
     }
 
     match /notificaciones/{notificationId} {
-      allow create: if isAdmin() || validChatNotificationCreate();
+      allow create: if isAdmin() || validChatNotificationCreate() || validClassCancelledNotificationCreate();
       allow delete: if isAdmin();
       allow read: if isAdmin() || (signedIn() && resource.data.userUid == request.auth.uid);
       allow update: if isAdmin()

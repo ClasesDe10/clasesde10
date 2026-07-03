@@ -3523,6 +3523,15 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   gap: 8px;
   align-items: center;
 }
+.class-cancel-action {
+  border-color: rgba(185, 28, 28, .22);
+  color: #9f1d1d;
+  background: #fff7f7;
+}
+.class-cancel-action:hover {
+  border-color: rgba(185, 28, 28, .38);
+  background: #ffecec;
+}
 .admin-calendar-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);

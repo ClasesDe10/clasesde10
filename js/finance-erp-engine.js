@@ -43,6 +43,22 @@ function numberOrNull(value) {
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : null;
 }
 
+function durationFactor(durationMinutes = 60) {
+  const minutes = Number(durationMinutes);
+  return (Number.isFinite(minutes) && minutes > 0 ? minutes : 60) / 60;
+}
+
+function amountFromHourly(hourlyRate, durationMinutes = 60) {
+  const hourly = numberOrNull(hourlyRate);
+  return hourly === null ? null : money(hourly * durationFactor(durationMinutes));
+}
+
+function hourlyFromAmount(amount, durationMinutes = 60) {
+  const total = numberOrNull(amount);
+  const factor = durationFactor(durationMinutes);
+  return total === null || factor <= 0 ? null : money(total / factor);
+}
+
 function percent(value) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0;
@@ -210,9 +226,7 @@ function fieldMatches(ruleValue, classValue) {
 function rateRuleAmount(rule = {}, durationMinutes = 60) {
   const fixed = numberOrNull(firstPresent(rule.amount, rule.importe, rule.teacherAmount, rule.importe_profesor, rule.price, rule.precio));
   if (fixed !== null) return fixed;
-  const hourly = numberOrNull(firstPresent(rule.hourlyRate, rule.ratePerHour, rule.pricePerHour, rule.tarifaHora, rule.tarifa_hora));
-  if (hourly !== null) return money(hourly * (durationMinutes || 60) / 60);
-  return null;
+  return amountFromHourly(firstPresent(rule.hourlyRate, rule.ratePerHour, rule.pricePerHour, rule.tarifaHora, rule.tarifa_hora), durationMinutes);
 }
 
 export function normalizeTeacherRateRule(raw = {}) {
@@ -298,6 +312,16 @@ function ruleScore(rule, classData = {}) {
 
 export function resolveTeacherRateForClass(classData = {}, teacherProfile = {}, rules = [], config = {}) {
   const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
+  const explicitHourly = amountFromHourly(firstPresent(
+    classData.teacherHourlyRate,
+    classData.importe_hora_profesor,
+    classData.teacherRatePerHour,
+    classData.tarifa_hora_profesor,
+  ), durationMinutes);
+  if (explicitHourly !== null) {
+    return { amount: explicitHourly, source: 'class_teacher_hourly_rate', ruleId: '', score: 0 };
+  }
+
   const allRules = [
     ...teacherRateRules(teacherProfile),
     ...asArray(rules).map(normalizeTeacherRateRule).filter((rule) => rule.active),
@@ -329,13 +353,29 @@ export function resolveTeacherRateForClass(classData = {}, teacherProfile = {}, 
 export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, options = {}) {
   const config = options.config || {};
   const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
+  const familyHourlyRate = numberOrNull(firstPresent(
+    classData.familyHourlyRate,
+    classData.precio_hora_familia,
+    classData.familyRatePerHour,
+    classData.tarifa_hora_familia,
+  ));
+  const familyFromHourly = amountFromHourly(familyHourlyRate, durationMinutes);
   const familyExplicit = numberOrNull(firstPresent(classData.precio_total, classData.amount, classData.familyAmount));
   const defaultFamilyRate = Number(config?.business?.defaultFamilyHourlyRate ?? 24);
-  const familyAmount = familyExplicit !== null
+  const familyAmount = familyFromHourly !== null
+    ? familyFromHourly
+    : familyExplicit !== null
     ? familyExplicit
     : money((Number.isFinite(defaultFamilyRate) ? defaultFamilyRate : 24) * durationMinutes / 60);
   const rate = resolveTeacherRateForClass(classData, teacherProfile, options.rules || [], config);
   const teacherAmount = rate.amount;
+  const teacherHourlyRate = numberOrNull(firstPresent(
+    classData.teacherHourlyRate,
+    classData.importe_hora_profesor,
+    classData.teacherRatePerHour,
+    classData.tarifa_hora_profesor,
+  )) ?? hourlyFromAmount(teacherAmount, durationMinutes);
+  const normalizedFamilyHourlyRate = familyHourlyRate ?? hourlyFromAmount(familyAmount, durationMinutes);
   const platformFee = money(familyAmount - teacherAmount);
   const marginPct = familyAmount > 0 ? percent((platformFee / familyAmount) * 100) : 0;
   const nowIso = options.nowIso || new Date().toISOString();
@@ -346,6 +386,10 @@ export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, op
     familyAmount,
     importe_profesor: teacherAmount,
     teacherAmount,
+    precio_hora_familia: normalizedFamilyHourlyRate,
+    familyHourlyRate: normalizedFamilyHourlyRate,
+    importe_hora_profesor: teacherHourlyRate,
+    teacherHourlyRate,
     comision_clasesde10: platformFee,
     platformFee,
     marginPct,
@@ -362,6 +406,13 @@ export function buildClassPricingQuote(classData = {}, teacherProfile = {}, opti
   const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
   const rate = resolveTeacherRateForClass(classData, teacherProfile, options.rules || [], config);
   const teacherAmount = money(rate.amount);
+  const explicitFamilyHourly = numberOrNull(firstPresent(
+    classData.familyHourlyRate,
+    classData.precio_hora_familia,
+    classData.familyRatePerHour,
+    classData.tarifa_hora_familia,
+  ));
+  const familyFromHourly = amountFromHourly(explicitFamilyHourly, durationMinutes);
   const explicitFamily = numberOrNull(firstPresent(classData.precio_total, classData.amount, classData.familyAmount));
   const defaultFamilyHourly = Number(config?.business?.defaultFamilyHourlyRate ?? 24);
   const defaultFamilyAmount = money((Number.isFinite(defaultFamilyHourly) ? defaultFamilyHourly : 24) * durationMinutes / 60);
@@ -372,9 +423,18 @@ export function buildClassPricingQuote(classData = {}, teacherProfile = {}, opti
     ? money(teacherAmount / (1 - targetMargin))
     : teacherAmount;
   const familyFromMinimumFee = money(teacherAmount + minimumFee);
-  const familyAmount = explicitFamily !== null
+  const familyAmount = familyFromHourly !== null
+    ? familyFromHourly
+    : explicitFamily !== null
     ? money(explicitFamily)
     : money(Math.max(defaultFamilyAmount, familyFromMargin, familyFromMinimumFee));
+  const normalizedFamilyHourlyRate = explicitFamilyHourly ?? hourlyFromAmount(familyAmount, durationMinutes);
+  const normalizedTeacherHourlyRate = numberOrNull(firstPresent(
+    classData.teacherHourlyRate,
+    classData.importe_hora_profesor,
+    classData.teacherRatePerHour,
+    classData.tarifa_hora_profesor,
+  )) ?? hourlyFromAmount(teacherAmount, durationMinutes);
   const platformFee = money(familyAmount - teacherAmount);
   const marginPct = familyAmount > 0 ? percent((platformFee / familyAmount) * 100) : 0;
   return {
@@ -383,6 +443,10 @@ export function buildClassPricingQuote(classData = {}, teacherProfile = {}, opti
     familyAmount,
     importe_profesor: teacherAmount,
     teacherAmount,
+    precio_hora_familia: normalizedFamilyHourlyRate,
+    familyHourlyRate: normalizedFamilyHourlyRate,
+    importe_hora_profesor: normalizedTeacherHourlyRate,
+    teacherHourlyRate: normalizedTeacherHourlyRate,
     comision_clasesde10: platformFee,
     platformFee,
     marginPct,
@@ -407,9 +471,16 @@ export function normalizeFinanceClass(raw = {}, context = {}) {
     rules: context.teacherRateRules || [],
     nowIso: context.nowIso,
   });
-  const familyAmount = numberOrNull(firstPresent(raw.precio_total, raw.amount, raw.familyAmount)) ?? financialPatch.familyAmount;
-  const teacherAmount = numberOrNull(firstPresent(raw.importe_profesor, raw.teacherAmount, raw.teacher_amount)) ?? financialPatch.teacherAmount;
-  const platformFee = numberOrNull(firstPresent(raw.comision_clasesde10, raw.platformFee)) ?? money(familyAmount - teacherAmount);
+  const usesHourlyPricing = numberOrNull(firstPresent(raw.familyHourlyRate, raw.precio_hora_familia, raw.teacherHourlyRate, raw.importe_hora_profesor)) !== null;
+  const familyAmount = usesHourlyPricing
+    ? financialPatch.familyAmount
+    : numberOrNull(firstPresent(raw.precio_total, raw.amount, raw.familyAmount)) ?? financialPatch.familyAmount;
+  const teacherAmount = usesHourlyPricing
+    ? financialPatch.teacherAmount
+    : numberOrNull(firstPresent(raw.importe_profesor, raw.teacherAmount, raw.teacher_amount)) ?? financialPatch.teacherAmount;
+  const platformFee = usesHourlyPricing
+    ? financialPatch.platformFee
+    : numberOrNull(firstPresent(raw.comision_clasesde10, raw.platformFee)) ?? money(familyAmount - teacherAmount);
   const date = dateOnly(firstPresent(raw.fecha, raw.date, raw.startAt, raw.createdAt, raw.created_at));
   const status = normalizeStatus(firstPresent(raw.estado, raw.status), '');
   const familyPaymentStatus = normalizeStatus(firstPresent(raw.familyPaymentStatus, raw.estado_pago_familia, raw.paymentStatus, raw.estado_pago), 'pendiente');
@@ -439,6 +510,10 @@ export function normalizeFinanceClass(raw = {}, context = {}) {
     durationMinutes: Number(raw.durationMinutes || raw.duracion_minutos || 60) || 60,
     familyAmount,
     teacherAmount,
+    familyHourlyRate: financialPatch.familyHourlyRate,
+    teacherHourlyRate: financialPatch.teacherHourlyRate,
+    precio_hora_familia: financialPatch.precio_hora_familia,
+    importe_hora_profesor: financialPatch.importe_hora_profesor,
     platformFee,
     marginPct: familyAmount > 0 ? percent((platformFee / familyAmount) * 100) : 0,
     teacherRateRuleId: raw.teacherRateRuleId || financialPatch.teacherRateRuleId,
@@ -836,6 +911,8 @@ export function buildFinanceCsvRows(dataset = {}, _metrics = {}, _anomalies = []
     nivel: item.level,
     modalidad: item.modality,
     estado: item.status,
+    precio_hora_familia: item.familyHourlyRate,
+    importe_hora_profesor: item.teacherHourlyRate,
     total_familia: item.familyAmount,
     cobra_profesor: item.teacherAmount,
     margen_clasesde10: item.platformFee,

@@ -938,14 +938,14 @@
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Total familia (€)</label>
+            <label class="form-label">Precio familia / hora (€)</label>
             <input type="number" class="form-control" id="clase-precio" min="0" step="0.5" placeholder="0.00">
-            <div class="form-hint">Importe que paga la familia por esta clase.</div>
+            <div class="form-hint">Tarifa por hora. El total de la clase se calcula segun la duracion real.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Cobra profesor (€)</label>
+            <label class="form-label">Cobra profesor / hora (€)</label>
             <input type="number" class="form-control" id="clase-importe-profesor" min="0" step="0.5" placeholder="0.00">
-            <div class="form-hint">Puede variar por clase, profesor, materia o acuerdo.</div>
+            <div class="form-hint">Tarifa por hora acordada para este profesor, alumno o materia.</div>
           </div>
         </div>
         <div class="form-row">
@@ -1208,7 +1208,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260701-accept-pointer';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260703-recurring-series';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
@@ -2226,19 +2226,53 @@ function formatDateTimeHint(value) {
   return `${formatFechaCorta(date.toISOString().slice(0, 10))} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+function classEditorDurationMinutes() {
+  const validation = validateClassTimeRange(
+    document.getElementById('clase-fecha')?.value,
+    document.getElementById('clase-hora-inicio')?.value,
+    document.getElementById('clase-hora-fin')?.value,
+  );
+  return validation.valid ? validation.durationMinutes : 60;
+}
+
+function proratedHourlyAmount(hourlyRate, durationMinutes = 60) {
+  const hourly = money(hourlyRate);
+  const minutes = Number(durationMinutes) || 60;
+  return roundMoney(hourly * minutes / 60);
+}
+
+function hourlyRateForClassAmount(amount, durationMinutes = 60) {
+  const total = money(amount);
+  const minutes = Number(durationMinutes) || 60;
+  return total > 0 ? roundMoney(total * 60 / minutes) : '';
+}
+
+function classDurationFromData(data = {}) {
+  if (Number(data.durationMinutes || data.duracion_minutos || 0) > 0) {
+    return Number(data.durationMinutes || data.duracion_minutos);
+  }
+  const validation = validateClassTimeRange(data.fecha || data.date, data.hora_inicio || data.startTime, data.hora_fin || data.endTime);
+  return validation.valid ? validation.durationMinutes : 60;
+}
+
 function updateClaseMoneyPreview() {
-  const total = money(document.getElementById('clase-precio').value);
-  const profesor = money(document.getElementById('clase-importe-profesor').value);
+  const durationMinutes = classEditorDurationMinutes();
+  const familyHourly = money(document.getElementById('clase-precio').value);
+  const teacherHourly = money(document.getElementById('clase-importe-profesor').value);
+  const total = proratedHourlyAmount(familyHourly, durationMinutes);
+  const profesor = proratedHourlyAmount(teacherHourly, durationMinutes);
   const margen = roundMoney(total - profesor);
   const pct = total > 0 ? Math.round((margen / total) * 1000) / 10 : 0;
   const preview = document.getElementById('clase-comision-preview');
   const hint = document.getElementById('clase-precio-hint');
   preview.value = total || profesor ? `${formatEuros(margen)} (${pct}%)` : '';
   hint.textContent = margen < 0
-    ? 'Atencion: el profesor cobra mas que lo que paga la familia.'
+    ? 'Atencion: el profesor cobra mas por hora que lo que paga la familia.'
     : total && !profesor
-      ? 'Completa cuanto cobra el profesor para medir margen real.'
-      : '';
+      ? 'Completa cuanto cobra el profesor por hora para medir margen real.'
+      : total || profesor
+        ? `${durationMinutes} min: familia ${formatEuros(total)} · profesor ${formatEuros(profesor)}.`
+        : '';
   hint.style.color = margen < 0 ? 'var(--danger)' : 'var(--gray-mid)';
 }
 
@@ -2269,6 +2303,9 @@ async function cargarClases() {
 
   tbody.innerHTML = clases.map(c => {
     const economic = economicStateForAdminClass(c);
+    const durationMinutes = classDurationFromData(c);
+    const familyHourly = c.familyHourlyRate || c.precio_hora_familia || hourlyRateForClassAmount(classTotal(c), durationMinutes);
+    const teacherHourly = c.teacherHourlyRate || c.importe_hora_profesor || hourlyRateForClassAmount(classTeacherAmount(c), durationMinutes);
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
@@ -2278,6 +2315,7 @@ async function cargarClases() {
     <td>${c.duracion_minutos} min</td>
     <td>
       <strong>${classTotal(c) ? formatEuros(classTotal(c)) : '—'}</strong>
+      <br><span style="font-size:.75rem;color:var(--gray-mid)">Familia ${familyHourly ? `${formatEuros(familyHourly)}/h` : '—'} · Prof. ${teacherHourly ? `${formatEuros(teacherHourly)}/h` : '—'}</span>
       <br><span style="font-size:.75rem;color:var(--gray-mid)">Prof. ${classTeacherAmount(c) ? formatEuros(classTeacherAmount(c)) : '—'} · Margen ${formatEuros(classPlatformFee(c))}</span>
     </td>
     <td>${badgeEstado(classStatusForBadge(c))}<br>${renderEconomicBadge(economic)}</td>
@@ -2334,8 +2372,9 @@ window.editarClase = async (id) => {
   document.getElementById('clase-materia').value = data.materia;
   document.getElementById('clase-hora-inicio').value = data.hora_inicio;
   document.getElementById('clase-hora-fin').value = data.hora_fin;
-  document.getElementById('clase-precio').value = data.precio_total || '';
-  document.getElementById('clase-importe-profesor').value = data.importe_profesor || data.teacherAmount || '';
+  const durationMinutes = classDurationFromData(data);
+  document.getElementById('clase-precio').value = data.familyHourlyRate || data.precio_hora_familia || hourlyRateForClassAmount(data.precio_total ?? data.amount ?? data.familyAmount, durationMinutes);
+  document.getElementById('clase-importe-profesor').value = data.teacherHourlyRate || data.importe_hora_profesor || hourlyRateForClassAmount(data.importe_profesor ?? data.teacherAmount, durationMinutes);
   document.getElementById('clase-estado').value = normalizeClassStatus(data.estado || data.status);
   document.getElementById('clase-observaciones').value = data.observaciones || '';
   await cargarSelectoresClase();
@@ -2364,7 +2403,10 @@ async function sugerirImporteProfesor() {
   document.getElementById(id).addEventListener('input', debounce(sugerirImporteProfesor, 250));
   document.getElementById(id).addEventListener('change', sugerirImporteProfesor);
 });
-document.getElementById('clase-importe-profesor').addEventListener('input', updateClaseMoneyPreview);
+['clase-importe-profesor','clase-fecha','clase-hora-inicio','clase-hora-fin'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateClaseMoneyPreview);
+  document.getElementById(id).addEventListener('change', updateClaseMoneyPreview);
+});
 
 function newCalendarUid() {
   return `cd10-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`;
@@ -2433,8 +2475,8 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
   const materia   = document.getElementById('clase-materia').value.trim();
   const horaIni   = document.getElementById('clase-hora-inicio').value;
   const horaFin   = document.getElementById('clase-hora-fin').value;
-  const precio    = parseMoneyInput('clase-precio');
-  const importeProfesor = parseMoneyInput('clase-importe-profesor');
+  const precioHoraFamilia = parseMoneyInput('clase-precio');
+  const importeHoraProfesor = parseMoneyInput('clase-importe-profesor');
   const estado    = document.getElementById('clase-estado').value;
   const obs       = document.getElementById('clase-observaciones').value.trim();
 
@@ -2449,8 +2491,8 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
     return;
   }
 
-  if (precio !== null && importeProfesor !== null && importeProfesor > precio) {
-    showToast('Margen negativo', 'El profesor no puede cobrar mas que el total de la familia salvo excepcion revisada.', 'warning');
+  if (precioHoraFamilia !== null && importeHoraProfesor !== null && importeHoraProfesor > precioHoraFamilia) {
+    showToast('Margen negativo', 'El profesor no puede cobrar mas por hora que lo que paga la familia salvo excepcion revisada.', 'warning');
     return;
   }
 
@@ -2467,8 +2509,10 @@ document.getElementById('btn-guardar-clase').addEventListener('click', async () 
     materia,
     hora_inicio: horaIni,
     hora_fin: horaFin,
-    precio_total: precio,
-    importe_profesor: importeProfesor,
+    familyHourlyRate: precioHoraFamilia,
+    precio_hora_familia: precioHoraFamilia,
+    teacherHourlyRate: importeHoraProfesor,
+    importe_hora_profesor: importeHoraProfesor,
     estado,
     observaciones: obs,
     calendarUid: claseEditandoActual?.calendarUid || newCalendarUid(),
@@ -2865,6 +2909,8 @@ document.getElementById('btn-export-finanzas')?.addEventListener('click', () => 
     {titulo:'Nivel', campo:'nivel'},
     {titulo:'Modalidad', campo:'modalidad'},
     {titulo:'Estado', campo:'estado'},
+    {titulo:'Precio familia / hora', campo:'precio_hora_familia'},
+    {titulo:'Cobra profesor / hora', campo:'importe_hora_profesor'},
     {titulo:'Total familia', campo:'total_familia'},
     {titulo:'Cobra profesor', campo:'cobra_profesor'},
     {titulo:'Margen ClasesDe10', campo:'margen_clasesde10'},

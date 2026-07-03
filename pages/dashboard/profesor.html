@@ -729,12 +729,17 @@ import {
   isScheduledClassStatus,
 } from '../../js/calendar-engine.js?v=20260701-attendance-clarity';
 import { buildTeacherPayoutPayload, classEconomicState } from '../../js/payment-engine.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260701-accept-pointer';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260703-recurring-series';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260701-journey-clarity';
 import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
+import {
+  cancelClassFromCalendar,
+  canCancelClassFromCalendar,
+  CLASS_CANCELLATION_PENALTY_POINTS,
+} from '../../js/class-cancellation.js?v=20260703-recurring-cancel';
 import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -829,6 +834,11 @@ function renderTeacherAttendanceSummary(clase) {
       ${notes ? `<span class="attendance-notes">${sanitize(notes)}</span>` : ''}
     </div>
   `;
+}
+
+function renderCalendarCancelAction(clase) {
+  if (!canCancelClassFromCalendar(clase)) return '';
+  return `<button class="btn btn-ghost btn-sm class-cancel-action" data-action="cancelar-clase-calendario" data-id="${sanitize(clase.id)}">Cancelar clase</button>`;
 }
 
 function renderTeacherClassAction(clase) {
@@ -1179,6 +1189,7 @@ async function cargarInicio() {
 
 // ── CALENDARIO ───────────────────────────────────────────────────
 let cal;
+let calendarClassById = new Map();
 async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
@@ -1221,6 +1232,7 @@ async function iniciarCalendario() {
               <div class="clase-materia">${sanitize(c.materia||'')}${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
               ${renderTeacherAttendanceSummary(c)}
               <div class="calendar-payment-state"><span class="badge ${economicBadge}">${sanitize(economic.badge)}</span><span class="payment-due-hint">${sanitize(economic.label)}</span></div>
+              <div class="calendar-class-actions">${renderCalendarCancelAction(c)}</div>
             </div>
             ${badgeEstado(classStatusForBadge(c))}
           </div>`;
@@ -1237,6 +1249,7 @@ async function cargarClasesCalendario(anio, mes) {
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
   const data = await cargarClasesProfesor({ desde, hasta, limit: 260 });
+  calendarClassById = new Map(data.map((clase) => [String(clase.id), clase]));
   cal.setClases(data);
 }
 
@@ -2046,6 +2059,10 @@ function renderIncomeInsights(model) {
 
 // ── PERFIL ───────────────────────────────────────────────────────
 function importeProfesorClase(clase) {
+  const hourly = Number(clase?.teacherHourlyRate ?? clase?.importe_hora_profesor ?? clase?.teacherRatePerHour);
+  if (Number.isFinite(hourly) && hourly > 0) {
+    return Math.round(((hourly * duracionClaseProfesor(clase) / 60) + Number.EPSILON) * 100) / 100;
+  }
   return Number(
     clase?.importe_profesor
     ?? clase?.teacherAmount
@@ -2431,7 +2448,55 @@ window.eliminarMateria = (m) => {
   renderMaterias();
 };
 
-document.addEventListener('click', (e) => {
+async function cancelarClaseDesdeCalendario(btn) {
+  const id = btn.dataset.id;
+  const clase = calendarClassById.get(String(id));
+  if (!clase) {
+    showToast('Clase no disponible', 'Recarga el calendario e intentalo otra vez.', 'warning');
+    return;
+  }
+  const confirmada = window.confirm(`¿Cancelar esta clase? Se avisara a la familia y se registraran ${CLASS_CANCELLATION_PENALTY_POINTS} puntos de responsabilidad en tu historial.`);
+  if (!confirmada) return;
+  const motivo = window.prompt('Motivo breve de la cancelacion', 'Cancelada por el profesor desde el calendario') || 'Cancelada por el profesor desde el calendario';
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Cancelando...';
+  try {
+    await cancelClassFromCalendar({
+      firebaseDb,
+      classId: id,
+      classData: clase,
+      currentUser: usuario,
+      role: 'profesor',
+      reason: motivo,
+    });
+    showToast('Clase cancelada', 'La familia recibira una notificacion con la clase cancelada.', 'success');
+    await cargarInicio();
+    await cargarMisClases();
+    await cargarBizumProfesor();
+    if (cal) {
+      const selectedDay = cal.diaSeleccionado;
+      await cargarClasesCalendario(cal.anio, cal.mes);
+      if (selectedDay) {
+        cal.diaSeleccionado = selectedDay;
+        cal.onDiaClick(selectedDay, cal.clasesPorFecha[selectedDay] || []);
+      }
+    }
+  } catch (error) {
+    showToast('No se pudo cancelar', error.message || 'Revisa permisos o conexion.', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
+document.addEventListener('click', async (e) => {
+  const cancelCalendarBtn = e.target.closest('[data-action="cancelar-clase-calendario"]');
+  if (cancelCalendarBtn) {
+    await cancelarClaseDesdeCalendario(cancelCalendarBtn);
+    return;
+  }
+
   const registrarBtn = e.target.closest('[data-action="registrar-clase"]');
   if (registrarBtn) {
     window.abrirRegistro(

@@ -140,6 +140,28 @@ function roundMoney(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
+function numberOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? roundMoney(n) : null;
+}
+
+function durationFactor(durationMinutes = 60) {
+  const minutes = Number(durationMinutes);
+  return (Number.isFinite(minutes) && minutes > 0 ? minutes : 60) / 60;
+}
+
+function amountFromHourly(hourlyRate, durationMinutes = 60) {
+  const hourly = numberOrNull(hourlyRate);
+  return hourly === null ? null : roundMoney(hourly * durationFactor(durationMinutes));
+}
+
+function hourlyFromAmount(amount, durationMinutes = 60) {
+  const total = numberOrNull(amount);
+  const factor = durationFactor(durationMinutes);
+  return total === null || factor <= 0 ? null : roundMoney(total / factor);
+}
+
 export function validateClassTimeRange(date, startTime, endTime) {
   const errors = [];
   if (!normalizeDateString(date)) errors.push('fecha');
@@ -302,13 +324,35 @@ export function buildClassLifecycleFields(classData = {}, nowIso = new Date().to
 
 export function buildAdminClassPayload(input = {}, previous = {}, options = {}) {
   const validation = validateClassTimeRange(input.fecha, input.hora_inicio, input.hora_fin);
+  const durationMinutes = validation.durationMinutes
+    || Number(input.durationMinutes || input.duracion_minutos || previous.durationMinutes || previous.duracion_minutos || 60)
+    || 60;
   const requestedStatus = storedClassStatus(input.estado || input.status || 'confirmada');
   const changedSchedule = scheduleChanged(previous, input);
   const nextStatus = changedSchedule && isScheduledClassStatus(requestedStatus) ? 'reprogramada' : requestedStatus;
   const nowIso = options.nowIso || new Date().toISOString();
-  const price = input.precio_total ?? input.amount ?? null;
-  let teacherAmount = input.importe_profesor ?? input.teacherAmount ?? null;
-  const numericPrice = price === null || price === '' ? null : Number(price);
+  const familyHourlyRate = numberOrNull(
+    input.familyHourlyRate
+    ?? input.precio_hora_familia
+    ?? input.familyRatePerHour
+    ?? input.tarifa_hora_familia
+    ?? previous.familyHourlyRate
+    ?? previous.precio_hora_familia,
+  );
+  const teacherHourlyRate = numberOrNull(
+    input.teacherHourlyRate
+    ?? input.importe_hora_profesor
+    ?? input.teacherRatePerHour
+    ?? input.tarifa_hora_profesor
+    ?? previous.teacherHourlyRate
+    ?? previous.importe_hora_profesor,
+  );
+  const explicitPrice = numberOrNull(input.precio_total ?? input.amount ?? input.familyAmount);
+  const price = familyHourlyRate !== null ? amountFromHourly(familyHourlyRate, durationMinutes) : explicitPrice;
+  let teacherAmount = teacherHourlyRate !== null
+    ? amountFromHourly(teacherHourlyRate, durationMinutes)
+    : numberOrNull(input.importe_profesor ?? input.teacherAmount ?? input.teacher_amount);
+  const numericPrice = price === null ? null : Number(price);
   if ((teacherAmount === null || teacherAmount === '' || teacherAmount === undefined) && Number.isFinite(numericPrice)) {
     const commissionPercent = Number(configValue(options.config, 'business.defaultCommissionPercent', 25));
     const minimumFee = Number(configValue(options.config, 'business.minimumPlatformFee', 0));
@@ -318,6 +362,8 @@ export function buildAdminClassPayload(input = {}, previous = {}, options = {}) 
   const platformFee = price !== null && teacherAmount !== null
     ? roundMoney(Number(price || 0) - Number(teacherAmount || 0))
     : null;
+  const normalizedFamilyHourlyRate = familyHourlyRate ?? hourlyFromAmount(price, durationMinutes);
+  const normalizedTeacherHourlyRate = teacherHourlyRate ?? hourlyFromAmount(teacherAmount, durationMinutes);
 
   return {
     profesor_id: input.profesor_id || input.teacherUid,
@@ -334,16 +380,20 @@ export function buildAdminClassPayload(input = {}, previous = {}, options = {}) 
     startTime: normalizeTimeString(input.startTime || input.hora_inicio),
     hora_fin: normalizeTimeString(input.hora_fin || input.endTime),
     endTime: normalizeTimeString(input.endTime || input.hora_fin),
-    duracion_minutos: validation.durationMinutes || null,
-    durationMinutes: validation.durationMinutes || null,
+    duracion_minutos: durationMinutes || null,
+    durationMinutes: durationMinutes || null,
     precio_total: price,
     amount: price,
     familyAmount: price,
     importe_profesor: teacherAmount,
     teacherAmount,
+    precio_hora_familia: normalizedFamilyHourlyRate,
+    familyHourlyRate: normalizedFamilyHourlyRate,
+    importe_hora_profesor: normalizedTeacherHourlyRate,
+    teacherHourlyRate: normalizedTeacherHourlyRate,
     comision_clasesde10: platformFee,
     platformFee,
-    marginPct: price ? Math.round((Number(platformFee || 0) / Number(price)) * 10000) / 100 : null,
+    marginPct: numericPrice ? Math.round((Number(platformFee || 0) / numericPrice) * 10000) / 100 : null,
     estado: nextStatus,
     status: nextStatus,
     lifecycleStatus: lifecycleStatusForClassStatus(nextStatus),

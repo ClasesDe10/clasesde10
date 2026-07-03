@@ -52,6 +52,26 @@ assert(adminPayload.lifecycleStatus === 'reprogramada', 'Schedule changes must p
 assert(adminPayload.platformFee === 7, 'Admin payload must calculate platform fee.');
 assert(adminPayload.previousSchedule?.fecha === '2026-06-29', 'Admin payload must preserve previous schedule metadata.');
 
+const hourlyAdminPayload = buildAdminClassPayload({
+  profesor_id: 'teacher_1',
+  familyUid: 'family_1',
+  alumno_id: 'student_1',
+  fecha: '2026-06-30',
+  materia: 'Matematicas',
+  hora_inicio: '17:00',
+  hora_fin: '18:30',
+  familyHourlyRate: 30,
+  teacherHourlyRate: 20,
+  precio_total: 999,
+  importe_profesor: 999,
+  estado: 'confirmada',
+}, {}, { nowIso: '2026-06-28T10:00:00.000Z', calendarUid: 'cal_hourly' });
+assert(hourlyAdminPayload.durationMinutes === 90, 'Hourly class payload must compute duration from the time range.');
+assert(hourlyAdminPayload.precio_total === 45, 'Hourly family rate must be prorated by real class duration.');
+assert(hourlyAdminPayload.importe_profesor === 30, 'Hourly teacher rate must be prorated by real class duration.');
+assert(hourlyAdminPayload.precio_hora_familia === 30, 'Class payload must preserve family hourly rate.');
+assert(hourlyAdminPayload.importe_hora_profesor === 20, 'Class payload must preserve teacher hourly rate.');
+
 const teacherPayload = buildTeacherAttendancePayload('realizada', 'Todo bien', '', 'teacher_1', '2026-06-30T18:05:00.000Z');
 assert(teacherPayload.attendanceStatus === 'pendiente_familia', 'Teacher completion must wait for family confirmation.');
 assert(teacherPayload.lifecycleStatus === 'pendiente_confirmacion', 'Teacher completion must enter pending confirmation lifecycle.');

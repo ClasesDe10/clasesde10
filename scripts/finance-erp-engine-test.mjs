@@ -74,6 +74,19 @@ assert.equal(financialPatch.teacherAmount, 28);
 assert.equal(financialPatch.platformFee, 12);
 assert.equal(financialPatch.marginPct, 30);
 
+const proratedFinancialPatch = buildClassFinancialPatch({
+  subject: 'Matematicas',
+  durationMinutes: 90,
+  familyHourlyRate: 30,
+  teacherHourlyRate: 20,
+}, teachers[0], { config });
+
+assert.equal(proratedFinancialPatch.familyAmount, 45);
+assert.equal(proratedFinancialPatch.teacherAmount, 30);
+assert.equal(proratedFinancialPatch.platformFee, 15);
+assert.equal(proratedFinancialPatch.precio_hora_familia, 30);
+assert.equal(proratedFinancialPatch.importe_hora_profesor, 20);
+
 const valuedHourly = estimateTeacherHourlyRate({
   id: 'teacher-premium',
   experiencia_anios: 5,
@@ -100,6 +113,44 @@ const quote = buildClassPricingQuote({
 assert.equal(quote.teacherAmount, 20);
 assert.ok(quote.familyAmount > quote.teacherAmount, 'Family price must include platform margin over teacher cost.');
 assert.ok(quote.platformFee > 0, 'Pricing quote must calculate platform fee.');
+
+const hourlyQuote = buildClassPricingQuote({
+  subject: 'Fisica',
+  durationMinutes: 45,
+  precio_hora_familia: 40,
+  importe_hora_profesor: 24,
+}, teachers[0], { config });
+assert.equal(hourlyQuote.familyAmount, 30);
+assert.equal(hourlyQuote.teacherAmount, 18);
+assert.equal(hourlyQuote.familyHourlyRate, 40);
+assert.equal(hourlyQuote.teacherHourlyRate, 24);
+
+const hourlyReport = buildFinanceErpReport({
+  classes: [{
+    id: 'hourly-stale',
+    teacherUid: 'teacher-a',
+    familyUid: 'family-a',
+    fecha: '2026-06-18',
+    materia: 'Fisica',
+    durationMinutes: 90,
+    estado: 'realizada',
+    precio_total: 999,
+    importe_profesor: 999,
+    familyHourlyRate: 40,
+    teacherHourlyRate: 25,
+    familyPaymentStatus: 'pendiente',
+    teacherPaymentStatus: 'pendiente',
+  }],
+  teachers,
+  families,
+  students,
+}, {
+  month: '2026-06',
+  config,
+  nowIso: '2026-06-28T12:00:00.000Z',
+});
+assert.equal(hourlyReport.metrics.revenue.earned, 60);
+assert.equal(hourlyReport.metrics.costs.teacherAccrued, 37.5);
 
 const report = buildFinanceErpReport({
   classes: [
