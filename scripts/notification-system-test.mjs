@@ -42,8 +42,10 @@ const [
 ]);
 
 assert(engine.includes('NOTIFICATION_EVENTS'), 'Notification engine must define event constants.');
-assert(engine.includes('class_unmarked_after_1h'), 'Notification engine must include unmarked class event.');
+assert(engine.includes('class_unmarked_after_24h'), 'Notification engine must include 24h unmarked class event.');
 assert(engine.includes('weekly_payment_due'), 'Notification engine must include weekly payment event.');
+assert(engine.includes('payment_overdue_reminder'), 'Notification engine must include overdue payment reminder events.');
+assert(engine.includes('payment_teacher_pause_warning'), 'Notification engine must include teacher pause warning events.');
 assert(engine.includes('alert_priority'), 'Notification engine must include prioritized alert event.');
 assert(engine.includes('relationship_followup'), 'Notification engine must include relationship follow-up events.');
 assert(engine.includes('proactive_assist'), 'Notification engine must include proactive assistance events.');
@@ -104,8 +106,11 @@ assert(functions.includes('notifyOnFamilyProfileUpdated'), 'Functions must notif
 assert(functions.includes('assignment_created'), 'Functions must notify assignment creation.');
 
 assert(automationWorker.includes('buildNotificationDocument'), 'Automation worker must use the shared notification document contract.');
-assert(automationWorker.includes('class_unmarked_after_1h'), 'Automation worker must keep class unmarked notifications.');
+assert(automationWorker.includes('class_unmarked_after_24h'), 'Automation worker must keep 24h class unmarked notifications.');
 assert(automationWorker.includes('teacher_payout_pending'), 'Automation worker must keep teacher payout notifications.');
+assert(automationWorker.includes('PAYMENT_OVERDUE_ESCALATION_STEPS'), 'Automation worker must escalate unpaid family payments across days.');
+assert(automationWorker.includes('teacher_pause_risk_day_15'), 'Automation worker must warn after more than two weeks unpaid.');
+assert(automationWorker.includes('valorar pausar las clases con el profesor'), 'Final unpaid warning must stay cordial and clear about possible professor pause.');
 
 assert(rules.includes('match /notificationTokens/{tokenId}'), 'Firestore rules must protect notification tokens.');
 assert(rules.includes("['readAt', 'leida', 'updatedAt']"), 'Firestore rules must allow users to mark notifications read.');

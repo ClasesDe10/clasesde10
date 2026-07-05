@@ -53,6 +53,19 @@ const payout = buildTeacherPayoutPayload('teacher_1', {
 assert(payout.paymentType === 'teacher_payout' && payout.estado === 'solicitado', 'Teacher payout must be requested.');
 assert(payout.classCount === 2, 'Teacher payout must count linked classes.');
 
+const shortLegacyClassEconomic = classEconomicState({
+  id: 'legacy_short_class',
+  estado: 'confirmada',
+  fecha: '2026-07-10',
+  hora_inicio: '17:30',
+  hora_fin: '18:03',
+  precio_total: 32,
+  importe_profesor: 24,
+});
+assert(shortLegacyClassEconomic.familyAmount === 17.6, 'Legacy hourly family amount must be prorated by real duration.');
+assert(shortLegacyClassEconomic.teacherAmount === 13.2, 'Legacy hourly teacher amount must be prorated by real duration.');
+assert(shortLegacyClassEconomic.platformFee === 4.4, 'Legacy hourly margin must be prorated by real duration.');
+
 const gatewayUpdate = buildGatewayPaymentUpdate({
   gateway: 'stripe',
   providerPaymentStatus: 'succeeded',
@@ -75,8 +88,11 @@ assert(match.status === 'matched' && match.classIds.length === 2, 'Exact payment
 
 const classPatch = buildClassPaymentPatch({ ...familyPayment, id: 'pay_1' }, 'c1', { nowIso: '2026-06-28T12:00:00.000Z' });
 assert(classPatch.familyPaymentStatus === 'validado' && classPatch.familyPaymentId === 'pay_1', 'Family payment patch must mark class as paid.');
+assert(classPatch.paymentEscalationStatus === 'resolved_paid', 'Validated payments must resolve any active overdue escalation.');
 
 assert(isPaymentOverdue({ estado: 'pendiente', dueAt: '2026-06-20T23:59:59.999Z' }, new Date('2026-06-28').getTime()), 'Pending past due payments must be overdue.');
+assert(!isPaymentOverdue({ estado: 'pendiente', dueAt: '2026-06-26T20:00:00.000Z' }, new Date('2026-06-28T19:00:00.000Z').getTime()), 'Family proof payments must keep the 48h grace window.');
+assert(isPaymentOverdue({ estado: 'pendiente', dueAt: '2026-06-26T20:00:00.000Z' }, new Date('2026-06-28T21:00:00.000Z').getTime()), 'Family proof payments must become overdue after the 48h grace window.');
 assert(paymentStatusForBadge({ estado: 'pendiente', dueAt: '2026-06-20T23:59:59.999Z' }) === 'vencido', 'Overdue payments must render as vencido.');
 
 const weeklySchedule = buildWeeklyPaymentSchedulePayload({
@@ -88,6 +104,36 @@ const weeklySchedule = buildWeeklyPaymentSchedulePayload({
   time: '20:00',
 });
 assert(paymentScheduleLabel(weeklySchedule) === 'Viernes 20:00', 'Weekly payment schedule must render a clear label.');
+assert(weeklySchedule.graceHours === 48, 'Weekly payment schedules must default to a 48h proof grace period.');
+const biweeklySchedule = buildWeeklyPaymentSchedulePayload({
+  ownerUid: 'family_user_1',
+  familyUid: 'family_1',
+  teacherUid: 'teacher_1',
+  studentId: 'student_1',
+  frequency: 'quincenal',
+  anchorDate: '2026-06-10',
+  time: '19:30',
+});
+assert(biweeklySchedule.paymentFrequency === 'quincenal' && biweeklySchedule.recurrenceDays === 14, 'Family payment schedules must support biweekly cadence.');
+assert(paymentScheduleLabel(biweeklySchedule) === 'Cada 15 dias - 10/06 19:30', 'Biweekly payment schedule must render a clear label.');
+const firstBiweeklyDue = new Date(weeklyPaymentDueAtForClass({ fecha: '2026-06-08', hora_fin: '18:00' }, biweeklySchedule));
+assert(
+  firstBiweeklyDue.getFullYear() === 2026
+    && firstBiweeklyDue.getMonth() === 5
+    && firstBiweeklyDue.getDate() === 10
+    && firstBiweeklyDue.getHours() === 19
+    && firstBiweeklyDue.getMinutes() === 30,
+  'Biweekly schedule must use the first anchor date after the class.',
+);
+const secondBiweeklyDue = new Date(weeklyPaymentDueAtForClass({ fecha: '2026-06-11', hora_fin: '18:00' }, biweeklySchedule));
+assert(
+  secondBiweeklyDue.getFullYear() === 2026
+    && secondBiweeklyDue.getMonth() === 5
+    && secondBiweeklyDue.getDate() === 24
+    && secondBiweeklyDue.getHours() === 19
+    && secondBiweeklyDue.getMinutes() === 30,
+  'Biweekly schedule must repeat every 14 days after the anchor date.',
+);
 const scheduleIndex = buildPaymentScheduleIndex([weeklySchedule]);
 assert(
   paymentScheduleForClass({ teacherUid: 'teacher_1', studentId: 'student_1' }, scheduleIndex)?.id === weeklySchedule.id,
@@ -213,13 +259,13 @@ assert(
 assert(classFamilyPaymentState(
   { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
   weeklySchedule,
-  { nowMs: new Date('2026-06-27T19:00:00').getTime() },
-).state === 'pending', 'Unpaid classes must stay pending before the 24h grace expires.');
+  { nowMs: new Date('2026-06-28T19:00:00').getTime() },
+).state === 'pending', 'Unpaid classes must stay pending before the 48h grace expires.');
 assert(classFamilyPaymentState(
   { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'pendiente' },
   weeklySchedule,
-  { nowMs: new Date('2026-06-27T21:01:00').getTime() },
-).state === 'overdue', 'Unpaid classes must become overdue after the weekly due date plus 24h.');
+  { nowMs: new Date('2026-06-28T21:01:00').getTime() },
+).state === 'overdue', 'Unpaid classes must become overdue after the weekly due date plus 48h.');
 assert(classFamilyPaymentState(
   { fecha: '2026-06-25', hora_fin: '18:00', familyPaymentStatus: 'validado' },
   weeklySchedule,

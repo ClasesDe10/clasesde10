@@ -17,6 +17,7 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   CHAT_MESSAGE: 'chat_message',
   CLASS_REMINDER: 'class_reminder',
   CLASS_CONFIRMATION_NEEDED: 'class_confirmation_needed',
+  CLASS_UNMARKED_AFTER_24H: 'class_unmarked_after_24h',
   CLASS_UNMARKED_AFTER_1H: 'class_unmarked_after_1h',
   CLASS_SCHEDULE_CHANGE: 'class_schedule_change',
   CLASS_INCIDENT: 'class_incident',
@@ -24,6 +25,8 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   FAMILY_PAYMENT_PENDING: 'family_payment_pending',
   TEACHER_PAYOUT_PENDING: 'teacher_payout_pending',
   PAYMENT_OVERDUE: 'payment_overdue',
+  PAYMENT_OVERDUE_REMINDER: 'payment_overdue_reminder',
+  PAYMENT_TEACHER_PAUSE_WARNING: 'payment_teacher_pause_warning',
   REQUEST_CREATED: 'request_created',
   MATCHING_READY: 'matching_ready',
   MATCHING_NO_MATCH: 'matching_no_match',
@@ -67,6 +70,12 @@ export const NOTIFICATION_EVENT_DEFINITIONS = Object.freeze({
     priority: 'high',
     channels: ['internal', 'browser', 'push'],
   },
+  [NOTIFICATION_EVENTS.CLASS_UNMARKED_AFTER_24H]: {
+    label: 'Clase sin marcar 24h',
+    category: 'clases',
+    priority: 'high',
+    channels: ['internal', 'browser', 'push'],
+  },
   [NOTIFICATION_EVENTS.CLASS_UNMARKED_AFTER_1H]: {
     label: 'Clase sin marcar',
     category: 'clases',
@@ -105,6 +114,18 @@ export const NOTIFICATION_EVENT_DEFINITIONS = Object.freeze({
   },
   [NOTIFICATION_EVENTS.PAYMENT_OVERDUE]: {
     label: 'Pago vencido',
+    category: 'pagos',
+    priority: 'critical',
+    channels: ['internal', 'browser', 'push'],
+  },
+  [NOTIFICATION_EVENTS.PAYMENT_OVERDUE_REMINDER]: {
+    label: 'Recordatorio de pago',
+    category: 'pagos',
+    priority: 'high',
+    channels: ['internal', 'browser', 'push'],
+  },
+  [NOTIFICATION_EVENTS.PAYMENT_TEACHER_PAUSE_WARNING]: {
+    label: 'Aviso de continuidad',
     category: 'pagos',
     priority: 'critical',
     channels: ['internal', 'browser', 'push'],

@@ -125,6 +125,63 @@ const systemJobLimit = Math.max(1, Number(process.env.SYSTEM_JOB_LIMIT || 50));
 const systemJobLeaseMs = 10 * 60 * 1000;
 const systemJobMaxBackoffMs = 60 * 60 * 1000;
 const MAINTENANCE_HEALTH_VERSION = 'maintenance-health-2026-07-01';
+const CLASS_UNMARKED_PENALTY_POINTS = -2;
+const PAYMENT_PROOF_OVERDUE_PENALTY_POINTS = -2;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const PAYMENT_OVERDUE_ESCALATION_VERSION = 'payment-overdue-escalation-2026-07-05';
+const PAYMENT_OVERDUE_ESCALATION_STEPS = Object.freeze([
+  {
+    key: 'due_48h',
+    minDueDays: 2,
+    noticeNumber: 1,
+    type: 'payment_overdue',
+    title: 'Justificante vencido',
+    adminTitle: 'Justificante vencido',
+    penaltyPoints: PAYMENT_PROOF_OVERDUE_PENALTY_POINTS,
+    status: 'overdue_detected',
+  },
+  {
+    key: 'reminder_day_5',
+    minDueDays: 5,
+    noticeNumber: 2,
+    type: 'payment_overdue_reminder',
+    title: 'Recordatorio de pago pendiente',
+    adminTitle: 'Segundo aviso de pago pendiente',
+    penaltyPoints: -1,
+    status: 'reminder_sent',
+  },
+  {
+    key: 'reminder_day_8',
+    minDueDays: 8,
+    noticeNumber: 3,
+    type: 'payment_overdue_reminder',
+    title: 'Seguimos pendientes del justificante',
+    adminTitle: 'Tercer aviso de pago pendiente',
+    penaltyPoints: -1,
+    status: 'reminder_sent',
+  },
+  {
+    key: 'reminder_day_11',
+    minDueDays: 11,
+    noticeNumber: 4,
+    type: 'payment_overdue_reminder',
+    title: 'Pago pendiente: revisalo cuando puedas',
+    adminTitle: 'Cuarto aviso de pago pendiente',
+    penaltyPoints: -1,
+    status: 'reminder_sent',
+  },
+  {
+    key: 'teacher_pause_risk_day_15',
+    minDueDays: 15,
+    noticeNumber: 5,
+    type: 'payment_teacher_pause_warning',
+    title: 'Aviso importante sobre tus clases',
+    adminTitle: 'Riesgo de pausa por impago',
+    penaltyPoints: -3,
+    status: 'teacher_pause_warning_sent',
+    finalWarning: true,
+  },
+]);
 let automationRulesCache = { expiresAt: 0, rules: [] };
 let platformConfigCache = { expiresAt: 0, config: {} };
 let platformConfigRuntime = {};
@@ -724,6 +781,44 @@ async function writeDoc(collectionRef, id, payload, options = {}) {
 async function updateRef(ref, payload) {
   if (dryRun) return;
   await ref.update(payload);
+}
+
+function trustPenaltyEventId(...parts) {
+  return `p_${parts
+    .map((part) => clean(part, 120).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('_')}`.slice(0, 180);
+}
+
+function trustPenaltyPatch({ classId, notificationType, role, userUid, points, reason }) {
+  const id = trustPenaltyEventId(notificationType, classId, role, userUid);
+  const safePoints = Number.isFinite(Number(points)) ? Number(points) : 0;
+  return {
+    [`trustPenaltyEvents.${id}`]: {
+      id,
+      type: 'notification_responsibility_penalty',
+      notificationType,
+      classId: clean(classId, 180),
+      appliedToRole: role,
+      role,
+      appliedToUid: clean(userUid, 180),
+      userUid: clean(userUid, 180),
+      points: safePoints,
+      reason: clean(reason, 300),
+      source: 'automation_worker',
+      createdAt: now(),
+      createdAtIso: isoNow(),
+    },
+    lastTrustPenaltyAt: now(),
+    lastTrustPenaltyAtIso: isoNow(),
+    updatedAt: now(),
+  };
+}
+
+async function applyClassTrustPenalty(ref, params = {}) {
+  if (!ref || !params.userUid || !params.notificationType || !params.role) return false;
+  await updateRef(ref, trustPenaltyPatch(params));
+  return true;
 }
 
 function dateFromFirestore(value) {
@@ -2198,9 +2293,52 @@ function classStatus(data) {
   return normalizeClassStatus(data.estado || data.status || '');
 }
 
+function timeToMinutes(value) {
+  const match = clean(value, 8).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function classTimeRangeDurationMinutes(data = {}) {
+  const start = timeToMinutes(data.hora_inicio || data.startTime);
+  const end = timeToMinutes(data.hora_fin || data.endTime);
+  return start !== null && end !== null && end > start ? end - start : null;
+}
+
+function classDurationMinutes(data = {}) {
+  const timeRange = classTimeRangeDurationMinutes(data);
+  if (timeRange !== null) return timeRange;
+  const explicit = Number(data.durationMinutes ?? data.duracion_minutos ?? data.duration);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : 60;
+}
+
+function proratedClassAmount(data = {}, hourlyFields = [], amountFields = []) {
+  const duration = classDurationMinutes(data);
+  for (const field of hourlyFields) {
+    const hourly = Number(data[field]);
+    if (Number.isFinite(hourly) && hourly > 0) return Math.round(((hourly * duration / 60) + Number.EPSILON) * 100) / 100;
+  }
+  const timeRange = classTimeRangeDurationMinutes(data);
+  for (const field of amountFields) {
+    const amount = Number(data[field]);
+    if (Number.isFinite(amount) && amount > 0) {
+      return timeRange !== null && timeRange !== 60
+        ? Math.round(((amount * duration / 60) + Number.EPSILON) * 100) / 100
+        : Math.round((amount + Number.EPSILON) * 100) / 100;
+    }
+  }
+  return 0;
+}
+
 function classFamilyAmount(data = {}) {
-  const amount = Number(data.precio_total ?? data.familyAmount ?? data.amount ?? data.total ?? 0);
-  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+  return proratedClassAmount(
+    data,
+    ['familyHourlyRate', 'precio_hora_familia', 'familyRatePerHour', 'tarifa_hora_familia'],
+    ['precio_total', 'familyAmount', 'amount', 'total'],
+  );
 }
 
 function classHasPaidStatus(data = {}) {
@@ -2794,14 +2932,14 @@ async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automat
   const teacherName = fullName(
     teacherProfile.data.nombre || teacherUser.data.nombre,
     teacherProfile.data.apellidos || teacherUser.data.apellidos,
-  ) || teacherProfile.data.email || teacherUser.data.email || 'Profesor';
+  ) || teacherProfile.data.email || teacherUser.data.email || 'Contacto';
   const familyName = fullName(
     familyProfile.data.nombre || familyUser.data.nombre,
     familyProfile.data.apellidos || familyUser.data.apellidos,
   ) || familyProfile.data.email || familyUser.data.email || 'Familia';
   const studentName = fullName(studentProfile.data.nombre, studentProfile.data.apellidos);
   const subject = clean(assignment.materia || assignment.subject, 180);
-  const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const introBody = `${teacherName} ya esta asignado. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
   const chatRef = db.collection('chats').doc(id);
   const chatSnap = await chatRef.get();
   const chatData = chatSnap.exists ? chatSnap.data() : {};
@@ -3151,41 +3289,66 @@ async function processUpcomingClassReminders(db, stats) {
 
 async function processUnmarkedClasses(db, stats) {
   const docs = await loadScheduledClassDocs(db);
+  const confirmationGraceMinutes = Math.max(24 * 60, runtimeNumber('automation.classConfirmationGraceMinutes', 24 * 60, 0, 43200));
   for (const doc of docs) {
     const data = doc.data();
     if (!isScheduledClassStatus(data.estado || data.status)) continue;
-    if (!classEndedMoreThan(data, 60)) continue;
+    if (!classEndedMoreThan(data, confirmationGraceMinutes)) continue;
 
     const { teacherUid, familyUid } = await resolveClassRecipients(db, data);
     const label = classLabel(data);
     const payload = {
-      type: 'class_unmarked_after_1h',
+      type: 'class_unmarked_after_24h',
       classId: doc.id,
       url: '/pages/login.html',
     };
-    const key = `class_unmarked_after_1h_${doc.id}`;
+    const key = `class_unmarked_after_24h_${doc.id}`;
     let created = 0;
 
-    created += await notifyUserOnce(
+    const teacherCreated = await notifyUserOnce(
       db,
       teacherUid,
       'Clase pendiente de marcar',
-      `La clase ${label} termino hace mas de una hora y sigue sin registrarse como realizada, cancelada o reprogramada.`,
+      `Han pasado 24h desde la clase ${label}. Marca si se dio o no desde tu panel.`,
       payload,
       `${key}_teacher`,
-    ) ? 1 : 0;
-    created += await notifyUserOnce(
+    );
+    created += teacherCreated ? 1 : 0;
+    if (teacherCreated) {
+      await applyClassTrustPenalty(doc.ref, {
+        classId: doc.id,
+        notificationType: 'class_unmarked_after_24h',
+        role: 'profesor',
+        userUid: teacherUid,
+        points: CLASS_UNMARKED_PENALTY_POINTS,
+        reason: 'No marco si la clase se dio o no dentro de las 24h posteriores.',
+      });
+    }
+
+    const familyCreated = await notifyUserOnce(
       db,
       familyUid,
       'Confirma si la clase se dio',
-      `La clase ${label} termino hace mas de una hora. Confirma desde tu panel si se realizo o si hubo incidencia.`,
+      `Han pasado 24h desde la clase ${label}. Confirma desde tu panel si se realizo o si hubo incidencia.`,
       payload,
       `${key}_family`,
-    ) ? 1 : 0;
+    );
+    created += familyCreated ? 1 : 0;
+    if (familyCreated) {
+      await applyClassTrustPenalty(doc.ref, {
+        classId: doc.id,
+        notificationType: 'class_unmarked_after_24h',
+        role: 'familia',
+        userUid: familyUid,
+        points: CLASS_UNMARKED_PENALTY_POINTS,
+        reason: 'No confirmo la asistencia de la clase dentro de las 24h posteriores.',
+      });
+    }
+
     created += await notifyAdminsOnce(
       db,
       'Clase sin registrar',
-      `La clase ${label} sigue programada una hora despues de terminar.`,
+      `La clase ${label} sigue sin marcar 24h despues de terminar.`,
       payload,
       `${key}_admin`,
     );
@@ -3403,7 +3566,83 @@ function isEndOfWeekWindow() {
 }
 
 function classHasPrice(data) {
-  return Number(data.precio_total || data.amount || data.familyAmount || 0) > 0;
+  return classFamilyAmount(data) > 0;
+}
+
+function paymentOverdueTiming(paymentState = {}) {
+  const dueMs = paymentState.dueAt ? new Date(paymentState.dueAt).getTime() : NaN;
+  if (!Number.isFinite(dueMs)) {
+    return { dueMs: NaN, daysSinceDue: 0, daysSinceOverdue: 0, graceHours: 48 };
+  }
+  const graceHours = Number.isFinite(Number(paymentState.graceHours)) ? Number(paymentState.graceHours) : 48;
+  const overdueStartMs = dueMs + graceHours * 60 * 60 * 1000;
+  const currentMs = Date.now();
+  return {
+    dueMs,
+    graceHours,
+    daysSinceDue: Math.max(0, Math.floor((currentMs - dueMs) / MS_PER_DAY)),
+    daysSinceOverdue: Math.max(0, Math.floor((currentMs - overdueStartMs) / MS_PER_DAY)),
+  };
+}
+
+function paymentOverdueNotificationKey(step = {}, classId = '', target = 'family') {
+  const id = clean(classId, 180);
+  if (step.key === 'due_48h') return `payment_overdue_${id}_${target}`;
+  return `${step.type}_${step.key}_${id}_${target}`;
+}
+
+async function notificationExists(db, userUid, key) {
+  const targetUid = clean(userUid, 180);
+  if (!targetUid || !key) return false;
+  const id = notificationId('auto', key, targetUid);
+  const snap = await db.collection('notificaciones').doc(id).get().catch(() => null);
+  return Boolean(snap?.exists);
+}
+
+async function nextPaymentOverdueEscalationStep(db, { familyUid, classId, daysSinceDue }) {
+  const eligibleSteps = PAYMENT_OVERDUE_ESCALATION_STEPS
+    .filter((step) => daysSinceDue >= step.minDueDays);
+  for (const step of eligibleSteps) {
+    const key = paymentOverdueNotificationKey(step, classId, 'family');
+    if (!(await notificationExists(db, familyUid, key))) return step;
+  }
+  return null;
+}
+
+function paymentOverdueAmountText(amount) {
+  return amount > 0 ? ` de ${amount.toFixed(2)} EUR` : '';
+}
+
+function paymentOverdueFamilyBody(step, context = {}) {
+  const amountText = paymentOverdueAmountText(context.amount);
+  if (step.key === 'due_48h') {
+    return `Ha pasado el margen de 48h para enviar el justificante de la clase ${context.label}. Puedes subirlo desde Pagos cuando lo tengas.`;
+  }
+  if (step.key === 'reminder_day_5') {
+    return `Te lo recordamos con calma: sigue pendiente el justificante${amountText} de la clase ${context.label}. Cuando puedas, subelo para dejarlo al dia.`;
+  }
+  if (step.key === 'reminder_day_8') {
+    return `Seguimos pendientes del justificante${amountText} de la clase ${context.label}. Si ya has hecho el Bizum, solo falta subir el comprobante para que podamos revisarlo.`;
+  }
+  if (step.key === 'reminder_day_11') {
+    return `Nos gustaria ayudarte a cerrar este pago${amountText} cuanto antes. Dejarlo al dia evita avisos nuevos y mantiene las clases funcionando con normalidad.`;
+  }
+  return `Te avisamos con mucho cuidado: este pago${amountText} lleva mas de dos semanas pendiente. Si no queda regularizado pronto, tendremos que valorar pausar las clases con el profesor para proteger su trabajo y evitar que la deuda siga creciendo. Si ya has pagado, sube el justificante y lo revisamos.`;
+}
+
+function paymentOverdueAdminBody(step, context = {}) {
+  const amountText = paymentOverdueAmountText(context.amount) || ' pendiente';
+  if (step.finalWarning) {
+    return `La familia ${context.familyName} acumula ${step.noticeNumber} avisos y mas de dos semanas sin justificar el pago${amountText} de ${context.studentName} con ${context.teacherName}. Preparar seguimiento cordial y posible pausa del profesor.`;
+  }
+  return `Aviso ${step.noticeNumber} de impago para ${context.familyName}: clase ${context.label} de ${context.studentName} con ${context.teacherName}${amountText}.`;
+}
+
+function paymentOverduePenaltyReason(step) {
+  if (step.finalWarning) {
+    return 'Impago sin regularizar tras mas de dos semanas y varios avisos cordiales.';
+  }
+  return `Aviso ${step.noticeNumber} por justificante de pago pendiente.`;
 }
 
 async function processPaymentReminders(db, stats) {
@@ -3447,7 +3686,7 @@ async function processPaymentReminders(db, stats) {
     const { familyUid } = await resolveClassRecipients(db, data);
     const label = classLabel(data);
     const familyName = clean(data.familyName || data.familia_nombre || data.parentName || data.familyUid || data.familia_id || 'familia sin nombre', 120);
-    const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || data.studentId || data.alumno_id || 'alumno/a sin nombre', 120);
+    const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || data.studentId || data.alumno_id || 'la clase', 120);
     const teacherName = clean(data.teacherName || data.profesor_nombre || data.teacherName || data.teacherUid || data.profesor_id || 'profesor sin nombre', 120);
     const amount = classFamilyAmount(data);
     const schedule = paymentScheduleForClass(data, scheduleIndex);
@@ -3472,36 +3711,99 @@ async function processPaymentReminders(db, stats) {
         updated_at: isoNow(),
       });
     }
+    const timing = paymentOverdueTiming(paymentState);
+    const overdueStep = paymentState.overdue
+      ? await nextPaymentOverdueEscalationStep(db, {
+          familyUid,
+          classId: doc.id,
+          daysSinceDue: timing.daysSinceDue,
+        })
+      : null;
+    if (paymentState.overdue && !overdueStep) {
+      stats.paymentsMarkedOverdue += 1;
+      continue;
+    }
+
+    const context = {
+      label,
+      familyName,
+      studentName,
+      teacherName,
+      amount,
+    };
     const payload = {
-      type: paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due',
+      type: paymentState.overdue ? overdueStep.type : 'weekly_payment_due',
       classId: doc.id,
       dueAt: paymentState.dueAt || '',
       familyName,
       studentName,
       teacherName,
       amount,
+      noticeNumber: overdueStep?.noticeNumber || 0,
+      overdueStage: overdueStep?.key || '',
+      daysSinceDue: timing.daysSinceDue,
+      daysSinceOverdue: timing.daysSinceOverdue,
+      escalationVersion: paymentState.overdue ? PAYMENT_OVERDUE_ESCALATION_VERSION : '',
       url: '/pages/login.html',
     };
+    const familyKey = paymentState.overdue
+      ? paymentOverdueNotificationKey(overdueStep, doc.id, 'family')
+      : `weekly_payment_due_${doc.id}_family`;
+    const adminKey = paymentState.overdue
+      ? paymentOverdueNotificationKey(overdueStep, doc.id, 'admin')
+      : `weekly_payment_due_${doc.id}_admin`;
     let created = 0;
-    created += await notifyUserOnce(
+    const familyPaymentCreated = await notifyUserOnce(
       db,
       familyUid,
-      paymentState.overdue ? 'Justificante vencido' : 'Justificante pendiente',
+      paymentState.overdue ? overdueStep.title : 'Justificante pendiente',
       paymentState.overdue
-        ? `Ha pasado el margen de 24h para enviar el justificante de la clase ${label}.`
+        ? paymentOverdueFamilyBody(overdueStep, context)
         : `Ya puedes enviar el justificante de la clase ${label}.`,
       payload,
-      `${paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due'}_${doc.id}_family`,
-    ) ? 1 : 0;
-    created += await notifyAdminsOnce(
+      familyKey,
+    );
+    created += familyPaymentCreated ? 1 : 0;
+    if (paymentState.overdue && familyPaymentCreated) {
+      await applyClassTrustPenalty(doc.ref, {
+        classId: doc.id,
+        notificationType: overdueStep.type,
+        role: 'familia',
+        userUid: familyUid,
+        points: overdueStep.penaltyPoints,
+        reason: paymentOverduePenaltyReason(overdueStep),
+      });
+    }
+    const adminCreated = await notifyAdminsOnce(
       db,
-      paymentState.overdue ? 'Justificante vencido' : 'Justificante pendiente',
+      paymentState.overdue ? overdueStep.adminTitle : 'Justificante pendiente',
       paymentState.overdue
-        ? `La familia ${familyName} falta por pagar/justificar la clase ${label} de ${studentName} con ${teacherName}. Importe familia: ${amount ? `${amount.toFixed(2)} EUR` : 'sin importe'}.`
+        ? paymentOverdueAdminBody(overdueStep, context)
         : `Revisar justificante pendiente de ${familyName}: clase ${label}${amount ? ` (${amount.toFixed(2)} EUR)` : ''}.`,
       payload,
-      `${paymentState.overdue ? 'payment_overdue' : 'weekly_payment_due'}_${doc.id}_admin`,
+      adminKey,
     );
+    created += adminCreated;
+    if (paymentState.overdue && overdueStep && (familyPaymentCreated || adminCreated)) {
+      await writeDoc(db.collection('clases'), doc.id, {
+        paymentEscalationStatus: overdueStep.status,
+        paymentEscalationStage: overdueStep.key,
+        paymentEscalationType: overdueStep.type,
+        paymentEscalationNoticeCount: overdueStep.noticeNumber,
+        paymentEscalationLastSentAt: now(),
+        paymentEscalationLastSentAtIso: isoNow(),
+        paymentOverdueDays: timing.daysSinceDue,
+        paymentOverdueDaysAfterGrace: timing.daysSinceOverdue,
+        paymentEscalationVersion: PAYMENT_OVERDUE_ESCALATION_VERSION,
+        ...(overdueStep.finalWarning ? {
+          teacherPauseRiskAt: now(),
+          teacherPauseRiskAtIso: isoNow(),
+        } : {}),
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+      stats.paymentEscalationNoticesCreated += familyPaymentCreated ? 1 : 0;
+    }
     stats.weeklyPaymentRemindersCreated += created;
     if (paymentState.overdue) stats.paymentsMarkedOverdue += 1;
   }
@@ -3656,7 +3958,7 @@ async function processPlatformAutomationSweep(db, stats) {
   for (const item of classes) {
     stats.platformClassesChecked += 1;
     if (!isScheduledClassStatus(item.estado || item.status)) continue;
-    if (!classEnded(item, 60)) continue;
+    if (!classEnded(item, Math.max(24 * 60, runtimeNumber('automation.classConfirmationGraceMinutes', 24 * 60, 0, 43200)))) continue;
     const enriched = await enrichWorkerClassData(db, item);
     await materializeWorkerAutomationPlan(db, {
       type: 'class.confirmation_overdue',
@@ -3827,7 +4129,7 @@ function preventiveIncidentOptions() {
     staleRequestHours: runtimeNumber('incidents.staleRequestHours', runtimeNumber('matching.staleRequestHours', 12, 1, 720), 1, 1440),
     unscheduledAssignmentHours: runtimeNumber('incidents.unscheduledAssignmentHours', 48, 1, 1440),
     chatStalledHours: runtimeNumber('incidents.chatStalledHours', 48, 1, 1440),
-    paymentGraceHours: runtimeNumber('payments.overdueGraceHours', 24, 0, 720),
+    paymentGraceHours: runtimeNumber('payments.overdueGraceHours', 48, 48, 720),
     repeatedCancellationWindowDays: runtimeNumber('incidents.repeatedCancellationWindowDays', 30, 1, 365),
     repeatedCancellationThreshold: runtimeNumber('incidents.repeatedCancellationThreshold', 3, 2, 50),
     recurrentIncidentWindowDays: runtimeNumber('incidents.recurrentIncidentWindowDays', 30, 1, 365),
@@ -5518,6 +5820,7 @@ async function main() {
     paymentsReconciled: 0,
     paymentsNeedingReview: 0,
     weeklyPaymentRemindersCreated: 0,
+    paymentEscalationNoticesCreated: 0,
     classPaymentContextsUpdated: 0,
     lifecycleClassesEvaluated: 0,
     lifecycleTransitionsApplied: 0,

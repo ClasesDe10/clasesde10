@@ -94,6 +94,8 @@ export const CANONICAL_FIELDS = Object.freeze({
     'familyPaymentStatus', 'teacherPaymentStatus', 'linkedFamilyPaymentId',
     'linkedFamilyPaymentStatus', 'linkedFamilyPaymentAmount',
     'familyPaymentReviewStatus', 'paymentReviewStartedAt',
+    'paymentEscalationStatus', 'paymentEscalationStage', 'paymentEscalationNoticeCount',
+    'paymentEscalationLastSentAt', 'teacherPauseRiskAt',
     'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt',
   ],
   pagos: ['paymentType', 'familyUid', 'teacherUid', 'studentId', 'classIds', 'amount', 'method', 'gateway', 'status', 'dueAt', 'reconciliationStatus', 'idempotencyKey', 'month', 'partitionKey', 'scaleShard', 'createdAt', 'updatedAt'],

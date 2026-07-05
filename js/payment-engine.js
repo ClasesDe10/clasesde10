@@ -45,6 +45,8 @@ export const PAYMENT_STATUSES = Object.freeze([
 
 export const PAID_PAYMENT_STATUSES = Object.freeze(['validado', 'pagado', 'paid', 'succeeded']);
 export const OPEN_PAYMENT_STATUSES = Object.freeze(['pendiente', 'solicitado', 'procesando', 'requiere_accion']);
+export const DEFAULT_FAMILY_PAYMENT_GRACE_HOURS = 48;
+const PAYMENT_DAY_MS = 24 * 60 * 60 * 1000;
 export const WEEKLY_PAYMENT_DAY_LABELS = Object.freeze({
   1: 'Lunes',
   2: 'Martes',
@@ -93,6 +95,56 @@ export function paymentAmount(payment = {}) {
   return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
 }
 
+function money(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : null;
+}
+
+function timeToMinutes(value) {
+  const match = cleanPaymentText(value, 8).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function classTimeRangeDurationMinutes(classData = {}) {
+  const start = timeToMinutes(classData.hora_inicio || classData.startTime);
+  const end = timeToMinutes(classData.hora_fin || classData.endTime);
+  if (start !== null && end !== null && end > start) return end - start;
+  return null;
+}
+
+function classDurationMinutes(classData = {}) {
+  const timeRange = classTimeRangeDurationMinutes(classData);
+  if (timeRange !== null) return timeRange;
+  const explicit = Number(classData.durationMinutes ?? classData.duracion_minutos ?? classData.duration);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : 60;
+}
+
+function prorateHourlyAmount(hourlyRate, durationMinutes = 60) {
+  const hourly = money(hourlyRate);
+  const minutes = Number(durationMinutes) || 60;
+  return hourly === null ? 0 : Math.round(((hourly * minutes / 60) + Number.EPSILON) * 100) / 100;
+}
+
+function classAmountFromHourlyOrLegacy(classData = {}, hourlyFields = [], legacyAmountFields = []) {
+  const durationMinutes = classDurationMinutes(classData);
+  for (const field of hourlyFields) {
+    const hourly = money(classData[field]);
+    if (hourly !== null && hourly > 0) return prorateHourlyAmount(hourly, durationMinutes);
+  }
+  const timeRangeDuration = classTimeRangeDurationMinutes(classData);
+  for (const field of legacyAmountFields) {
+    const amount = money(classData[field]);
+    if (amount !== null && amount > 0) {
+      return timeRangeDuration !== null && timeRangeDuration !== 60 ? prorateHourlyAmount(amount, durationMinutes) : amount;
+    }
+  }
+  return 0;
+}
+
 export function isTeacherPayout(payment = {}) {
   return ['teacher_payout', 'pago_profesor'].includes(payment.paymentType || payment.tipo);
 }
@@ -116,7 +168,15 @@ export function isPaymentOverdue(payment = {}, nowMs = Date.now()) {
   const due = payment.dueAt || payment.due_at;
   if (!due) return false;
   const dueDate = new Date(due);
-  return !Number.isNaN(dueDate.getTime()) && dueDate.getTime() < nowMs;
+  if (Number.isNaN(dueDate.getTime())) return false;
+  const teacherPayout = isTeacherPayout(payment);
+  const graceHours = Number(payment.graceHours ?? payment.grace_hours ?? payment.overdueGraceHours ?? DEFAULT_FAMILY_PAYMENT_GRACE_HOURS);
+  const safeGraceHours = teacherPayout
+    ? 0
+    : Number.isFinite(graceHours)
+    ? Math.max(DEFAULT_FAMILY_PAYMENT_GRACE_HOURS, Math.min(168, graceHours))
+    : DEFAULT_FAMILY_PAYMENT_GRACE_HOURS;
+  return dueDate.getTime() + safeGraceHours * 3600000 < nowMs;
 }
 
 export function paymentDueAtFromDate(baseDate = new Date(), days = 7) {
@@ -137,12 +197,56 @@ function normalizePaymentScheduleTime(value) {
   return /^\d{2}:\d{2}$/.test(raw) ? raw : '20:00';
 }
 
+function normalizePaymentScheduleFrequency(value) {
+  const raw = cleanPaymentText(value || 'semanal', 40).toLowerCase();
+  if (['quincenal', 'biweekly', 'fortnightly', 'cada_15_dias', '15_dias', '15dias'].includes(raw)) return 'quincenal';
+  return 'semanal';
+}
+
+function normalizePaymentScheduleAnchorDate(value) {
+  const raw = cleanPaymentText(value, 20).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return '';
+  const [year, month, day] = raw.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return '';
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return '';
+  return raw;
+}
+
 function mondayBasedDay(date) {
   const day = date.getDay();
   return day === 0 ? 7 : day;
 }
 
+function biweeklyScheduleDateFromClassDate(baseDate, schedule = {}) {
+  const classDate = new Date(baseDate);
+  if (Number.isNaN(classDate.getTime())) return null;
+  const anchorDate = normalizePaymentScheduleAnchorDate(
+    schedule.anchorDate
+    || schedule.paymentAnchorDate
+    || schedule.fecha_inicio_pago
+    || schedule.fecha_inicio_cobro
+    || schedule.startDate,
+  );
+  if (!anchorDate) return null;
+  const time = normalizePaymentScheduleTime(schedule.time ?? schedule.paymentTime ?? schedule.hora_pago);
+  const [hours, minutes] = time.split(':').map(Number);
+  const anchor = new Date(`${anchorDate}T00:00:00`);
+  anchor.setHours(hours, minutes, 0, 0);
+  if (Number.isNaN(anchor.getTime())) return null;
+  let due = new Date(anchor);
+  if (due.getTime() <= classDate.getTime()) {
+    const elapsedDays = Math.max(0, Math.floor((classDate.getTime() - due.getTime()) / PAYMENT_DAY_MS));
+    due.setDate(due.getDate() + Math.floor(elapsedDays / 14) * 14);
+    while (due.getTime() <= classDate.getTime()) due.setDate(due.getDate() + 14);
+  }
+  return due;
+}
+
 function scheduleDateFromClassDate(baseDate, schedule = {}) {
+  if (normalizePaymentScheduleFrequency(schedule.frequency ?? schedule.paymentFrequency ?? schedule.frecuencia_pago) === 'quincenal') {
+    return biweeklyScheduleDateFromClassDate(baseDate, schedule);
+  }
   const classDate = new Date(baseDate);
   if (Number.isNaN(classDate.getTime())) return null;
   const dayOfWeek = normalizePaymentScheduleDay(schedule.dayOfWeek ?? schedule.paymentDay ?? schedule.dia_semana_pago);
@@ -212,10 +316,20 @@ export function paymentScheduleForClass(classData = {}, scheduleIndex = new Map(
 
 export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
   const nowIso = options.nowIso || new Date().toISOString();
+  const frequency = normalizePaymentScheduleFrequency(input.frequency ?? input.paymentFrequency ?? input.frecuencia_pago);
   const dayOfWeek = normalizePaymentScheduleDay(input.dayOfWeek ?? input.paymentDay ?? input.dia_semana_pago);
   const time = normalizePaymentScheduleTime(input.time ?? input.paymentTime ?? input.hora_pago);
-  const graceHours = Number(input.graceHours ?? input.grace_hours ?? options.defaultGraceHours ?? 24);
-  const safeGraceHours = Number.isFinite(graceHours) ? Math.max(1, Math.min(168, graceHours)) : 24;
+  const anchorDate = normalizePaymentScheduleAnchorDate(
+    input.anchorDate
+    || input.paymentAnchorDate
+    || input.fecha_inicio_pago
+    || input.fecha_inicio_cobro
+    || input.startDate,
+  );
+  const graceHours = Number(input.graceHours ?? input.grace_hours ?? options.defaultGraceHours ?? DEFAULT_FAMILY_PAYMENT_GRACE_HOURS);
+  const safeGraceHours = Number.isFinite(graceHours)
+    ? Math.max(DEFAULT_FAMILY_PAYMENT_GRACE_HOURS, Math.min(168, graceHours))
+    : DEFAULT_FAMILY_PAYMENT_GRACE_HOURS;
   return {
     id: input.id || paymentScheduleDocumentId(input),
     type: 'weekly_family_teacher_payment',
@@ -230,15 +344,26 @@ export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
     alumno_id: input.alumno_id || input.studentId || '',
     assignmentId: input.assignmentId || input.asignacion_id || '',
     asignacion_id: input.asignacion_id || input.assignmentId || '',
+    frequency,
+    paymentFrequency: frequency,
+    frecuencia_pago: frequency,
+    recurrenceDays: frequency === 'quincenal' ? 14 : 7,
     dayOfWeek,
     paymentDay: dayOfWeek,
     dia_semana_pago: dayOfWeek,
+    anchorDate,
+    paymentAnchorDate: anchorDate,
+    fecha_inicio_pago: anchorDate,
     time,
     paymentTime: time,
     hora_pago: time,
     graceHours: safeGraceHours,
     grace_hours: safeGraceHours,
-    label: cleanPaymentText(input.label || `${WEEKLY_PAYMENT_DAY_LABELS[dayOfWeek]} ${time}`, 120),
+    label: cleanPaymentText(input.label || (
+      frequency === 'quincenal' && anchorDate
+        ? `Cada 15 dias desde ${anchorDate} ${time}`
+        : `${WEEKLY_PAYMENT_DAY_LABELS[dayOfWeek]} ${time}`
+    ), 120),
     notes: cleanPaymentText(input.notes || input.notas, 500),
     source: input.source || 'family_dashboard',
     updatedAtIso: nowIso,
@@ -246,9 +371,17 @@ export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
 }
 
 export function paymentScheduleLabel(schedule = {}) {
-  if (!schedule || schedule.active === false) return 'Sin plan semanal';
+  if (!schedule || schedule.active === false) return 'Sin plan de pago';
+  const frequency = normalizePaymentScheduleFrequency(schedule.frequency ?? schedule.paymentFrequency ?? schedule.frecuencia_pago);
   const day = normalizePaymentScheduleDay(schedule.dayOfWeek ?? schedule.paymentDay ?? schedule.dia_semana_pago);
   const time = normalizePaymentScheduleTime(schedule.time ?? schedule.paymentTime ?? schedule.hora_pago);
+  if (frequency === 'quincenal') {
+    const anchorDate = normalizePaymentScheduleAnchorDate(schedule.anchorDate || schedule.paymentAnchorDate || schedule.fecha_inicio_pago);
+    const anchorLabel = anchorDate
+      ? `${anchorDate.slice(8, 10)}/${anchorDate.slice(5, 7)}`
+      : 'fecha pendiente';
+    return `Cada 15 dias - ${anchorLabel} ${time}`;
+  }
   return `${WEEKLY_PAYMENT_DAY_LABELS[day]} ${time}`;
 }
 
@@ -335,20 +468,23 @@ export function classFamilyPaymentState(classData = {}, schedule = null, options
     };
   }
   const dueAt = weeklyPaymentDueAtForClass(classData, schedule, options);
-  const graceHours = Number(schedule?.graceHours ?? schedule?.grace_hours ?? options.defaultGraceHours ?? 24);
-  const safeGraceMs = (Number.isFinite(graceHours) ? Math.max(1, graceHours) : 24) * 3600000;
+  const graceHours = Number(schedule?.graceHours ?? schedule?.grace_hours ?? options.defaultGraceHours ?? DEFAULT_FAMILY_PAYMENT_GRACE_HOURS);
+  const safeGraceHours = Number.isFinite(graceHours)
+    ? Math.max(DEFAULT_FAMILY_PAYMENT_GRACE_HOURS, Math.min(168, graceHours))
+    : DEFAULT_FAMILY_PAYMENT_GRACE_HOURS;
+  const safeGraceMs = safeGraceHours * 3600000;
   const dueMs = dueAt ? new Date(dueAt).getTime() : NaN;
   const nowMs = Number(options.nowMs ?? Date.now());
   const overdue = Number.isFinite(dueMs) && dueMs + safeGraceMs < nowMs;
   return {
     state: overdue ? 'overdue' : 'pending',
     label: overdue ? 'Justificante vencido' : 'Justificante pendiente',
-    badge: overdue ? 'Vencida' : 'Pendiente',
+    badge: overdue ? 'Vencida +48h' : 'Pendiente',
     dotClass: overdue ? 'dot-red' : 'dot-gold',
     tone: overdue ? 'danger' : 'warning',
     dueAt,
     overdue,
-    graceHours: Number.isFinite(graceHours) ? Math.max(1, graceHours) : 24,
+    graceHours: safeGraceHours,
   };
 }
 
@@ -419,7 +555,11 @@ export function applyClassPaymentContext(classes = [], payments = []) {
 }
 
 export function classTeacherPaymentAmount(classData = {}) {
-  return paymentAmount({ amount: classData.importe_profesor ?? classData.teacherAmount ?? classData.teacherPrice });
+  return classAmountFromHourlyOrLegacy(
+    classData,
+    ['teacherHourlyRate', 'importe_hora_profesor', 'teacherRatePerHour', 'tarifa_hora_profesor'],
+    ['importe_profesor', 'teacherAmount', 'teacherPrice', 'teacher_amount'],
+  );
 }
 
 export function classPlatformFeeAmount(classData = {}) {
@@ -704,7 +844,7 @@ export function unpaidFamilyClasses(classes = []) {
     const paymentStatus = normalizePaymentStatus(item.familyPaymentStatus || item.estado_pago_familia || item.estado_pago || item.paymentStatus);
     return ['realizada', 'completada', 'completed'].includes(classStatus)
       && !PAID_PAYMENT_STATUSES.includes(paymentStatus)
-      && paymentAmount({ amount: item.precio_total ?? item.amount ?? item.familyAmount }) > 0;
+      && classPaymentAmount(item) > 0;
   });
 }
 
@@ -716,8 +856,27 @@ function paymentBlocksClassConfirmation(payment = {}) {
     && payment.classIds.length > 0;
 }
 
-function classPaymentAmount(classData = {}) {
-  return paymentAmount({ amount: classData.precio_total ?? classData.amount ?? classData.familyAmount });
+export function classPaymentAmount(classData = {}) {
+  return classAmountFromHourlyOrLegacy(
+    classData,
+    ['familyHourlyRate', 'precio_hora_familia', 'familyRatePerHour', 'tarifa_hora_familia'],
+    ['precio_total', 'amount', 'familyAmount'],
+  );
+}
+
+function classTeacherBizumPhone(classData = {}) {
+  return cleanPaymentText(
+    classData.teacherBizumPhone
+    || classData.bizumPhone
+    || classData.telefono_bizum
+    || classData.teacherPhone
+    || classData.profesor_telefono
+    || classData.telefono_profesor
+    || classData.profesores?.telefono
+    || classData.profesores?.usuarios?.telefono
+    || '',
+    40,
+  );
 }
 
 function classPaymentGroupKey(classData = {}, state = {}) {
@@ -755,8 +914,10 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
         alumno_id: classData.alumno_id || classData.studentId || '',
         assignmentId: classData.assignmentId || classData.asignacion_id || '',
         asignacion_id: classData.asignacion_id || classData.assignmentId || '',
-        studentName: cleanPaymentText(classData.studentName || classData.alumno_nombre || classData.alumnoNombre || 'Alumno/a', 160),
-        teacherName: cleanPaymentText(classData.teacherName || classData.profesor_nombre || classData.profesorNombre || 'Profesor/a', 160),
+        studentName: cleanPaymentText(classData.studentName || classData.alumno_nombre || classData.alumnoNombre || 'Sin nombre', 160),
+        teacherName: cleanPaymentText(classData.teacherName || classData.profesor_nombre || classData.profesorNombre || 'Sin nombre', 160),
+        teacherPhone: classTeacherBizumPhone(classData),
+        bizumPhone: classTeacherBizumPhone(classData),
         dueAt: state.dueAt || '',
         state: state.state,
         overdue: state.overdue === true,
@@ -771,6 +932,8 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
     const group = groups.get(key);
     group.amount = Math.round((group.amount + amount) * 100) / 100;
     group.classIds.push(classId);
+    if (!group.teacherPhone) group.teacherPhone = classTeacherBizumPhone(classData);
+    if (!group.bizumPhone) group.bizumPhone = classTeacherBizumPhone(classData);
     group.classes.push({
       id: classId,
       date: classData.fecha || classData.date || '',
@@ -806,7 +969,7 @@ export function buildFamilyClassPaymentConfirmationPayload(group = {}, input = {
   const amount = paymentAmount({ amount: input.monto ?? input.amount ?? group.amount });
   const concept = cleanPaymentText(
     input.concepto
-      || `Justificante ${classIds.length || group.classCount || 1} clase(s) - ${group.studentName || 'Alumno/a'}`,
+      || `Justificante ${classIds.length || group.classCount || 1} clase(s) - ${group.studentName || 'Sin nombre'}`,
     240,
   );
 
@@ -838,13 +1001,13 @@ export function matchPaymentToClasses(payment = {}, classes = []) {
 
   const amount = paymentAmount(payment);
   const unpaid = unpaidFamilyClasses(classes);
-  const exactSingle = unpaid.find((item) => paymentAmount({ amount: item.precio_total ?? item.amount ?? item.familyAmount }) === amount);
+  const exactSingle = unpaid.find((item) => classPaymentAmount(item) === amount);
   if (exactSingle) return { status: 'matched', classIds: [String(exactSingle.id)], confidence: 0.96, reason: 'single_exact_amount' };
 
   const sorted = unpaid
     .map((item) => ({
       id: String(item.id),
-      amount: paymentAmount({ amount: item.precio_total ?? item.amount ?? item.familyAmount }),
+      amount: classPaymentAmount(item),
       date: item.fecha || item.date || '',
     }))
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -1224,6 +1387,9 @@ export function buildClassPaymentPatch(payment = {}, classId = '', options = {})
     familyPaymentStatus: status,
     familyPaymentId: payment.id || payment.paymentId || '',
     familyPaymentValidatedAt: nowIso,
+    paymentEscalationStatus: 'resolved_paid',
+    paymentEscalationResolvedAt: nowIso,
+    teacherPauseRiskResolvedAt: nowIso,
     updated_at: nowIso,
   };
 }
