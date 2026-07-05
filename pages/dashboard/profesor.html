@@ -2471,13 +2471,27 @@ async function cargarIngresos() {
 
 document.getElementById('form-dia-cobro-profesor')?.addEventListener('submit', guardarDiaCobroProfesor);
 
+function attendanceDoneValue(value) {
+  return ['realizada', 'dada', 'completed', 'done', 'confirmada_por_ambas_partes', 'confirmed_by_both']
+    .includes(String(value || '').toLowerCase());
+}
+
+function attendanceBlockedValue(value) {
+  return ['no_realizada', 'incidencia', 'cancelada', 'cancelado', 'discrepancia']
+    .includes(String(value || '').toLowerCase());
+}
+
 function esClaseConIngresoProfesor(clase) {
   const importe = importeProfesorClase(clase);
   if (importe <= 0) return false;
   const estado = String(clase?.estado || clase?.status || '').toLowerCase();
   const asistencia = String(clase?.attendanceStatus || clase?.estado_asistencia || '').toLowerCase();
+  const profesor = String(clase?.teacherConfirmationStatus || clase?.teacherAttendanceStatus || '').toLowerCase();
+  const familia = String(clase?.familyConfirmationStatus || clase?.familyAttendanceStatus || clase?.confirmacion_familia || '').toLowerCase();
+  if (attendanceBlockedValue(estado) || attendanceBlockedValue(asistencia) || attendanceBlockedValue(profesor) || attendanceBlockedValue(familia)) return false;
   return ['realizada', 'pagada', 'paid', 'completada', 'completed'].includes(estado)
-    || ['realizada', 'confirmada_por_ambas_partes', 'confirmed_by_both'].includes(asistencia);
+    || attendanceDoneValue(asistencia)
+    || attendanceDoneValue(profesor);
 }
 
 function esCobroProfesorPagado(clase) {
