@@ -7,11 +7,13 @@ import { nombreMes, nombreDia, formatHora } from './utils.js';
 import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js';
 
 export class Calendario {
-  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, legendItems }) {
+  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, legendItems, dayIndicatorMode, daySummaryLabel }) {
     this.contenedor  = contenedor;
     this.onDiaClick  = onDiaClick || (() => {});
     this.onMesChange = onMesChange || (() => {});
     this.classDotClass = classDotClass || ((classData) => this.coloresPorEstado(classStatusForBadge(classData)));
+    this.dayIndicatorMode = dayIndicatorMode || 'dots';
+    this.daySummaryLabel = daySummaryLabel || ((classData, items) => this.defaultDaySummaryLabel(classData, items));
     this.legendItems = Array.isArray(legendItems) && legendItems.length
       ? legendItems
       : [
@@ -26,6 +28,36 @@ export class Calendario {
     this.mes  = hoy.getMonth();
     this.clasesPorFecha = {};
     this.diaSeleccionado = null;
+  }
+
+  escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  defaultDaySummaryLabel(classData = {}, items = []) {
+    if (classData.calendarEventType === 'family_payment_due') return classData.overdue ? 'Pago vencido' : 'Dia de pago';
+    if (classData.calendarEventType === 'teacher_payout_day') return 'Cobro';
+    return formatHora(classData.hora_inicio || classData.startTime || '') || `${items.length || 1} evento`;
+  }
+
+  renderDayIndicators(clases = []) {
+    if (!clases.length) return '';
+    if (this.dayIndicatorMode === 'summary') {
+      const first = clases[0];
+      const tone = this.classDotClass(first);
+      const label = this.daySummaryLabel(first, clases);
+      const extra = clases.length > 1 ? `<span class="day-count">+${clases.length - 1}</span>` : '';
+      return `<div class="day-event-summary"><span class="day-chip ${this.escapeHtml(tone)}">${this.escapeHtml(label)}</span>${extra}</div>`;
+    }
+    const dots = clases.slice(0,4).map(c =>
+      `<div class="day-dot ${this.escapeHtml(this.classDotClass(c))}"></div>`
+    ).join('');
+    return `<div class="day-dots">${dots}</div>`;
   }
 
   setClases(clases) {
@@ -106,15 +138,13 @@ export class Calendario {
       const esHoy = fecha === hoy;
       const esSel = fecha === this.diaSeleccionado;
 
-      const dots = clases.slice(0,4).map(c =>
-        `<div class="day-dot ${this.classDotClass(c)}"></div>`
-      ).join('');
+      const indicators = this.renderDayIndicators(clases);
 
       diasHTML += `
-        <div class="calendar-day ${esHoy ? 'today' : ''} ${esSel ? 'selected' : ''}"
-             data-fecha="${fecha}" title="${clases.length} clase(s)">
+        <div class="calendar-day ${clases.length ? 'has-events' : ''} ${esHoy ? 'today' : ''} ${esSel ? 'selected' : ''}"
+             data-fecha="${fecha}" title="${clases.length} evento(s)">
           <span class="day-num">${d}</span>
-          <div class="day-dots">${dots}</div>
+          ${indicators}
         </div>`;
     }
 

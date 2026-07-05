@@ -14,6 +14,21 @@ function toIcsDate(date) {
   return `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`;
 }
 
+function toIcsDay(value) {
+  const text = normalizeDateString(value);
+  if (!text) return '';
+  return text.replace(/-/g, '');
+}
+
+function addDaysToIsoDay(value, days = 1) {
+  const text = normalizeDateString(value);
+  if (!text) return '';
+  const date = new Date(`${text}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return '';
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function escapeIcs(value) {
   return cleanCalendarText(value, 2000)
     .replace(/\\/g, '\\\\')
@@ -44,6 +59,11 @@ export function classCalendarUid(classData = {}, fallbackId = '') {
 }
 
 export function classCalendarSummary(classData = {}) {
+  if (classData.calendarTitle || classData.summary || classData.title) {
+    return cleanCalendarText(classData.calendarTitle || classData.summary || classData.title, 160);
+  }
+  if (classData.calendarEventType === 'family_payment_due') return 'ClasesDe10 - Dia de pago';
+  if (classData.calendarEventType === 'teacher_payout_day') return 'ClasesDe10 - Cobro previsto';
   return cleanCalendarText(`ClasesDe10 - ${classData.materia || classData.subject || 'Clase'}`, 160);
 }
 
@@ -59,6 +79,25 @@ function calendarPersonName(role, id = '', ...values) {
 }
 
 export function classCalendarDescription(classData = {}) {
+  if (classData.calendarDescription || classData.description) {
+    return cleanCalendarText(classData.calendarDescription || classData.description, 2000);
+  }
+  if (classData.calendarEventType === 'family_payment_due') {
+    const group = classData.paymentGroup || {};
+    return [
+      `Alumno: ${calendarPersonName('Alumno', group.studentId || group.alumno_id, group.studentName)}`,
+      `Profesor: ${calendarPersonName('Profesor', group.teacherUid || group.profesor_id, group.teacherName)}`,
+      group.amount ? `Importe: ${group.amount} EUR` : '',
+      group.classCount ? `Clases incluidas: ${group.classCount}` : '',
+    ].filter(Boolean).join('\n');
+  }
+  if (classData.calendarEventType === 'teacher_payout_day') {
+    return [
+      `Periodo: ${classData.periodStart || ''} - ${classData.periodEnd || ''}`,
+      classData.payoutAmount ? `Importe previsto: ${classData.payoutAmount} EUR` : '',
+      Array.isArray(classData.payoutClasses) ? `Clases incluidas: ${classData.payoutClasses.length}` : '',
+    ].filter(Boolean).join('\n');
+  }
   const studentName = calendarPersonName('Alumno', classData.alumno_id || classData.studentId, classData.alumno_nombre, classData.studentName);
   const teacherName = calendarPersonName('Profesor', classData.profesor_id || classData.teacherUid, classData.profesor_nombre, classData.teacherName);
   return [
@@ -70,20 +109,32 @@ export function classCalendarDescription(classData = {}) {
 }
 
 export function buildIcsEvent(classData = {}, options = {}) {
-  const start = classStartAt(classData);
-  const end = classEndAt(classData);
-  if (!start || !end) return '';
+  const forceAllDay = classData.allDay === true
+    || classData.calendarEventType === 'family_payment_due'
+    || classData.calendarEventType === 'teacher_payout_day';
+  const start = forceAllDay ? null : classStartAt(classData);
+  const end = forceAllDay ? null : classEndAt(classData);
+  const day = normalizeDateString(classData.fecha || classData.date || classData.payoutDate || classData.dueDate);
+  if ((!start || !end) && !day) return '';
   const uid = `${classCalendarUid(classData, options.fallbackId)}@clasesde10.com`;
   const stamp = toIcsDate(options.now ? new Date(options.now) : new Date());
   const status = ['cancelada'].includes(cleanCalendarText(classData.estado || classData.status).toLowerCase())
     ? 'CANCELLED'
     : 'CONFIRMED';
+  const dateLines = start && end
+    ? [
+        `DTSTART:${toIcsDate(start)}`,
+        `DTEND:${toIcsDate(end)}`,
+      ]
+    : [
+        `DTSTART;VALUE=DATE:${toIcsDay(day)}`,
+        `DTEND;VALUE=DATE:${toIcsDay(addDaysToIsoDay(day, 1))}`,
+      ];
   const lines = [
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${stamp}`,
-    `DTSTART:${toIcsDate(start)}`,
-    `DTEND:${toIcsDate(end)}`,
+    ...dateLines,
     `SUMMARY:${escapeIcs(classCalendarSummary(classData))}`,
     `DESCRIPTION:${escapeIcs(classCalendarDescription(classData))}`,
     `STATUS:${status}`,
@@ -98,6 +149,7 @@ export function buildIcsCalendar(classes = [], options = {}) {
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//ClasesDe10//Calendar//ES',
+    `X-WR-CALNAME:${escapeIcs(options.calendarName || 'ClasesDe10')}`,
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     ...events,
@@ -107,13 +159,20 @@ export function buildIcsCalendar(classes = [], options = {}) {
 }
 
 export function googleCalendarTemplateUrl(classData = {}) {
-  const start = classStartAt(classData);
-  const end = classEndAt(classData);
-  if (!start || !end) return '';
+  const forceAllDay = classData.allDay === true
+    || classData.calendarEventType === 'family_payment_due'
+    || classData.calendarEventType === 'teacher_payout_day';
+  const start = forceAllDay ? null : classStartAt(classData);
+  const end = forceAllDay ? null : classEndAt(classData);
+  const day = normalizeDateString(classData.fecha || classData.date || classData.payoutDate || classData.dueDate);
+  if ((!start || !end) && !day) return '';
+  const dates = start && end
+    ? `${toIcsDate(start).replace(/Z$/, 'Z')}/${toIcsDate(end).replace(/Z$/, 'Z')}`
+    : `${toIcsDay(day)}/${toIcsDay(addDaysToIsoDay(day, 1))}`;
   const params = new URLSearchParams({
     action: 'TEMPLATE',
     text: classCalendarSummary(classData),
-    dates: `${toIcsDate(start).replace(/Z$/, 'Z')}/${toIcsDate(end).replace(/Z$/, 'Z')}`,
+    dates,
     details: classCalendarDescription(classData),
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;

@@ -82,6 +82,7 @@
     "test:calendar-engine": "node scripts/calendar-engine-test.mjs",
     "test:class-lifecycle": "node scripts/class-lifecycle-engine-test.mjs",
     "test:calendar-notifications": "node scripts/calendar-notifications-test.mjs",
+    "test:calendar-export-ui": "node scripts/calendar-export-ui-test.mjs",
     "test:notification-system": "node scripts/notification-system-test.mjs",
     "test:chat-scheduling": "node scripts/chat-scheduling-system-test.mjs",
     "test:class-reset": "node scripts/class-reset-test.mjs",

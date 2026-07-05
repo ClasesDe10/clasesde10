@@ -9,7 +9,8 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260705-calendar-side-panel">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-indicators">
+<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260706-calendar-indicators">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -161,6 +162,9 @@
 
       <!-- ══ CALENDARIO ══ -->
       <section id="section-calendario" class="dash-section" style="display:none">
+        <div class="calendar-actions-bar">
+          <button class="btn btn-ghost btn-sm" type="button" data-action="exportar-calendario-mes">Exportar mes</button>
+        </div>
         <div class="calendar-page-layout">
           <div id="calendario-wrapper"></div>
           <div class="card calendar-day-panel">
@@ -696,13 +700,14 @@ import {
   canCancelClassFromCalendar,
   CLASS_CANCELLATION_PENALTY_POINTS,
 } from '../../js/class-cancellation.js?v=20260703-recurring-cancel';
+import { buildIcsCalendar } from '../../js/calendar-sync.js?v=20260706-calendar-export';
 import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, formatFechaCorta, formatHora,
   badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js?v=20260701-selected-refresh';
+import { Calendario } from '../../js/calendario.js?v=20260706-calendar-indicators';
 
 const usuario = await requireAuth(['familia']);
 if (!usuario) throw new Error('No autorizado');
@@ -1723,11 +1728,39 @@ async function cargarInicio() {
 // ── CALENDARIO ───────────────────────────────────────────────────
 let cal;
 let calendarClassById = new Map();
+let calendarExportItems = [];
+
+function familyCalendarDayLabel(item = {}, items = []) {
+  if (isFamilyPaymentCalendarEvent(item)) return item.overdue ? 'Pago vencido' : 'Dia de pago';
+  return formatHora(item.hora_inicio || item.startTime || '') || `${items.length || 1} evento`;
+}
+
+function downloadCalendarMonth(filenamePrefix, calendarName) {
+  if (!calendarExportItems.length) {
+    showToast('Calendario vacio', 'No hay eventos en el mes visible para exportar.', 'info');
+    return;
+  }
+  const ics = buildIcsCalendar(calendarExportItems, { calendarName });
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const month = cal ? `${cal.anio}-${String(cal.mes + 1).padStart(2, '0')}` : fechaHoy().slice(0, 7);
+  link.href = url;
+  link.download = `${filenamePrefix}-${month}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast('Calendario descargado', 'Puedes importarlo en Google Calendar, Apple Calendar, Outlook o el calendario del movil.', 'success');
+}
+
 async function iniciarCalendario() {
   await cargarPaymentSchedulesFamilia();
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
+      dayIndicatorMode: 'summary',
+      daySummaryLabel: familyCalendarDayLabel,
       classDotClass: (clase) => isFamilyPaymentCalendarEvent(clase)
         ? (clase.overdue ? 'dot-red' : 'dot-gold')
         : familyPaymentStateForClass(clase).dotClass,
@@ -1812,7 +1845,8 @@ async function cargarClasesCalendario(anio, mes) {
   const paymentEvents = buildFamilyPaymentCalendarEvents(groups, anio, mes);
   familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
   calendarClassById = new Map(clasesMes.map((clase) => [String(clase.id), clase]));
-  cal.setClases([...clasesMes, ...paymentEvents]);
+  calendarExportItems = [...clasesMes, ...paymentEvents];
+  cal.setClases(calendarExportItems);
 }
 
 // ── CLASES ───────────────────────────────────────────────────────
@@ -1901,6 +1935,10 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
   const btn = event.target.closest('[data-action="confirmar-clase-familia"]');
   if (!btn) return;
   await confirmarClaseFamiliaDesdeBoton(btn);
+});
+
+document.querySelector('[data-action="exportar-calendario-mes"]')?.addEventListener('click', () => {
+  downloadCalendarMonth('clasesde10-familia', 'ClasesDe10 Familia');
 });
 
 document.getElementById('cal-clases-dia')?.addEventListener('click', async (event) => {
@@ -2300,6 +2338,12 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
     .map((group) => ({
       id: `family-payment-due-${group.key}`,
       calendarEventType: 'family_payment_due',
+      calendarTitle: group.overdue ? 'ClasesDe10 - Pago vencido' : 'ClasesDe10 - Dia de pago',
+      calendarDescription: [
+        `${personDisplayName('Alumno', group.studentId || group.alumno_id, group.studentName)} con ${personDisplayName('Profesor', group.teacherUid || group.profesor_id, group.teacherName)}`,
+        `Importe: ${formatEuros(group.amount || 0)}`,
+        `${group.classCount || group.classIds?.length || 1} clase(s) incluidas`,
+      ].join('\n'),
       fecha: paymentGroupDueDateIso(group),
       date: paymentGroupDueDateIso(group),
       paymentGroupKey: group.key,

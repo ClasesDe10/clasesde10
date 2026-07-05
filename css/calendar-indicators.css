@@ -1,0 +1,91 @@
+.calendar-day {
+  border: 1px solid transparent;
+}
+
+.calendar-day.has-events {
+  background: rgba(12, 31, 63, .035);
+  border-color: rgba(12, 31, 63, .08);
+}
+
+.day-event-summary {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.day-chip {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 19px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: white;
+  font-size: .62rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 5px 12px rgba(12,31,63,.12);
+}
+
+.day-chip.dot-gold {
+  color: #352607;
+}
+
+.day-chip.dot-gray {
+  color: white;
+}
+
+.day-count {
+  flex: 0 0 auto;
+  height: 19px;
+  min-width: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12,31,63,.12);
+  color: var(--navy);
+  font-size: .58rem;
+  font-weight: 800;
+}
+
+.calendar-day.selected .day-count {
+  background: rgba(255,255,255,.2);
+  color: white;
+}
+
+.calendar-actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 380px) {
+  .day-event-summary {
+    gap: 2px;
+    margin-top: 0;
+  }
+
+  .day-chip {
+    min-height: 15px;
+    padding: 2px 4px;
+    font-size: .48rem;
+    max-width: 42px;
+  }
+
+  .day-count {
+    height: 15px;
+    min-width: 15px;
+    padding: 0 3px;
+    font-size: .48rem;
+  }
+}
