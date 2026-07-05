@@ -1891,7 +1891,7 @@ async function cargarClasesCalendario(anio, mes) {
   const paymentEvents = buildFamilyPaymentCalendarEvents(groups, anio, mes);
   familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
   calendarClassById = new Map(clasesMes.map((clase) => [String(clase.id), clase]));
-  calendarExportItems = [...clasesMes, ...paymentEvents];
+  calendarExportItems = [...paymentEvents, ...clasesMes];
   cal.setClases(calendarExportItems);
 }
 
@@ -2373,10 +2373,138 @@ function paymentGroupDueDateIso(group = {}) {
   return isoDateLocal(date);
 }
 
+function localDateFromIso(value = '') {
+  const raw = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [year, month, day] = raw.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+    ? date
+    : null;
+}
+
+function addLocalDays(date, days = 0) {
+  const copy = new Date(date);
+  copy.setDate(copy.getDate() + Number(days || 0));
+  return copy;
+}
+
+function mondayBasedLocalDay(date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+function paymentScheduleFrequencyValue(schedule = {}) {
+  return normalizeFamilyPaymentFrequency(schedule.frequency || schedule.paymentFrequency || schedule.frecuencia_pago);
+}
+
+function paymentScheduleDayValue(schedule = {}) {
+  const day = Number(schedule.dayOfWeek || schedule.paymentDay || schedule.dia_semana_pago || 5);
+  return Number.isFinite(day) && day >= 1 && day <= 7 ? Math.round(day) : 5;
+}
+
+function paymentScheduleAnchorValue(schedule = {}) {
+  const raw = String(schedule.anchorDate || schedule.paymentAnchorDate || schedule.fecha_inicio_pago || '').slice(0, 10);
+  return localDateFromIso(raw) ? raw : '';
+}
+
+function uniqueFamilyPaymentSchedules() {
+  const schedules = new Map();
+  for (const schedule of paymentSchedulesCache.values()) {
+    if (!schedule?.id || schedule.active === false || schedule.status === 'inactive') continue;
+    schedules.set(schedule.id, schedule);
+  }
+  return Array.from(schedules.values());
+}
+
+function paymentScheduleGroupKey(schedule = {}, dateIso = '') {
+  const assignmentId = schedule.assignmentId || schedule.asignacion_id || '';
+  const teacherUid = schedule.teacherUid || schedule.profesor_id || '';
+  const studentId = schedule.studentId || schedule.alumno_id || '';
+  return [assignmentId || `${teacherUid}:${studentId}`, dateIso].join('|');
+}
+
+function paymentScheduleDatesForMonth(schedule = {}, anio, mes) {
+  const monthStart = new Date(anio, mes, 1);
+  const monthEnd = new Date(anio, mes + 1, 0);
+  const dates = [];
+  if (paymentScheduleFrequencyValue(schedule) === 'quincenal') {
+    const anchor = localDateFromIso(paymentScheduleAnchorValue(schedule));
+    if (!anchor) return dates;
+    let current = anchor;
+    if (current < monthStart) {
+      const elapsedDays = Math.floor((monthStart.getTime() - current.getTime()) / 86400000);
+      current = addLocalDays(current, Math.floor(elapsedDays / 14) * 14);
+      while (current < monthStart) current = addLocalDays(current, 14);
+    }
+    while (current <= monthEnd) {
+      dates.push(isoDateLocal(current));
+      current = addLocalDays(current, 14);
+    }
+    return dates;
+  }
+
+  let current = new Date(monthStart);
+  let diff = paymentScheduleDayValue(schedule) - mondayBasedLocalDay(current);
+  if (diff < 0) diff += 7;
+  current = addLocalDays(current, diff);
+  while (current <= monthEnd) {
+    dates.push(isoDateLocal(current));
+    current = addLocalDays(current, 7);
+  }
+  return dates;
+}
+
+function buildFamilyPaymentScheduleCalendarEvents(groups = [], anio, mes) {
+  const groupKeys = new Set((groups || []).map((group) => group.key).filter(Boolean));
+  return uniqueFamilyPaymentSchedules().flatMap((schedule) => (
+    paymentScheduleDatesForMonth(schedule, anio, mes)
+      .map((dateIso) => {
+        const key = paymentScheduleGroupKey(schedule, dateIso);
+        if (groupKeys.has(key)) return null;
+        return {
+          id: `family-payment-schedule-${schedule.id}-${dateIso}`,
+          calendarEventType: 'family_payment_due',
+          calendarTitle: 'ClasesDe10 - Dia de pago',
+          calendarDescription: [
+            paymentScheduleLabel(schedule),
+            'No hay clases pendientes agrupadas en este vencimiento.',
+          ].join('\n'),
+          fecha: dateIso,
+          date: dateIso,
+          dueDate: dateIso,
+          paymentGroupKey: key,
+          paymentGroup: {
+            key,
+            scheduleOnly: true,
+            familyUid: schedule.familyUid || schedule.familia_id || '',
+            familia_id: schedule.familia_id || schedule.familyUid || '',
+            teacherUid: schedule.teacherUid || schedule.profesor_id || '',
+            profesor_id: schedule.profesor_id || schedule.teacherUid || '',
+            studentId: schedule.studentId || schedule.alumno_id || '',
+            alumno_id: schedule.alumno_id || schedule.studentId || '',
+            assignmentId: schedule.assignmentId || schedule.asignacion_id || '',
+            asignacion_id: schedule.asignacion_id || schedule.assignmentId || '',
+            dueAt: dateIso,
+            amount: 0,
+            classIds: [],
+            classes: [],
+            classCount: 0,
+            overdue: false,
+            status: 'programado',
+            label: paymentScheduleLabel(schedule),
+          },
+          overdue: false,
+        };
+      })
+      .filter(Boolean)
+  ));
+}
+
 function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
   const monthStart = `${anio}-${String(mes + 1).padStart(2, '0')}-01`;
   const monthEnd = isoDateLocal(new Date(anio, mes + 1, 0));
-  return (groups || [])
+  const dueEvents = (groups || [])
     .filter((group) => {
       const dueDate = paymentGroupDueDateIso(group);
       return dueDate && dueDate >= monthStart && dueDate <= monthEnd;
@@ -2396,6 +2524,12 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
       paymentGroup: group,
       overdue: group.overdue === true,
     }));
+  const scheduleEvents = buildFamilyPaymentScheduleCalendarEvents(groups, anio, mes);
+  return [...dueEvents, ...scheduleEvents].sort((a, b) => (
+    String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || ''))
+      || Number(b.overdue === true) - Number(a.overdue === true)
+      || String(a.id || '').localeCompare(String(b.id || ''))
+  ));
 }
 
 function bizumPhoneForGroup(group = {}) {
@@ -2432,6 +2566,7 @@ async function copyBizumPaymentDetails(group = {}) {
 function renderFamilyPaymentDueCalendarCard(event = {}) {
   const group = event.paymentGroup || {};
   const schedule = paymentScheduleFor(group);
+  const hasPayableClasses = Number(group.amount || 0) > 0 && Number(group.classCount || group.classIds?.length || 0) > 0;
   const rows = (group.classes || []).slice(0, 6).map((clase) => `
     <div class="calendar-payout-row">
       <span>${sanitize(formatFechaCorta(clase.date))}${clase.startTime ? ` ${sanitize(formatHora(clase.startTime))}` : ''}</span>
@@ -2452,18 +2587,20 @@ function renderFamilyPaymentDueCalendarCard(event = {}) {
         <div class="clase-nombre">${sanitize(personDisplayName('Alumno', group.studentId || group.alumno_id, group.studentName))} con ${sanitize(personDisplayName('Profesor', group.teacherUid || group.profesor_id, group.teacherName))}</div>
         <div class="clase-materia">${sanitize(schedule ? paymentScheduleLabel(schedule) : 'Día de pago')}</div>
         <div class="calendar-payout-summary">
-          <span class="badge ${group.overdue ? 'badge-danger' : 'badge-warning'}">${group.overdue ? 'Vencido' : 'Pendiente'}</span>
-          <strong>${sanitize(formatEuros(group.amount || 0))}</strong>
+          <span class="badge ${group.overdue ? 'badge-danger' : group.scheduleOnly ? 'badge-info' : 'badge-warning'}">${group.overdue ? 'Vencido' : group.scheduleOnly ? 'Programado' : 'Pendiente'}</span>
+          <strong>${hasPayableClasses ? sanitize(formatEuros(group.amount || 0)) : 'Sin importe pendiente'}</strong>
         </div>
         <div class="calendar-payout-detail">
-          ${rows || '<div class="calendar-payout-empty">No hay clases pendientes en este vencimiento.</div>'}
+          ${rows || '<div class="calendar-payout-empty">Dia de pago configurado. Ahora mismo no hay clases pendientes en este vencimiento.</div>'}
           ${extra}
         </div>
-        <div class="calendar-bizum-actions">
-          <button class="btn btn-primary btn-sm" type="button" data-action="pagar-bizum-calendario" data-key="${sanitize(group.key)}">Pagar con Bizum ahora</button>
-          <button class="btn btn-ghost btn-sm" type="button" data-action="copiar-bizum-calendario" data-key="${sanitize(group.key)}">Copiar datos</button>
-        </div>
-        <div class="calendar-bizum-hint">${phone ? `Telefono Bizum: ${sanitize(phone)}` : 'Telefono Bizum no disponible: confirma el pago desde el modal con referencia o justificante.'}</div>
+        ${hasPayableClasses ? `
+          <div class="calendar-bizum-actions">
+            <button class="btn btn-primary btn-sm" type="button" data-action="pagar-bizum-calendario" data-key="${sanitize(group.key)}">Pagar con Bizum ahora</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="copiar-bizum-calendario" data-key="${sanitize(group.key)}">Copiar datos</button>
+          </div>
+          <div class="calendar-bizum-hint">${phone ? `Telefono Bizum: ${sanitize(phone)}` : 'Telefono Bizum no disponible: confirma el pago desde el modal con referencia o justificante.'}</div>
+        ` : ''}
       </div>
     </div>`;
 }

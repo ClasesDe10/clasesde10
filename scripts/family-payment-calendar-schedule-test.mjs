@@ -1,0 +1,62 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
+
+const root = process.cwd();
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function read(relativePath) {
+  return readFile(path.join(root, relativePath), 'utf8');
+}
+
+const familyDashboard = await read('pages/dashboard/familia.html');
+
+assert(
+  familyDashboard.includes('function buildFamilyPaymentScheduleCalendarEvents'),
+  'Family calendar must build events from saved payment schedules, not only from unpaid class groups.',
+);
+assert(
+  familyDashboard.includes('uniqueFamilyPaymentSchedules()'),
+  'Family calendar must iterate unique saved payment schedules.',
+);
+assert(
+  familyDashboard.includes('paymentScheduleDatesForMonth(schedule, anio, mes)'),
+  'Family calendar must calculate weekly/biweekly schedule dates for the visible month.',
+);
+assert(
+  familyDashboard.includes("id: `family-payment-schedule-${schedule.id}-${dateIso}`"),
+  'Family payment schedule markers must have deterministic ids per schedule day.',
+);
+assert(
+  familyDashboard.includes('if (groupKeys.has(key)) return null;'),
+  'Family calendar must not duplicate a schedule marker when a real payment group already exists.',
+);
+assert(
+  familyDashboard.includes('scheduleOnly: true'),
+  'Schedule-only payment markers must be distinguishable from payable groups.',
+);
+assert(
+  familyDashboard.includes('calendarExportItems = [...paymentEvents, ...clasesMes]'),
+  'Family payment events must be ordered before classes so the day chip shows payment day.',
+);
+assert(
+  familyDashboard.includes('hasPayableClasses'),
+  'Family payment cards must detect whether there are actual pending classes to pay.',
+);
+assert(
+  familyDashboard.includes("group.scheduleOnly ? 'Programado'"),
+  'Schedule-only payment cards must show a programmed status.',
+);
+assert(
+  familyDashboard.includes("'Sin importe pendiente'"),
+  'Schedule-only payment cards must not show zero euros as payable.',
+);
+assert(
+  familyDashboard.includes('Dia de pago configurado. Ahora mismo no hay clases pendientes'),
+  'Schedule-only payment cards must explain that there are no pending classes for that due day.',
+);
+
+console.log('Family payment calendar schedule checks passed.');
