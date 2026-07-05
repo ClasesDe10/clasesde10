@@ -28,9 +28,12 @@ assert(css.includes('.calendar-actions-bar'), 'Dashboard CSS must style calendar
 
 for (const [name, html] of [['family', family], ['professor', professor]]) {
   assert(html.includes('data-action="exportar-calendario-mes"'), `${name} calendar must expose month export action.`);
+  assert(html.includes('data-action="exportar-calendario-completo"'), `${name} calendar must expose full calendar export action.`);
   assert(html.includes('calendar-indicators.css'), `${name} calendar must load visible calendar indicator CSS.`);
   assert(html.includes('buildIcsCalendar'), `${name} calendar must generate ICS exports.`);
   assert(html.includes('calendarExportItems'), `${name} calendar must export the visible month events.`);
+  assert(html.includes('FULL_CALENDAR_EXPORT_FUTURE_MONTHS'), `${name} calendar must export a complete forward range for mobile calendar import.`);
+  assert(html.includes('downloadCalendarItems'), `${name} calendar must share ICS download behavior for month and full exports.`);
   assert(html.includes("dayIndicatorMode: 'summary'"), `${name} calendar must use visible day chips.`);
 }
 

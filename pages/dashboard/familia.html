@@ -165,6 +165,7 @@
       <section id="section-calendario" class="dash-section" style="display:none">
         <div class="calendar-actions-bar">
           <button class="btn btn-ghost btn-sm" type="button" data-action="exportar-calendario-mes">Exportar mes</button>
+          <button class="btn btn-primary btn-sm" type="button" data-action="exportar-calendario-completo">Exportar todo (.ics)</button>
         </div>
         <div class="calendar-page-layout">
           <div id="calendario-wrapper"></div>
@@ -1916,29 +1917,125 @@ async function cargarInicio() {
 let cal;
 let calendarClassById = new Map();
 let calendarExportItems = [];
+const FULL_CALENDAR_EXPORT_PAST_MONTHS = 1;
+const FULL_CALENDAR_EXPORT_FUTURE_MONTHS = 12;
 
 function familyCalendarDayLabel(item = {}, items = []) {
   if (isFamilyPaymentCalendarEvent(item)) return item.overdue ? 'Pago vencido' : 'Dia de pago';
   return formatHora(item.hora_inicio || item.startTime || '') || `${items.length || 1} evento`;
 }
 
-function downloadCalendarMonth(filenamePrefix, calendarName) {
-  if (!calendarExportItems.length) {
-    showToast('Calendario vacio', 'No hay eventos en el mes visible para exportar.', 'info');
+function downloadCalendarItems(items = [], filename = 'clasesde10.ics', calendarName = 'ClasesDe10', emptyMessage = 'No hay eventos para exportar.') {
+  if (!items.length) {
+    showToast('Calendario vacio', emptyMessage, 'info');
     return;
   }
-  const ics = buildIcsCalendar(calendarExportItems, { calendarName });
+  const ics = buildIcsCalendar(items, { calendarName });
   const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const month = cal ? `${cal.anio}-${String(cal.mes + 1).padStart(2, '0')}` : fechaHoy().slice(0, 7);
   link.href = url;
-  link.download = `${filenamePrefix}-${month}.ics`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
   showToast('Calendario descargado', 'Puedes importarlo en Google Calendar, Apple Calendar, Outlook o el calendario del movil.', 'success');
+}
+
+function downloadCalendarMonth(filenamePrefix, calendarName) {
+  const month = cal ? `${cal.anio}-${String(cal.mes + 1).padStart(2, '0')}` : fechaHoy().slice(0, 7);
+  downloadCalendarItems(
+    calendarExportItems,
+    `${filenamePrefix}-${month}.ics`,
+    calendarName,
+    'No hay eventos en el mes visible para exportar.',
+  );
+}
+
+function calendarExportRange() {
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth() - FULL_CALENDAR_EXPORT_PAST_MONTHS, 1);
+  const end = new Date(today.getFullYear(), today.getMonth() + FULL_CALENDAR_EXPORT_FUTURE_MONTHS + 1, 0);
+  return {
+    start,
+    end,
+    desde: isoDateLocal(start),
+    hasta: isoDateLocal(end),
+  };
+}
+
+function calendarMonthsBetween(start, end) {
+  const months = [];
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1);
+  const last = new Date(end.getFullYear(), end.getMonth(), 1);
+  while (cursor <= last) {
+    months.push({ anio: cursor.getFullYear(), mes: cursor.getMonth() });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
+}
+
+function uniqueCalendarItems(items = []) {
+  const map = new Map();
+  (items || []).filter(Boolean).forEach((item, index) => {
+    const key = String(item.id || item.calendarUid || `${item.calendarEventType || 'class'}-${item.fecha || item.date || item.dueDate || ''}-${item.hora_inicio || item.startTime || index}`);
+    if (!map.has(key)) map.set(key, item);
+  });
+  return Array.from(map.values()).sort((a, b) => (
+    String(a.fecha || a.date || a.dueDate || '').localeCompare(String(b.fecha || b.date || b.dueDate || ''))
+      || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || ''))
+      || String(a.id || '').localeCompare(String(b.id || ''))
+  ));
+}
+
+async function buildFullFamilyCalendarExportItems() {
+  await cargarPaymentSchedulesFamilia();
+  const range = calendarExportRange();
+  const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
+  const hijosFamilia = hijos || [];
+  const ids = hijosFamilia.map(h => h.id);
+  const hijosPorId = new Map(hijosFamilia.map((hijo) => [
+    hijo.id,
+    personDisplayName('Alumno', hijo.id, fullPersonName(hijo.nombre, hijo.apellidos)),
+  ]));
+  const [data, pagos, chats] = await Promise.all([
+    cargarClasesFamilia({ hijos: hijosFamilia, ids, hijosPorId, desde: range.desde, hasta: range.hasta, limit: 2000 }),
+    cargarPagosFamiliaFirestore(),
+    cargarChatsUsuarioActual(),
+  ]);
+  const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijosFamilia, clases: data, chats });
+  hydratePaymentSchedulesForCalendar(identityResolver);
+  const clasesConPago = applyClassPaymentContext(data, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const groups = buildFamilyPaymentConfirmationGroups(clasesConPago, pagos, paymentScheduleIndexFamilia())
+    .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
+  const paymentEvents = calendarMonthsBetween(range.start, range.end)
+    .flatMap(({ anio, mes }) => buildFamilyPaymentCalendarEvents(groups, anio, mes));
+  return uniqueCalendarItems([...paymentEvents, ...clasesConPago]);
+}
+
+async function downloadFullFamilyCalendar(button) {
+  const previousText = button?.textContent || '';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Preparando...';
+  }
+  try {
+    const items = await buildFullFamilyCalendarExportItems();
+    downloadCalendarItems(
+      items,
+      'clasesde10-familia-completo.ics',
+      'ClasesDe10 Familia',
+      'No hay clases ni pagos para exportar.',
+    );
+  } catch (error) {
+    showToast('No se pudo exportar', error.message || 'Intentalo de nuevo en unos segundos.', 'error');
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText;
+    }
+  }
 }
 
 async function iniciarCalendario() {
@@ -2130,6 +2227,10 @@ document.getElementById('tbody-clases')?.addEventListener('click', async (event)
 
 document.querySelector('[data-action="exportar-calendario-mes"]')?.addEventListener('click', () => {
   downloadCalendarMonth('clasesde10-familia', 'ClasesDe10 Familia');
+});
+
+document.querySelector('[data-action="exportar-calendario-completo"]')?.addEventListener('click', async (event) => {
+  await downloadFullFamilyCalendar(event.currentTarget);
 });
 
 document.getElementById('cal-clases-dia')?.addEventListener('click', async (event) => {
