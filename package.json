@@ -78,6 +78,7 @@
     "test:payment-engine": "node scripts/payment-engine-test.mjs",
     "test:product-ux": "node scripts/product-ux-test.mjs",
     "test:dashboard-empty-state": "node scripts/dashboard-empty-state-test.mjs",
+    "test:form-layout-stability": "node scripts/form-layout-stability-test.mjs",
     "test:bizum-payments": "node scripts/bizum-payments-test.mjs",
     "test:calendar-engine": "node scripts/calendar-engine-test.mjs",
     "test:class-lifecycle": "node scripts/class-lifecycle-engine-test.mjs",

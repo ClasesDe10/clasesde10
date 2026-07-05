@@ -35,15 +35,14 @@
     } catch (_) {}
   };
 
+  const isPanelInstallPath = (pathname = window.location.pathname) =>
+    /^\/pages\/login(?:\.html)?$/i.test(pathname) ||
+    /^\/pages\/dashboard\//i.test(pathname);
+
   const canShow = () =>
     !isStandalone() &&
     !dismissedRecently() &&
-    !window.location.pathname.startsWith('/pages/dashboard/') &&
-    ![
-      '/pages/login.html',
-      '/pages/registro.html',
-      '/pages/reset-password.html',
-    ].includes(window.location.pathname);
+    isPanelInstallPath();
 
   function syncViewportVars() {
     const viewport = window.visualViewport;
@@ -466,6 +465,45 @@
         font-size: .75rem;
         font-weight: 750;
         line-height: 1.35;
+      }
+      .income-lab-toolbar .cd10-smart-hint,
+      .student-section-toolbar .cd10-smart-hint,
+      .ops-toolbar .cd10-smart-hint,
+      .calendar-actions-bar .cd10-smart-hint,
+      .topbar .cd10-smart-hint,
+      [data-no-smart-hints] .cd10-smart-hint {
+        display: none !important;
+      }
+      .form-row,
+      .form-row-3,
+      .income-payout-form {
+        align-items: start;
+      }
+      .form-row > .form-group,
+      .form-row-3 > .form-group,
+      .income-payout-form > .form-group {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .form-control {
+        min-height: 44px;
+      }
+      .income-lab-toolbar {
+        align-items: flex-start;
+      }
+      .income-lab-toolbar label {
+        align-content: start;
+      }
+      .income-payout-form .btn {
+        align-self: start;
+        min-height: 44px;
+        margin-top: 28px;
+      }
+      @media (max-width: 760px) {
+        .income-payout-form .btn {
+          margin-top: 0;
+        }
       }
       input.cd10-field-complete,
       select.cd10-field-complete,
@@ -1526,6 +1564,7 @@
     if (!(field instanceof HTMLElement)) return '';
     if (field.closest('.auth-card')) return '';
     if (['hidden', 'password', 'submit', 'button', 'reset'].includes(field.type)) return '';
+    if (isCompactFieldContext(field)) return '';
     const context = fieldContext(field);
     const rules = [
       [/email|correo/, 'Este correo se usara para acceso y avisos importantes.'],
@@ -1542,6 +1581,18 @@
     ];
     const found = rules.find(([pattern]) => pattern.test(context));
     return found?.[1] || '';
+  }
+
+  function isCompactFieldContext(field) {
+    return Boolean(field.closest([
+      '.income-lab-toolbar',
+      '.student-section-toolbar',
+      '.ops-toolbar',
+      '.calendar-actions-bar',
+      '.topbar',
+      '.table-wrapper thead',
+      '[data-no-smart-hints]',
+    ].join(',')));
   }
 
   function updateFieldFeedback(field) {
@@ -1565,6 +1616,10 @@
 
   function addSmartHint(field) {
     if (!(field instanceof HTMLElement) || field.dataset.cd10HintBound === 'true') return;
+    if (isCompactFieldContext(field)) return;
+    const group = field.closest('.form-group, .cf-field, .field, .input-group');
+    const uploadZone = field.type === 'file' ? field.closest('.upload-zone') : null;
+    if (!group && !uploadZone) return;
     const hint = hintForField(field);
     if (!hint) return;
     const id = `cd10-hint-${field.id || field.name || Math.random().toString(36).slice(2)}`.replace(/[^a-z0-9_-]/gi, '-');
@@ -1575,20 +1630,28 @@
     node.textContent = hint;
     const describedBy = field.getAttribute('aria-describedby');
     field.setAttribute('aria-describedby', describedBy ? `${describedBy} ${id}` : id);
-    const group = field.closest('.form-group, .cf-field, .field, .input-group');
-    const uploadZone = field.type === 'file' ? field.closest('.upload-zone') : null;
     if (uploadZone) {
       uploadZone.querySelectorAll('.cd10-smart-hint').forEach((item) => item.remove());
       uploadZone.insertAdjacentElement('afterend', node);
-    } else if (group && !group.querySelector('.cd10-smart-hint')) {
+    } else if (group) {
+      if (group.querySelector('.cd10-smart-hint')) {
+        field.dataset.cd10HintBound = 'true';
+        return;
+      }
       group.appendChild(node);
-    } else {
-      field.insertAdjacentElement('afterend', node);
     }
     field.dataset.cd10HintBound = 'true';
   }
 
   function enhanceFieldDetails(root = document) {
+    root.querySelectorAll?.([
+      '.income-lab-toolbar .cd10-smart-hint',
+      '.student-section-toolbar .cd10-smart-hint',
+      '.ops-toolbar .cd10-smart-hint',
+      '.calendar-actions-bar .cd10-smart-hint',
+      '.topbar .cd10-smart-hint',
+      '[data-no-smart-hints] .cd10-smart-hint',
+    ].join(',')).forEach((hint) => hint.remove());
     root.querySelectorAll?.('input, select, textarea').forEach((field) => {
       bindFieldFeedback(field);
       addSmartHint(field);
@@ -1810,7 +1873,7 @@
     installCard.className = 'cd10-install-card';
     installCard.setAttribute('role', 'dialog');
     installCard.setAttribute('aria-live', 'polite');
-    installCard.setAttribute('aria-label', 'Instalar ClasesDe10');
+    installCard.setAttribute('aria-label', 'Instalar panel de ClasesDe10');
 
     const iosSteps = mode === 'ios'
       ? '<div class="cd10-install-card__steps">En iPhone: pulsa Compartir y despues "Anadir a pantalla de inicio".</div>'
@@ -1820,13 +1883,13 @@
       <div class="cd10-install-card__top">
         <img src="/assets/img/logo-192.png" alt="" width="42" height="42">
         <div>
-          <strong>Instala ClasesDe10 en tu movil</strong>
-          <p>Accede como app, con icono propio y carga mas rapida en visitas futuras.</p>
+          <strong>Instala tu panel de ClasesDe10</strong>
+          <p>El icono abre el acceso a tu cuenta. Si ya tienes sesion, entraras directo a tu panel.</p>
           ${iosSteps}
         </div>
       </div>
       <div class="cd10-install-card__actions">
-        <button class="cd10-install-card__primary" type="button" data-pwa-install>${mode === 'ios' ? 'Como instalar' : 'Instalar app'}</button>
+        <button class="cd10-install-card__primary" type="button" data-pwa-install>${mode === 'ios' ? 'Como instalar' : 'Instalar panel'}</button>
         <button class="cd10-install-card__secondary" type="button" data-pwa-dismiss>Ahora no</button>
       </div>
     `;
@@ -1848,7 +1911,7 @@
 
       if (mode === 'ios') {
         installCard.querySelector('.cd10-install-card__steps').textContent =
-          'Abre el menu Compartir de Safari y elige "Anadir a pantalla de inicio".';
+          'Abre el menu Compartir de Safari y elige "Anadir a pantalla de inicio". El acceso abrira tu login/panel.';
       }
     });
 
