@@ -22,6 +22,57 @@ function clean(value, max = 500) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
+const GENERIC_CANCELLATION_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'docente',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'estudiante',
+  'familia',
+  'familia sin nombre',
+  'sin nombre',
+  'sin profesor',
+  'contacto',
+  'la otra persona',
+  'el profesor',
+  'la familia',
+]);
+
+function cancellationPersonKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericCancellationPersonLabel(value) {
+  const key = cancellationPersonKey(value);
+  return !key || GENERIC_CANCELLATION_PERSON_LABELS.has(key);
+}
+
+function cancellationPersonFallback(role, id = '') {
+  const label = clean(role, 40) || 'Persona';
+  const cleanId = clean(id, 180);
+  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
+function cancellationPersonName(role, id = '', ...values) {
+  for (const value of values) {
+    const candidate = clean(value, 180);
+    if (candidate && !isGenericCancellationPersonLabel(candidate)) return candidate;
+  }
+  return cancellationPersonFallback(role, id);
+}
+
 function dateLabel(classData = {}) {
   const date = clean(classData.fecha || classData.date, 20).slice(0, 10);
   const start = clean(classData.hora_inicio || classData.startTime, 8).slice(0, 5);
@@ -47,13 +98,13 @@ export function classCancellationCounterparty(classData = {}, actorRole = '') {
     return {
       uid: clean(classData.teacherUid || classData.profesor_id, 180),
       role: 'profesor',
-      name: clean(classData.teacherName || classData.profesor_nombre || 'el profesor', 160),
+      name: cancellationPersonName('Profesor', classData.teacherUid || classData.profesor_id, classData.teacherName, classData.profesor_nombre),
     };
   }
   return {
     uid: clean(classData.familyUid || classData.familia_id, 180),
     role: 'familia',
-    name: clean(classData.familyName || classData.familia_nombre || 'la familia', 160),
+    name: cancellationPersonName('Familia', classData.familyUid || classData.familia_id, classData.familyName, classData.familia_nombre),
   };
 }
 
@@ -104,7 +155,12 @@ export function buildClassCancellationNotificationPayload({
 } = {}) {
   const actorRole = clean(role, 40).toLowerCase() === 'profesor' ? 'profesor' : 'familia';
   const counterparty = classCancellationCounterparty(classData, actorRole);
-  const actorLabel = actorRole === 'profesor' ? 'El profesor' : 'La familia';
+  const actorId = actorRole === 'profesor'
+    ? clean(classData.teacherUid || classData.profesor_id || currentUser.uid || currentUser.firebase_uid || currentUser.id, 180)
+    : clean(classData.familyUid || classData.familia_id || currentUser.uid || currentUser.firebase_uid || currentUser.id, 180);
+  const actorLabel = actorRole === 'profesor'
+    ? cancellationPersonName('Profesor', actorId, [currentUser.nombre, currentUser.apellidos].filter(Boolean).join(' '), currentUser.displayName, currentUser.email, classData.teacherName, classData.profesor_nombre)
+    : cancellationPersonName('Familia', actorId, [currentUser.nombre, currentUser.apellidos].filter(Boolean).join(' '), currentUser.displayName, currentUser.email, classData.familyName, classData.familia_nombre);
   const subject = clean(classData.materia || classData.subject || 'Clase', 160);
   const body = `${actorLabel} ha cancelado ${subject} (${dateLabel(classData)}). Motivo: ${clean(reason || 'Cancelada desde el calendario', 500)}.`;
   return {

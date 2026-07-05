@@ -125,6 +125,41 @@ function first(...values) {
   return values.find((value) => value !== undefined && value !== null && clean(value) !== '');
 }
 
+const GENERIC_ANALYTICS_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'docente',
+  'sin profesor',
+  'sin nombre',
+  'contacto',
+]);
+
+function analyticsPersonKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function analyticsPersonFallback(role, id = '') {
+  const label = clean(role, 40) || 'Persona';
+  const cleanId = clean(id, 180);
+  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
+function analyticsPersonName(role, id = '', ...values) {
+  for (const value of values) {
+    const candidate = clean(value, 180);
+    if (candidate && !GENERIC_ANALYTICS_PERSON_LABELS.has(analyticsPersonKey(candidate))) return candidate;
+  }
+  return analyticsPersonFallback(role, id);
+}
+
 function percentage(part, total) {
   return total > 0 ? round((number(part) / number(total)) * 100, 1) : 0;
 }
@@ -332,7 +367,14 @@ function teacherConversion(records = {}) {
     const offered = requests.filter((item) => clean(first(item.assignedTeacherUid, item.profesor_asignado_id), 160) === teacherUid).length || assigned.length;
     return {
       teacherUid,
-      teacherName: clean([first(teacher.nombre, teacher.usuarios?.nombre), first(teacher.apellidos, teacher.usuarios?.apellidos)].filter(Boolean).join(' '), 180) || teacherUid || 'Sin profesor',
+      teacherName: analyticsPersonName(
+        'Profesor',
+        teacherUid,
+        [first(teacher.nombre, teacher.usuarios?.nombre), first(teacher.apellidos, teacher.usuarios?.apellidos)].filter(Boolean).join(' '),
+        teacher.displayName,
+        teacher.name,
+        teacher.email,
+      ),
       offered,
       assignments: assigned.length,
       classes: teacherClasses.length,

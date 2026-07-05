@@ -171,8 +171,40 @@ function updatedAt(item = {}) {
   return first(item.updatedAt, item.updated_at, item.lastMessageAt, item.createdAt, item.created_at, item.fecha, item.date);
 }
 
+const GENERIC_RELATIONSHIP_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'docente',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'estudiante',
+  'familia',
+  'sin nombre',
+  'sin profesor',
+  'contacto',
+]);
+
+function relationshipPersonKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function relationshipPersonFallback(role, item = {}) {
+  const label = clean(role, 40);
+  if (!label) return '';
+  const id = idOf(item);
+  if (id) return `${label} ${id.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
 function nameOf(item = {}, fallback = '') {
-  return clean(first(
+  const values = [
     item.displayName,
     item.name,
     [item.nombre, item.apellidos].filter(Boolean).join(' '),
@@ -180,7 +212,12 @@ function nameOf(item = {}, fallback = '') {
     item.email,
     item.usuarios?.email,
     fallback,
-  ), 180);
+  ];
+  for (const value of values) {
+    const candidate = clean(value, 180);
+    if (candidate && !GENERIC_RELATIONSHIP_PERSON_LABELS.has(relationshipPersonKey(candidate))) return candidate;
+  }
+  return relationshipPersonFallback(fallback, item);
 }
 
 function classRelationId(item = {}) {

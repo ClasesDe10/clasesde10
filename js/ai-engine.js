@@ -208,6 +208,13 @@ export function getTeacherName(teacher) {
   );
 }
 
+function teacherNameOrFallback(name = '', id = '') {
+  const candidate = clean(name, 180);
+  if (candidate) return candidate;
+  const cleanId = clean(id, 180);
+  return cleanId ? `Profesor ${cleanId.slice(0, 6)}` : 'Profesor pendiente de nombre';
+}
+
 function subjectTags(value) {
   const text = normalizeText(Array.isArray(value) ? value.join(' ') : value);
   const tokens = new Set(tokenize(text));
@@ -1189,7 +1196,7 @@ export function buildMatchingDecisionSupport(request, candidates = []) {
     quality,
     confidenceScore,
     summary: best
-      ? `${best.teacherName || 'Profesor'} encaja con ${bestScore}% y ${assignable.length} candidato(s) asignable(s).`
+      ? `${teacherNameOrFallback(best.teacherName, best.teacherUid)} encaja con ${bestScore}% y ${assignable.length} candidato(s) asignable(s).`
       : 'Sin candidato claro para la solicitud.',
     thinkingSummary: best
       ? `Decision basada sobre todo en ${joinNatural(decisionFactors.map((factor) => factor.label), 'las senales disponibles')}.`
@@ -1648,15 +1655,16 @@ export function buildTeacherProfileRecommendations(teacher = {}) {
   const experience = profile.experienceYears > 0
     ? `${profile.experienceYears} anio(s) de experiencia`
     : 'experiencia pendiente de detallar';
+  const profileName = teacherNameOrFallback(profile.name, profile.teacherUid || profile.id);
 
   const generatedDescription = [
-    `${profile.name || 'Este profesor'} imparte ${subjects} para ${levels}.`,
+    `${profileName} imparte ${subjects} para ${levels}.`,
     `Trabaja en ${modality} en ${zone}.`,
     `Cuenta con ${study} y ${experience}.`,
     profile.availability ? `Disponibilidad: ${profile.availability}.` : 'Falta concretar la disponibilidad horaria.',
   ].join(' ');
 
-  const headline = `${profile.name || 'Profesor'} - ${subjects} (${levels})`;
+  const headline = `${profileName} - ${subjects} (${levels})`;
   const nextActions = quality.issues.slice(0, 6).map((issue) => ({
     field: issue.field,
     label: issue.label,
@@ -1841,11 +1849,12 @@ export function summarizeTeacherProfile(teacher = {}) {
   const quality = evaluateTeacherProfile(teacher);
   const profile = quality.profile;
   const nextActions = quality.issues.slice(0, 4).map((issue) => issue.label);
+  const profileName = teacherNameOrFallback(profile.name, profile.teacherUid || profile.id);
   return {
     score: quality.score,
     readiness: quality.readiness,
     assignable: quality.assignable,
-    summary: `${profile.name || 'Profesor'}: ${profile.subjects.join(', ') || 'sin materias'}; ${profile.levels.join(', ') || 'sin niveles'}; ${profile.zone || 'sin zona'}.`,
+    summary: `${profileName}: ${profile.subjects.join(', ') || 'sin materias'}; ${profile.levels.join(', ') || 'sin niveles'}; ${profile.zone || 'sin zona'}.`,
     strengths: quality.strengths.slice(0, 5),
     nextActions,
   };

@@ -17,12 +17,17 @@ import {
   where,
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
-import { firebaseAuth, firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
+import {
+  getDownloadURL,
+  ref as storageRef,
+  uploadBytes,
+} from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
+import { firebaseAuth, firebaseDb, firebaseStorage } from './firebase-client.js?v=20260627-domain-auth';
 import {
   buildAdminClassPayload,
   validateClassTimeRange,
-} from './calendar-engine.js?v=20260628-calendar';
-import { buildClassPricingQuote } from './finance-erp-engine.js?v=20260629-pricing';
+} from './calendar-engine.js?v=20260704-prorated-duration';
+import { buildClassPricingQuote } from './finance-erp-engine.js?v=20260704-prorated-duration';
 import {
   availabilitySlotLabel,
   busySlotLabel,
@@ -65,6 +70,48 @@ const SCHEDULE_KIND_WEEKLY = 'weekly_recurring';
 const SCHEDULE_KIND_ONE_OFF = 'one_off';
 const SCHEDULE_KINDS = new Set([SCHEDULE_KIND_WEEKLY, SCHEDULE_KIND_ONE_OFF]);
 const ACCEPTED_SCHEDULE_STATUSES = new Set(['aceptada', 'accepted', 'confirmada', 'confirmed']);
+const CHAT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const CHAT_ATTACHMENT_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'audio/webm',
+  'audio/ogg',
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/wav',
+]);
+const CHAT_ATTACHMENT_MIME_BY_EXT = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  webm: 'audio/webm',
+  ogg: 'audio/ogg',
+  mp3: 'audio/mpeg',
+  m4a: 'audio/mp4',
+  wav: 'audio/wav',
+};
+const chatAttachmentUrlCache = new Map();
 
 function clean(value, max = 2000) {
   return String(value || '').trim().slice(0, max);
@@ -77,6 +124,123 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function escapeAttribute(value, max = 300000) {
+  return clean(value, max)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function safeImageSrc(value) {
+  const src = clean(value, 300000);
+  if (!src) return '';
+  const lowerPrefix = src.slice(0, 80).toLowerCase();
+  if (/^data:image\/(?:png|jpe?g|webp|gif);base64,/i.test(lowerPrefix)) return src;
+  if (/^(https?:|blob:)/i.test(src)) return src;
+  if (/^(\/|\.\/|\.\.\/)/.test(src)) return src;
+  return '';
+}
+
+function initialsFromName(name = '') {
+  const words = clean(name, 180).split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] || '';
+  const second = words.length > 1 ? words[1]?.[0] : '';
+  return `${first}${second}`.toUpperCase() || '?';
+}
+
+function chatIcon(name) {
+  const icons = {
+    clip: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l10-10a4 4 0 0 1 5.7 5.7l-10 10a2 2 0 1 1-2.8-2.8l9.4-9.4"/></svg>',
+    image: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5L5 19"/></svg>',
+    mic: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
+    phone: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.6 2.5a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6.5 6.5l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.5.6A2 2 0 0 1 22 16.9Z"/></svg>',
+    calendar: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 11h18"/></svg>',
+    edit: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  };
+  return icons[name] || '';
+}
+
+function fileExtension(name = '') {
+  return clean(name, 240).split('.').pop()?.toLowerCase() || '';
+}
+
+function mimeTypeForFile(file = {}) {
+  const direct = clean(file.type, 180).split(';')[0].toLowerCase();
+  if (direct) return direct;
+  return CHAT_ATTACHMENT_MIME_BY_EXT[fileExtension(file.name)] || 'application/octet-stream';
+}
+
+function chatAttachmentKindFromMime(mimeType = '') {
+  const type = clean(mimeType, 180).toLowerCase();
+  if (type.startsWith('image/')) return 'image';
+  if (type.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+
+function safeStorageFileName(fileName = '') {
+  return clean(fileName, 180)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 120) || 'archivo';
+}
+
+function validateChatAttachmentFile(file) {
+  if (!file) throw new Error('Selecciona un archivo.');
+  if (file.size > CHAT_ATTACHMENT_MAX_BYTES) throw new Error('El archivo no puede superar 10 MB.');
+  const mimeType = mimeTypeForFile(file);
+  if (!CHAT_ATTACHMENT_TYPES.has(mimeType)) {
+    throw new Error('Formato no admitido. Usa imagen, PDF, Word, Excel, PowerPoint, texto o audio.');
+  }
+  return mimeType;
+}
+
+function normalizeChatAttachment(attachment = {}) {
+  if (!attachment || typeof attachment !== 'object') return null;
+  const storagePath = clean(attachment.storagePath || attachment.storage_path || attachment.path, 600);
+  if (!storagePath) return null;
+  const mimeType = clean(attachment.mimeType || attachment.mime_type, 180).toLowerCase();
+  const kind = clean(attachment.kind || chatAttachmentKindFromMime(mimeType), 40) || 'file';
+  return {
+    kind: ['image', 'audio', 'file'].includes(kind) ? kind : 'file',
+    name: clean(attachment.name || attachment.fileName || attachment.nombre || 'Archivo', 180),
+    mimeType,
+    sizeBytes: Number(attachment.sizeBytes || attachment.tamano_bytes || 0) || null,
+    storagePath,
+    durationMs: Number(attachment.durationMs || 0) || null,
+  };
+}
+
+function chatAttachmentLabel(attachment = {}) {
+  const normalized = normalizeChatAttachment(attachment);
+  if (!normalized) return '';
+  if (normalized.kind === 'image') return `Foto: ${normalized.name}`;
+  if (normalized.kind === 'audio') return 'Nota de audio';
+  return `Archivo: ${normalized.name}`;
+}
+
+function chatMessagePreview(body = '', attachment = null) {
+  return clean(body, 180) || chatAttachmentLabel(attachment) || 'Mensaje';
+}
+
+function chatStoragePath(chatId = '', uid = '', fileName = '') {
+  const safeChat = clean(chatId, 180).replace(/\//g, '_') || 'chat';
+  const safeUid = clean(uid, 180).replace(/\//g, '_') || 'usuario';
+  return `chats/${safeChat}/${safeUid}/${Date.now()}-${safeStorageFileName(fileName)}`;
+}
+
+async function getChatAttachmentUrl(path = '') {
+  const cleanPath = clean(path, 600);
+  if (!cleanPath) return '';
+  if (chatAttachmentUrlCache.has(cleanPath)) return chatAttachmentUrlCache.get(cleanPath);
+  const url = await getDownloadURL(storageRef(firebaseStorage, cleanPath));
+  chatAttachmentUrlCache.set(cleanPath, url);
+  return url;
 }
 
 function isAcceptedScheduleProposal(proposal = {}) {
@@ -301,8 +465,8 @@ function pickClassPriceFields(fields = {}) {
 }
 
 function proratedPricingFromHourly(chat = {}, durationMinutes = 60) {
-  const familyHourly = Number(chat.familyHourlyRate ?? chat.precio_hora_familia ?? chat.familyRatePerHour);
-  const teacherHourly = Number(chat.teacherHourlyRate ?? chat.importe_hora_profesor ?? chat.teacherRatePerHour);
+  const familyHourly = Number(chat.familyHourlyRate ?? chat.precio_hora_familia ?? chat.familyRatePerHour ?? chat.precio_total ?? chat.amount ?? chat.familyAmount);
+  const teacherHourly = Number(chat.teacherHourlyRate ?? chat.importe_hora_profesor ?? chat.teacherRatePerHour ?? chat.importe_profesor ?? chat.teacherAmount);
   if (!Number.isFinite(familyHourly) || familyHourly <= 0 || !Number.isFinite(teacherHourly) || teacherHourly <= 0) return null;
   const factor = (Number(durationMinutes) || 60) / 60;
   const familyAmount = Math.round((familyHourly * factor + Number.EPSILON) * 100) / 100;
@@ -339,12 +503,65 @@ function assignmentIds(assignment) {
   return { familyUid, teacherUid, studentId, familyUserUid, teacherUserUid };
 }
 
+const GENERIC_IDENTITY_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'familia',
+  'familia sin nombre',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'estudiante',
+  'docente',
+  'contacto',
+  'sin nombre',
+  'la otra persona',
+  'este alumno',
+  'este profesor',
+]);
+
+function isGenericIdentityLabel(value) {
+  const normalized = clean(value, 180).toLowerCase();
+  return !normalized || GENERIC_IDENTITY_LABELS.has(normalized);
+}
+
 function reliableName(value, fallback = '') {
   const text = clean(value, 180);
-  return text.length > 1 ? text : clean(fallback, 180);
+  if (text.length > 1 && !isGenericIdentityLabel(text)) return text;
+  const fallbackText = clean(fallback, 180);
+  return fallbackText.length > 1 && !isGenericIdentityLabel(fallbackText) ? fallbackText : '';
 }
 
 function hydrateChatNames(data = {}, fallback = {}) {
+  const teacherPhotoUrl = safeImageSrc(
+    data.teacherPhotoUrl
+    || data.profesor_foto_url
+    || data.teacherAvatarUrl
+    || data.teacherProfilePhotoUrl
+    || fallback.teacherPhotoUrl
+    || fallback.profesor_foto_url
+    || fallback.teacherAvatarUrl
+    || fallback.teacherProfilePhotoUrl,
+  );
+  const teacherPhone = clean(
+    data.teacherPhone
+    || data.profesor_telefono
+    || fallback.teacherPhone
+    || fallback.profesor_telefono,
+    40,
+  );
+  const familyPhone = clean(
+    data.familyPhone
+    || data.familia_telefono
+    || fallback.familyPhone
+    || fallback.familia_telefono,
+    40,
+  );
   return {
     ...data,
     familyName: reliableName(data.familyName, fallback.familyName),
@@ -372,6 +589,12 @@ function hydrateChatNames(data = {}, fallback = {}) {
     commissionPercent: data.commissionPercent ?? data.comision_porcentaje ?? fallback.commissionPercent ?? fallback.comision_porcentaje ?? null,
     pricingRule: data.pricingRule || fallback.pricingRule || '',
     teacherRateSource: data.teacherRateSource || fallback.teacherRateSource || '',
+    teacherPhotoUrl,
+    profesor_foto_url: teacherPhotoUrl,
+    teacherPhone,
+    profesor_telefono: teacherPhone,
+    familyPhone,
+    familia_telefono: familyPhone,
   };
 }
 
@@ -416,7 +639,10 @@ function defaultChatTitle(chat, role) {
   const family = readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail);
   const teacher = readableChatIdentity(chat.teacherName, chat.profesor_nombre, chat.teacherEmail);
   const student = readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
-  if (role === 'profesor') return student || family || shortChatEntityLabel('Familia', chat.familyUid || chat.familia_id);
+  if (role === 'profesor') {
+    const studentId = chat.studentId || chat.alumno_id;
+    return student || family || (studentId ? shortChatEntityLabel('Alumno', studentId) : shortChatEntityLabel('Familia', chat.familyUid || chat.familia_id));
+  }
   if (role === 'familia') return teacher || shortChatEntityLabel('Profesor', chat.teacherUid || chat.profesor_id);
   return [
     family || shortChatEntityLabel('Familia', chat.familyUid || chat.familia_id),
@@ -426,6 +652,39 @@ function defaultChatTitle(chat, role) {
 
 function chatTitle(chat, role, preference = {}) {
   return reliableName(preference.displayNameOverride, '') || defaultChatTitle(chat, role);
+}
+
+function chatCounterpartPhotoUrl(chat = {}, role = '') {
+  if (role !== 'familia') return '';
+  return safeImageSrc(chat.teacherPhotoUrl || chat.profesor_foto_url || chat.teacherAvatarUrl || chat.teacherProfilePhotoUrl);
+}
+
+function chatCounterpartPhone(chat = {}, role = '') {
+  const phone = role === 'familia'
+    ? chat.teacherPhone || chat.profesor_telefono
+    : role === 'profesor'
+      ? chat.familyPhone || chat.familia_telefono
+      : '';
+  return clean(phone, 40).replace(/[^\d+]/g, '');
+}
+
+function renderChatCallActions(chat = {}, role = '') {
+  if (!chat?.id || role === 'admin') return '';
+  const phone = chatCounterpartPhone(chat, role);
+  return phone
+    ? `<a class="chat-icon-btn" href="tel:${escapeAttribute(phone, 40)}" title="Llamar" aria-label="Llamar">${chatIcon('phone')}</a>`
+    : '';
+}
+
+function renderChatCounterpartAvatar(chat = {}, role = '', preference = {}, variant = 'list') {
+  if (role !== 'familia') return '';
+  const title = chatTitle(chat, role, preference);
+  const photoUrl = chatCounterpartPhotoUrl(chat, role);
+  const classes = `chat-contact-avatar chat-contact-avatar-${variant}${photoUrl ? ' has-image' : ''}`;
+  if (photoUrl) {
+    return `<span class="${classes}"><img src="${escapeAttribute(photoUrl)}" alt="${escapeAttribute(`Foto de ${title}`, 240)}" loading="lazy" referrerpolicy="no-referrer"></span>`;
+  }
+  return `<span class="${classes}" aria-hidden="true">${escapeHtml(initialsFromName(title))}</span>`;
 }
 
 function realChatTitle(chat, role) {
@@ -439,9 +698,7 @@ function realChatTitle(chat, role) {
 
 function isUsefulChatIdentity(value) {
   const normalized = clean(value, 120).toLowerCase();
-  return normalized
-    && normalized.length > 1
-    && !['profesor', 'familia', 'alumno', 'alumno/a', 'profesor asignado'].includes(normalized);
+  return normalized && normalized.length > 1 && !isGenericIdentityLabel(normalized);
 }
 
 function readableChatIdentity(...values) {
@@ -450,7 +707,7 @@ function readableChatIdentity(...values) {
 
 function shortChatEntityLabel(label, id = '') {
   const suffix = clean(id, 180).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
-  return suffix ? `${label} ${suffix}` : label;
+  return suffix ? `${label} ${suffix}` : `${label} pendiente de nombre`;
 }
 
 function isExpectedPermissionFallback(error) {
@@ -465,14 +722,14 @@ function chatSubtitle(chat, role, preference = {}) {
   if (preference.displayNameOverride && isUsefulChatIdentity(realTitle)) parts.push(`Nombre real: ${realTitle}`);
   const familyName = readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail);
   const studentName = readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
-  if (role === 'profesor' && familyName && familyName !== defaultTitle) parts.push(`Familia: ${familyName}`);
-  if (role !== 'profesor' && studentName) parts.push(`Alumno/a: ${studentName}`);
+  if (role === 'profesor' && familyName && familyName !== defaultTitle) parts.push(familyName);
+  if (role !== 'profesor' && studentName) parts.push(studentName);
   if (chat.materia) parts.push(chat.materia);
-  return parts.join(' · ') || 'Asignacion activa';
+  return parts.join(' - ') || 'Asignacion activa';
 }
 
 async function loadAssignments(dbCompat, role, profileId, actorIds = []) {
-  const select = '*, alumnos(nombre,apellidos), familias(nombre,apellidos,usuarios(nombre,apellidos,email,telefono)), profesores(nombre,apellidos,email,usuarios(nombre,apellidos,email,telefono))';
+  const select = '*, alumnos(nombre,apellidos), familias(nombre,apellidos,telefono,usuarios(nombre,apellidos,email,telefono)), profesores(nombre,apellidos,email,telefono,foto_url,photoUrl,usuarios(nombre,apellidos,email,telefono))';
   if (role === 'admin') {
     const { data, error } = await dbCompat.from('asignaciones').select(select).eq('activa', true);
     if (error) throw error;
@@ -503,15 +760,25 @@ async function ensureChatForAssignment(assignment, usuario, role) {
 
   const ref = doc(firebaseDb, 'chats', assignmentId);
   const existing = await getDoc(ref);
-  const teacherName = fullName(
+  const teacherName = readableChatIdentity(fullName(
     assignment.profesores?.usuarios?.nombre || assignment.profesores?.nombre,
     assignment.profesores?.usuarios?.apellidos || assignment.profesores?.apellidos,
-  ) || assignment.profesores?.usuarios?.email || assignment.profesores?.email || 'Profesor';
-  const familyName = fullName(
+  ), assignment.teacherName, assignment.profesor_nombre, assignment.profesores?.usuarios?.email, assignment.profesores?.email)
+    || shortChatEntityLabel('Profesor', teacherUid);
+  const teacherPhotoUrl = safeImageSrc(assignment.profesores?.foto_url || assignment.profesores?.photoUrl);
+  const teacherPhone = clean(assignment.profesores?.usuarios?.telefono || assignment.profesores?.telefono, 40);
+  const familyName = readableChatIdentity(fullName(
     assignment.familias?.usuarios?.nombre || assignment.familias?.nombre,
     assignment.familias?.usuarios?.apellidos || assignment.familias?.apellidos,
-  ) || assignment.familias?.usuarios?.email || 'Familia';
-  const studentName = fullName(assignment.alumnos?.nombre, assignment.alumnos?.apellidos);
+  ), assignment.familyName, assignment.familia_nombre, assignment.familias?.usuarios?.email)
+    || shortChatEntityLabel('Familia', familyUid);
+  const familyPhone = clean(assignment.familias?.usuarios?.telefono || assignment.familias?.telefono, 40);
+  const studentName = readableChatIdentity(
+    fullName(assignment.alumnos?.nombre, assignment.alumnos?.apellidos),
+    assignment.studentName,
+    assignment.alumno_nombre,
+    assignment.studentDisplayName,
+  ) || shortChatEntityLabel('Alumno', studentId);
   const participantUids = participantMap([
     familyUid,
     teacherUid,
@@ -539,6 +806,12 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     teacherRateSource: assignment.teacherRateSource || '',
     familyName,
     teacherName,
+    teacherPhotoUrl,
+    profesor_foto_url: teacherPhotoUrl,
+    teacherPhone,
+    profesor_telefono: teacherPhone,
+    familyPhone,
+    familia_telefono: familyPhone,
     studentName,
     participantUids,
     active: true,
@@ -819,6 +1092,12 @@ async function loadChatAvailability(chat = {}, currentUid = '', role = '') {
   repairBusySlotsFromVisibleClasses(visibleClassBusy, currentUid, role);
   return {
     loading: false,
+    teacherUid,
+    profesor_id: teacherUid,
+    studentId,
+    alumno_id: studentId,
+    teacherName: readableChatIdentity(chat.teacherName, chat.profesor_nombre, chat.teacherEmail) || shortChatEntityLabel('Profesor', teacherUid),
+    studentName: readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName) || shortChatEntityLabel('Alumno', studentId),
     teacherSlots: uniqueAvailabilityRows([...teacherCanonical, ...teacherLegacy]),
     studentSlots: uniqueAvailabilityRows(studentRows),
     busySlots,
@@ -963,16 +1242,18 @@ async function persistBusySlotsForClass(classId, classFields = {}, context = {})
 function availabilityForRole(role, availability = {}) {
   const teacherSlots = availability.teacherSlots || [];
   const studentSlots = availability.studentSlots || [];
+  const teacherLabel = readableChatIdentity(availability.teacherName) || shortChatEntityLabel('Profesor', availability.teacherUid || availability.profesor_id);
+  const studentLabel = readableChatIdentity(availability.studentName) || shortChatEntityLabel('Alumno', availability.studentId || availability.alumno_id);
   if (role === 'familia') return {
-    targetLabel: 'profesor',
+    targetLabel: teacherLabel,
     targetSlots: teacherSlots,
-    ownLabel: 'alumno',
+    ownLabel: studentLabel,
     ownSlots: studentSlots,
   };
   if (role === 'profesor') return {
-    targetLabel: 'alumno',
+    targetLabel: studentLabel,
     targetSlots: studentSlots,
-    ownLabel: 'profesor',
+    ownLabel: teacherLabel,
     ownSlots: teacherSlots,
   };
   return {
@@ -1020,20 +1301,23 @@ function renderAvailabilitySummary(availability = {}, role = '') {
   const studentSummary = summarizeAvailabilitySlots(availability.studentSlots || []);
   const busySummary = summarizeBusySlots(availability.busySlots || [], 3);
   const roleContext = availabilityForRole(role, availability);
+  const teacherLabel = readableChatIdentity(availability.teacherName) || shortChatEntityLabel('Profesor', availability.teacherUid || availability.profesor_id);
+  const studentLabel = readableChatIdentity(availability.studentName) || shortChatEntityLabel('Alumno', availability.studentId || availability.alumno_id);
+  const targetAvailabilityText = `de ${roleContext.targetLabel}`;
   const targetMissing = role !== 'admin' && !roleContext.targetSlots.length;
   const ownMissing = role !== 'admin' && !roleContext.ownSlots.length;
   const ownSection = role === 'profesor' ? 'disponibilidad' : role === 'familia' ? 'alumnos' : '';
   const statusClass = targetMissing ? 'warning' : 'success';
   const statusText = targetMissing
-    ? `Falta disponibilidad del ${roleContext.targetLabel}; no se puede proponer horario todavia.`
-    : `Las propuestas deben estar dentro de las franjas del ${roleContext.targetLabel} y fuera de horas ya ocupadas.`;
+    ? `Falta disponibilidad ${targetAvailabilityText}; no se puede proponer horario todavia.`
+    : `Las propuestas deben estar dentro de las franjas ${targetAvailabilityText} y fuera de horas ya ocupadas.`;
 
   return `
     <div class="schedule-availability-summary ${statusClass}">
       <div class="schedule-availability-status">${escapeHtml(statusText)}</div>
       <div class="schedule-availability-grid">
-        <div><span>Profesor</span><strong>${escapeHtml(teacherSummary || 'Sin franjas marcadas')}</strong></div>
-        <div><span>Alumno</span><strong>${escapeHtml(studentSummary || 'Sin franjas marcadas')}</strong></div>
+        <div><span>${escapeHtml(teacherLabel)}</span><strong>${escapeHtml(teacherSummary || 'Sin franjas marcadas')}</strong></div>
+        <div><span>${escapeHtml(studentLabel)}</span><strong>${escapeHtml(studentSummary || 'Sin franjas marcadas')}</strong></div>
         <div class="schedule-availability-busy"><span>Ocupado</span><strong>${escapeHtml(busySummary || 'Sin clases confirmadas en conflicto')}</strong></div>
       </div>
       ${ownMissing && ownSection ? `
@@ -1051,7 +1335,7 @@ function renderShell(container, role) {
         <div class="chat-panel-header">
           <div>
             <div class="chat-title">Chat</div>
-            <div class="chat-subtitle">Conversaciones de asignaciones activas</div>
+            <div class="chat-subtitle">Mensajes y avisos</div>
           </div>
         </div>
         <div class="chat-tabs">
@@ -1063,12 +1347,19 @@ function renderShell(container, role) {
       <section class="chat-thread-panel" data-chat-panel="chats">
         <div class="chat-thread-header" data-chat-header>
           <div class="chat-empty-title">Selecciona una conversacion</div>
-          <div class="chat-empty-subtitle">Solo aparecen chats de asignaciones activas.</div>
+          <div class="chat-empty-subtitle">Elige un chat para empezar.</div>
         </div>
         <div class="chat-messages" data-chat-messages></div>
         <section class="chat-schedule-panel" data-chat-schedule-panel style="display:none"></section>
         <form class="chat-compose" data-chat-form style="display:none">
-          <textarea class="form-control" data-chat-input rows="2" maxlength="2000" aria-label="Escribe un mensaje" placeholder="Escribe un mensaje..."></textarea>
+          <input type="file" data-chat-file-input hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif">
+          <input type="file" data-chat-image-input hidden accept="image/jpeg,image/png,image/webp,image/gif">
+          <div class="chat-compose-tools" aria-label="Acciones del chat">
+            <button class="chat-icon-btn" type="button" data-chat-attach-file title="Adjuntar archivo" aria-label="Adjuntar archivo">${chatIcon('clip')}</button>
+            <button class="chat-icon-btn" type="button" data-chat-attach-image title="Enviar foto" aria-label="Enviar foto">${chatIcon('image')}</button>
+            <button class="chat-icon-btn" type="button" data-chat-audio-record aria-pressed="false" title="Nota de audio" aria-label="Nota de audio">${chatIcon('mic')}</button>
+          </div>
+          <textarea class="form-control" data-chat-input rows="1" maxlength="2000" aria-label="Mensaje" placeholder="Mensaje"></textarea>
           <button class="btn btn-primary" type="submit">Enviar</button>
         </form>
       </section>
@@ -1076,12 +1367,12 @@ function renderShell(container, role) {
         <div class="chat-thread-header">
           <div>
             <div class="chat-thread-title">Notificaciones</div>
-            <div class="chat-thread-subtitle">Avisos importantes de Admin y Sistema. En movil/PWA puedes activar avisos fuera de la app.</div>
+            <div class="chat-thread-subtitle">Avisos importantes.</div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
             <button class="btn btn-ghost btn-sm" type="button" data-chat-open-panel="chats">Ver chats</button>
             <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos en este dispositivo</button>
-            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar revisadas</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Revisadas</button>
           </div>
         </div>
         <form class="admin-notification-form" data-admin-notification-form style="${role === 'admin' ? '' : 'display:none'}">
@@ -1102,7 +1393,7 @@ function renderShell(container, role) {
             <label><input type="checkbox" data-notification-channel="internal"> Internas</label>
             <label><input type="checkbox" data-notification-channel="browser"> Navegador</label>
             <label><input type="checkbox" data-notification-channel="push"> Push PWA</label>
-            <label><input type="checkbox" data-notification-event="class_unmarked_after_1h"> Clases sin marcar</label>
+            <label><input type="checkbox" data-notification-event="class_unmarked_after_24h"> Clases sin marcar 24h</label>
             <label><input type="checkbox" data-notification-event="class_confirmation_needed"> Confirmaciones</label>
             <label><input type="checkbox" data-notification-event="weekly_payment_due"> Pagos semana</label>
             <label><input type="checkbox" data-notification-event="chat_message"> Mensajes</label>
@@ -1181,6 +1472,18 @@ function renderSchedulePanelLegacy(container, chat, proposals, role, currentActo
 function renderSchedulePanel(container, chat, proposals, role, currentActorIds = new Set(), availability = {}) {
   const panel = container.querySelector('[data-chat-schedule-panel]');
   if (!panel || !chat) return;
+  const scheduleVisible = panel.dataset.scheduleVisible === 'true';
+  const scheduleToggle = container.querySelector('[data-chat-toggle-schedule]');
+  if (scheduleToggle) {
+    scheduleToggle.classList.toggle('active', scheduleVisible);
+    scheduleToggle.classList.toggle('has-pending', proposals.some((proposal) => proposal.status === 'propuesta'));
+  }
+  panel.classList.toggle('is-expanded', scheduleVisible);
+  if (!scheduleVisible) {
+    panel.style.display = 'none';
+    panel.innerHTML = '';
+    return;
+  }
   panel.style.display = '';
   const plannerOpen = panel.dataset.schedulePlannerOpen === 'true';
   const draft = readScheduleDraft(panel);
@@ -1288,15 +1591,23 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
 function renderChatList(container, chats, selectedId, role, preferences = {}) {
   const list = container.querySelector('[data-chat-list]');
   if (!chats.length) {
-    list.innerHTML = '<div class="chat-empty-state">No hay chats disponibles. Apareceran cuando exista una asignacion activa.</div>';
+    list.innerHTML = '<div class="chat-empty-state">Sin chats activos.</div>';
     return;
   }
-  list.innerHTML = chats.map((chat) => `
-    <button class="chat-list-item ${chat.id === selectedId ? 'active' : ''}" type="button" data-chat-id="${escapeHtml(chat.id)}">
-      <span class="chat-list-name">${escapeHtml(chatTitle(chat, role, preferences[chat.id] || {}))}</span>
-      <span class="chat-list-meta">${escapeHtml(chatSubtitle(chat, role, preferences[chat.id] || {}))}</span>
-      <span class="chat-list-preview">${escapeHtml(chat.lastMessage || 'Sin mensajes todavia')}</span>
-    </button>`).join('');
+  list.innerHTML = chats.map((chat) => {
+    const preference = preferences[chat.id] || {};
+    return `
+      <button class="chat-list-item ${chat.id === selectedId ? 'active' : ''}" type="button" data-chat-id="${escapeHtml(chat.id)}">
+        <span class="chat-list-main">
+          ${renderChatCounterpartAvatar(chat, role, preference, 'list')}
+          <span class="chat-list-copy">
+            <span class="chat-list-name">${escapeHtml(chatTitle(chat, role, preference))}</span>
+            <span class="chat-list-meta">${escapeHtml(chatSubtitle(chat, role, preference))}</span>
+            <span class="chat-list-preview">${escapeHtml(chat.lastMessage || 'Sin mensajes todavia')}</span>
+          </span>
+        </span>
+      </button>`;
+  }).join('');
 }
 
 function renderThreadHeader(container, chat, role, preference = {}) {
@@ -1304,15 +1615,83 @@ function renderThreadHeader(container, chat, role, preference = {}) {
   if (!chat) return;
   const customName = clean(preference.displayNameOverride, 120);
   header.innerHTML = `
-    <div class="chat-thread-heading">
-      <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
-      <div class="chat-thread-subtitle">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
+    <div class="chat-thread-identity">
+      ${renderChatCounterpartAvatar(chat, role, preference, 'thread')}
+      <div class="chat-thread-heading">
+        <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
+        <div class="chat-thread-subtitle">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
+      </div>
     </div>
     <form class="chat-alias-form" data-chat-name-form hidden>
       <input class="form-control" type="text" maxlength="120" value="${escapeHtml(customName)}" data-chat-name-input aria-label="Nombre guardado para este chat" placeholder="${escapeHtml(defaultChatTitle(chat, role))}">
       <button class="btn btn-primary btn-sm" type="submit">Guardar</button>
     </form>
-    <button class="btn btn-ghost btn-sm chat-alias-toggle" type="button" data-edit-chat-name>${customName ? 'Cambiar nombre' : 'Personalizar nombre'}</button>`;
+    <div class="chat-header-actions">
+      <button class="chat-icon-btn" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>
+      ${renderChatCallActions(chat, role)}
+      <button class="chat-icon-btn chat-alias-toggle" type="button" data-edit-chat-name title="Nombre del chat" aria-label="Nombre del chat">${chatIcon('edit')}</button>
+    </div>`;
+}
+
+function renderMessageAttachment(attachment = {}) {
+  const item = normalizeChatAttachment(attachment);
+  if (!item) return '';
+  const path = escapeAttribute(item.storagePath, 600);
+  const name = escapeHtml(item.name);
+  if (item.kind === 'image') {
+    return `
+      <a class="chat-attachment chat-attachment-image" data-chat-attachment-path="${path}" href="#" target="_blank" rel="noopener" aria-label="Abrir ${escapeAttribute(item.name, 180)}">
+        <img data-chat-attachment-path="${path}" alt="${escapeAttribute(item.name, 180)}" loading="lazy">
+        <span>${name}</span>
+      </a>`;
+  }
+  if (item.kind === 'audio') {
+    return `
+      <div class="chat-attachment chat-attachment-audio">
+        <audio controls preload="metadata" data-chat-attachment-path="${path}"></audio>
+        <a data-chat-attachment-path="${path}" href="#" target="_blank" rel="noopener">Descargar audio</a>
+      </div>`;
+  }
+  return `
+    <a class="chat-attachment chat-attachment-file" data-chat-attachment-path="${path}" href="#" target="_blank" rel="noopener">
+      ${chatIcon('clip')}
+      <span>${name}</span>
+    </a>`;
+}
+
+function renderMessageText(value = '') {
+  const text = clean(value, 2000);
+  const urlPattern = /https:\/\/[^\s]+/g;
+  let html = '';
+  let lastIndex = 0;
+  for (const match of text.matchAll(urlPattern)) {
+    const url = match[0];
+    html += escapeHtml(text.slice(lastIndex, match.index));
+    html += `<a href="${escapeAttribute(url, 600)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`;
+    lastIndex = match.index + url.length;
+  }
+  html += escapeHtml(text.slice(lastIndex));
+  return html;
+}
+
+async function hydrateMessageAttachments(box) {
+  const nodes = [...box.querySelectorAll('[data-chat-attachment-path]')];
+  await Promise.all(nodes.map(async (node) => {
+    const path = node.dataset.chatAttachmentPath;
+    if (!path || node.dataset.chatAttachmentReady === 'true') return;
+    try {
+      const url = await getChatAttachmentUrl(path);
+      if (node.tagName === 'IMG' || node.tagName === 'AUDIO') {
+        node.src = url;
+      } else if (node.tagName === 'A') {
+        node.href = url;
+      }
+      node.dataset.chatAttachmentReady = 'true';
+    } catch (_) {
+      node.classList.add('is-error');
+      if (node.tagName === 'A') node.removeAttribute('href');
+    }
+  }));
 }
 
 function renderMessages(container, messages, currentUid) {
@@ -1322,17 +1701,21 @@ function renderMessages(container, messages, currentUid) {
   const shouldStickToBottom = !hadMessages || distanceFromBottom < 120;
   const previousScrollTop = box.scrollTop;
   if (!messages.length) {
-    box.innerHTML = '<div class="chat-empty-state">Todavia no hay mensajes. Escribe el primero para coordinar la clase.</div>';
+    box.innerHTML = '<div class="chat-empty-state">Sin mensajes todavia.</div>';
     return;
   }
   box.innerHTML = messages.map((message) => {
     const mine = message.senderUid === currentUid;
+    const attachment = normalizeChatAttachment(message.attachment);
+    const body = clean(message.body, 2000);
     return `
       <div class="chat-message ${mine ? 'mine' : ''}">
-        <div class="chat-message-meta">${escapeHtml(message.senderName || message.senderRole || 'Usuario')} · ${escapeHtml(formatDateTime(message.createdAt))}</div>
-        <div class="chat-message-body">${escapeHtml(message.body)}</div>
+        <div class="chat-message-meta">${escapeHtml(message.senderName || message.senderRole || 'Usuario')} - ${escapeHtml(formatDateTime(message.createdAt))}</div>
+        ${body ? `<div class="chat-message-body">${renderMessageText(body)}</div>` : ''}
+        ${attachment ? renderMessageAttachment(attachment) : ''}
       </div>`;
   }).join('');
+  hydrateMessageAttachments(box).catch(() => {});
   box.scrollTop = shouldStickToBottom ? box.scrollHeight : previousScrollTop;
 }
 
@@ -1539,6 +1922,10 @@ export async function initChatWidget({
     notificationPublicConfig: {},
     availabilityByChat: {},
     chatPreferencesById: {},
+    audioRecorder: null,
+    audioStream: null,
+    audioChunks: [],
+    audioStartedAt: 0,
   };
   const currentUid = clean(firebaseAuth.currentUser?.uid || usuario.firebase_uid || usuario.uid || usuario.id, 180);
   const currentActorIds = new Set([
@@ -1611,6 +1998,136 @@ export async function initChatWidget({
     });
   }
 
+  async function sendChatMessage({ body = '', attachment = null, messageType = 'text' } = {}) {
+    if (!state.selectedChat) return;
+    const safeBody = clean(body || chatAttachmentLabel(attachment), 2000);
+    if (!safeBody && !attachment) return;
+    const chatRef = doc(firebaseDb, 'chats', state.selectedChat.id);
+    const payload = {
+      senderUid: currentUid,
+      senderRole: role,
+      senderName,
+      body: safeBody || 'Mensaje',
+      messageType,
+      createdAt: serverTimestamp(),
+      readBy: { [currentUid]: true },
+    };
+    if (attachment) payload.attachment = normalizeChatAttachment(attachment);
+    await addDoc(collection(chatRef, 'mensajes'), payload);
+    await updateDoc(chatRef, {
+      lastMessage: chatMessagePreview(safeBody, attachment),
+      lastMessageAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  async function uploadChatAttachment(file, forcedKind = '') {
+    if (!state.selectedChat) throw new Error('Selecciona un chat.');
+    const mimeType = validateChatAttachmentFile(file);
+    const kind = forcedKind || chatAttachmentKindFromMime(mimeType);
+    if (forcedKind === 'image' && !mimeType.startsWith('image/')) throw new Error('Selecciona una imagen.');
+    if (forcedKind === 'audio' && !mimeType.startsWith('audio/')) throw new Error('Selecciona un audio.');
+    const storagePath = chatStoragePath(state.selectedChat.id, currentUid, file.name);
+    await uploadBytes(storageRef(firebaseStorage, storagePath), file, { contentType: mimeType });
+    return {
+      kind,
+      name: clean(file.name || (kind === 'audio' ? 'nota-audio.webm' : 'archivo'), 180),
+      mimeType,
+      sizeBytes: Number(file.size || 0),
+      storagePath,
+    };
+  }
+
+  async function sendChatAttachmentFile(file, forcedKind = '') {
+    const attachment = await uploadChatAttachment(file, forcedKind);
+    await sendChatMessage({
+      body: chatAttachmentLabel(attachment),
+      attachment,
+      messageType: attachment.kind,
+    });
+    return attachment;
+  }
+
+  async function handleChatFileInput(input) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !state.selectedChat) return;
+    const submitButton = container.querySelector('[data-chat-form] button[type="submit"]');
+    submitButton.disabled = true;
+    try {
+      const forcedKind = input.matches('[data-chat-image-input]') ? 'image' : '';
+      await sendChatAttachmentFile(file, forcedKind);
+      showToast('Enviado', 'Archivo enviado en el chat.', 'success');
+      await refreshChats();
+      selectChat(state.selectedChat.id);
+    } catch (error) {
+      showToast('No se envio', error.message || 'No se pudo adjuntar el archivo.', 'error');
+    } finally {
+      submitButton.disabled = false;
+    }
+  }
+
+  async function finishAudioRecording(button) {
+    const recorder = state.audioRecorder;
+    if (!recorder || recorder.state !== 'recording') return;
+    button?.classList.remove('is-recording');
+    button?.setAttribute('aria-pressed', 'false');
+    recorder.stop();
+  }
+
+  async function toggleAudioRecording(button) {
+    if (state.audioRecorder?.state === 'recording') {
+      await finishAudioRecording(button);
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      showToast('Audio no disponible', 'Este navegador no permite grabar notas de voz.', 'warning');
+      return;
+    }
+    if (!state.selectedChat) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      state.audioRecorder = recorder;
+      state.audioStream = stream;
+      state.audioChunks = [];
+      state.audioStartedAt = Date.now();
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data?.size) state.audioChunks.push(event.data);
+      });
+      recorder.addEventListener('stop', async () => {
+        const chunks = state.audioChunks.slice();
+        const durationMs = Math.max(0, Date.now() - state.audioStartedAt);
+        state.audioStream?.getTracks?.().forEach((track) => track.stop());
+        state.audioRecorder = null;
+        state.audioStream = null;
+        state.audioChunks = [];
+        if (!chunks.length || durationMs < 600) {
+          showToast('Audio muy corto', 'Graba al menos un segundo.', 'info');
+          return;
+        }
+        const blob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+        const file = new File([blob], `nota-audio-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+        try {
+          const attachment = await uploadChatAttachment(file, 'audio');
+          attachment.durationMs = durationMs;
+          await sendChatMessage({ body: 'Nota de audio', attachment, messageType: 'audio' });
+          showToast('Audio enviado', 'Nota de voz enviada.', 'success');
+          await refreshChats();
+          if (state.selectedChat?.id) selectChat(state.selectedChat.id);
+        } catch (error) {
+          showToast('No se envio el audio', error.message || 'No se pudo subir la nota de voz.', 'error');
+        }
+      });
+      recorder.start();
+      button?.classList.add('is-recording');
+      button?.setAttribute('aria-pressed', 'true');
+      showToast('Grabando', 'Pulsa de nuevo el micro para enviar.', 'info');
+    } catch (error) {
+      showToast('Microfono bloqueado', error.message || 'Permite el microfono para grabar notas de audio.', 'warning');
+    }
+  }
+
   async function refreshChats() {
     container.querySelector('[data-chat-list]').innerHTML = '<div class="chat-empty-state">Cargando chats...</div>';
     state.chats = await loadChats(db, role, profileId, usuario, currentActorIds);
@@ -1628,6 +2145,7 @@ export async function initChatWidget({
     container.querySelector('[data-chat-form]').style.display = '';
     const schedulePanel = container.querySelector('[data-chat-schedule-panel]');
     if (schedulePanel) {
+      schedulePanel.dataset.scheduleVisible = 'false';
       schedulePanel.dataset.schedulePlannerOpen = 'false';
       schedulePanel.dataset.scheduleKind = SCHEDULE_KIND_WEEKLY;
     }
@@ -1835,6 +2353,37 @@ export async function initChatWidget({
       return;
     }
 
+    const attachFile = event.target.closest('[data-chat-attach-file]');
+    if (attachFile) {
+      container.querySelector('[data-chat-file-input]')?.click();
+      return;
+    }
+
+    const attachImage = event.target.closest('[data-chat-attach-image]');
+    if (attachImage) {
+      container.querySelector('[data-chat-image-input]')?.click();
+      return;
+    }
+
+    const audioRecord = event.target.closest('[data-chat-audio-record]');
+    if (audioRecord) {
+      await toggleAudioRecording(audioRecord);
+      return;
+    }
+
+    const toggleSchedule = event.target.closest('[data-chat-toggle-schedule]');
+    if (toggleSchedule && state.selectedChat) {
+      const panel = container.querySelector('[data-chat-schedule-panel]');
+      if (panel) {
+        const nextVisible = panel.dataset.scheduleVisible !== 'true';
+        panel.dataset.scheduleVisible = nextVisible ? 'true' : 'false';
+        if (!nextVisible) panel.dataset.schedulePlannerOpen = 'false';
+        renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
+        if (nextVisible) panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+      return;
+    }
+
     const focusActiveProposal = event.target.closest('[data-focus-active-proposal]');
     if (focusActiveProposal) {
       const active = container.querySelector('.schedule-proposal.active');
@@ -1847,6 +2396,7 @@ export async function initChatWidget({
     if (openSchedulePlanner) {
       const panel = container.querySelector('[data-chat-schedule-panel]');
       if (panel) {
+        panel.dataset.scheduleVisible = 'true';
         panel.dataset.schedulePlannerOpen = 'true';
         panel.dataset.scheduleKind = normalizeScheduleKind(openSchedulePlanner.dataset.openSchedulePlanner);
         renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat?.id] || {});
@@ -1949,13 +2499,20 @@ export async function initChatWidget({
     setPanel('chats');
     const panel = container.querySelector('[data-chat-schedule-panel]');
     if (!panel) return;
+    panel.dataset.scheduleVisible = 'true';
     panel.dataset.schedulePlannerOpen = 'true';
     panel.dataset.scheduleKind = normalizeScheduleKind(event.detail?.kind || SCHEDULE_KIND_ONE_OFF);
     renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
     setTimeout(() => focusSchedulePrimaryField(panel), 50);
   });
 
-  container.addEventListener('change', (event) => {
+  container.addEventListener('change', async (event) => {
+    const chatFileInput = event.target.closest('[data-chat-file-input], [data-chat-image-input]');
+    if (chatFileInput) {
+      await handleChatFileInput(chatFileInput);
+      return;
+    }
+
     const kindSelect = event.target.closest('[data-schedule-kind]');
     if (!kindSelect || !state.selectedChat) return;
     const panel = container.querySelector('[data-chat-schedule-panel]');
@@ -2392,20 +2949,7 @@ export async function initChatWidget({
 
     input.disabled = true;
     try {
-      const chatRef = doc(firebaseDb, 'chats', state.selectedChat.id);
-      await addDoc(collection(chatRef, 'mensajes'), {
-        senderUid: currentUid,
-        senderRole: role,
-        senderName,
-        body,
-        createdAt: serverTimestamp(),
-        readBy: { [currentUid]: true },
-      });
-      await updateDoc(chatRef, {
-        lastMessage: body.slice(0, 180),
-        lastMessageAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      await sendChatMessage({ body, messageType: 'text' });
       input.value = '';
       await refreshChats();
       selectChat(state.selectedChat.id);

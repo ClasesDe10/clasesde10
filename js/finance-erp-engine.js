@@ -53,6 +53,35 @@ function amountFromHourly(hourlyRate, durationMinutes = 60) {
   return hourly === null ? null : money(hourly * durationFactor(durationMinutes));
 }
 
+function timeToMinutes(value) {
+  const match = clean(value, 8).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function classTimeRangeDurationMinutes(classData = {}) {
+  const start = timeToMinutes(firstPresent(classData.hora_inicio, classData.startTime));
+  const end = timeToMinutes(firstPresent(classData.hora_fin, classData.endTime));
+  return start !== null && end !== null && end > start ? end - start : null;
+}
+
+function classDurationMinutes(classData = {}) {
+  const timeRange = classTimeRangeDurationMinutes(classData);
+  if (timeRange !== null) return timeRange;
+  const explicit = Number(classData.durationMinutes || classData.duracion_minutos || 60);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : 60;
+}
+
+function legacyAmountOrHourly(classData = {}, amount, durationMinutes = 60) {
+  const value = numberOrNull(amount);
+  if (value === null) return null;
+  const timeRange = classTimeRangeDurationMinutes(classData);
+  return timeRange !== null && timeRange !== 60 ? amountFromHourly(value, durationMinutes) : value;
+}
+
 function hourlyFromAmount(amount, durationMinutes = 60) {
   const total = numberOrNull(amount);
   const factor = durationFactor(durationMinutes);
@@ -164,19 +193,66 @@ function compactName(...values) {
   return values.map((value) => clean(value, 120)).filter(Boolean).join(' ').trim();
 }
 
-function profileName(profile = {}, fallback = '') {
-  return clean(
-    firstPresent(
-      profile.nombreCompleto,
-      profile.fullName,
-      compactName(profile.nombre, profile.apellidos),
-      compactName(profile.usuarios?.nombre, profile.usuarios?.apellidos),
-      profile.displayName,
-      profile.name,
-      fallback,
-    ),
-    180,
-  );
+const GENERIC_FINANCE_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'docente',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'estudiante',
+  'familia',
+  'familia sin nombre',
+  'sin familia',
+  'sin alumno',
+  'sin nombre',
+  'sin profesor',
+  'contacto',
+  'la otra persona',
+  'el profesor',
+  'la familia',
+]);
+
+function financePersonKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericFinancePersonLabel(value) {
+  const key = financePersonKey(value);
+  return !key || GENERIC_FINANCE_PERSON_LABELS.has(key);
+}
+
+function financePersonFallback(role, id = '') {
+  const label = clean(role, 40) || 'Persona';
+  const cleanId = clean(id, 180);
+  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
+function profileName(profile = {}, fallback = '', role = 'Persona', id = '') {
+  const values = [
+    profile.nombreCompleto,
+    profile.fullName,
+    compactName(profile.nombre, profile.apellidos),
+    compactName(profile.usuarios?.nombre, profile.usuarios?.apellidos),
+    profile.displayName,
+    profile.name,
+    fallback,
+  ];
+  for (const value of values) {
+    const candidate = clean(value, 180);
+    if (candidate && !isGenericFinancePersonLabel(candidate)) return candidate;
+  }
+  return financePersonFallback(role, id || fallback);
 }
 
 function entityId(item = {}, type = '') {
@@ -311,7 +387,7 @@ function ruleScore(rule, classData = {}) {
 }
 
 export function resolveTeacherRateForClass(classData = {}, teacherProfile = {}, rules = [], config = {}) {
-  const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
+  const durationMinutes = classDurationMinutes(classData);
   const explicitHourly = amountFromHourly(firstPresent(
     classData.teacherHourlyRate,
     classData.importe_hora_profesor,
@@ -342,7 +418,7 @@ export function resolveTeacherRateForClass(classData = {}, teacherProfile = {}, 
 
   const explicit = numberOrNull(firstPresent(classData.importe_profesor, classData.teacherAmount, classData.teacher_amount));
   if (explicit !== null) {
-    return { amount: explicit, source: 'class_amount', ruleId: '', score: 0 };
+    return { amount: legacyAmountOrHourly(classData, explicit, durationMinutes), source: 'class_amount', ruleId: '', score: 0 };
   }
 
   const hourly = estimateTeacherHourlyRate(teacherProfile, classData, config);
@@ -352,7 +428,7 @@ export function resolveTeacherRateForClass(classData = {}, teacherProfile = {}, 
 
 export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, options = {}) {
   const config = options.config || {};
-  const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
+  const durationMinutes = classDurationMinutes(classData);
   const familyHourlyRate = numberOrNull(firstPresent(
     classData.familyHourlyRate,
     classData.precio_hora_familia,
@@ -365,7 +441,7 @@ export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, op
   const familyAmount = familyFromHourly !== null
     ? familyFromHourly
     : familyExplicit !== null
-    ? familyExplicit
+    ? legacyAmountOrHourly(classData, familyExplicit, durationMinutes)
     : money((Number.isFinite(defaultFamilyRate) ? defaultFamilyRate : 24) * durationMinutes / 60);
   const rate = resolveTeacherRateForClass(classData, teacherProfile, options.rules || [], config);
   const teacherAmount = rate.amount;
@@ -403,7 +479,7 @@ export function buildClassFinancialPatch(classData = {}, teacherProfile = {}, op
 
 export function buildClassPricingQuote(classData = {}, teacherProfile = {}, options = {}) {
   const config = options.config || {};
-  const durationMinutes = Number(classData.durationMinutes || classData.duracion_minutos || 60) || 60;
+  const durationMinutes = classDurationMinutes(classData);
   const rate = resolveTeacherRateForClass(classData, teacherProfile, options.rules || [], config);
   const teacherAmount = money(rate.amount);
   const explicitFamilyHourly = numberOrNull(firstPresent(
@@ -426,7 +502,7 @@ export function buildClassPricingQuote(classData = {}, teacherProfile = {}, opti
   const familyAmount = familyFromHourly !== null
     ? familyFromHourly
     : explicitFamily !== null
-    ? money(explicitFamily)
+    ? legacyAmountOrHourly(classData, explicitFamily, durationMinutes)
     : money(Math.max(defaultFamilyAmount, familyFromMargin, familyFromMinimumFee));
   const normalizedFamilyHourlyRate = explicitFamilyHourly ?? hourlyFromAmount(familyAmount, durationMinutes);
   const normalizedTeacherHourlyRate = numberOrNull(firstPresent(
@@ -504,9 +580,9 @@ export function normalizeFinanceClass(raw = {}, context = {}) {
     teacherUid,
     familyUid,
     studentUid,
-    teacherName: profileName(teacher, firstPresent(raw.profesor_nombre, raw.teacherName, teacherUid) || 'Sin profesor'),
-    familyName: profileName(family, firstPresent(raw.familia_nombre, raw.familyName, familyUid) || 'Sin familia'),
-    studentName: profileName(student, firstPresent(raw.alumno_nombre, raw.studentName, studentUid) || 'Sin alumno'),
+    teacherName: profileName(teacher, firstPresent(raw.profesor_nombre, raw.teacherName), 'Profesor', teacherUid),
+    familyName: profileName(family, firstPresent(raw.familia_nombre, raw.familyName), 'Familia', familyUid),
+    studentName: profileName(student, firstPresent(raw.alumno_nombre, raw.studentName), 'Alumno', studentUid),
     durationMinutes: Number(raw.durationMinutes || raw.duracion_minutos || 60) || 60,
     familyAmount,
     teacherAmount,
@@ -810,7 +886,7 @@ export function detectFinanceAnomalies(dataset = {}, metrics = {}, options = {})
         'negative_margin',
         'critical',
         'Margen negativo',
-        `${item.teacherName || 'Profesor'} cobra mas que el importe de familia.`,
+        `${item.teacherName || financePersonFallback('Profesor', item.teacherUid)} cobra mas que el importe de familia.`,
         item,
         item.platformFee,
         ['Ajustar tarifa de la clase.', 'Revisar si existe beca o ajuste manual autorizado.'],
@@ -820,7 +896,7 @@ export function detectFinanceAnomalies(dataset = {}, metrics = {}, options = {})
         'low_margin',
         'medium',
         'Margen bajo',
-        `${item.teacherName || 'Profesor'} deja un margen del ${item.marginPct}%.`,
+        `${item.teacherName || financePersonFallback('Profesor', item.teacherUid)} deja un margen del ${item.marginPct}%.`,
         item,
         item.platformFee,
         ['Revisar precio de familia.', 'Revisar tarifa de profesor para futuras clases.'],
@@ -831,7 +907,7 @@ export function detectFinanceAnomalies(dataset = {}, metrics = {}, options = {})
         'payment_overdue',
         'high',
         'Cobro familiar vencido',
-        `${item.familyName || 'Familia'} tiene una clase vencida pendiente de cobro.`,
+        `${item.familyName || financePersonFallback('Familia', item.familyUid)} tiene una clase vencida pendiente de cobro.`,
         item,
         item.familyAmount,
         ['Enviar recordatorio de pago.', 'Verificar Bizum o justificante.'],
@@ -842,7 +918,7 @@ export function detectFinanceAnomalies(dataset = {}, metrics = {}, options = {})
         'teacher_payout_overdue',
         'medium',
         'Pago a profesor pendiente',
-        `${item.teacherName || 'Profesor'} tiene un pago pendiente tras cobro familiar.`,
+        `${item.teacherName || financePersonFallback('Profesor', item.teacherUid)} tiene un pago pendiente tras cobro familiar.`,
         item,
         item.teacherAmount,
         ['Preparar Bizum al profesor.', 'Conciliar clase antes del cierre semanal.'],

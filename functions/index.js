@@ -20,6 +20,8 @@ const CLASS_RESET_GENERATION = 'class-reset-20260629';
 const MATCHING_TEACHER_SCAN_LIMIT = Number(process.env.MATCHING_TEACHER_SCAN_LIMIT || 1000);
 const MATCHING_USER_SCAN_LIMIT = Number(process.env.MATCHING_USER_SCAN_LIMIT || 2000);
 const MATCHING_ASSIGNMENT_SCAN_LIMIT = Number(process.env.MATCHING_ASSIGNMENT_SCAN_LIMIT || 5000);
+const MIN_FAMILY_PAYMENT_GRACE_HOURS = 48;
+const PAYMENT_PROOF_OVERDUE_PENALTY_POINTS = -2;
 const STRIPE_SECRET_KEY = defineSecret('STRIPE_SECRET_KEY');
 const STRIPE_WEBHOOK_SECRET = defineSecret('STRIPE_WEBHOOK_SECRET');
 let adminUsersCache = { expiresAt: 0, users: [] };
@@ -29,6 +31,57 @@ let platformConfigCache = { expiresAt: 0, config: {} };
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
+}
+
+const GENERIC_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'docente',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'estudiante',
+  'familia',
+  'familia sin nombre',
+  'sin nombre',
+  'sin profesor',
+  'contacto',
+  'la otra persona',
+  'el profesor',
+  'la familia',
+]);
+
+function personKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericPersonLabel(value) {
+  const key = personKey(value);
+  return !key || GENERIC_PERSON_LABELS.has(key);
+}
+
+function personFallback(role, id = '') {
+  const label = clean(role, 40) || 'Persona';
+  const cleanId = clean(id, 180);
+  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
+function personName(role, id = '', ...values) {
+  for (const value of values) {
+    const candidate = clean(value, 180);
+    if (candidate && !isGenericPersonLabel(candidate)) return candidate;
+  }
+  return personFallback(role, id);
 }
 
 function safeInternalActionUrl(value, fallback = '/pages/login.html') {
@@ -85,9 +138,60 @@ function paymentAmount(data = {}) {
   return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
 }
 
+function timeToMinutes(value) {
+  const match = clean(value, 8).match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function classTimeRangeDurationMinutes(data = {}) {
+  const start = timeToMinutes(data.hora_inicio || data.startTime);
+  const end = timeToMinutes(data.hora_fin || data.endTime);
+  return start !== null && end !== null && end > start ? end - start : null;
+}
+
+function classDurationMinutes(data = {}) {
+  const timeRange = classTimeRangeDurationMinutes(data);
+  if (timeRange !== null) return timeRange;
+  const explicit = Number(data.durationMinutes ?? data.duracion_minutos ?? data.duration);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : 60;
+}
+
+function proratedClassAmount(data = {}, hourlyFields = [], amountFields = []) {
+  const duration = classDurationMinutes(data);
+  for (const field of hourlyFields) {
+    const hourly = Number(data[field]);
+    if (Number.isFinite(hourly) && hourly > 0) return Math.round(((hourly * duration / 60) + Number.EPSILON) * 100) / 100;
+  }
+  const timeRange = classTimeRangeDurationMinutes(data);
+  for (const field of amountFields) {
+    const amount = Number(data[field]);
+    if (Number.isFinite(amount) && amount > 0) {
+      return timeRange !== null && timeRange !== 60
+        ? Math.round(((amount * duration / 60) + Number.EPSILON) * 100) / 100
+        : Math.round((amount + Number.EPSILON) * 100) / 100;
+    }
+  }
+  return 0;
+}
+
 function classFamilyAmount(data = {}) {
-  const amount = Number(data.precio_total ?? data.familyAmount ?? data.amount ?? data.total ?? 0);
-  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+  return proratedClassAmount(
+    data,
+    ['familyHourlyRate', 'precio_hora_familia', 'familyRatePerHour', 'tarifa_hora_familia'],
+    ['precio_total', 'familyAmount', 'amount', 'total'],
+  );
+}
+
+function classTeacherAmount(data = {}) {
+  return proratedClassAmount(
+    data,
+    ['teacherHourlyRate', 'importe_hora_profesor', 'teacherRatePerHour', 'tarifa_hora_profesor'],
+    ['importe_profesor', 'teacherAmount', 'teacher_amount'],
+  );
 }
 
 function buildClassPaymentPatch(payment, nowValue = now()) {
@@ -167,6 +271,49 @@ function now() {
   return admin.firestore.FieldValue.serverTimestamp();
 }
 
+function trustPenaltyEventId(...parts) {
+  return `p_${parts
+    .map((part) => clean(part, 120).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('_')}`.slice(0, 180);
+}
+
+function trustPenaltyPatch({ classId, notificationType, role, userUid, points, reason }) {
+  const id = trustPenaltyEventId(notificationType, classId, role, userUid);
+  const safePoints = Number.isFinite(Number(points)) ? Number(points) : 0;
+  return {
+    [`trustPenaltyEvents.${id}`]: {
+      id,
+      type: 'notification_responsibility_penalty',
+      notificationType,
+      classId: clean(classId, 180),
+      appliedToRole: role,
+      role,
+      appliedToUid: clean(userUid, 180),
+      userUid: clean(userUid, 180),
+      points: safePoints,
+      reason: clean(reason, 300),
+      source: 'cloud_function',
+      createdAt: now(),
+      createdAtIso: new Date().toISOString(),
+    },
+    lastTrustPenaltyAt: now(),
+    lastTrustPenaltyAtIso: new Date().toISOString(),
+    updatedAt: now(),
+  };
+}
+
+async function applyClassTrustPenalty(ref, params = {}) {
+  if (!ref || !params.userUid || !params.notificationType || !params.role) return false;
+  try {
+    await ref.update(trustPenaltyPatch(params));
+    return true;
+  } catch (error) {
+    logger.warn('Could not write class trust penalty.', { classId: params.classId, error: error.message });
+    return false;
+  }
+}
+
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
 }
@@ -209,6 +356,7 @@ const NOTIFICATION_DEFINITIONS = {
   chat_message: { category: 'chat', priority: 'normal', channels: ['internal', 'browser', 'push'] },
   class_reminder: { category: 'clases', priority: 'normal', channels: ['internal', 'browser', 'push'] },
   class_confirmation_needed: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
+  class_unmarked_after_24h: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
   class_unmarked_after_1h: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
   class_schedule_change: { category: 'clases', priority: 'high', channels: ['internal', 'browser', 'push'] },
   class_incident: { category: 'incidencias', priority: 'critical', channels: ['internal', 'browser', 'push'] },
@@ -1016,7 +1164,7 @@ function classNeedsConfirmation(data = {}) {
   if (!['programada', 'confirmada', 'pendiente_confirmacion', 'scheduled', 'confirmed'].includes(status)) return false;
   if (data.teacherConfirmedAt && data.familyConfirmedAt) return false;
   if (['realizada', 'completada', 'cancelada', 'reprogramada', 'pagada'].includes(lower(data.attendanceStatus))) return false;
-  return classEndedMoreThanMinutes(data, 60);
+  return classEndedMoreThanMinutes(data, 24 * 60);
 }
 
 function paymentDueDate(data = {}) {
@@ -1027,7 +1175,11 @@ function paymentIsOverdue(data = {}) {
   const status = normalizePaymentStatus(data.familyPaymentStatus || data.estado_pago_familia || data.paymentStatus || data.estado || data.status);
   if (!['pendiente', 'solicitado', 'procesando', 'requires_action', 'requiere_accion'].includes(status)) return false;
   const due = paymentDueDate(data);
-  return Boolean(due && due.getTime() < Date.now());
+  if (!due) return false;
+  const graceHours = isTeacherPayout(data)
+    ? 0
+    : Math.max(MIN_FAMILY_PAYMENT_GRACE_HOURS, Math.min(168, Number(data.graceHours ?? data.grace_hours ?? data.overdueGraceHours ?? MIN_FAMILY_PAYMENT_GRACE_HOURS) || MIN_FAMILY_PAYMENT_GRACE_HOURS));
+  return due.getTime() + graceHours * 60 * 60 * 1000 < Date.now();
 }
 
 function normalizeWeeklyPaymentDay(value) {
@@ -1081,7 +1233,7 @@ function weeklyPaymentStateForClass(data = {}, schedule = null) {
   if (classFamilyPaymentPaid(data)) return { state: 'paid', dueAt: null, overdueAt: null };
   const dueAt = weeklyPaymentDueDateForClass(data, schedule);
   if (!dueAt) return { state: 'missing_due_at', dueAt: null, overdueAt: null };
-  const graceHours = Math.max(1, Math.min(168, Number(schedule?.graceHours ?? schedule?.grace_hours ?? 24) || 24));
+  const graceHours = Math.max(MIN_FAMILY_PAYMENT_GRACE_HOURS, Math.min(168, Number(schedule?.graceHours ?? schedule?.grace_hours ?? MIN_FAMILY_PAYMENT_GRACE_HOURS) || MIN_FAMILY_PAYMENT_GRACE_HOURS));
   const overdueAt = new Date(dueAt.getTime() + graceHours * 60 * 60 * 1000);
   if (Date.now() >= overdueAt.getTime()) return { state: 'overdue', dueAt, overdueAt };
   if (Date.now() >= dueAt.getTime()) return { state: 'pending_due', dueAt, overdueAt };
@@ -1175,14 +1327,17 @@ async function processWeeklyClassPaymentReminders(stats) {
     }
 
     const familyUserUid = clean(schedule?.ownerUid || data.ownerUid || data.familyUserUid || data.familia_user_uid, 180);
-    const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || 'tu alumno/a', 120);
-    const familyName = clean(data.familyName || data.familia_nombre || data.parentName || data.familyDisplayName || 'familia sin nombre', 120);
-    const teacherName = clean(data.teacherName || data.profesor_nombre || data.teacherDisplayName || data.profesor_id || 'profesor sin nombre', 120);
+    const studentId = clean(data.studentId || data.alumno_id, 180);
+    const familyId = clean(data.familyUid || data.familia_id || familyUserUid, 180);
+    const teacherId = clean(data.teacherUid || data.profesor_id, 180);
+    const studentName = personName('Alumno', studentId, data.studentName, data.alumno_nombre, data.alumnoName);
+    const familyName = personName('Familia', familyId, data.familyName, data.familia_nombre, data.parentName, data.familyDisplayName);
+    const teacherName = personName('Profesor', teacherId, data.teacherName, data.profesor_nombre, data.teacherDisplayName);
     const subject = clean(data.subject || data.materia || 'clase', 120);
     const amount = classFamilyAmount(data);
     const title = state.state === 'overdue' ? 'Justificante vencido' : 'Justificante pendiente';
     const body = state.state === 'overdue'
-      ? `Ha pasado el margen de 24 h para justificar la ${subject} de ${studentName}.`
+      ? `Ha pasado el margen de 48 h para justificar la ${subject} de ${studentName}.`
       : `Recuerda justificar la ${subject} de ${studentName}.`;
     const adminBody = state.state === 'overdue'
       ? `La familia ${familyName} falta por pagar/justificar la ${subject} de ${studentName} con ${teacherName}. Importe familia: ${amount ? `${amount.toFixed(2)} EUR` : 'sin importe'}. Limite: ${dueIso}. Vencido desde: ${overdueIso}.`
@@ -1215,7 +1370,19 @@ async function processWeeklyClassPaymentReminders(stats) {
           fromRole: 'automation',
         },
       );
-      if (created) stats.weeklyPaymentEvents += 1;
+      if (created) {
+        stats.weeklyPaymentEvents += 1;
+        if (state.state === 'overdue') {
+          await applyClassTrustPenalty(doc.ref, {
+            classId: doc.id,
+            notificationType: 'payment_overdue',
+            role: 'familia',
+            userUid: familyUserUid,
+            points: PAYMENT_PROOF_OVERDUE_PENALTY_POINTS,
+            reason: 'No subio el justificante dentro de las 48h posteriores al dia acordado de pago.',
+          });
+        }
+      }
     }
 
     await notifyAdminsOnce(
@@ -1668,17 +1835,33 @@ async function ensureChatForAssignmentServer(assignmentId, reason = 'automation'
     userRecord(familyUserUid),
   ]);
 
-  const teacherName = fullName(
-    teacherProfile.data.nombre || teacherUser.data.nombre,
-    teacherProfile.data.apellidos || teacherUser.data.apellidos,
-  ) || teacherProfile.data.email || teacherUser.data.email || 'Profesor';
-  const familyName = fullName(
-    familyProfile.data.nombre || familyUser.data.nombre,
-    familyProfile.data.apellidos || familyUser.data.apellidos,
-  ) || familyProfile.data.email || familyUser.data.email || 'Familia';
-  const studentName = fullName(studentProfile.data.nombre, studentProfile.data.apellidos);
+  const teacherName = personName(
+    'Profesor',
+    teacherProfileId,
+    fullName(teacherProfile.data.nombre || teacherUser.data.nombre, teacherProfile.data.apellidos || teacherUser.data.apellidos),
+    teacherProfile.data.displayName,
+    teacherUser.data.displayName,
+    teacherProfile.data.email,
+    teacherUser.data.email,
+  );
+  const familyName = personName(
+    'Familia',
+    familyProfileId,
+    fullName(familyProfile.data.nombre || familyUser.data.nombre, familyProfile.data.apellidos || familyUser.data.apellidos),
+    familyProfile.data.displayName,
+    familyUser.data.displayName,
+    familyProfile.data.email,
+    familyUser.data.email,
+  );
+  const studentName = personName(
+    'Alumno',
+    studentId,
+    fullName(studentProfile.data.nombre, studentProfile.data.apellidos),
+    studentProfile.data.displayName,
+    studentProfile.data.email,
+  );
   const subject = clean(assignment.materia || assignment.subject, 180);
-  const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const introBody = `${teacherName} ya esta asignado. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
   const chatRef = db.collection('chats').doc(id);
   const chatSnap = await chatRef.get();
   const introAlreadySent = Boolean(chatSnap.exists && chatSnap.data().assignmentIntroSentAt);
@@ -2305,8 +2488,9 @@ function studentDiagnostic(data) {
   const level = clean(data.nivel || data.curso || data.metadata?.nivel) || 'Sin nivel';
   const modality = clean(data.modalidad || data.metadata?.modalidad) || 'Sin modalidad';
   const zone = clean(data.zona || data.metadata?.zona) || 'Sin zona';
+  const studentName = personName('Alumno', data.studentId || data.alumno_id, data.alumno, data.metadata?.alumno, data.studentName);
   return {
-    summary: `Alumno: ${clean(data.alumno || data.metadata?.alumno || data.studentName) || 'Sin nombre'}. Nivel: ${level}. Materia: ${subject}. Modalidad: ${modality}. Zona: ${zone}.`,
+    summary: `Alumno: ${studentName}. Nivel: ${level}. Materia: ${subject}. Modalidad: ${modality}. Zona: ${zone}.`,
     missing: [
       subject === 'Sin materia' ? 'materia' : '',
       level === 'Sin nivel' ? 'nivel' : '',
@@ -2955,7 +3139,7 @@ exports.processPublicLead = onDocumentCreated({
       automationStatus: 'review_teacher_lead',
       updatedAt: now(),
     });
-    await notifyAdmins('Nuevo profesor interesado', `${lead.nombre || lead.email || 'Profesor'} envio una solicitud publica. Precio sugerido: ${price} EUR/h.`, {
+    await notifyAdmins('Nuevo profesor interesado', `${lead.nombre || lead.email || 'Un profesor interesado'} envio una solicitud publica. Precio sugerido: ${price} EUR/h.`, {
       type: 'teacher_lead',
       leadId,
     });
@@ -2972,7 +3156,7 @@ exports.processPublicLead = onDocumentCreated({
       diagnostico: studentDiagnostic({ ...lead, ...(lead.metadata || {}) }),
       updatedAt: now(),
     });
-    await notifyAdmins('Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
+    await notifyAdmins('Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Una familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
       type: 'family_lead_request',
       leadId,
       requestId: requestRef.id,
@@ -2980,7 +3164,7 @@ exports.processPublicLead = onDocumentCreated({
     return;
   }
 
-  await notifyAdmins('Nuevo contacto publico', `${lead.nombre || lead.email || 'Contacto'} envio un mensaje.`, {
+  await notifyAdmins('Nuevo contacto publico', `${lead.nombre || lead.email || 'Un contacto publico'} envio un mensaje.`, {
     type: 'contact_lead',
     leadId,
   });
@@ -3533,8 +3717,8 @@ exports.generateMonthlySummary = onSchedule({
     summary.classes += 1;
     const teacherUid = data.teacherUid || data.profesor_id || 'sin_profesor';
     const familyUid = data.familyUid || data.familia_id || 'sin_familia';
-    summary.teacherTotals[teacherUid] = (summary.teacherTotals[teacherUid] || 0) + Number(data.importe_profesor || data.teacherAmount || 0);
-    summary.familyTotals[familyUid] = (summary.familyTotals[familyUid] || 0) + Number(data.precio_total || data.amount || 0);
+    summary.teacherTotals[teacherUid] = (summary.teacherTotals[teacherUid] || 0) + classTeacherAmount(data);
+    summary.familyTotals[familyUid] = (summary.familyTotals[familyUid] || 0) + classFamilyAmount(data);
   });
 
   await db.collection('resumenMensual').doc(month).set(summary, { merge: true });

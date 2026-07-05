@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260701-role-ux">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260705-calendar-side-panel">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -146,9 +146,9 @@
 
       <!-- ══ CALENDARIO ══ -->
       <section id="section-calendario" class="dash-section" style="display:none">
-        <div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
+        <div class="calendar-page-layout">
           <div id="calendario-wrapper"></div>
-          <div class="card">
+          <div class="card calendar-day-panel">
             <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
             <div class="card-body" style="padding:0" id="cal-clases-dia">
               <div class="empty-state dashboard-empty-state is-compact">
@@ -232,8 +232,34 @@
             <div class="stat-card-label">Total</div>
           </div>
           <div class="stat-card">
-            <div class="stat-card-value" id="ing-pago-quincenal">Domingo</div>
-            <div class="stat-card-label">Pago cada 2 semanas</div>
+            <div class="stat-card-value" id="ing-pago-quincenal">Configurar</div>
+            <div class="stat-card-label">Proximo cobro</div>
+          </div>
+        </div>
+        <div class="card income-payout-card" style="margin-bottom:20px">
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <span class="card-title">Dia de cobro</span>
+            <span class="badge badge-warning" id="ing-cobro-lock-badge">Pendiente</span>
+          </div>
+          <div class="card-body">
+            <div id="ing-cobro-status" class="income-payout-status"></div>
+            <form id="form-dia-cobro-profesor" class="income-payout-form" method="post" novalidate>
+              <div class="form-group">
+                <label class="form-label" for="ing-cobro-frecuencia">Frecuencia de cobro</label>
+                <select class="form-control" id="ing-cobro-frecuencia">
+                  <option value="">Seleccionar...</option>
+                  <option value="quincenal">Cada 15 dias</option>
+                  <option value="mensual">Una vez al mes</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="ing-cobro-fecha-inicio">Primer dia de cobro</label>
+                <input class="form-control" type="date" id="ing-cobro-fecha-inicio">
+                <div class="form-hint">El calendario repetira esta fecha segun la frecuencia elegida.</div>
+              </div>
+              <button class="btn btn-primary" type="submit" id="btn-guardar-dia-cobro-profesor">Guardar dia de cobro</button>
+            </form>
+            <div class="income-payout-lock-note">Una vez guardado no se puede cambiar desde el panel. Si te equivocas, contacta con ClasesDe10 para revisarlo.</div>
           </div>
         </div>
         <div class="card" style="margin-bottom:20px">
@@ -245,8 +271,8 @@
             <div class="alert alert-info" style="margin-bottom:16px">
               <span class="alert-icon">i</span>
               <div class="alert-body">
-                <div class="alert-title">Cobro normal quincenal</div>
-                Los profesores cobran cada dos semanas los domingos. Usa esta opcion solo si necesitas pedir un Bizum fuera de ese ciclo; el admin recibira la solicitud y la marcara como pagada cuando se tramite.
+                <div class="alert-title">Cobro ordinario configurable</div>
+                Configura en Ingresos si prefieres cobrar cada 15 dias o una vez al mes. El calendario senalara cada fecha prevista; usa esta opcion solo si necesitas pedir un Bizum fuera de ese ciclo.
               </div>
             </div>
             <div class="table-wrapper">
@@ -511,6 +537,13 @@
                     </label>
                   </div>
                 </div>
+                <div class="profile-payout-reminder" id="perfil-cobro-reminder">
+                  <div>
+                    <strong>Dia de cobro</strong>
+                    <span id="perfil-cobro-text">Configuralo en Ingresos. Una vez guardado no se puede cambiar desde el panel.</span>
+                  </div>
+                  <button class="btn btn-ghost btn-sm" type="button" data-section="ingresos">Ir a ingresos</button>
+                </div>
                 <div class="form-group">
                   <label class="form-label">Disponibilidad resumida</label>
                   <textarea class="form-control" id="p-disponibilidad" rows="3" placeholder="Lunes a jueves tardes, sabados manana, online..."></textarea>
@@ -720,19 +753,20 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260629-school-profile';
+} from '../../js/profile-engine.js?v=20260705-payout-day-lock';
 import {
   buildTeacherAttendancePayload,
+  classAttendanceReminderState,
   classAttendanceState,
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260701-attendance-clarity';
-import { buildTeacherPayoutPayload, classEconomicState } from '../../js/payment-engine.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260703-recurring-series';
+} from '../../js/calendar-engine.js?v=20260704-prorated-duration';
+import { buildTeacherPayoutPayload, classEconomicState } from '../../js/payment-engine.js?v=20260704-prorated-duration';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260705-family-teacher-photo-calls';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
-import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260701-journey-clarity';
+import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260705-payout-day-lock';
 import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import {
@@ -816,6 +850,445 @@ let clasesBizumPendientes = [];
 let incomeInsightsModel = null;
 let alumnosProfesorCache = new Map();
 
+function normalizeDisplayName(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+const GENERIC_PERSON_LABELS = new Set([
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'familia',
+  'familia sin nombre',
+  'sin nombre',
+  'contacto',
+]);
+
+function nameLookupKey(value) {
+  return normalizeDisplayName(value)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function isGenericPersonLabel(value) {
+  const key = nameLookupKey(value);
+  return !key || GENERIC_PERSON_LABELS.has(key);
+}
+
+function meaningfulPersonName(...values) {
+  return values.map(normalizeDisplayName).find((value) => value && !isGenericPersonLabel(value)) || '';
+}
+
+function personFallbackLabel(role, id = '') {
+  const suffix = normalizeDisplayName(id).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
+  return suffix ? `${role} ${suffix}` : `${role} pendiente de nombre`;
+}
+
+function personDisplayName(role, id = '', ...values) {
+  return meaningfulPersonName(...values) || personFallbackLabel(role, id);
+}
+
+function splitDisplayName(value) {
+  const parts = normalizeDisplayName(value).split(' ').filter(Boolean);
+  return { first: parts[0] || '', last: parts.slice(1).join(' ') };
+}
+
+function studentNamePartsFromClass(clase = {}) {
+  const nestedFirst = normalizeDisplayName(clase.alumnos?.nombre || clase.studentFirstName || clase.student_first_name);
+  const nestedLast = normalizeDisplayName(clase.alumnos?.apellidos || clase.studentLastName || clase.student_last_name);
+  const directFull = normalizeDisplayName(clase.studentFullName || clase.alumno_nombre || clase.studentName || clase.studentDisplayName);
+  const directParts = splitDisplayName(directFull);
+  const first = nestedFirst || directParts.first;
+  const last = nestedLast || directParts.last;
+  const full = normalizeDisplayName([first, last].filter(Boolean).join(' ')) || directFull;
+  return { first, last, full };
+}
+
+function studentNamePartsFromAssigned(alumno = {}) {
+  const first = normalizeDisplayName(alumno.nombre);
+  const last = normalizeDisplayName(alumno.apellidos);
+  const full = normalizeDisplayName(alumno.nombreCompleto || [first, last].filter(Boolean).join(' '));
+  const parts = splitDisplayName(full);
+  return { first: first || parts.first, last: last || parts.last, full };
+}
+
+function preferredPersonDisplayName(parts = {}, duplicatedFirstNames = new Set()) {
+  const first = normalizeDisplayName(parts.first);
+  const last = normalizeDisplayName(parts.last);
+  const full = normalizeDisplayName(parts.full || [first, last].filter(Boolean).join(' '));
+  if (!full || isGenericPersonLabel(full)) return '';
+  if (first && duplicatedFirstNames.has(nameLookupKey(first)) && last) return full;
+  return first || full;
+}
+
+function withPreferredStudentDisplayNames(rows = [], partSelector = studentNamePartsFromClass) {
+  const records = rows.map((row) => ({ row, parts: partSelector(row) }));
+  const firstCounts = new Map();
+  records.forEach(({ parts }) => {
+    const key = nameLookupKey(parts.first);
+    if (!key) return;
+    firstCounts.set(key, (firstCounts.get(key) || 0) + 1);
+  });
+  const duplicated = new Set([...firstCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key));
+  return records.map(({ row, parts }) => {
+    const displayName = preferredPersonDisplayName(parts, duplicated);
+    const fullName = normalizeDisplayName(parts.full) || displayName;
+    return {
+      ...row,
+      studentFullName: fullName,
+      studentFirstName: normalizeDisplayName(parts.first),
+      studentLastName: normalizeDisplayName(parts.last),
+      studentDisplayName: displayName,
+      alumno_nombre: displayName,
+      studentName: displayName,
+    };
+  });
+}
+
+function studentDisplayName(clase = {}) {
+  return personDisplayName('Alumno', clase.studentId || clase.alumno_id, clase.studentDisplayName, clase.alumno_nombre, clase.studentName, studentNamePartsFromClass(clase).full);
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function normalizePayoutFrequency(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (['mensual', 'monthly', 'mes', 'monthly_payout'].includes(raw)) return 'mensual';
+  if (['quincenal', 'biweekly', 'fortnightly', 'cada_15_dias', '15dias', '15_dias'].includes(raw)) return 'quincenal';
+  return '';
+}
+
+function parseIsoLocalDate(value) {
+  const raw = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [year, month, day] = raw.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isoDateLocal(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function addLocalDays(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+function daysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function normalizeTeacherPayoutPreference(source = {}) {
+  const frequency = normalizePayoutFrequency(
+    source.payoutFrequency
+    ?? source.frecuencia_cobro_profesor
+    ?? source.payoutCadence
+    ?? source.cobro_frecuencia
+    ?? source.paymentFrequency
+  );
+  const rawAnchor = String(
+    source.payoutAnchorDate
+    ?? source.fecha_inicio_cobro_profesor
+    ?? source.teacherPayoutAnchorDate
+    ?? source.cobro_fecha_inicio
+    ?? ''
+  ).slice(0, 10);
+  const fallbackDay = Number(
+    source.payoutDayOfMonth
+    ?? source.dia_cobro_profesor
+    ?? source.paymentDayOfMonth
+    ?? source.cobro_dia
+    ?? 0
+  );
+  const fallbackAnchor = rawAnchor || (
+    Number.isInteger(fallbackDay) && fallbackDay >= 1 && fallbackDay <= 31
+      ? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(fallbackDay).padStart(2, '0')}`
+      : ''
+  );
+  const anchor = parseIsoLocalDate(fallbackAnchor);
+  return {
+    frequency: frequency || (anchor ? 'quincenal' : ''),
+    anchorDate: anchor ? isoDateLocal(anchor) : '',
+    dayOfMonth: anchor ? anchor.getDate() : null,
+    configured: Boolean((frequency || anchor) && anchor),
+  };
+}
+
+function teacherPayoutFrequencyLabel(frequency) {
+  return frequency === 'mensual' ? 'Cobro mensual' : 'Cobro cada 15 dias';
+}
+
+function payoutDatesForMonth(preference, year, monthIndex) {
+  if (!preference?.configured) return [];
+  const anchor = parseIsoLocalDate(preference.anchorDate);
+  if (!anchor) return [];
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex, daysInMonth(year, monthIndex));
+
+  if (preference.frequency === 'mensual') {
+    const day = Math.min(preference.dayOfMonth || anchor.getDate(), daysInMonth(year, monthIndex));
+    const target = new Date(year, monthIndex, day);
+    return target >= anchor && target <= monthEnd ? [target] : [];
+  }
+
+  let cursor = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  if (cursor < monthStart) {
+    const diffDays = Math.floor((monthStart.getTime() - cursor.getTime()) / DAY_MS);
+    cursor = addLocalDays(cursor, Math.floor(diffDays / 15) * 15);
+    while (cursor < monthStart) cursor = addLocalDays(cursor, 15);
+  }
+  const dates = [];
+  while (cursor <= monthEnd) {
+    if (cursor >= anchor) dates.push(cursor);
+    cursor = addLocalDays(cursor, 15);
+  }
+  return dates;
+}
+
+function previousPayoutDateFor(preference, payoutDate) {
+  if (preference.frequency === 'mensual') {
+    const prevMonth = new Date(payoutDate.getFullYear(), payoutDate.getMonth() - 1, 1);
+    const day = Math.min(preference.dayOfMonth || payoutDate.getDate(), daysInMonth(prevMonth.getFullYear(), prevMonth.getMonth()));
+    return new Date(prevMonth.getFullYear(), prevMonth.getMonth(), day);
+  }
+  return addLocalDays(payoutDate, -15);
+}
+
+function nextTeacherPayoutDate(preference, fromDate = new Date()) {
+  if (!preference?.configured) return null;
+  const today = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+  for (let offset = 0; offset < 18; offset += 1) {
+    const cursor = new Date(today.getFullYear(), today.getMonth() + offset, 1);
+    const next = payoutDatesForMonth(preference, cursor.getFullYear(), cursor.getMonth())
+      .find((date) => date >= today);
+    if (next) return next;
+  }
+  return null;
+}
+
+function teacherPayoutSummaryLabel(profile = perfil) {
+  const preference = normalizeTeacherPayoutPreference(profile || {});
+  if (!preference.configured) return 'Configurar';
+  const next = nextTeacherPayoutDate(preference);
+  return next ? formatFechaCorta(isoDateLocal(next)) : teacherPayoutFrequencyLabel(preference.frequency);
+}
+
+function teacherPayoutPersistenceFields(preference = {}) {
+  if (!preference?.configured) return {};
+  return {
+    frecuencia_cobro_profesor: preference.frequency,
+    payoutFrequency: preference.frequency,
+    fecha_inicio_cobro_profesor: preference.anchorDate,
+    payoutAnchorDate: preference.anchorDate,
+    dia_cobro_profesor: preference.dayOfMonth,
+    payoutDayOfMonth: preference.dayOfMonth,
+  };
+}
+
+function teacherPayoutDetailLabel(preference = normalizeTeacherPayoutPreference(perfil || {})) {
+  if (!preference.configured) return 'Sin dia de cobro configurado';
+  const next = nextTeacherPayoutDate(preference);
+  const frequency = teacherPayoutFrequencyLabel(preference.frequency).toLowerCase();
+  const anchor = formatFechaCorta(preference.anchorDate);
+  const nextText = next ? ` Proximo cobro previsto: ${formatFechaCorta(isoDateLocal(next))}.` : '';
+  return `${frequency}, desde ${anchor}.${nextText}`;
+}
+
+function syncTeacherPayoutSettings() {
+  const preference = normalizeTeacherPayoutPreference(perfil || {});
+  const locked = preference.configured;
+  const frequencyInput = document.getElementById('ing-cobro-frecuencia');
+  const anchorInput = document.getElementById('ing-cobro-fecha-inicio');
+  const submitButton = document.getElementById('btn-guardar-dia-cobro-profesor');
+  const statusBox = document.getElementById('ing-cobro-status');
+  const lockBadge = document.getElementById('ing-cobro-lock-badge');
+  const profileReminder = document.getElementById('perfil-cobro-reminder');
+  const profileText = document.getElementById('perfil-cobro-text');
+  const stat = document.getElementById('ing-pago-quincenal');
+
+  if (frequencyInput) {
+    frequencyInput.value = preference.frequency || '';
+    frequencyInput.disabled = locked;
+  }
+  if (anchorInput) {
+    anchorInput.value = preference.anchorDate || '';
+    anchorInput.disabled = locked;
+  }
+  if (submitButton) {
+    submitButton.disabled = locked;
+    submitButton.textContent = locked ? 'Dia de cobro bloqueado' : 'Guardar dia de cobro';
+  }
+  if (statusBox) {
+    statusBox.classList.toggle('is-locked', locked);
+    statusBox.classList.toggle('is-pending', !locked);
+    statusBox.innerHTML = locked
+      ? `<strong>Dia de cobro guardado</strong><span>${sanitize(teacherPayoutDetailLabel(preference))}</span>`
+      : '<strong>Falta fijar tu dia de cobro</strong><span>Elige una frecuencia y el primer dia. Este dato se usa para marcar tus cobros en el calendario y no se podra cambiar desde el panel.</span>';
+  }
+  if (lockBadge) {
+    lockBadge.className = locked ? 'badge badge-success' : 'badge badge-warning';
+    lockBadge.textContent = locked ? 'Fijo' : 'Pendiente';
+  }
+  if (profileReminder) {
+    profileReminder.classList.toggle('is-locked', locked);
+  }
+  if (profileText) {
+    profileText.textContent = locked
+      ? teacherPayoutDetailLabel(preference)
+      : 'Configuralo en Ingresos. Una vez guardado no se puede cambiar desde el panel.';
+  }
+  if (stat) stat.textContent = teacherPayoutSummaryLabel(perfil);
+}
+
+async function guardarDiaCobroProfesor(event) {
+  event?.preventDefault();
+  const currentPreference = normalizeTeacherPayoutPreference(perfil || {});
+  if (currentPreference.configured) {
+    showToast('Dia de cobro fijo', 'Ya esta guardado. Si necesitas cambiarlo, contacta con ClasesDe10.', 'warning');
+    syncTeacherPayoutSettings();
+    return;
+  }
+
+  const frequency = normalizePayoutFrequency(document.getElementById('ing-cobro-frecuencia')?.value);
+  const anchorDate = document.getElementById('ing-cobro-fecha-inicio')?.value || '';
+  const preference = normalizeTeacherPayoutPreference({ payoutFrequency: frequency, payoutAnchorDate: anchorDate });
+  if (!preference.configured) {
+    showToast('Falta el dia de cobro', 'Elige frecuencia y primer dia de cobro antes de guardar.', 'warning');
+    return;
+  }
+
+  const button = document.getElementById('btn-guardar-dia-cobro-profesor');
+  const previousText = button?.textContent || '';
+  if (button) {
+    button.disabled = true;
+    button.textContent = 'Guardando...';
+  }
+
+  const timestampIso = new Date().toISOString();
+  const payoutFields = teacherPayoutPersistenceFields(preference);
+  const firebasePayload = {
+    ...payoutFields,
+    payoutLockedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updated_at: timestampIso,
+  };
+  const legacyPayload = {
+    ...payoutFields,
+    payout_locked_at: timestampIso,
+    updated_at: timestampIso,
+  };
+
+  try {
+    await setDoc(firestoreDoc(firebaseDb, 'profesores', profesorFirestoreId), firebasePayload, { merge: true });
+    if (perfilLegacy?.id) {
+      await db.from('profesores').update(legacyPayload).eq('id', perfilLegacy.id);
+      perfilLegacy = { ...perfilLegacy, ...legacyPayload };
+    }
+    perfil = { ...perfil, ...payoutFields, payout_locked_at: timestampIso };
+    syncTeacherPayoutSettings();
+    renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual());
+    await cargarInicio();
+    if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
+    showToast('Dia de cobro guardado', 'Queda fijado para tus proximos cobros.', 'success');
+  } catch (error) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousText;
+    }
+    showToast('Error', error.message || 'No se pudo guardar el dia de cobro.', 'error');
+  }
+}
+
+function classDateIso(clase = {}) {
+  const raw = clase.fecha || clase.date || clase.startAtIso || clase.startsAt || '';
+  if (typeof raw?.toDate === 'function') return isoDateLocal(raw.toDate());
+  if (Number.isFinite(raw?.seconds)) return isoDateLocal(new Date(raw.seconds * 1000));
+  const value = String(raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : isoDateLocal(date);
+}
+
+function buildTeacherPayoutCalendarEvents(year, monthIndex, classes = []) {
+  const preference = normalizeTeacherPayoutPreference(perfil || {});
+  return payoutDatesForMonth(preference, year, monthIndex).map((payoutDate) => {
+    const previousDate = previousPayoutDateFor(preference, payoutDate);
+    const payoutDateIso = isoDateLocal(payoutDate);
+    const periodStartIso = isoDateLocal(addLocalDays(previousDate, 1));
+    const periodClasses = (classes || [])
+      .filter((clase) => {
+        const dateIso = classDateIso(clase);
+        const classDate = parseIsoLocalDate(dateIso);
+        return classDate
+          && classDate > previousDate
+          && classDate <= payoutDate
+          && esClaseConIngresoProfesor(clase)
+          && !esCobroProfesorPagado(clase);
+      })
+      .sort((a, b) => String(classDateIso(a)).localeCompare(String(classDateIso(b))) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')));
+    const payoutAmount = periodClasses.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
+    return {
+      id: `teacher-payout-${payoutDateIso}`,
+      calendarEventType: 'teacher_payout_day',
+      fecha: payoutDateIso,
+      date: payoutDateIso,
+      payoutDate: payoutDateIso,
+      periodStart: periodStartIso,
+      periodEnd: payoutDateIso,
+      payoutFrequency: preference.frequency,
+      payoutFrequencyLabel: teacherPayoutFrequencyLabel(preference.frequency),
+      payoutAmount,
+      payoutClasses: periodClasses,
+    };
+  });
+}
+
+function isTeacherPayoutCalendarEvent(item = {}) {
+  return item.calendarEventType === 'teacher_payout_day';
+}
+
+function renderTeacherPayoutCalendarCard(event) {
+  const classes = event.payoutClasses || [];
+  const total = Number(event.payoutAmount || 0);
+  const rows = classes.slice(0, 6).map((clase) => `
+    <div class="calendar-payout-row">
+      <span>${sanitize(formatFechaCorta(classDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
+      <strong>${sanitize(studentDisplayName(clase))}</strong>
+      <em>${sanitize(formatEuros(importeProfesorClase(clase)))}</em>
+    </div>`).join('');
+  const extra = classes.length > 6
+    ? `<div class="calendar-payout-more">+${classes.length - 6} clase(s) mas en este periodo</div>`
+    : '';
+  return `
+    <div class="clase-item calendar-payout-item" style="padding:12px 16px">
+      <div class="clase-time calendar-payout-time">
+        <div class="clase-time-hora">Cobro</div>
+        <div class="clase-time-fin">${sanitize(formatFechaCorta(event.payoutDate))}</div>
+      </div>
+      <div class="clase-info">
+        <div class="clase-nombre">${sanitize(event.payoutFrequencyLabel)}</div>
+        <div class="clase-materia">Periodo ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</div>
+        <div class="calendar-payout-summary">
+          <span class="badge badge-navy">${classes.length} clase(s)</span>
+          <strong>${sanitize(formatEuros(total))}</strong>
+        </div>
+        <div class="calendar-payout-detail">
+          ${rows || '<div class="calendar-payout-empty">No hay clases pendientes de liquidar en este periodo.</div>'}
+          ${extra}
+        </div>
+      </div>
+    </div>`;
+}
+
 function claseTerminada(clase, margenMinutos = 0) {
   return classEnded(clase, margenMinutos);
 }
@@ -828,12 +1301,102 @@ function renderTeacherAttendanceSummary(clase) {
     : 'badge-info';
   const notes = clase.notas_profesor || clase.notasProfesor || '';
   return `
-    <div class="attendance-summary">
+    <div class="calendar-status-line">
       <span class="badge ${badgeClass}">${sanitize(state.label)}</span>
-      <span class="attendance-hint">${sanitize(state.teacherNextStep)}</span>
-      ${notes ? `<span class="attendance-notes">${sanitize(notes)}</span>` : ''}
+      <span>${sanitize(teacherAttendanceCompactText(state))}</span>
+      ${notes ? `<small>${sanitize(notes)}</small>` : ''}
     </div>
   `;
+}
+
+function teacherAttendanceCompactText(state = {}) {
+  if (state.key === 'confirmed_by_both') return 'Asistencia confirmada';
+  if (state.key === 'pending_family') return 'Falta confirmar familia';
+  if (state.key === 'pending_teacher') return 'Falta registrar profesor';
+  if (state.key === 'incident') return 'Incidencia abierta';
+  if (state.key === 'cancelled') return 'Clase cancelada';
+  if (state.key === 'scheduled') return 'Pendiente de realizar';
+  return state.teacherNextStep || state.label || 'Asistencia pendiente';
+}
+
+function teacherAttendanceSelectValue(clase = {}) {
+  const teacher = String(clase.teacherConfirmationStatus || clase.teacherAttendanceStatus || '').toLowerCase();
+  if (teacher === 'realizada') return 'realizada';
+  if (['no_realizada', 'cancelada', 'incidencia'].includes(teacher)) return 'no_realizada';
+  return 'pendiente';
+}
+
+function renderTeacherAttendanceReminder(clase) {
+  const reminder = classAttendanceReminderState(clase);
+  if (!reminder.needsTeacherResult) return '';
+  if (reminder.isOverdue) {
+    return `<div class="calendar-attendance-alert">Han pasado 24h. Marca si se dio o no.</div>`;
+  }
+  if (reminder.hoursUntilDue !== null && reminder.hoursUntilDue <= 24) {
+    return `<div class="calendar-attendance-hint">Pendiente de marcar antes de 24h.</div>`;
+  }
+  return '';
+}
+
+function renderTeacherAttendanceSelect(clase, state = classAttendanceState(clase)) {
+  const current = teacherAttendanceSelectValue(clase);
+  const lockedReason = state.key === 'confirmed_by_both'
+    ? 'Confirmada por ambos'
+    : ['cancelled', 'incident'].includes(state.key)
+      ? 'Asistencia cerrada'
+      : !state.ended
+    ? 'Disponible al terminar'
+    : current !== 'pendiente'
+      ? 'Resultado registrado'
+      : '';
+  const disabled = lockedReason ? 'disabled' : '';
+  const lockedHint = state.key === 'confirmed_by_both' ? '' : lockedReason;
+  return `
+    <label class="calendar-attendance-select">
+      <span>Resultado</span>
+      <select class="form-control"
+              data-action="actualizar-asistencia-calendario"
+              data-id="${sanitize(clase.id)}"
+              data-current="${sanitize(current)}"
+              ${disabled}>
+        <option value="pendiente" ${current === 'pendiente' ? 'selected' : ''}>En espera</option>
+        <option value="realizada" ${current === 'realizada' ? 'selected' : ''}>Se ha dado</option>
+        <option value="no_realizada" ${current === 'no_realizada' ? 'selected' : ''}>No se ha dado</option>
+      </select>
+      ${lockedHint ? `<small>${sanitize(lockedHint)}</small>` : ''}
+    </label>
+  `;
+}
+
+function teacherEconomicCompactText(economic = {}) {
+  const labels = {
+    settled: 'Pagada y liquidada',
+    payout_pending: 'Familia pagada; falta liquidar profesor',
+    in_review: 'Justificante en revision',
+    pending: 'No pagada',
+    overdue: 'No pagada, fuera de plazo',
+    rejected: 'Justificante rechazado',
+    cancelled: 'Sin cobro activo',
+    missing_amount: 'Falta importe de familia',
+    missing_teacher_amount: 'Falta importe del profesor',
+  };
+  return labels[economic.state] || economic.label || 'Pago pendiente';
+}
+
+function renderTeacherEconomicStatus(clase = {}, economic = classEconomicState(clase)) {
+  const economicBadge = {
+    success: 'badge-success',
+    warning: 'badge-warning',
+    danger: 'badge-danger',
+    info: 'badge-info',
+    navy: 'badge-navy',
+    gray: 'badge-gray',
+  }[economic.tone] || 'badge-gray';
+  return `
+    <div class="calendar-status-line calendar-payment-line">
+      <span class="badge ${economicBadge}">${sanitize(economic.badge)}</span>
+      <span>${sanitize(teacherEconomicCompactText(economic))}</span>
+    </div>`;
 }
 
 function renderCalendarCancelAction(clase) {
@@ -844,7 +1407,7 @@ function renderCalendarCancelAction(clase) {
 function renderTeacherClassAction(clase) {
   const state = classAttendanceState(clase);
   if (!state.canTeacherRegister) return '<span class="muted">Sin accion ahora</span>';
-  const alumnoNombre = clase.alumno_nombre || clase.studentName || 'Alumno/a';
+  const alumnoNombre = studentDisplayName(clase);
   return `
     <button class="btn btn-primary btn-sm"
             data-action="registrar-clase"
@@ -998,11 +1561,69 @@ function mergeById(rows = []) {
   return Array.from(map.values());
 }
 
+function classTimeMinutes(value) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function classTimeRangeDurationMinutes(clase = {}) {
+  const start = classTimeMinutes(clase?.hora_inicio || clase?.startTime);
+  const end = classTimeMinutes(clase?.hora_fin || clase?.endTime);
+  if (start !== null && end !== null && end > start) return end - start;
+  return null;
+}
+
+function duracionClaseProfesor(clase) {
+  const timeRange = classTimeRangeDurationMinutes(clase);
+  if (timeRange !== null) return timeRange;
+  return Number(clase?.duracion_minutos || clase?.durationMinutes || clase?.duration || 60) || 60;
+}
+
+function proratedTeacherClassAmount(clase = {}) {
+  const minutes = duracionClaseProfesor(clase);
+  const hourly = Number(clase?.teacherHourlyRate ?? clase?.importe_hora_profesor ?? clase?.teacherRatePerHour ?? clase?.tarifa_hora_profesor);
+  if (Number.isFinite(hourly) && hourly > 0) {
+    return Math.round(((hourly * minutes / 60) + Number.EPSILON) * 100) / 100;
+  }
+  const amount = Number(clase?.importe_profesor ?? clase?.teacherAmount ?? clase?.precio_profesor ?? clase?.teacher_amount ?? 0);
+  const timeRange = classTimeRangeDurationMinutes(clase);
+  return Number.isFinite(amount) && amount > 0
+    ? (timeRange !== null && timeRange !== 60 ? Math.round(((amount * minutes / 60) + Number.EPSILON) * 100) / 100 : Math.round((amount + Number.EPSILON) * 100) / 100)
+    : 0;
+}
+
+function hourlyRateFromClassFields(clase = {}, hourlyFields = [], amountFields = []) {
+  for (const field of hourlyFields) {
+    const hourly = Number(clase[field]);
+    if (Number.isFinite(hourly) && hourly > 0) return Math.round((hourly + Number.EPSILON) * 100) / 100;
+  }
+  const timeRange = classTimeRangeDurationMinutes(clase);
+  for (const field of amountFields) {
+    const amount = Number(clase[field]);
+    if (Number.isFinite(amount) && amount > 0 && timeRange !== null && timeRange !== 60) return Math.round((amount + Number.EPSILON) * 100) / 100;
+  }
+  return null;
+}
+
 function normalizeTeacherClassRow(clase = {}) {
-  const alumnoNombre = [clase.alumnos?.nombre, clase.alumnos?.apellidos].filter(Boolean).join(' ').trim()
-    || clase.alumno_nombre
-    || clase.studentName
-    || 'Alumno/a';
+  const studentParts = studentNamePartsFromClass(clase);
+  const alumnoNombre = personDisplayName('Alumno', clase.studentId || clase.alumno_id, studentParts.full);
+  const durationMinutes = duracionClaseProfesor(clase);
+  const teacherAmount = proratedTeacherClassAmount(clase);
+  const teacherHourlyRate = hourlyRateFromClassFields(
+    clase,
+    ['teacherHourlyRate', 'importe_hora_profesor', 'teacherRatePerHour', 'tarifa_hora_profesor'],
+    ['importe_profesor', 'teacherAmount', 'precio_profesor', 'teacher_amount'],
+  );
+  const familyHourlyRate = hourlyRateFromClassFields(
+    clase,
+    ['familyHourlyRate', 'precio_hora_familia', 'familyRatePerHour', 'tarifa_hora_familia'],
+    ['precio_total', 'amount', 'familyAmount'],
+  );
   return {
     ...clase,
     teacherUid: clase.teacherUid || clase.profesor_id || '',
@@ -1017,14 +1638,22 @@ function normalizeTeacherClassRow(clase = {}) {
     endTime: clase.endTime || clase.hora_fin || '',
     materia: clase.materia || clase.subject || '',
     subject: clase.subject || clase.materia || '',
-    duracion_minutos: clase.duracion_minutos || clase.durationMinutes || '',
-    durationMinutes: clase.durationMinutes || clase.duracion_minutos || '',
+    duracion_minutos: durationMinutes,
+    durationMinutes,
+    studentFullName: studentParts.full || alumnoNombre,
+    studentFirstName: studentParts.first,
+    studentLastName: studentParts.last,
+    studentDisplayName: alumnoNombre,
     alumno_nombre: alumnoNombre,
     studentName: alumnoNombre,
-    importe_profesor: clase.importe_profesor ?? clase.teacherAmount ?? null,
-    teacherAmount: clase.teacherAmount ?? clase.importe_profesor ?? null,
+    importe_profesor: teacherAmount,
+    teacherAmount,
+    importe_hora_profesor: teacherHourlyRate,
+    teacherHourlyRate,
     precio_total: clase.precio_total ?? clase.amount ?? clase.familyAmount ?? null,
     familyAmount: clase.familyAmount ?? clase.precio_total ?? clase.amount ?? null,
+    precio_hora_familia: familyHourlyRate,
+    familyHourlyRate,
   };
 }
 
@@ -1044,6 +1673,7 @@ async function cargarClasesProfesor(options = {}) {
   if (options.desde) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') >= options.desde);
   if (options.hasta) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') <= options.hasta);
   if (options.estado) rows = rows.filter((clase) => classStatusForBadge(clase) === options.estado || clase.estado === options.estado || clase.status === options.estado);
+  rows = withPreferredStudentDisplayNames(rows);
   rows.sort((a, b) => String(b.fecha || b.date || '').localeCompare(String(a.fecha || a.date || '')) || String(b.hora_inicio || b.startTime || '').localeCompare(String(a.hora_inicio || a.startTime || '')));
   return rows;
 }
@@ -1156,7 +1786,7 @@ async function cargarInicio() {
           <div class="clase-time-min">${formatFechaCorta(c.fecha)}</div>
         </div>
         <div class="clase-info">
-          <div class="clase-nombre">${sanitize(c.alumno_nombre || c.studentName || c.alumnos?.nombre || 'Alumno/a')}</div>
+          <div class="clase-nombre">${sanitize(studentDisplayName(c))}</div>
           <div class="clase-materia">${sanitize(c.materia)} · ${c.duracion_minutos || c.durationMinutes || '—'} min${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
         </div>
       </div>`;
@@ -1176,12 +1806,12 @@ async function cargarInicio() {
     contPend.innerHTML = pendientes.map(c => `
       <div class="clase-item" style="padding:12px 20px">
         <div class="clase-info">
-          <div class="clase-nombre">${sanitize(c.alumno_nombre || c.studentName || c.alumnos?.nombre || 'Alumno/a')} — ${sanitize(c.materia)}</div>
+          <div class="clase-nombre">${sanitize(studentDisplayName(c))} — ${sanitize(c.materia)}</div>
           <div class="clase-materia">${formatFechaCorta(c.fecha)} ${formatHora(c.hora_inicio)}</div>
         </div>
         ${renderTeacherClassAction({
           ...c,
-          alumno_nombre: c.alumno_nombre || c.studentName || ((c.alumnos?.nombre||'') + ' ' + (c.alumnos?.apellidos||'')),
+          alumno_nombre: studentDisplayName(c),
         })}
       </div>`).join('');
   }
@@ -1194,17 +1824,20 @@ async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
-      classDotClass: (clase) => classEconomicState(clase).dotClass,
+      classDotClass: (clase) => isTeacherPayoutCalendarEvent(clase) ? 'dot-purple' : classEconomicState(clase).dotClass,
       legendItems: [
         { className: 'dot-gold', label: 'Familia pendiente' },
         { className: 'dot-navy', label: 'Por cobrar' },
         { className: 'dot-teal', label: 'Cobrado' },
         { className: 'dot-red', label: 'Incidencia' },
+        { className: 'dot-purple', label: 'Cobro programado' },
       ],
       onDiaClick: (fecha, clases) => {
-        document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
+        const payoutEvents = clases.filter(isTeacherPayoutCalendarEvent);
+        const classItems = clases.filter((item) => !isTeacherPayoutCalendarEvent(item));
+        document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${payoutEvents.length + classItems.length})`;
         const cont = document.getElementById('cal-clases-dia');
-        if (!clases.length) {
+        if (!payoutEvents.length && !classItems.length) {
           cont.innerHTML = renderEmptyState({
             icon: '📅',
             title: 'Sin clases este día',
@@ -1214,29 +1847,36 @@ async function iniciarCalendario() {
           });
           return;
         }
-        cont.innerHTML = clases.map(c => {
+        const payoutHtml = payoutEvents.map(renderTeacherPayoutCalendarCard).join('');
+        const classHtml = classItems.map(c => {
           const importe = importeProfesorClase(c);
           const economic = classEconomicState(c);
-          const economicBadge = {
-            success: 'badge-success',
-            warning: 'badge-warning',
-            danger: 'badge-danger',
-            info: 'badge-info',
-            navy: 'badge-navy',
-          }[economic.tone] || 'badge-gray';
+          const attendance = classAttendanceState(c);
+          const alumnoNombre = studentDisplayName(c);
           return `
           <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}" style="padding:10px 16px">
-            <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
+            <div class="clase-time">
+              <div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div>
+              <div class="clase-time-fin">${formatHora(c.hora_fin||'')}</div>
+            </div>
             <div class="clase-info">
-              <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia||'')}</div>
-              <div class="clase-materia">${sanitize(c.materia||'')}${importe > 0 ? ` · ${formatEuros(importe)}` : ''}</div>
-              ${renderTeacherAttendanceSummary(c)}
-              <div class="calendar-payment-state"><span class="badge ${economicBadge}">${sanitize(economic.badge)}</span><span class="payment-due-hint">${sanitize(economic.label)}</span></div>
+              <div class="clase-nombre">${sanitize(alumnoNombre)}</div>
+              <div class="clase-materia">${sanitize(c.materia||'')}</div>
+              <div class="calendar-class-meta">
+                <span>Hora ${formatHora(c.hora_inicio||'')} - ${formatHora(c.hora_fin||'')}</span>
+                <span>Cobra profe ${importe > 0 ? formatEuros(importe) : '-'}</span>
+              </div>
+              <div class="calendar-status-stack">
+                ${renderTeacherAttendanceSummary(c)}
+                ${renderTeacherEconomicStatus(c, economic)}
+              </div>
+              ${renderTeacherAttendanceReminder(c)}
+              ${renderTeacherAttendanceSelect(c, attendance)}
               <div class="calendar-class-actions">${renderCalendarCancelAction(c)}</div>
             </div>
-            ${badgeEstado(classStatusForBadge(c))}
           </div>`;
         }).join('');
+        cont.innerHTML = `${payoutHtml}${classHtml}`;
       },
       onMesChange: cargarClasesCalendario,
     });
@@ -1247,10 +1887,16 @@ async function iniciarCalendario() {
 async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
-  const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const data = await cargarClasesProfesor({ desde, hasta, limit: 260 });
-  calendarClassById = new Map(data.map((clase) => [String(clase.id), clase]));
-  cal.setClases(data);
+  const hasta = isoDateLocal(new Date(anio, mes + 1, 0));
+  const desdeCalculo = isoDateLocal(new Date(anio, mes - 1, 1));
+  const data = await cargarClasesProfesor({ desde: desdeCalculo, hasta, limit: 800 });
+  const clasesMes = data.filter((clase) => {
+    const dateIso = classDateIso(clase);
+    return dateIso >= desde && dateIso <= hasta;
+  });
+  const payoutEvents = buildTeacherPayoutCalendarEvents(anio, mes, data);
+  calendarClassById = new Map(clasesMes.map((clase) => [String(clase.id), clase]));
+  cal.setClases([...clasesMes, ...payoutEvents]);
 }
 
 // ── MIS CLASES ───────────────────────────────────────────────────
@@ -1283,7 +1929,7 @@ async function cargarMisClases() {
   }
 
   tbody.innerHTML = clases.map(c => {
-    const alumnoNombre = c.alumno_nombre || c.studentName || 'Alumno/a';
+    const alumnoNombre = studentDisplayName(c);
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
@@ -1386,7 +2032,7 @@ async function cargarMisAlumnos() {
   tbody.innerHTML = alumnos.map((alumno) => `<tr>
     <td>
       <div class="student-cell-main">
-        <strong>${sanitize(alumno.nombreCompleto || 'Alumno/a')}</strong>
+        <strong>${sanitize(personDisplayName('Alumno', alumno.studentId, alumno.displayName, alumno.nombreCompleto))}</strong>
         <span>${sanitize(alumno.materia || 'Materia sin indicar')}</span>
       </div>
     </td>
@@ -1480,11 +2126,11 @@ function normalizeLegacyAssignedStudent(row = {}) {
 function normalizeAssignedStudent({ assignmentId = '', studentId = '', familyUid = '', materia = '', nivel = '', notasAsignacion = '', assignedAt = '', student = {}, family = {}, familyUser = {}, source = '' } = {}) {
   const nombre = firstText(student.nombre, student.name);
   const apellidos = firstText(student.apellidos, student.surname, student.lastName);
-  const nombreCompleto = compactText([nombre, apellidos], ' ') || firstText(student.displayName, student.studentName, 'Alumno/a');
+  const nombreCompleto = personDisplayName('Alumno', studentId, compactText([nombre, apellidos], ' '), student.displayName, student.studentName);
   const familyName = compactText([
     firstText(familyUser.nombre, family.nombre, family.name),
     firstText(familyUser.apellidos, family.apellidos, family.lastName),
-  ], ' ') || firstText(family.displayName, family.familyName, 'Familia');
+  ], ' ') || personDisplayName('Familia', familyUid, family.displayName, family.familyName, familyUser.email, family.email);
   const keyBase = firstText(studentId, `${nombreCompleto}:${materia}`);
   return {
     cacheId: `${source || 'row'}:${firstText(assignmentId, keyBase)}`,
@@ -1521,7 +2167,12 @@ function mergeAssignedStudentRows(rows = []) {
     const prev = map.get(key);
     map.set(key, prev ? mergeStudentInfo(prev, row) : row);
   });
-  return Array.from(map.values()).sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto));
+  return withPreferredStudentDisplayNames(Array.from(map.values()), studentNamePartsFromAssigned)
+    .map((row) => ({
+      ...row,
+      displayName: personDisplayName('Alumno', row.studentId, row.studentDisplayName, row.nombreCompleto),
+    }))
+    .sort((a, b) => a.nombreCompleto.localeCompare(b.nombreCompleto));
 }
 
 function mergeStudentInfo(a, b) {
@@ -1616,7 +2267,7 @@ function renderStudentDetail(alumno = {}) {
     <div class="student-detail-hero">
       <div class="student-detail-avatar">${sanitize(getIniciales(alumno.nombre, alumno.apellidos))}</div>
       <div>
-        <h3>${sanitize(alumno.nombreCompleto || 'Alumno/a')}</h3>
+        <h3>${sanitize(personDisplayName('Alumno', alumno.studentId, alumno.displayName, alumno.nombreCompleto))}</h3>
         <p>${sanitize(compactText([alumno.materia, alumno.nivel, alumno.curso], ' / ') || 'Asignacion activa')}</p>
       </div>
     </div>
@@ -1675,6 +2326,7 @@ document.addEventListener('click', (event) => {
 // ── INGRESOS ─────────────────────────────────────────────────────
 async function cargarIngresos() {
   if (!profesorId) return;
+  syncTeacherPayoutSettings();
   const clases = await cargarClasesProfesor({ limit: 1000 });
   const hoyDate = new Date();
   const mesActual = `${hoyDate.getFullYear()}-${String(hoyDate.getMonth()+1).padStart(2,'0')}`;
@@ -1690,7 +2342,7 @@ async function cargarIngresos() {
   document.getElementById('ing-por-cobrar').textContent = formatEuros(porCobrar);
   document.getElementById('ing-mes-actual').textContent = formatEuros(dMesActual?.total_profesor || 0);
   document.getElementById('ing-total').textContent = formatEuros(total);
-  document.getElementById('ing-pago-quincenal').textContent = 'Domingo';
+  document.getElementById('ing-pago-quincenal').textContent = teacherPayoutSummaryLabel(perfil);
   incomeInsightsModel = buildIncomeInsightsModel(clasesConIngreso);
   renderIncomeInsights(incomeInsightsModel);
 
@@ -1720,6 +2372,8 @@ async function cargarIngresos() {
   }).join('');
 }
 
+document.getElementById('form-dia-cobro-profesor')?.addEventListener('submit', guardarDiaCobroProfesor);
+
 function esClaseConIngresoProfesor(clase) {
   const importe = importeProfesorClase(clase);
   if (importe <= 0) return false;
@@ -1740,10 +2394,6 @@ function mesClaseProfesor(clase) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
-}
-
-function duracionClaseProfesor(clase) {
-  return Number(clase?.duracion_minutos || clase?.durationMinutes || clase?.duration || 60) || 60;
 }
 
 function agruparIngresosProfesor(clases) {
@@ -1777,12 +2427,14 @@ function incomeMonthLabel(monthKey) {
 }
 
 function incomeStudentName(clase) {
-  return String(
-    clase?.alumno_nombre
-    || clase?.studentName
-    || [clase?.alumnos?.nombre, clase?.alumnos?.apellidos].filter(Boolean).join(' ')
-    || 'Alumno/a'
-  ).trim();
+  return personDisplayName(
+    'Alumno',
+    clase?.studentId || clase?.alumno_id,
+    clase?.studentDisplayName,
+    clase?.alumno_nombre,
+    clase?.studentName,
+    [clase?.alumnos?.nombre, clase?.alumnos?.apellidos].filter(Boolean).join(' '),
+  );
 }
 
 function incomeStudentKey(clase) {
@@ -2059,17 +2711,7 @@ function renderIncomeInsights(model) {
 
 // ── PERFIL ───────────────────────────────────────────────────────
 function importeProfesorClase(clase) {
-  const hourly = Number(clase?.teacherHourlyRate ?? clase?.importe_hora_profesor ?? clase?.teacherRatePerHour);
-  if (Number.isFinite(hourly) && hourly > 0) {
-    return Math.round(((hourly * duracionClaseProfesor(clase) / 60) + Number.EPSILON) * 100) / 100;
-  }
-  return Number(
-    clase?.importe_profesor
-    ?? clase?.teacherAmount
-    ?? clase?.precio_profesor
-    ?? clase?.teacher_amount
-    ?? 0
-  ) || 0;
+  return proratedTeacherClassAmount(clase);
 }
 
 function estadoCobroProfesor(clase) {
@@ -2134,7 +2776,7 @@ async function cargarBizumProfesor() {
     tbody.innerHTML = renderTableEmptyState(6, {
       icon: '✓',
       title: 'Sin Bizum excepcional pendiente',
-      description: 'El cobro normal se gestiona cada dos semanas los domingos. Aqui solo veras clases si necesitas pedir un Bizum fuera de ese ciclo.',
+      description: 'El cobro normal se gestiona segun la frecuencia guardada en Ingresos. Aqui solo veras clases si necesitas pedir un Bizum fuera de ese ciclo.',
       actions: [emptyAction('Ver mis clases', { 'data-section': 'clases' }, 'ghost')],
     });
     return;
@@ -2142,7 +2784,7 @@ async function cargarBizumProfesor() {
 
   const rows = pendientes.map((clase) => `<tr>
     <td>${formatFechaCorta(clase.fecha)}</td>
-    <td>${sanitize(clase.alumno_nombre || clase.studentName || clase.alumnos?.nombre || 'Alumno')}</td>
+    <td>${sanitize(studentDisplayName(clase))}</td>
     <td>${sanitize(clase.materia || '-')}</td>
     <td><strong>${formatEuros(importeProfesorClase(clase))}</strong></td>
     <td>${badgeEstado('pendiente')}</td>
@@ -2151,7 +2793,7 @@ async function cargarBizumProfesor() {
 
   const blockedRows = sinImporte.slice(0, 8).map((clase) => `<tr>
     <td>${formatFechaCorta(clase.fecha)}</td>
-    <td>${sanitize(clase.alumno_nombre || clase.studentName || clase.alumnos?.nombre || 'Alumno')}</td>
+    <td>${sanitize(studentDisplayName(clase))}</td>
     <td>${sanitize(clase.materia || '-')}</td>
     <td>-</td>
     <td>${badgeEstado('pendiente')}</td>
@@ -2184,7 +2826,7 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
     monto: total,
     gateway: 'manual',
     concepto: `Bizum excepcional profesor - ${classIds.length} clase(s)`,
-    notas_profesor: `Solicitud automatica de cobro excepcional por Bizum de ${classIds.length} clase(s). El cobro ordinario del profesor es quincenal los domingos.`,
+    notas_profesor: `Solicitud automatica de cobro excepcional por Bizum de ${classIds.length} clase(s). El cobro ordinario del profesor sigue la frecuencia guardada en Ingresos.`,
     telefono_bizum: perfil?.telefono || usuario.telefono || '',
     classIds,
   }));
@@ -2398,6 +3040,7 @@ async function cargarPerfil() {
   document.getElementById('p-experiencia').value = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
   document.getElementById('p-disponibilidad').value = perfil.disponibilidad_resumen || perfil.availabilitySummary || '';
   document.getElementById('p-bizum').checked     = perfil.acepta_bizum === true || perfil.hasBizum === true;
+  syncTeacherPayoutSettings();
   document.getElementById('p-coche').value       = (perfil.tiene_coche === true || perfil.hasCar === true || perfil.carAvailable === true || perfil.vehiculo_propio === true)
     ? 'si'
     : (perfil.tiene_coche === false || perfil.hasCar === false || perfil.carAvailable === false || perfil.vehiculo_propio === false)
@@ -2490,6 +3133,60 @@ async function cancelarClaseDesdeCalendario(btn) {
   }
 }
 
+async function actualizarAsistenciaDesdeCalendario(select) {
+  const id = select.dataset.id;
+  const previous = select.dataset.current || 'pendiente';
+  const estado = select.value;
+  if (!id || estado === 'pendiente') {
+    select.value = previous;
+    return;
+  }
+
+  const clase = calendarClassById.get(String(id)) || {};
+  const attendance = classAttendanceState(clase);
+  if (!attendance.ended) {
+    select.value = previous;
+    showToast('Aun no disponible', 'Podras marcar el resultado cuando termine la clase.', 'info');
+    return;
+  }
+
+  let motivo = '';
+  if (estado === 'no_realizada') {
+    motivo = window.prompt('Cuentanos brevemente por que no se dio la clase:') || '';
+    if (!motivo.trim()) {
+      select.value = previous;
+      showToast('Falta el motivo', 'Indica por que no se dio para avisar y revisarlo.', 'warning');
+      return;
+    }
+  }
+
+  const originalDisabled = select.disabled;
+  try {
+    select.disabled = true;
+    const payload = buildTeacherAttendancePayload(estado, '', motivo.trim(), usuario.uid || usuario.id);
+    await updateDoc(firestoreDoc(firebaseDb, 'clases', id), payload);
+    showToast(
+      'Resultado guardado',
+      estado === 'realizada' ? 'La familia ya puede confirmar la clase.' : 'Hemos registrado que la clase no se dio.',
+      'success',
+    );
+    await Promise.allSettled([cargarInicio(), cargarMisClases()]);
+    if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
+  } catch (error) {
+    select.value = previous;
+    showToast('Error', error.message || 'No se pudo actualizar la clase.', 'error');
+  } finally {
+    select.disabled = originalDisabled;
+  }
+}
+
+document.addEventListener('change', async (e) => {
+  const attendanceSelect = e.target.closest('[data-action="actualizar-asistencia-calendario"]');
+  if (attendanceSelect) {
+    await actualizarAsistenciaDesdeCalendario(attendanceSelect);
+  }
+});
+
 document.addEventListener('click', async (e) => {
   const cancelCalendarBtn = e.target.closest('[data-action="cancelar-clase-calendario"]');
   if (cancelCalendarBtn) {
@@ -2559,6 +3256,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const experiencia = Number(document.getElementById('p-experiencia').value || 0);
   const disponibilidad = document.getElementById('p-disponibilidad').value.trim();
   const aceptaBizum = document.getElementById('p-bizum').checked;
+  const payoutPreference = normalizeTeacherPayoutPreference(perfil || {});
   const cocheValue = document.getElementById('p-coche').value;
   const movilidadDeclarada = cocheValue === 'si' || cocheValue === 'no';
   const tieneCoche = cocheValue === 'si';
@@ -2622,6 +3320,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     certifications: certificaciones,
     acepta_bizum: aceptaBizum,
     hasBizum: aceptaBizum,
+    ...teacherPayoutPersistenceFields(payoutPreference),
     tiene_coche: tieneCoche,
     hasCar: tieneCoche,
     carAvailable: tieneCoche,
@@ -2749,6 +3448,8 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   }
 
   perfil = { ...perfil, ...profesorPayload };
+  document.getElementById('ing-pago-quincenal').textContent = teacherPayoutSummaryLabel(perfil);
+  if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
   renderQualityPanel('perfil-calidad-panel', evaluation);
   showToast('Guardado', 'Perfil actualizado correctamente.', 'success');
 });
@@ -2901,8 +3602,9 @@ window.eliminarDisponibilidad = async (id) => {
 };
 
 // ── INIT ─────────────────────────────────────────────────────────
+syncTeacherPayoutSettings();
 irA(sectionFromHash(), { fromHash: true });
 </script>
-<script src="/js/pwa.js?v=20260629-teacher-docs" defer></script>
+<script src="/js/pwa.js?v=20260705-panel-pwa-mobile" defer></script>
 </body>
 </html>

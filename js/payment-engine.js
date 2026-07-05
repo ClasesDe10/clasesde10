@@ -61,6 +61,41 @@ export function cleanPaymentText(value, max = 500) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
 }
 
+const GENERIC_PAYMENT_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'familia',
+  'familia sin nombre',
+  'sin nombre',
+  'contacto',
+]);
+
+function isGenericPaymentPersonLabel(value) {
+  const normalized = cleanPaymentText(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return !normalized || GENERIC_PAYMENT_PERSON_LABELS.has(normalized);
+}
+
+function paymentPersonFallback(role, id = '') {
+  const suffix = cleanPaymentText(id, 180).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
+  return suffix ? `${role} ${suffix}` : `${role} pendiente de nombre`;
+}
+
+function paymentPersonName(role, id = '', ...values) {
+  const found = values.map((value) => cleanPaymentText(value, 180)).find((value) => value && !isGenericPaymentPersonLabel(value));
+  return found || paymentPersonFallback(role, id);
+}
+
 export function normalizePaymentStatus(status) {
   const raw = cleanPaymentText(status, 40).toLowerCase();
   if (!raw) return 'pendiente';
@@ -914,8 +949,8 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
         alumno_id: classData.alumno_id || classData.studentId || '',
         assignmentId: classData.assignmentId || classData.asignacion_id || '',
         asignacion_id: classData.asignacion_id || classData.assignmentId || '',
-        studentName: cleanPaymentText(classData.studentName || classData.alumno_nombre || classData.alumnoNombre || 'Sin nombre', 160),
-        teacherName: cleanPaymentText(classData.teacherName || classData.profesor_nombre || classData.profesorNombre || 'Sin nombre', 160),
+        studentName: paymentPersonName('Alumno', classData.studentId || classData.alumno_id, classData.studentName, classData.alumno_nombre, classData.alumnoNombre),
+        teacherName: paymentPersonName('Profesor', classData.teacherUid || classData.profesor_id, classData.teacherName, classData.profesor_nombre, classData.profesorNombre),
         teacherPhone: classTeacherBizumPhone(classData),
         bizumPhone: classTeacherBizumPhone(classData),
         dueAt: state.dueAt || '',
@@ -969,7 +1004,7 @@ export function buildFamilyClassPaymentConfirmationPayload(group = {}, input = {
   const amount = paymentAmount({ amount: input.monto ?? input.amount ?? group.amount });
   const concept = cleanPaymentText(
     input.concepto
-      || `Justificante ${classIds.length || group.classCount || 1} clase(s) - ${group.studentName || 'Sin nombre'}`,
+      || `Justificante ${classIds.length || group.classCount || 1} clase(s) - ${paymentPersonName('Alumno', group.studentId || group.alumno_id, group.studentName)}`,
     240,
   );
 

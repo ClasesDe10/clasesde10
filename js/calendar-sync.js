@@ -47,11 +47,24 @@ export function classCalendarSummary(classData = {}) {
   return cleanCalendarText(`ClasesDe10 - ${classData.materia || classData.subject || 'Clase'}`, 160);
 }
 
+function calendarPersonName(role, id = '', ...values) {
+  const generic = new Set(['profesor', 'profesora', 'profesor/a', 'alumno', 'alumna', 'alumno/a', 'sin nombre', 'contacto']);
+  for (const value of values) {
+    const candidate = cleanCalendarText(value, 180);
+    const key = candidate.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (candidate && !generic.has(key)) return candidate;
+  }
+  const cleanId = cleanCalendarText(id, 180);
+  return cleanId ? `${role} ${cleanId.slice(0, 6)}` : `${role} pendiente de nombre`;
+}
+
 export function classCalendarDescription(classData = {}) {
+  const studentName = calendarPersonName('Alumno', classData.alumno_id || classData.studentId, classData.alumno_nombre, classData.studentName);
+  const teacherName = calendarPersonName('Profesor', classData.profesor_id || classData.teacherUid, classData.profesor_nombre, classData.teacherName);
   return [
     `Materia: ${classData.materia || classData.subject || 'Clase'}`,
-    `Alumno: ${classData.alumno_nombre || classData.studentName || classData.alumno_id || classData.studentId || ''}`,
-    `Profesor: ${classData.profesor_nombre || classData.teacherName || classData.profesor_id || classData.teacherUid || ''}`,
+    `Alumno: ${studentName}`,
+    `Profesor: ${teacherName}`,
     classData.observaciones ? `Notas: ${classData.observaciones}` : '',
   ].filter(Boolean).join('\n');
 }

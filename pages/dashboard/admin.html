@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260701-role-ux">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260705-calendar-side-panel">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1208,7 +1208,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260703-recurring-series';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260705-family-teacher-photo-calls';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
@@ -1237,10 +1237,13 @@ import {
 import {
   SCHEDULED_CLASS_STATUSES,
   buildAdminClassPayload,
+  buildTeacherAttendancePayload,
+  classAttendanceReminderState,
+  classAttendanceState,
   classStatusForBadge,
   normalizeClassStatus,
   validateClassTimeRange,
-} from '../../js/calendar-engine.js?v=20260628-calendar';
+} from '../../js/calendar-engine.js?v=20260704-prorated-duration';
 import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calendar';
 import {
   PAID_PAYMENT_STATUSES,
@@ -1263,13 +1266,13 @@ import {
   paymentStatusForBadge,
   reviewPaymentWithAssistant,
   shouldAutoValidatePaymentReview,
-} from '../../js/payment-engine.js?v=20260630-payment-ai';
+} from '../../js/payment-engine.js?v=20260704-prorated-duration';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
   buildFinanceErpReport,
   buildFinanceCsvRows,
-} from '../../js/finance-erp-engine.js?v=20260629-pricing';
+} from '../../js/finance-erp-engine.js?v=20260704-prorated-duration';
 import {
   showToast, openModal, closeModal, initModals, initSidebar,
   formatFechaCorta, formatHora, formatEuros, badgeEstado, nombreMes,
@@ -1548,6 +1551,57 @@ function firstAdminValue(...values) {
   return values.find((value) => cleanAdminNotificationText(value));
 }
 
+const ADMIN_GENERIC_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'docente',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'estudiante',
+  'familia',
+  'familia sin nombre',
+  'sin nombre',
+  'sin profesor',
+  'contacto',
+  'la otra persona',
+  'el profesor',
+  'la familia',
+]);
+
+function adminPersonKey(value) {
+  return cleanAdminNotificationText(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericAdminPersonLabel(value) {
+  const key = adminPersonKey(value);
+  return !key || ADMIN_GENERIC_PERSON_LABELS.has(key);
+}
+
+function adminPersonFallback(role, id = '') {
+  const label = cleanAdminNotificationText(role, 40) || 'Persona';
+  const cleanId = cleanAdminNotificationText(id, 180);
+  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
+function adminPersonName(role, id = '', ...values) {
+  for (const value of values) {
+    const candidate = cleanAdminNotificationText(value, 180);
+    if (candidate && !isGenericAdminPersonLabel(candidate)) return candidate;
+  }
+  return adminPersonFallback(role, id);
+}
+
 function adminNotificationDocId(type, classId, adminUid) {
   return [`${type}_${classId}_admin`, adminUid]
     .map((part) => cleanAdminNotificationText(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
@@ -1610,17 +1664,19 @@ function adminClassPaymentStatus(clase = {}) {
 }
 
 function adminOverdueClassNotificationBody(clase = {}, state = {}) {
-  const familyName = firstAdminValue(
+  const familyId = firstAdminValue(clase.familyUid, clase.familia_id);
+  const studentId = firstAdminValue(clase.studentId, clase.alumno_id);
+  const teacherId = firstAdminValue(clase.teacherUid, clase.profesor_id);
+  const familyName = adminPersonName(
+    'Familia',
+    familyId,
     clase.familia_nombre,
     clase.familyName,
     clase.familiaName,
     clase.parentName,
-    clase.familyUid,
-    clase.familia_id,
-    'familia sin nombre',
   );
-  const studentName = firstAdminValue(clase.alumno_nombre, clase.studentName, clase.alumnoName, clase.studentId, clase.alumno_id, 'alumno/a sin nombre');
-  const teacherName = firstAdminValue(clase.profesor_nombre, clase.teacherName, clase.profesor_id, clase.teacherUid, 'profesor sin nombre');
+  const studentName = adminPersonName('Alumno', studentId, clase.alumno_nombre, clase.studentName, clase.alumnoName);
+  const teacherName = adminPersonName('Profesor', teacherId, clase.profesor_nombre, clase.teacherName, clase.teacherDisplayName);
   const subject = firstAdminValue(clase.materia, clase.subject, 'clase');
   const amount = classTotal(clase);
   const dueText = formatAdminDateTime(state.dueAt);
@@ -2135,17 +2191,26 @@ function parseMoneyInput(id) {
 }
 
 function classTotal(clase) {
-  return money(clase?.precio_total ?? clase?.amount ?? clase?.familyAmount);
+  return proratedClassAmount(
+    clase,
+    ['familyHourlyRate', 'precio_hora_familia', 'familyRatePerHour', 'tarifa_hora_familia'],
+    ['precio_total', 'amount', 'familyAmount'],
+  );
 }
 
 function classTeacherAmount(clase) {
-  return money(clase?.importe_profesor ?? clase?.teacherAmount ?? clase?.teacher_amount);
+  return proratedClassAmount(
+    clase,
+    ['teacherHourlyRate', 'importe_hora_profesor', 'teacherRatePerHour', 'tarifa_hora_profesor'],
+    ['importe_profesor', 'teacherAmount', 'teacherPrice', 'teacher_amount'],
+  );
 }
 
 function classPlatformFee(clase) {
-  const explicit = clase?.comision_clasesde10 ?? clase?.platformFee;
-  if (explicit !== undefined && explicit !== null && explicit !== '') return money(explicit);
-  return roundMoney(classTotal(clase) - classTeacherAmount(clase));
+  const total = classTotal(clase);
+  const teacher = classTeacherAmount(clase);
+  if (total || teacher) return roundMoney(total - teacher);
+  return proratedClassAmount(clase, [], ['comision_clasesde10', 'platformFee', 'marginAmount']);
 }
 
 function classMarginPct(clase) {
@@ -2247,12 +2312,61 @@ function hourlyRateForClassAmount(amount, durationMinutes = 60) {
   return total > 0 ? roundMoney(total * 60 / minutes) : '';
 }
 
+function classTimeRangeDurationFromData(data = {}) {
+  const validation = validateClassTimeRange(data.fecha || data.date, data.hora_inicio || data.startTime, data.hora_fin || data.endTime);
+  return validation.valid ? validation.durationMinutes : null;
+}
+
 function classDurationFromData(data = {}) {
+  const timeRange = classTimeRangeDurationFromData(data);
+  if (timeRange !== null) return timeRange;
   if (Number(data.durationMinutes || data.duracion_minutos || 0) > 0) {
     return Number(data.durationMinutes || data.duracion_minutos);
   }
-  const validation = validateClassTimeRange(data.fecha || data.date, data.hora_inicio || data.startTime, data.hora_fin || data.endTime);
-  return validation.valid ? validation.durationMinutes : 60;
+  return 60;
+}
+
+function proratedClassAmount(clase = {}, hourlyFields = [], amountFields = []) {
+  const durationMinutes = classDurationFromData(clase);
+  for (const field of hourlyFields) {
+    const hourly = money(clase?.[field]);
+    if (hourly > 0) return proratedHourlyAmount(hourly, durationMinutes);
+  }
+  const timeRange = classTimeRangeDurationFromData(clase);
+  for (const field of amountFields) {
+    const amount = money(clase?.[field]);
+    if (amount > 0) return timeRange !== null && timeRange !== 60 ? proratedHourlyAmount(amount, durationMinutes) : roundMoney(amount);
+  }
+  return 0;
+}
+
+function hourlyRateFromClassFields(clase = {}, hourlyFields = [], amountFields = []) {
+  for (const field of hourlyFields) {
+    const hourly = money(clase?.[field]);
+    if (hourly > 0) return roundMoney(hourly);
+  }
+  const timeRange = classTimeRangeDurationFromData(clase);
+  for (const field of amountFields) {
+    const amount = money(clase?.[field]);
+    if (amount > 0 && timeRange !== null && timeRange !== 60) return roundMoney(amount);
+  }
+  return '';
+}
+
+function familyHourlyRateForClass(clase = {}) {
+  return hourlyRateFromClassFields(
+    clase,
+    ['familyHourlyRate', 'precio_hora_familia', 'familyRatePerHour', 'tarifa_hora_familia'],
+    ['precio_total', 'amount', 'familyAmount'],
+  );
+}
+
+function teacherHourlyRateForClass(clase = {}) {
+  return hourlyRateFromClassFields(
+    clase,
+    ['teacherHourlyRate', 'importe_hora_profesor', 'teacherRatePerHour', 'tarifa_hora_profesor'],
+    ['importe_profesor', 'teacherAmount', 'teacherPrice', 'teacher_amount'],
+  );
 }
 
 function updateClaseMoneyPreview() {
@@ -2304,8 +2418,8 @@ async function cargarClases() {
   tbody.innerHTML = clases.map(c => {
     const economic = economicStateForAdminClass(c);
     const durationMinutes = classDurationFromData(c);
-    const familyHourly = c.familyHourlyRate || c.precio_hora_familia || hourlyRateForClassAmount(classTotal(c), durationMinutes);
-    const teacherHourly = c.teacherHourlyRate || c.importe_hora_profesor || hourlyRateForClassAmount(classTeacherAmount(c), durationMinutes);
+    const familyHourly = familyHourlyRateForClass(c);
+    const teacherHourly = teacherHourlyRateForClass(c);
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
@@ -2372,9 +2486,8 @@ window.editarClase = async (id) => {
   document.getElementById('clase-materia').value = data.materia;
   document.getElementById('clase-hora-inicio').value = data.hora_inicio;
   document.getElementById('clase-hora-fin').value = data.hora_fin;
-  const durationMinutes = classDurationFromData(data);
-  document.getElementById('clase-precio').value = data.familyHourlyRate || data.precio_hora_familia || hourlyRateForClassAmount(data.precio_total ?? data.amount ?? data.familyAmount, durationMinutes);
-  document.getElementById('clase-importe-profesor').value = data.teacherHourlyRate || data.importe_hora_profesor || hourlyRateForClassAmount(data.importe_profesor ?? data.teacherAmount, durationMinutes);
+  document.getElementById('clase-precio').value = familyHourlyRateForClass(data);
+  document.getElementById('clase-importe-profesor').value = teacherHourlyRateForClass(data);
   document.getElementById('clase-estado').value = normalizeClassStatus(data.estado || data.status);
   document.getElementById('clase-observaciones').value = data.observaciones || '';
   await cargarSelectoresClase();
@@ -2618,15 +2731,23 @@ function importePago(p) {
 }
 
 function nombreClaseFinanzas(c) {
+  const studentId = firstAdminValue(c?.studentId, c?.alumno_id, c?.studentUid);
+  const teacherId = firstAdminValue(c?.teacherUid, c?.profesor_id);
   return [
-    c?.alumno_nombre || c?.studentName || c?.alumno_id || c?.studentId,
+    adminPersonName('Alumno', studentId, c?.alumno_nombre, c?.studentName, c?.alumnoName),
     c?.materia || c?.subject,
-    c?.profesor_nombre || c?.teacherName || c?.profesor_id || c?.teacherUid,
+    adminPersonName('Profesor', teacherId, c?.profesor_nombre, c?.teacherName, c?.teacherDisplayName),
   ].filter(Boolean).join(' / ') || c?.id || 'Clase';
 }
 
 function nombreProfesorFinanzas(c) {
-  return c?.profesor_nombre || c?.teacherName || c?.profesor_id || c?.teacherUid || 'Sin profesor';
+  return adminPersonName(
+    'Profesor',
+    firstAdminValue(c?.teacherUid, c?.profesor_id),
+    c?.profesor_nombre,
+    c?.teacherName,
+    c?.teacherDisplayName,
+  );
 }
 
 function sumar(lista, getter) {
@@ -2925,6 +3046,7 @@ document.getElementById('btn-export-finanzas')?.addEventListener('click', () => 
 
 // ── CALENDARIO ───────────────────────────────────────────────────
 let cal;
+let adminCalendarClassById = new Map();
 async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
@@ -2947,6 +3069,7 @@ async function cargarClasesCalendario(anio, mes) {
     loadAdminPaymentContext(),
   ]);
   const clases = applyClassPaymentContext(data || [], paymentContext.payments);
+  adminCalendarClassById = new Map(clases.map((clase) => [String(clase.id), clase]));
   cal.setClases(clases);
   renderAdminCalendarMonthSummary(clases);
   if (cal.diaSeleccionado) {
@@ -3021,18 +3144,79 @@ function mostrarClasesDia(fecha, clases) {
   if (!clases.length) {
     cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>'; return;
   }
-  cont.innerHTML = clases.map(c => `
+  cont.innerHTML = clases.map(c => {
+    const studentName = adminPersonName(
+      'Alumno',
+      firstAdminValue(c.studentId, c.alumno_id, c.studentUid),
+      c.alumno_nombre,
+      c.studentName,
+      c.alumnoName,
+    );
+    return `
     <div class="clase-item">
       <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia)}</div>
+        <div class="clase-nombre">${sanitize(studentName)}</div>
         <div class="clase-materia">${sanitize(c.materia||'')}</div>
       </div>
       <div>${badgeEstado(classStatusForBadge(c))}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 // ── PROFESORES ───────────────────────────────────────────────────
+function adminAttendanceSelectValue(clase = {}) {
+  const teacher = String(clase.teacherConfirmationStatus || clase.teacherAttendanceStatus || '').toLowerCase();
+  if (teacher === 'realizada') return 'realizada';
+  if (['no_realizada', 'cancelada', 'incidencia'].includes(teacher)) return 'no_realizada';
+  return 'pendiente';
+}
+
+function renderAdminAttendanceBothStatus(clase, state = classAttendanceState(clase)) {
+  const confirmed = state.key === 'confirmed_by_both' || state.attendanceStatus === 'confirmada_por_ambas_partes';
+  return `
+    <div class="calendar-attendance-both">
+      <span>Confirmada por ambos</span>
+      <strong class="${confirmed ? 'is-ok' : 'is-pending'}">${confirmed ? 'Si' : 'No'}</strong>
+    </div>
+  `;
+}
+
+function renderAdminAttendanceReminder(clase) {
+  const reminder = classAttendanceReminderState(clase);
+  return reminder.isOverdue
+    ? '<div class="calendar-attendance-alert">Han pasado 24h. Falta marcar si se dio o no.</div>'
+    : '';
+}
+
+function renderAdminAttendanceSelect(clase, state = classAttendanceState(clase)) {
+  const current = adminAttendanceSelectValue(clase);
+  const lockedReason = state.key === 'confirmed_by_both'
+    ? 'Confirmada por ambos'
+    : ['cancelled', 'incident'].includes(state.key)
+      ? 'Asistencia cerrada'
+      : !state.ended
+        ? 'Disponible al terminar'
+        : current !== 'pendiente'
+          ? 'Resultado registrado'
+          : '';
+  return `
+    <label class="calendar-attendance-select">
+      <span>Resultado</span>
+      <select class="form-control"
+              data-action="actualizar-asistencia-admin"
+              data-id="${sanitize(clase.id || '')}"
+              data-current="${sanitize(current)}"
+              ${lockedReason ? 'disabled' : ''}>
+        <option value="pendiente" ${current === 'pendiente' ? 'selected' : ''}>En espera</option>
+        <option value="realizada" ${current === 'realizada' ? 'selected' : ''}>Se ha dado</option>
+        <option value="no_realizada" ${current === 'no_realizada' ? 'selected' : ''}>No se ha dado</option>
+      </select>
+      ${lockedReason ? `<small>${sanitize(lockedReason)}</small>` : ''}
+    </label>
+  `;
+}
+
 function mostrarClasesDiaEconomico(fecha, clases) {
   document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
   const cont = document.getElementById('cal-clases-dia');
@@ -3061,6 +3245,21 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     <div class="admin-calendar-day-summary">${kpis}</div>
     ${enriched.map(({ clase: c, economic }) => {
       const dueText = economic.dueAt ? `Limite: ${formatDateTimeHint(economic.dueAt)}` : 'Sin limite semanal definido';
+      const attendance = classAttendanceState(c);
+      const calendarStudentName = adminPersonName(
+        'Alumno',
+        firstAdminValue(c.studentId, c.alumno_id, c.studentUid),
+        c.alumno_nombre,
+        c.studentName,
+        c.alumnoName,
+      );
+      const calendarTeacherName = adminPersonName(
+        'Profesor',
+        firstAdminValue(c.teacherUid, c.profesor_id),
+        c.profesor_nombre,
+        c.teacherName,
+        c.teacherDisplayName,
+      );
       const paymentLink = economic.linkedFamilyPaymentId
         ? `<button class="btn btn-ghost btn-sm" data-action="abrir-pago-admin" data-payment-id="${sanitize(economic.linkedFamilyPaymentId)}">Ver pago</button>`
         : '';
@@ -3068,13 +3267,16 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}">
       <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div><div class="clase-time-fin">${formatHora(c.hora_fin||'')}</div></div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(c.alumno_nombre||c.materia)}</div>
-        <div class="clase-materia">${sanitize(c.materia||'')} · ${sanitize(c.profesor_nombre || 'Profesor')}</div>
+        <div class="clase-nombre">${sanitize(calendarStudentName)}</div>
+        <div class="clase-materia">${sanitize(c.materia||'Clase')} · ${sanitize(calendarTeacherName)}</div>
         <div class="admin-calendar-money-line">
           <span>Familia ${sanitize(formatEuros(economic.familyAmount))}</span>
           <span>Profesor ${sanitize(formatEuros(economic.teacherAmount))}</span>
           <span>Margen ${sanitize(formatEuros(economic.platformFee))}${economic.marginPct ? ` (${sanitize(String(economic.marginPct))}%)` : ''}</span>
         </div>
+        ${renderAdminAttendanceBothStatus(c, attendance)}
+        ${renderAdminAttendanceReminder(c)}
+        ${renderAdminAttendanceSelect(c, attendance)}
         <div class="calendar-payment-state">
           ${renderEconomicBadge(economic)}
           <span class="payment-due-hint">${sanitize(economic.label)} · ${sanitize(dueText)}</span>
@@ -3090,6 +3292,53 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     </div>`;
     }).join('')}`;
 }
+
+async function actualizarAsistenciaAdminDesdeCalendario(select) {
+  const id = select.dataset.id;
+  const previous = select.dataset.current || 'pendiente';
+  const estado = select.value;
+  if (!id || estado === 'pendiente') {
+    select.value = previous;
+    return;
+  }
+  const clase = adminCalendarClassById.get(String(id)) || {};
+  const attendance = classAttendanceState(clase);
+  if (!attendance.ended) {
+    select.value = previous;
+    showToast('Aun no disponible', 'La clase debe haber terminado antes de marcar resultado.', 'info');
+    return;
+  }
+
+  let motivo = '';
+  if (estado === 'no_realizada') {
+    motivo = window.prompt('Motivo por el que no se dio la clase:') || '';
+    if (!motivo.trim()) {
+      select.value = previous;
+      showToast('Falta el motivo', 'Indica un motivo para dejar trazada la incidencia.', 'warning');
+      return;
+    }
+  }
+
+  const originalDisabled = select.disabled;
+  try {
+    select.disabled = true;
+    const payload = buildTeacherAttendancePayload(estado, 'Actualizado desde calendario admin', motivo.trim(), usuario.uid || usuario.id);
+    const { error } = await db.from('clases').update(payload).eq('id', id);
+    if (error) throw error;
+    showToast('Resultado actualizado', estado === 'realizada' ? 'Clase marcada como dada.' : 'Clase marcada como no dada.', 'success');
+    if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
+  } catch (error) {
+    select.value = previous;
+    showToast('Error', error.message || 'No se pudo actualizar la clase.', 'error');
+  } finally {
+    select.disabled = originalDisabled;
+  }
+}
+
+document.getElementById('cal-clases-dia')?.addEventListener('change', async (event) => {
+  const attendanceSelect = event.target.closest('[data-action="actualizar-asistencia-admin"]');
+  if (attendanceSelect) await actualizarAsistenciaAdminDesdeCalendario(attendanceSelect);
+});
 
 document.getElementById('cal-clases-dia')?.addEventListener('click', (event) => {
   const editBtn = event.target.closest('[data-action="editar-clase"]');
@@ -3108,7 +3357,15 @@ document.getElementById('cal-clases-dia')?.addEventListener('click', (event) => 
 const PAG_PROF = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-profesores'), onPageChange: cargarProfesores });
 
 function nombreProfesor(p) {
-  return `${p?.usuarios?.nombre || p?.nombre || ''} ${p?.usuarios?.apellidos || p?.apellidos || ''}`.trim() || p?.email || p?.usuarios?.email || p?.id || 'Profesor';
+  return adminPersonName(
+    'Profesor',
+    p?.id || p?.uid || p?.userUid || p?.profesor_id,
+    `${p?.usuarios?.nombre || p?.nombre || ''} ${p?.usuarios?.apellidos || p?.apellidos || ''}`.trim(),
+    p?.displayName,
+    p?.name,
+    p?.email,
+    p?.usuarios?.email,
+  );
 }
 
 function listaCampo(valor) {
@@ -3922,20 +4179,27 @@ function adminParticipantMap(ids = []) {
 }
 
 function nombreAlumnoSolicitud(solicitud = {}) {
-  return [
-    solicitud.alumnos?.nombre || solicitud.alumno_nombre || solicitud.studentName || '',
-    solicitud.alumnos?.apellidos || solicitud.alumno_apellidos || '',
-  ].filter(Boolean).join(' ').trim();
+  return adminPersonName(
+    'Alumno',
+    solicitud.alumno_id || solicitud.studentId || solicitud.studentUid,
+    [
+      solicitud.alumnos?.nombre || solicitud.alumno_nombre || solicitud.studentName || '',
+      solicitud.alumnos?.apellidos || solicitud.alumno_apellidos || '',
+    ].filter(Boolean).join(' ').trim(),
+  );
 }
 
 function nombreFamiliaSolicitud(solicitud = {}) {
-  return [
-    solicitud.familias?.usuarios?.nombre || solicitud.familyName || '',
-    solicitud.familias?.usuarios?.apellidos || '',
-  ].filter(Boolean).join(' ').trim()
-    || solicitud.familias?.usuarios?.email
-    || solicitud.familyEmail
-    || 'Familia';
+  return adminPersonName(
+    'Familia',
+    solicitud.familia_id || solicitud.familyUid,
+    [
+      solicitud.familias?.usuarios?.nombre || solicitud.familyName || '',
+      solicitud.familias?.usuarios?.apellidos || '',
+    ].filter(Boolean).join(' ').trim(),
+    solicitud.familias?.usuarios?.email,
+    solicitud.familyEmail,
+  );
 }
 
 async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, pricingQuote = null }) {
@@ -4126,9 +4390,9 @@ async function cargarProfesores() {
     <td><input type="checkbox" class="crm-prof-check" data-id="${sanitize(p.id)}" ${selectedProfesores.has(p.id) ? 'checked' : ''} aria-label="Seleccionar profesor"></td>
     <td>
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="avatar">${getIniciales(p.usuarios?.nombre || p.nombre || p.email, p.usuarios?.apellidos || p.apellidos)}</div>
+        <div class="avatar">${getIniciales(nombreProfesor(p), '')}</div>
         <div>
-          <div style="font-weight:600">${sanitize(p.usuarios?.nombre || p.nombre || p.email || 'Profesor')} ${sanitize(p.usuarios?.apellidos || p.apellidos || '')}</div>
+          <div style="font-weight:600">${sanitize(nombreProfesor(p))}</div>
           <div style="font-size:.75rem;color:var(--gray-mid)">${sanitize(p.ciudad||'Madrid')}</div>
         </div>
       </div>
@@ -4182,9 +4446,9 @@ async function cargarProfesores() {
   tbody.innerHTML = filtrado.map(p => `<tr>
     <td>
       <div style="display:flex;align-items:center;gap:10px">
-        <div class="avatar">${getIniciales(p.usuarios?.nombre || p.nombre || p.email, p.usuarios?.apellidos || p.apellidos)}</div>
+        <div class="avatar">${getIniciales(nombreProfesor(p), '')}</div>
         <div>
-          <div style="font-weight:600">${sanitize(p.usuarios?.nombre || p.nombre || p.email || 'Profesor')} ${sanitize(p.usuarios?.apellidos || p.apellidos || '')}</div>
+          <div style="font-weight:600">${sanitize(nombreProfesor(p))}</div>
           <div style="font-size:.75rem;color:var(--gray-mid)">${sanitize(p.ciudad||'Madrid')}</div>
         </div>
       </div>
@@ -4376,7 +4640,15 @@ document.getElementById('btn-export-profesores').addEventListener('click', async
 const PAG_FAM = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-familias'), onPageChange: cargarFamilias });
 
 function nombreFamilia(f) {
-  return `${f?.usuarios?.nombre || f?.nombre || ''} ${f?.usuarios?.apellidos || f?.apellidos || ''}`.trim() || f?.email || f?.usuarios?.email || f?.id || 'Familia';
+  return adminPersonName(
+    'Familia',
+    f?.id || f?.uid || f?.userUid || f?.familia_id,
+    `${f?.usuarios?.nombre || f?.nombre || ''} ${f?.usuarios?.apellidos || f?.apellidos || ''}`.trim(),
+    f?.displayName,
+    f?.name,
+    f?.email,
+    f?.usuarios?.email,
+  );
 }
 
 function mapFamiliaFirestore(docSnap, user = {}) {
@@ -5035,7 +5307,7 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
     return `
       <div data-ai-match="teacher" style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-          <strong>${sanitize(m.teacherName || m.nombreProfesor || m.teacherEmail || teacherId || 'Profesor')}</strong>
+          <strong>${sanitize(adminPersonName('Profesor', teacherId, m.teacherName, m.nombreProfesor, m.teacherEmail))}</strong>
           <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
         ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
@@ -5240,10 +5512,10 @@ function esPagoProfesor(pago) {
 function nombreOrigenPago(pago) {
   if (esPagoProfesor(pago)) {
     const nombre = [pago.profesores?.usuarios?.nombre, pago.profesores?.usuarios?.apellidos].filter(Boolean).join(' ');
-    return nombre || pago.profesor_nombre || 'Profesor';
+    return adminPersonName('Profesor', pago.profesor_id || pago.teacherUid, nombre, pago.profesor_nombre, pago.teacherName, pago.teacherEmail);
   }
   const familia = [pago.familias?.usuarios?.nombre, pago.familias?.usuarios?.apellidos].filter(Boolean).join(' ');
-  return familia || pago.familia_nombre || 'Familia';
+  return adminPersonName('Familia', pago.familia_id || pago.familyUid, familia, pago.familia_nombre, pago.familyName, pago.familyEmail);
 }
 
 function paymentAiTone(review = {}) {
@@ -5848,6 +6120,6 @@ window.closeModal = (id) => {
   document.body.style.overflow = '';
 };
 </script>
-<script src="/js/pwa.js?v=20260629-teacher-docs" defer></script>
+<script src="/js/pwa.js?v=20260705-panel-pwa-mobile" defer></script>
 </body>
 </html>

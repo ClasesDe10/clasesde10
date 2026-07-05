@@ -190,6 +190,57 @@ function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
 }
 
+const WORKER_GENERIC_PERSON_LABELS = new Set([
+  'profesor',
+  'profesora',
+  'profesor/a',
+  'profesor asignado',
+  'profesor sin nombre',
+  'docente',
+  'alumno',
+  'alumna',
+  'alumno/a',
+  'alumno sin nombre',
+  'alumno/a sin nombre',
+  'estudiante',
+  'familia',
+  'familia sin nombre',
+  'sin nombre',
+  'sin profesor',
+  'contacto',
+  'la otra persona',
+  'el profesor',
+  'la familia',
+]);
+
+function workerPersonKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+function isGenericWorkerPersonLabel(value) {
+  const key = workerPersonKey(value);
+  return !key || WORKER_GENERIC_PERSON_LABELS.has(key);
+}
+
+function workerPersonFallback(role, id = '') {
+  const label = clean(role, 40) || 'Persona';
+  const cleanId = clean(id, 180);
+  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
+  return `${label} pendiente de nombre`;
+}
+
+function workerPersonName(role, id = '', ...values) {
+  for (const value of values) {
+    const candidate = clean(value, 180);
+    if (candidate && !isGenericWorkerPersonLabel(candidate)) return candidate;
+  }
+  return workerPersonFallback(role, id);
+}
+
 function lower(value) {
   return clean(value).toLowerCase();
 }
@@ -322,8 +373,9 @@ function studentDiagnostic(data) {
   const level = clean(data.nivel || data.curso || data.metadata?.nivel) || 'Sin nivel';
   const modality = clean(data.modalidad || data.metadata?.modalidad) || 'Sin modalidad';
   const zone = clean(data.zona || data.metadata?.zona) || 'Sin zona';
+  const studentName = workerPersonName('Alumno', data.studentId || data.alumno_id, data.alumno, data.metadata?.alumno, data.studentName);
   return {
-    summary: `Alumno: ${clean(data.alumno || data.metadata?.alumno || data.studentName) || 'Sin nombre'}. Nivel: ${level}. Materia: ${subject}. Modalidad: ${modality}. Zona: ${zone}.`,
+    summary: `Alumno: ${studentName}. Nivel: ${level}. Materia: ${subject}. Modalidad: ${modality}. Zona: ${zone}.`,
     missing: [
       subject === 'Sin materia' ? 'materia' : '',
       level === 'Sin nivel' ? 'nivel' : '',
@@ -1708,7 +1760,7 @@ async function processPublicLeads(db, stats) {
         estado: 'procesado',
         updatedAt: now(),
       });
-      await notifyAdmins(db, 'Nuevo profesor interesado', `${lead.nombre || lead.email || 'Profesor'} envio una solicitud publica. Precio sugerido: ${price} EUR/h.`, {
+      await notifyAdmins(db, 'Nuevo profesor interesado', `${lead.nombre || lead.email || 'Un profesor interesado'} envio una solicitud publica. Precio sugerido: ${price} EUR/h.`, {
         type: 'teacher_lead',
         leadId: doc.id,
       });
@@ -1738,7 +1790,7 @@ async function processPublicLeads(db, stats) {
         },
         updatedAt: now(),
       });
-      await notifyAdmins(db, 'Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
+      await notifyAdmins(db, 'Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Una familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
         type: 'family_lead_request',
         leadId: doc.id,
         requestId: requestRef.id,
@@ -1753,7 +1805,7 @@ async function processPublicLeads(db, stats) {
       estado: 'procesado',
       updatedAt: now(),
     });
-    await notifyAdmins(db, 'Nuevo contacto publico', `${lead.nombre || lead.email || 'Contacto'} envio un mensaje.`, {
+    await notifyAdmins(db, 'Nuevo contacto publico', `${lead.nombre || lead.email || 'Un contacto publico'} envio un mensaje.`, {
       type: 'contact_lead',
       leadId: doc.id,
     });
@@ -2929,15 +2981,31 @@ async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automat
     userRecord(db, familyUserUid),
   ]);
 
-  const teacherName = fullName(
-    teacherProfile.data.nombre || teacherUser.data.nombre,
-    teacherProfile.data.apellidos || teacherUser.data.apellidos,
-  ) || teacherProfile.data.email || teacherUser.data.email || 'Contacto';
-  const familyName = fullName(
-    familyProfile.data.nombre || familyUser.data.nombre,
-    familyProfile.data.apellidos || familyUser.data.apellidos,
-  ) || familyProfile.data.email || familyUser.data.email || 'Familia';
-  const studentName = fullName(studentProfile.data.nombre, studentProfile.data.apellidos);
+  const teacherName = workerPersonName(
+    'Profesor',
+    teacherProfileId,
+    fullName(teacherProfile.data.nombre || teacherUser.data.nombre, teacherProfile.data.apellidos || teacherUser.data.apellidos),
+    teacherProfile.data.displayName,
+    teacherUser.data.displayName,
+    teacherProfile.data.email,
+    teacherUser.data.email,
+  );
+  const familyName = workerPersonName(
+    'Familia',
+    familyProfileId,
+    fullName(familyProfile.data.nombre || familyUser.data.nombre, familyProfile.data.apellidos || familyUser.data.apellidos),
+    familyProfile.data.displayName,
+    familyUser.data.displayName,
+    familyProfile.data.email,
+    familyUser.data.email,
+  );
+  const studentName = workerPersonName(
+    'Alumno',
+    studentId,
+    fullName(studentProfile.data.nombre, studentProfile.data.apellidos),
+    studentProfile.data.displayName,
+    studentProfile.data.email,
+  );
   const subject = clean(assignment.materia || assignment.subject, 180);
   const introBody = `${teacherName} ya esta asignado. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
   const chatRef = db.collection('chats').doc(id);
@@ -3685,9 +3753,12 @@ async function processPaymentReminders(db, stats) {
 
     const { familyUid } = await resolveClassRecipients(db, data);
     const label = classLabel(data);
-    const familyName = clean(data.familyName || data.familia_nombre || data.parentName || data.familyUid || data.familia_id || 'familia sin nombre', 120);
-    const studentName = clean(data.studentName || data.alumno_nombre || data.alumnoName || data.studentId || data.alumno_id || 'la clase', 120);
-    const teacherName = clean(data.teacherName || data.profesor_nombre || data.teacherName || data.teacherUid || data.profesor_id || 'profesor sin nombre', 120);
+    const familyId = clean(data.familyUid || data.familia_id || familyUid, 180);
+    const studentId = clean(data.studentId || data.alumno_id, 180);
+    const teacherId = clean(data.teacherUid || data.profesor_id, 180);
+    const familyName = workerPersonName('Familia', familyId, data.familyName, data.familia_nombre, data.parentName, data.familyDisplayName);
+    const studentName = workerPersonName('Alumno', studentId, data.studentName, data.alumno_nombre, data.alumnoName);
+    const teacherName = workerPersonName('Profesor', teacherId, data.teacherName, data.profesor_nombre, data.teacherDisplayName);
     const amount = classFamilyAmount(data);
     const schedule = paymentScheduleForClass(data, scheduleIndex);
     const paymentState = classFamilyPaymentState(data, schedule, {

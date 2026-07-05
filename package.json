@@ -104,6 +104,7 @@
     "test:audit-system": "node scripts/audit-system-test.mjs",
     "test:professor-profile": "node scripts/professor-profile-fields-test.mjs",
     "test:family-profile": "node scripts/family-profile-fields-test.mjs",
+    "test:personalized-names": "node scripts/personalized-names-test.mjs",
     "smoke:professor-profile-rules": "node scripts/professor-profile-rules-smoke.mjs",
     "smoke:profiles-ui": "node scripts/profile-ui-smoke.mjs",
     "test:auth:functional": "node scripts/firebase-auth-functional-test.mjs",
