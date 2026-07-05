@@ -45,6 +45,7 @@ export const PAYMENT_STATUSES = Object.freeze([
 
 export const PAID_PAYMENT_STATUSES = Object.freeze(['validado', 'pagado', 'paid', 'succeeded']);
 export const OPEN_PAYMENT_STATUSES = Object.freeze(['pendiente', 'solicitado', 'procesando', 'requiere_accion']);
+export const REOPEN_FAMILY_PAYMENT_STATUSES = Object.freeze(['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado']);
 export const DEFAULT_FAMILY_PAYMENT_GRACE_HOURS = 48;
 const PAYMENT_DAY_MS = 24 * 60 * 60 * 1000;
 export const WEEKLY_PAYMENT_DAY_LABELS = Object.freeze({
@@ -1425,6 +1426,57 @@ export function buildClassPaymentPatch(payment = {}, classId = '', options = {})
     paymentEscalationStatus: 'resolved_paid',
     paymentEscalationResolvedAt: nowIso,
     teacherPauseRiskResolvedAt: nowIso,
+    updated_at: nowIso,
+  };
+}
+
+export function shouldReopenFamilyClassPayment(paymentOrStatus = {}) {
+  const status = typeof paymentOrStatus === 'string'
+    ? normalizePaymentStatus(paymentOrStatus)
+    : normalizePaymentStatus(paymentOrStatus.estado || paymentOrStatus.status || paymentOrStatus.providerPaymentStatus || paymentOrStatus.gatewayStatus);
+  return REOPEN_FAMILY_PAYMENT_STATUSES.includes(status);
+}
+
+export function buildClassFamilyPaymentReopenPatch(payment = {}, classId = '', options = {}) {
+  const nowIso = options.nowIso || new Date().toISOString();
+  const status = normalizePaymentStatus(options.status || payment.estado || payment.status || payment.providerPaymentStatus || payment.gatewayStatus);
+  const paymentId = cleanPaymentText(payment.id || payment.paymentId || payment.payment_id, 180);
+  const reason = cleanPaymentText(
+    options.reason
+    || payment.failureReason
+    || payment.rejectionReason
+    || payment.rejectedReason
+    || payment.reviewNotes
+    || payment.notas
+    || '',
+    500,
+  );
+  const dueAt = cleanPaymentText(payment.dueAt || payment.due_at || payment.fecha_vencimiento || payment.paymentDueAt || '', 60);
+  const escalationType = status === 'cancelado' ? 'payment_cancelled' : 'payment_rejected';
+  return {
+    estado_pago: 'vencido',
+    estado_pago_familia: 'vencido',
+    paymentStatus: 'vencido',
+    familyPaymentStatus: 'vencido',
+    familyPaymentId: null,
+    familyPaymentValidatedAt: null,
+    familyPaymentReviewStatus: status,
+    familyPaymentRejectedAt: nowIso,
+    familyPaymentRejectedReason: reason,
+    rejectedFamilyPaymentId: paymentId,
+    rejectedFamilyPaymentStatus: status,
+    rejectedFamilyPaymentAt: nowIso,
+    rejectedFamilyPaymentReason: reason,
+    lastRejectedFamilyPaymentId: paymentId,
+    linkedFamilyPaymentId: paymentId,
+    linkedFamilyPaymentStatus: status,
+    linkedFamilyPaymentRawStatus: status,
+    linkedFamilyPaymentAt: nowIso,
+    paymentDueAt: dueAt || null,
+    familyPaymentDueAt: dueAt || null,
+    paymentEscalationStatus: 'reopened_after_rejection',
+    paymentEscalationStage: 'proof_rejected',
+    paymentEscalationType: escalationType,
     updated_at: nowIso,
   };
 }

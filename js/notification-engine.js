@@ -23,6 +23,7 @@ export const NOTIFICATION_EVENTS = Object.freeze({
   CLASS_INCIDENT: 'class_incident',
   WEEKLY_PAYMENT_DUE: 'weekly_payment_due',
   FAMILY_PAYMENT_PENDING: 'family_payment_pending',
+  FAMILY_PAYMENT_REJECTED: 'family_payment_rejected',
   TEACHER_PAYOUT_PENDING: 'teacher_payout_pending',
   PAYMENT_OVERDUE: 'payment_overdue',
   PAYMENT_OVERDUE_REMINDER: 'payment_overdue_reminder',
@@ -102,6 +103,12 @@ export const NOTIFICATION_EVENT_DEFINITIONS = Object.freeze({
   },
   [NOTIFICATION_EVENTS.FAMILY_PAYMENT_PENDING]: {
     label: 'Cobro pendiente',
+    category: 'pagos',
+    priority: 'high',
+    channels: ['internal', 'browser', 'push'],
+  },
+  [NOTIFICATION_EVENTS.FAMILY_PAYMENT_REJECTED]: {
+    label: 'Justificante rechazado',
     category: 'pagos',
     priority: 'high',
     channels: ['internal', 'browser', 'push'],
@@ -278,9 +285,13 @@ export function notificationPriority(type, explicitPriority = '') {
 }
 
 export function notificationPriorityClass(notification = {}) {
-  const priority = notificationPriority(notification.type, notification.priority);
-  if (priority === 'critical') return 'critica';
-  if (priority === 'high') return 'alta';
+  const priority = notificationPriority(notification.type, notification.priority)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  if (['critical', 'critica', 'urgent', 'urgente', 'red', 'rojo'].includes(priority)) return 'critica';
+  if (['high', 'alta', 'orange', 'naranja'].includes(priority)) return 'alta';
+  if (['medium', 'media', 'warning', 'warn', 'yellow', 'amarillo'].includes(priority)) return 'media';
   return 'normal';
 }
 

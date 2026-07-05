@@ -54,7 +54,7 @@ import {
   notificationActionUrl,
   notificationCategoryLabel,
   notificationPriorityClass,
-} from './notification-engine.js';
+} from './notification-engine.js?v=20260705-payment-alerts';
 import {
   registerPushNotifications,
   watchForegroundPushMessages,
@@ -133,6 +133,31 @@ function escapeAttribute(value, max = 300000) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function ensureNotificationPriorityStyles() {
+  if (typeof document === 'undefined' || document.getElementById('cd10-notification-priority-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'cd10-notification-priority-styles';
+  style.textContent = `
+    .notification-item.priority-media,
+    .notification-item.priority-medium,
+    .notification-item.priority-normal {
+      border-color: rgba(232,160,48,.32);
+      background: linear-gradient(90deg, rgba(255,221,125,.16), var(--white, #fff) 44%);
+    }
+    .notification-item.priority-media.unread,
+    .notification-item.priority-medium.unread,
+    .notification-item.priority-normal.unread {
+      box-shadow: inset 3px 0 0 #f2bd2f;
+    }
+    .notification-item.priority-media .notification-kicker,
+    .notification-item.priority-medium .notification-kicker,
+    .notification-item.priority-normal .notification-kicker {
+      color: #8a650d;
+    }
+  `;
+  document.head?.appendChild(style);
 }
 
 function safeImageSrc(value) {
@@ -1736,7 +1761,7 @@ function notificationPriorityLabel(priority) {
   if (normalized === 'critical' || normalized === 'critica') return 'critica';
   if (normalized === 'high' || normalized === 'alta') return 'alta';
   if (normalized === 'medium' || normalized === 'media') return 'media';
-  return '';
+  return normalized === 'normal' ? 'normal' : '';
 }
 
 function notificationSourceLabel(notification = {}) {
@@ -1813,6 +1838,7 @@ function notificationAction(notification, role = '') {
 }
 
 function renderNotifications(container, notifications) {
+  ensureNotificationPriorityStyles();
   const list = container.querySelector('[data-notifications-list]');
   const count = notifications.filter(isNotificationUnread).length;
   const countNode = container.querySelector('[data-notification-count]');

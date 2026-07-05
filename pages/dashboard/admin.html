@@ -1208,11 +1208,11 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260705-family-teacher-photo-calls';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260705-payment-alerts';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
-} from '../../js/notification-engine.js';
+} from '../../js/notification-engine.js?v=20260705-payment-alerts';
 import { isAfterClassReset } from '../../js/class-reset.js?v=20260629-reset';
 import {
   addDoc,
@@ -1250,6 +1250,7 @@ import {
   applyClassPaymentContext,
   buildPaymentAiReviewPatch,
   buildPaymentScheduleIndex,
+  buildClassFamilyPaymentReopenPatch,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
   classEconomicState,
@@ -1266,7 +1267,8 @@ import {
   paymentStatusForBadge,
   reviewPaymentWithAssistant,
   shouldAutoValidatePaymentReview,
-} from '../../js/payment-engine.js?v=20260704-prorated-duration';
+  shouldReopenFamilyClassPayment,
+} from '../../js/payment-engine.js?v=20260705-payment-alerts';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -5518,6 +5520,83 @@ function nombreOrigenPago(pago) {
   return adminPersonName('Familia', pago.familia_id || pago.familyUid, familia, pago.familia_nombre, pago.familyName, pago.familyEmail);
 }
 
+function familyPaymentTargetUid(pago = {}) {
+  return cleanAdminNotificationText(
+    pago.familyUserUid
+    || pago.familia_user_uid
+    || pago.usuario_id
+    || pago.userUid
+    || pago.familyUid
+    || pago.familia_id
+    || pago.familias?.usuario_id
+    || pago.familias?.user_uid
+    || pago.familias?.usuarios?.uid
+    || pago.familias?.usuarios?.id,
+    180,
+  );
+}
+
+function paymentRejectedNotificationBody(payment = {}, status = 'rechazado', linkedClassIds = []) {
+  const amount = paymentAmount(payment);
+  const amountText = amount > 0 ? ` de ${formatEuros(amount)}` : '';
+  const familyName = nombreOrigenPago(payment);
+  const classCount = linkedClassIds.length;
+  const classText = classCount === 1 ? 'la clase vinculada' : `${classCount || 'las'} clases vinculadas`;
+  const statusText = normalizePaymentStatus(status) === 'cancelado' ? 'cancelado' : 'rechazado';
+  const reason = cleanAdminNotificationText(
+    payment.failureReason
+    || payment.rejectionReason
+    || payment.rejectedReason
+    || payment.reviewNotes
+    || payment.notas
+    || '',
+    260,
+  );
+  return `No hemos podido validar el justificante${amountText} de ${familyName}. El pago queda ${statusText} y vuelve a estar pendiente para ${classText}. Puedes subir un nuevo justificante desde Pagos cuando lo tengas.${reason ? ` Motivo: ${reason}` : ''}`;
+}
+
+async function notifyFamilyPaymentRejected(payment = {}, status = 'rechazado', linkedClassIds = [], nowIso = new Date().toISOString()) {
+  const familyUid = familyPaymentTargetUid(payment);
+  const paymentId = cleanAdminNotificationText(payment.id || payment.paymentId, 180);
+  if (!familyUid || !paymentId) return false;
+  const notificationId = ['family_payment_rejected', paymentId, normalizePaymentStatus(status), familyUid]
+    .map((part) => cleanAdminNotificationText(part, 180).toLowerCase().replace(/[^a-z0-9_-]+/g, '_'))
+    .filter(Boolean)
+    .join('__')
+    .slice(0, 900);
+  const ref = firestoreDoc(firebaseDb, 'notificaciones', notificationId);
+  const existing = await getDoc(ref).catch(() => null);
+  if (existing?.exists()) return false;
+  await setDoc(ref, {
+    ...buildNotificationDocument({
+      userUid: familyUid,
+      role: 'familia',
+      title: 'Justificante no validado',
+      body: paymentRejectedNotificationBody(payment, status, linkedClassIds),
+      type: NOTIFICATION_EVENTS.FAMILY_PAYMENT_REJECTED,
+      priority: 'high',
+      category: 'pagos',
+      source: 'admin',
+      createdByUid: usuario.uid || usuario.id,
+      payload: {
+        paymentId,
+        pago_id: paymentId,
+        classIds: linkedClassIds,
+        status: normalizePaymentStatus(status),
+        amount: paymentAmount(payment),
+        url: '/pages/login.html',
+      },
+    }),
+    idempotencyKey: notificationId,
+    notificationKey: notificationId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    created_at: nowIso,
+    updated_at: nowIso,
+  }, { merge: false });
+  return true;
+}
+
 function paymentAiTone(review = {}) {
   if (review.recommendation === 'auto_validate') return 'success';
   if (Array.isArray(review.risks) && review.risks.length) return 'danger';
@@ -5806,11 +5885,14 @@ window.validarPago = async (id, estado, options = {}) => {
   if (pagoError) { if (!options.silent) showToast('Error', pagoError.message, 'error'); return; }
 
   const fechaValidacion = new Date().toISOString();
+  const normalizedEstado = normalizePaymentStatus(estado);
   let linkedClassIds = Array.isArray(pagoActual.classIds) ? pagoActual.classIds.map(String).filter(Boolean) : [];
+  const singleLinkedClassId = cleanAdminNotificationText(pagoActual.classId || pagoActual.class_id || pagoActual.clase_id, 180);
+  if (!linkedClassIds.length && singleLinkedClassId) linkedClassIds = [singleLinkedClassId];
   let reconciliationStatus = pagoActual.reconciliationStatus || 'pending_match';
   let reconciliationReason = pagoActual.reconciliationReason || '';
 
-  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizePaymentStatus(estado))) {
+  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado)) {
     const familyUid = pagoActual.familyUid || pagoActual.familia_id;
     const { data: clasesFamilia } = familyUid
       ? await db.from('clases').select('*').eq('familia_id', familyUid)
@@ -5835,7 +5917,7 @@ window.validarPago = async (id, estado, options = {}) => {
   const { error } = await db.from('pagos').update(payload).eq('id', id);
   if (error) { if (!options.silent) showToast('Error', error.message, 'error'); return; }
 
-  if (esPagoProfesor(pagoActual) && estado === 'pagado' && Array.isArray(pagoActual.classIds)) {
+  if (esPagoProfesor(pagoActual) && normalizedEstado === 'pagado' && Array.isArray(pagoActual.classIds)) {
     const updates = pagoActual.classIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id }, classId, { nowIso: fechaValidacion })).eq('id', classId));
     const results = await Promise.all(updates);
     const failed = results.find((result) => result.error);
@@ -5846,7 +5928,7 @@ window.validarPago = async (id, estado, options = {}) => {
     }
   }
 
-  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizePaymentStatus(estado)) && linkedClassIds.length) {
+  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado) && linkedClassIds.length) {
     const updates = linkedClassIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id, paymentType: 'family_payment' }, classId, { nowIso: fechaValidacion })).eq('id', classId));
     const results = await Promise.all(updates);
     const failed = results.find((result) => result.error);
@@ -5855,6 +5937,21 @@ window.validarPago = async (id, estado, options = {}) => {
       if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
       return;
     }
+  }
+
+  if (!esPagoProfesor(pagoActual) && shouldReopenFamilyClassPayment(normalizedEstado) && linkedClassIds.length) {
+    const rejectedPayment = { ...pagoActual, ...payload, id, paymentType: 'family_payment', estado: normalizedEstado, status: normalizedEstado };
+    const updates = linkedClassIds.map((classId) => db.from('clases').update(buildClassFamilyPaymentReopenPatch(rejectedPayment, classId, { nowIso: fechaValidacion, status: normalizedEstado })).eq('id', classId));
+    const results = await Promise.all(updates);
+    const failed = results.find((result) => result.error);
+    if (failed) {
+      if (!options.silent) showToast('Pago actualizado', 'El justificante se rechazo, pero alguna clase no pudo reabrirse para la familia.', 'warning');
+      if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
+      return;
+    }
+    await notifyFamilyPaymentRejected(rejectedPayment, normalizedEstado, linkedClassIds, fechaValidacion).catch((notificationError) => {
+      console.warn('No se pudo avisar a la familia del justificante rechazado', notificationError);
+    });
   }
 
   await recordAdminAudit(options.automationReview ? 'payment.ai_auto_validated' : 'payment.status_updated', {
