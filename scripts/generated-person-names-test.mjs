@@ -37,6 +37,10 @@ for (const [file, source] of Object.entries(files)) {
 const chat = files['js/chat-widget.js'];
 assert(chat.includes('dedupeGeneratedChats'), 'Chat list must remove duplicated generated-name chats.');
 assert(chat.includes('messageSenderDisplayName'), 'Chat messages must resolve old one-letter sender names from participant ids.');
+assert(chat.includes('loadRoleProfile'), 'Chat must use role profiles as a fallback for contact identity.');
+assert(chat.includes('teacherProfile.foto_url'), 'Family chat must recover the teacher profile photo when assignment data is incomplete.');
+assert(chat.includes('teacherProfile.telefono'), 'Family chat must recover the teacher phone when assignment data is incomplete.');
+assert(chat.includes('href="tel:${escapeAttribute(phone, 40)}"'), 'Chat must render a direct phone call action when a counterpart phone exists.');
 assert(chat.includes('Profesor RWS1') === false, 'No hardcoded generated teacher example should be rendered.');
 assert(chat.includes('Alumno XDZJ') === false, 'No hardcoded generated student example should be rendered.');
 assert(chat.includes('profesor(?:a|\\/a)?|profesor asignado|docente|alumno(?:a|\\/a)?|familia'), 'Chat must detect generated role+token names.');

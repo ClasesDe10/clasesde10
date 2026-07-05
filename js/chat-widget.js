@@ -819,6 +819,25 @@ function isExpectedPermissionFallback(error) {
   return /permission|insufficient permissions/.test(message);
 }
 
+async function loadRoleProfile(collectionName = '', uid = '') {
+  const cleanCollection = clean(collectionName, 40);
+  const cleanUid = clean(uid, 180);
+  if (!cleanCollection || !cleanUid) return {};
+  try {
+    const snap = await getDoc(doc(firebaseDb, cleanCollection, cleanUid));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : {};
+  } catch (error) {
+    if (!isExpectedPermissionFallback(error)) {
+      console.warn('No se pudo cargar perfil para completar el chat', {
+        collectionName: cleanCollection,
+        uid: cleanUid,
+        message: error.message || String(error),
+      });
+    }
+    return {};
+  }
+}
+
 function chatSubtitle(chat, role, preference = {}) {
   const parts = [];
   const realTitle = realChatTitle(chat, role);
@@ -865,24 +884,78 @@ async function ensureChatForAssignment(assignment, usuario, role) {
 
   const ref = doc(firebaseDb, 'chats', assignmentId);
   const existing = await getDoc(ref);
+  const [teacherProfile, familyProfile, studentProfile] = await Promise.all([
+    loadRoleProfile('profesores', teacherUid),
+    loadRoleProfile('familias', familyUid),
+    studentId ? loadRoleProfile('alumnos', studentId) : Promise.resolve({}),
+  ]);
+  const teacherProfileUser = teacherProfile.usuarios || teacherProfile.usuario || {};
+  const familyProfileUser = familyProfile.usuarios || familyProfile.usuario || {};
   const teacherName = readableChatIdentity(fullName(
     assignment.profesores?.usuarios?.nombre || assignment.profesores?.nombre,
     assignment.profesores?.usuarios?.apellidos || assignment.profesores?.apellidos,
-  ), assignment.teacherName, assignment.profesor_nombre, assignment.profesores?.usuarios?.email, assignment.profesores?.email)
+  ), fullName(
+    teacherProfileUser.nombre || teacherProfile.nombre,
+    teacherProfileUser.apellidos || teacherProfile.apellidos,
+  ), assignment.teacherName, assignment.profesor_nombre, teacherProfile.displayName, teacherProfile.nombre_completo, assignment.profesores?.usuarios?.email, assignment.profesores?.email, teacherProfileUser.email, teacherProfile.email)
     || shortChatEntityLabel('Profesor', teacherUid);
-  const teacherPhotoUrl = safeImageSrc(assignment.profesores?.foto_url || assignment.profesores?.photoUrl);
-  const teacherPhone = clean(assignment.profesores?.usuarios?.telefono || assignment.profesores?.telefono, 40);
+  const teacherPhotoUrl = safeImageSrc(
+    assignment.teacherPhotoUrl
+    || assignment.profesor_foto_url
+    || assignment.profesores?.foto_url
+    || assignment.profesores?.photoUrl
+    || assignment.profesores?.avatarUrl
+    || assignment.profesores?.profilePhotoUrl
+    || teacherProfile.foto_url
+    || teacherProfile.photoUrl
+    || teacherProfile.avatarUrl
+    || teacherProfile.profilePhotoUrl
+    || teacherProfile.photoURL
+  );
+  const teacherPhone = clean(
+    assignment.teacherPhone
+    || assignment.profesor_telefono
+    || assignment.telefono_profesor
+    || assignment.profesores?.usuarios?.telefono
+    || assignment.profesores?.telefono
+    || assignment.profesores?.phone
+    || assignment.profesores?.telefono_bizum
+    || assignment.profesores?.bizumPhone
+    || teacherProfileUser.telefono
+    || teacherProfile.telefono
+    || teacherProfile.phone
+    || teacherProfile.telefono_bizum
+    || teacherProfile.bizumPhone,
+    40,
+  );
   const familyName = readableChatIdentity(fullName(
     assignment.familias?.usuarios?.nombre || assignment.familias?.nombre,
     assignment.familias?.usuarios?.apellidos || assignment.familias?.apellidos,
-  ), assignment.familyName, assignment.familia_nombre, assignment.familias?.usuarios?.email)
+  ), fullName(
+    familyProfileUser.nombre || familyProfile.nombre,
+    familyProfileUser.apellidos || familyProfile.apellidos,
+  ), assignment.familyName, assignment.familia_nombre, familyProfile.displayName, familyProfile.nombre_completo, assignment.familias?.usuarios?.email, familyProfileUser.email, familyProfile.email)
     || shortChatEntityLabel('Familia', familyUid);
-  const familyPhone = clean(assignment.familias?.usuarios?.telefono || assignment.familias?.telefono, 40);
+  const familyPhone = clean(
+    assignment.familyPhone
+    || assignment.familia_telefono
+    || assignment.telefono_familia
+    || assignment.familias?.usuarios?.telefono
+    || assignment.familias?.telefono
+    || assignment.familias?.phone
+    || familyProfileUser.telefono
+    || familyProfile.telefono
+    || familyProfile.phone,
+    40,
+  );
   const studentName = readableChatIdentity(
     fullName(assignment.alumnos?.nombre, assignment.alumnos?.apellidos),
+    fullName(studentProfile.nombre, studentProfile.apellidos),
     assignment.studentName,
     assignment.alumno_nombre,
     assignment.studentDisplayName,
+    studentProfile.displayName,
+    studentProfile.nombre_completo,
   ) || shortChatEntityLabel('Alumno', studentId);
   const participantUids = participantMap([
     familyUid,
