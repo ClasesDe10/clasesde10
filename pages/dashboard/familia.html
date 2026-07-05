@@ -701,6 +701,10 @@ import {
   CLASS_CANCELLATION_PENALTY_POINTS,
 } from '../../js/class-cancellation.js?v=20260703-recurring-cancel';
 import { buildIcsCalendar } from '../../js/calendar-sync.js?v=20260706-calendar-export';
+import {
+  ensureRecurringClassOccurrencesForRange,
+  loadParticipantClasses,
+} from '../../js/recurring-class-sync.js?v=20260706-recurring-calendar-sync';
 import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
@@ -1269,6 +1273,42 @@ async function cargarFirestoreIn(nombreColeccion, campo, valores = []) {
   return Array.from(map.values());
 }
 
+async function cargarClasesParticipanteFamilia() {
+  try {
+    return await loadParticipantClasses({
+      firebaseDb,
+      firestoreCollection,
+      getDocs,
+      firestoreQuery,
+      where,
+      uid: ownerUid(),
+    });
+  } catch (error) {
+    if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron cargar clases por participante', error);
+    return [];
+  }
+}
+
+async function asegurarClasesRecurrentesFamilia(rows = [], options = {}) {
+  if (!options.desde || !options.hasta) return [];
+  try {
+    return await ensureRecurringClassOccurrencesForRange({
+      firebaseDb,
+      firestoreDoc,
+      setDoc,
+      serverTimestamp,
+      classes: rows,
+      rangeStart: options.desde,
+      rangeEnd: options.hasta,
+      currentUid: ownerUid(),
+      currentRole: 'familia',
+    });
+  } catch (error) {
+    if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron actualizar las clases recurrentes de familia', error);
+    return [];
+  }
+}
+
 function mergeById(rows = []) {
   const map = new Map();
   rows.filter(Boolean).forEach((row) => map.set(String(row.id || row.calendarUid || `${row.fecha || row.date}-${row.hora_inicio || row.startTime}`), row));
@@ -1443,16 +1483,22 @@ async function cargarClasesFamilia(options = {}) {
   ]));
   const studentIds = [...new Set((options.ids || hijos.map((hijo) => hijo.id)).filter(Boolean))];
   const familyIds = familyPaymentQueryIds();
-  const [byStudent, byFamilyUid, byFamiliaId] = await Promise.all([
+  const [byParticipant, byStudent, byFamilyUid, byFamiliaId] = await Promise.all([
+    cargarClasesParticipanteFamilia(),
     studentIds.length ? cargarClasesPorAlumnos(studentIds, { ...options, hijosPorId }) : Promise.resolve([]),
     cargarFirestoreIn('clases', 'familyUid', familyIds),
     cargarFirestoreIn('clases', 'familia_id', familyIds),
   ]);
   let rows = mergeById([
+    ...byParticipant,
     ...byStudent,
     ...byFamilyUid,
     ...byFamiliaId,
   ]).map((clase) => normalizeClassRow(clase, hijosPorId));
+  const extendedRows = await asegurarClasesRecurrentesFamilia(rows, options);
+  if (extendedRows.length) {
+    rows = mergeById([...rows, ...extendedRows]).map((clase) => normalizeClassRow(clase, hijosPorId));
+  }
 
   if (options.strictStudentFilter && studentIds.length) {
     rows = rows.filter((clase) => studentIds.includes(clase.studentId || clase.alumno_id));

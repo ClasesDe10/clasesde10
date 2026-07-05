@@ -532,6 +532,44 @@ service cloud.firestore {
         && request.resource.data.status == resource.data.status;
     }
 
+    function teacherPayoutPreferenceFields() {
+      return [
+        'frecuencia_cobro_profesor',
+        'payoutFrequency',
+        'fecha_inicio_cobro_profesor',
+        'payoutAnchorDate',
+        'dia_cobro_profesor',
+        'payoutDayOfMonth',
+        'payoutLockedAt'
+      ];
+    }
+
+    function validTeacherPayoutPreferenceUpdate(changed) {
+      return !changed.hasAny(teacherPayoutPreferenceFields())
+        || (
+          !resource.data.keys().hasAny(teacherPayoutPreferenceFields())
+          && request.resource.data.keys().hasAll([
+            'frecuencia_cobro_profesor',
+            'payoutFrequency',
+            'fecha_inicio_cobro_profesor',
+            'payoutAnchorDate',
+            'dia_cobro_profesor',
+            'payoutDayOfMonth',
+            'payoutLockedAt'
+          ])
+          && request.resource.data.frecuencia_cobro_profesor in ['quincenal', 'mensual']
+          && request.resource.data.payoutFrequency == request.resource.data.frecuencia_cobro_profesor
+          && request.resource.data.fecha_inicio_cobro_profesor is string
+          && request.resource.data.fecha_inicio_cobro_profesor.matches('^\\d{4}-\\d{2}-\\d{2}$')
+          && request.resource.data.payoutAnchorDate == request.resource.data.fecha_inicio_cobro_profesor
+          && request.resource.data.dia_cobro_profesor is int
+          && request.resource.data.dia_cobro_profesor >= 1
+          && request.resource.data.dia_cobro_profesor <= 31
+          && request.resource.data.payoutDayOfMonth == request.resource.data.dia_cobro_profesor
+          && request.resource.data.payoutLockedAt == request.time
+        );
+    }
+
     function validTeacherProfileSelfUpdate() {
       let changed = request.resource.data.diff(resource.data).affectedKeys();
       return changed.hasOnly([
@@ -582,6 +620,13 @@ service cloud.firestore {
           'certifications',
           'acepta_bizum',
           'hasBizum',
+          'frecuencia_cobro_profesor',
+          'payoutFrequency',
+          'fecha_inicio_cobro_profesor',
+          'payoutAnchorDate',
+          'dia_cobro_profesor',
+          'payoutDayOfMonth',
+          'payoutLockedAt',
           'tiene_coche',
           'hasCar',
           'carAvailable',
@@ -612,6 +657,7 @@ service cloud.firestore {
           || request.resource.data.verificationStatus in ['pendiente', 'pendiente_perfil'])
         && (!changed.hasAny(['status'])
           || request.resource.data.status in ['pendiente_revision', 'pendiente_perfil'])
+        && validTeacherPayoutPreferenceUpdate(changed)
         && validClientUpdatedAt();
     }
 
@@ -1160,6 +1206,13 @@ service cloud.firestore {
           'alumno_id',
           'assignmentId',
           'asignacion_id',
+          'frequency',
+          'paymentFrequency',
+          'frecuencia_pago',
+          'recurrenceDays',
+          'anchorDate',
+          'paymentAnchorDate',
+          'fecha_inicio_pago',
           'dayOfWeek',
           'paymentDay',
           'dia_semana_pago',
@@ -1187,6 +1240,18 @@ service cloud.firestore {
         && data.profesor_id == data.teacherUid
         && data.studentId is string
         && data.alumno_id == data.studentId
+        && data.frequency in ['semanal', 'quincenal']
+        && data.paymentFrequency == data.frequency
+        && data.frecuencia_pago == data.frequency
+        && data.recurrenceDays is number
+        && (
+          (data.frequency == 'semanal' && data.recurrenceDays == 7)
+          || (data.frequency == 'quincenal' && data.recurrenceDays == 14)
+        )
+        && data.anchorDate is string
+        && data.anchorDate.matches('^\\d{4}-\\d{2}-\\d{2}$')
+        && data.paymentAnchorDate == data.anchorDate
+        && data.fecha_inicio_pago == data.anchorDate
         && data.dayOfWeek is number
         && data.dayOfWeek >= 1
         && data.dayOfWeek <= 7
@@ -1462,6 +1527,12 @@ service cloud.firestore {
           'familyName',
           'teacherName',
           'studentName',
+          'teacherPhotoUrl',
+          'profesor_foto_url',
+          'teacherPhone',
+          'profesor_telefono',
+          'familyPhone',
+          'familia_telefono',
           'participantUids',
           'active',
           'schedulingStatus',
@@ -1483,6 +1554,12 @@ service cloud.firestore {
         )
         && request.resource.data.participantUids[request.resource.data.familyUid] == true
         && request.resource.data.participantUids[request.resource.data.teacherUid] == true
+        && optionalString('teacherPhotoUrl', 300000)
+        && optionalString('profesor_foto_url', 300000)
+        && optionalString('teacherPhone', 40)
+        && optionalString('profesor_telefono', 40)
+        && optionalString('familyPhone', 40)
+        && optionalString('familia_telefono', 40)
         && request.resource.data.active == true
         && (
           !request.resource.data.keys().hasAny(['assignmentIntroSentAt'])
@@ -1765,8 +1842,26 @@ service cloud.firestore {
         && exists(chatPath)
         && exists(proposalPath)
         && isChatParticipant(get(chatPath).data)
-        && get(proposalPath).data.status == 'propuesta'
-        && canRespondToScheduleProposal(get(proposalPath).data)
+        && (
+          (
+            get(proposalPath).data.status == 'propuesta'
+            && canRespondToScheduleProposal(get(proposalPath).data)
+          )
+          || (
+            get(proposalPath).data.status == 'aceptada'
+            && get(proposalPath).data.scheduleKind == 'weekly_recurring'
+            && request.resource.data.classSeriesId == request.resource.data.scheduleProposalId
+            && request.resource.data.seriesId == request.resource.data.scheduleProposalId
+            && request.resource.data.isRecurring == true
+            && request.resource.data.seriesIndex is number
+            && request.resource.data.seriesIndex >= 0
+            && request.resource.data.seriesIndex < 260
+            && request.resource.data.seriesTotal is number
+            && request.resource.data.seriesTotal >= 1
+            && request.resource.data.seriesTotal <= 260
+            && request.resource.data.seriesIndex < request.resource.data.seriesTotal
+          )
+        )
         && request.resource.data.teacherUid == chatTeacherUid(get(chatPath).data)
         && request.resource.data.profesor_id == chatTeacherUid(get(chatPath).data)
         && request.resource.data.familyUid == chatFamilyUid(get(chatPath).data)
@@ -1794,10 +1889,10 @@ service cloud.firestore {
             && request.resource.data.seriesEndDate.size() == 10
             && request.resource.data.seriesIndex is number
             && request.resource.data.seriesIndex >= 0
-            && request.resource.data.seriesIndex < 60
+            && request.resource.data.seriesIndex < 260
             && request.resource.data.seriesTotal is number
             && request.resource.data.seriesTotal >= 1
-            && request.resource.data.seriesTotal <= 60
+            && request.resource.data.seriesTotal <= 260
             && request.resource.data.seriesIndex < request.resource.data.seriesTotal
             && request.resource.data.isRecurring == true
             && request.resource.data.recurrence is map
@@ -1818,12 +1913,59 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function validChatAttachment() {
+      return !request.resource.data.keys().hasAny(['attachment'])
+        || (
+          request.resource.data.attachment is map
+          && request.resource.data.attachment.keys().hasOnly([
+            'kind',
+            'name',
+            'mimeType',
+            'sizeBytes',
+            'storagePath',
+            'durationMs'
+          ])
+          && request.resource.data.attachment.keys().hasAll([
+            'kind',
+            'name',
+            'mimeType',
+            'sizeBytes',
+            'storagePath'
+          ])
+          && request.resource.data.attachment.kind in ['file', 'image', 'audio']
+          && request.resource.data.attachment.name is string
+          && request.resource.data.attachment.name.size() >= 1
+          && request.resource.data.attachment.name.size() <= 180
+          && request.resource.data.attachment.mimeType is string
+          && request.resource.data.attachment.mimeType.matches(
+            '^(image/(jpeg|jpg|png|webp|gif)|audio/(webm|ogg|mpeg|mp4|x-m4a|wav)|application/pdf|application/msword|application/vnd\\.ms-(excel|powerpoint)|application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet|presentationml\\.presentation)|text/plain)$'
+          )
+          && (
+            request.resource.data.attachment.sizeBytes is int
+            || request.resource.data.attachment.sizeBytes is float
+          )
+          && request.resource.data.attachment.sizeBytes > 0
+          && request.resource.data.attachment.sizeBytes <= 10 * 1024 * 1024
+          && request.resource.data.attachment.storagePath is string
+          && request.resource.data.attachment.storagePath.size() >= 12
+          && request.resource.data.attachment.storagePath.size() <= 600
+          && request.resource.data.attachment.storagePath.matches('^chats/[^/]+/.+')
+          && (
+            !request.resource.data.attachment.keys().hasAny(['durationMs'])
+            || request.resource.data.attachment.durationMs is int
+            || request.resource.data.attachment.durationMs is float
+          )
+        );
+    }
+
     function validChatMessageCreate() {
       return request.resource.data.keys().hasOnly([
           'senderUid',
           'senderRole',
           'senderName',
           'body',
+          'messageType',
+          'attachment',
           'createdAt',
           'readBy'
         ])
@@ -1834,6 +1976,11 @@ service cloud.firestore {
         && request.resource.data.body is string
         && request.resource.data.body.size() >= 1
         && request.resource.data.body.size() <= 2000
+        && (
+          !request.resource.data.keys().hasAny(['messageType'])
+          || request.resource.data.messageType in ['text', 'file', 'image', 'audio', 'call']
+        )
+        && validChatAttachment()
         && request.resource.data.createdAt == request.time;
     }
 
