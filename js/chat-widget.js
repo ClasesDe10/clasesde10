@@ -600,20 +600,6 @@ function hydrateChatNames(data = {}, fallback = {}) {
     || fallback.teacherAvatarUrl
     || fallback.teacherProfilePhotoUrl,
   );
-  const teacherPhone = clean(
-    data.teacherPhone
-    || data.profesor_telefono
-    || fallback.teacherPhone
-    || fallback.profesor_telefono,
-    40,
-  );
-  const familyPhone = clean(
-    data.familyPhone
-    || data.familia_telefono
-    || fallback.familyPhone
-    || fallback.familia_telefono,
-    40,
-  );
   return {
     ...data,
     familyName: reliableName(data.familyName, fallback.familyName),
@@ -643,10 +629,10 @@ function hydrateChatNames(data = {}, fallback = {}) {
     teacherRateSource: data.teacherRateSource || fallback.teacherRateSource || '',
     teacherPhotoUrl,
     profesor_foto_url: teacherPhotoUrl,
-    teacherPhone,
-    profesor_telefono: teacherPhone,
-    familyPhone,
-    familia_telefono: familyPhone,
+    teacherPhone: '',
+    profesor_telefono: '',
+    familyPhone: '',
+    familia_telefono: '',
   };
 }
 
@@ -767,21 +753,25 @@ function chatCounterpartPhotoUrl(chat = {}, role = '') {
   return safeImageSrc(chat.teacherPhotoUrl || chat.profesor_foto_url || chat.teacherAvatarUrl || chat.teacherProfilePhotoUrl);
 }
 
-function chatCounterpartPhone(chat = {}, role = '') {
-  const phone = role === 'familia'
-    ? chat.teacherPhone || chat.profesor_telefono
-    : role === 'profesor'
-      ? chat.familyPhone || chat.familia_telefono
-      : '';
-  return clean(phone, 40).replace(/[^\d+]/g, '');
-}
-
 function renderChatCallActions(chat = {}, role = '') {
   if (!chat?.id || role === 'admin') return '';
-  const phone = chatCounterpartPhone(chat, role);
-  return phone
-    ? `<a class="chat-icon-btn" href="tel:${escapeAttribute(phone, 40)}" title="Llamar" aria-label="Llamar">${chatIcon('phone')}</a>`
-    : '';
+  return `<button class="chat-icon-btn" type="button" data-chat-call-request title="Solicitar llamada" aria-label="Solicitar llamada segura">${chatIcon('phone')}</button>`;
+}
+
+function chatCallRequestBody(sender, counterpart) {
+  const requester = reliableName(sender, '') || 'La otra persona';
+  const target = reliableName(counterpart, '');
+  return `Solicitud de llamada: ${requester} quiere acordar una llamada${target ? ` con ${target}` : ''}. Contestad por este chat para fijar la hora. ClasesDe10 no comparte telefonos reales.`;
+}
+
+function chatCallRequesterName(chat = {}, role = '', fallback = '') {
+  if (role === 'familia') {
+    return readableChatIdentity(chat.familyName, chat.familia_nombre) || 'La familia';
+  }
+  if (role === 'profesor') {
+    return readableChatIdentity(chat.teacherName, chat.profesor_nombre) || 'El profesor';
+  }
+  return readableChatIdentity(fallback, chat.familyName, chat.teacherName) || 'ClasesDe10';
 }
 
 function renderChatCounterpartAvatar(chat = {}, role = '', preference = {}, variant = 'list') {
@@ -916,22 +906,6 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     || teacherProfile.profilePhotoUrl
     || teacherProfile.photoURL
   );
-  const teacherPhone = clean(
-    assignment.teacherPhone
-    || assignment.profesor_telefono
-    || assignment.telefono_profesor
-    || assignment.profesores?.usuarios?.telefono
-    || assignment.profesores?.telefono
-    || assignment.profesores?.phone
-    || assignment.profesores?.telefono_bizum
-    || assignment.profesores?.bizumPhone
-    || teacherProfileUser.telefono
-    || teacherProfile.telefono
-    || teacherProfile.phone
-    || teacherProfile.telefono_bizum
-    || teacherProfile.bizumPhone,
-    40,
-  );
   const familyName = readableChatIdentity(fullName(
     assignment.familias?.usuarios?.nombre || assignment.familias?.nombre,
     assignment.familias?.usuarios?.apellidos || assignment.familias?.apellidos,
@@ -940,18 +914,6 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     familyProfileUser.apellidos || familyProfile.apellidos,
   ), assignment.familyName, assignment.familia_nombre, familyProfile.displayName, familyProfile.nombre_completo, assignment.familias?.usuarios?.email, familyProfileUser.email, familyProfile.email)
     || shortChatEntityLabel('Familia', familyUid);
-  const familyPhone = clean(
-    assignment.familyPhone
-    || assignment.familia_telefono
-    || assignment.telefono_familia
-    || assignment.familias?.usuarios?.telefono
-    || assignment.familias?.telefono
-    || assignment.familias?.phone
-    || familyProfileUser.telefono
-    || familyProfile.telefono
-    || familyProfile.phone,
-    40,
-  );
   const studentName = readableChatIdentity(
     fullName(assignment.alumnos?.nombre, assignment.alumnos?.apellidos),
     fullName(studentProfile.nombre, studentProfile.apellidos),
@@ -990,10 +952,6 @@ async function ensureChatForAssignment(assignment, usuario, role) {
     teacherName,
     teacherPhotoUrl,
     profesor_foto_url: teacherPhotoUrl,
-    teacherPhone,
-    profesor_telefono: teacherPhone,
-    familyPhone,
-    familia_telefono: familyPhone,
     studentName,
     participantUids,
     active: true,
@@ -1882,7 +1840,15 @@ function messageSenderDisplayName(message = {}, chat = {}, currentUid = '', curr
   if (senderUid === 'system' || senderRole === 'system') return 'ClasesDe10';
   const directName = readableChatIdentity(message.senderName);
   const currentName = readableChatIdentity(currentDisplayName);
-  if (senderUid && senderUid === currentUid) return currentName || directName || 'Tu';
+  if (senderUid && senderUid === currentUid) {
+    if (senderRole === 'familia') {
+      return readableChatIdentity(chat.familyName, chat.familia_nombre) || directName || currentName || 'Tu';
+    }
+    if (senderRole === 'profesor') {
+      return readableChatIdentity(chat.teacherName, chat.profesor_nombre) || directName || currentName || 'Tu';
+    }
+    return directName || currentName || 'Tu';
+  }
   const teacherIds = [
     chat.teacherUserUid,
     chat.teacherUid,
@@ -2208,15 +2174,16 @@ export async function initChatWidget({
     });
   }
 
-  async function sendChatMessage({ body = '', attachment = null, messageType = 'text' } = {}) {
+  async function sendChatMessage({ body = '', attachment = null, messageType = 'text', senderDisplayName = '' } = {}) {
     if (!state.selectedChat) return;
     const safeBody = clean(body || chatAttachmentLabel(attachment), 2000);
     if (!safeBody && !attachment) return;
+    const safeSenderName = readableChatIdentity(senderDisplayName, senderName) || role;
     const chatRef = doc(firebaseDb, 'chats', state.selectedChat.id);
     const payload = {
       senderUid: currentUid,
       senderRole: role,
-      senderName,
+      senderName: safeSenderName,
       body: safeBody || 'Mensaje',
       messageType,
       createdAt: serverTimestamp(),
@@ -2229,6 +2196,30 @@ export async function initChatWidget({
       lastMessageAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+  }
+
+  async function requestChatCall(button) {
+    if (!state.selectedChat) return;
+    const chatId = state.selectedChat.id;
+    const counterpart = chatTitle(state.selectedChat, role, state.chatPreferencesById?.[chatId] || {});
+    const requester = chatCallRequesterName(state.selectedChat, role, senderName);
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    try {
+      await sendChatMessage({
+        body: chatCallRequestBody(requester, counterpart),
+        messageType: 'call',
+        senderDisplayName: requester,
+      });
+      showToast('Solicitud enviada', 'La llamada se acuerda por chat. No se ha compartido ningun telefono.', 'success');
+      await refreshChats();
+      selectChat(chatId);
+    } catch (error) {
+      showToast('No se pudo pedir llamada', error.message || 'Revisa permisos del chat.', 'error');
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
   }
 
   async function uploadChatAttachment(file, forcedKind = '') {
@@ -2560,6 +2551,12 @@ export async function initChatWidget({
     const openDashboardSection = event.target.closest('[data-open-dashboard-section]');
     if (openDashboardSection) {
       navigateDashboardSection(openDashboardSection.dataset.openDashboardSection);
+      return;
+    }
+
+    const callRequest = event.target.closest('[data-chat-call-request]');
+    if (callRequest) {
+      await requestChatCall(callRequest);
       return;
     }
 

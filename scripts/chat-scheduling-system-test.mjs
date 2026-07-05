@@ -77,6 +77,16 @@ assert(chat.includes("doc(firebaseDb, 'chats', state.selectedChat.id, 'preferenc
 assert(chat.includes('readableChatIdentity'), 'Chat widget must reject one-letter/generic chat names before rendering titles.');
 assert(chat.includes('shortChatEntityLabel'), 'Chat widget must fall back to role labels with short ids when chat names are incomplete.');
 assert(chat.includes('realChatTitle'), 'Chat widget must only show a real chat name when it comes from profile data, not from fallback labels.');
+assert(chat.includes('renderChatCounterpartAvatar'), 'Family chat must render the professor avatar next to the teacher name.');
+assert(chat.includes('chatCounterpartPhotoUrl'), 'Family chat must resolve the professor profile photo from chat data.');
+assert(chat.includes('teacherPhotoUrl') && chat.includes('profesor_foto_url'), 'Chat documents must carry professor profile photo aliases.');
+assert(chat.includes('data-chat-call-request'), 'Chat must keep voice calls as an in-app request action.');
+assert(chat.includes("messageType: 'call'"), 'Chat call requests must be persisted as call messages.');
+assert(chat.includes('ClasesDe10 no comparte telefonos reales'), 'Chat call requests must explain that real phones are not shared.');
+assert(!chat.includes('href="tel:'), 'Chat must not expose real phone numbers through tel links.');
+assert(!chat.includes('data-chat-video-call'), 'Chat must not expose videocall controls.');
+assert(!chat.includes('Videollamada'), 'Chat must not offer videocalls in family or teacher chat.');
+assert(!chat.includes('meet.jit.si'), 'Chat must not generate external videocall rooms.');
 assert(chat.includes('Esperando respuesta'), 'Own schedule proposals must clearly show they are waiting for the other participant.');
 assert(chat.includes("relationshipStage: 'horario_propuesto'"), 'Schedule proposals must update the chat relationship stage.');
 assert(chat.includes("relationshipStage: 'clase_programada'"), 'Accepted proposals must activate the scheduled relationship stage.');
