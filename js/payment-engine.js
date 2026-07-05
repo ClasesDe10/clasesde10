@@ -80,16 +80,25 @@ const GENERIC_PAYMENT_PERSON_LABELS = new Set([
 ]);
 
 function isGenericPaymentPersonLabel(value) {
-  const normalized = cleanPaymentText(value, 180)
-    .toLowerCase()
+  const text = cleanPaymentText(value, 180);
+  const normalized = text.toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
-  return !normalized || GENERIC_PAYMENT_PERSON_LABELS.has(normalized);
+  if (!normalized || GENERIC_PAYMENT_PERSON_LABELS.has(normalized)) return true;
+  const ascii = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (/^[a-z]$/i.test(ascii)) return true;
+  const generated = ascii.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+  if (!generated) return false;
+  const token = generated[1].replace(/[^A-Za-z0-9]/g, '');
+  if (token.length <= 1) return true;
+  return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
 }
 
 function paymentPersonFallback(role, id = '') {
-  const suffix = cleanPaymentText(id, 180).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
-  return suffix ? `${role} ${suffix}` : `${role} pendiente de nombre`;
+  return `${role} pendiente de nombre`;
 }
 
 function paymentPersonName(role, id = '', ...values) {

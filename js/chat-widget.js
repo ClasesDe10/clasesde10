@@ -551,8 +551,31 @@ const GENERIC_IDENTITY_LABELS = new Set([
 ]);
 
 function isGenericIdentityLabel(value) {
-  const normalized = clean(value, 180).toLowerCase();
-  return !normalized || GENERIC_IDENTITY_LABELS.has(normalized);
+  const text = clean(value, 180);
+  const normalized = text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (!normalized || GENERIC_IDENTITY_LABELS.has(normalized)) return true;
+  const ascii = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (/^[a-z]$/i.test(ascii)) return true;
+  const generated = ascii.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+  if (!generated) return false;
+  const token = generated[1].replace(/[^A-Za-z0-9]/g, '');
+  if (token.length <= 1) return true;
+  return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
+}
+
+function identityKey(value) {
+  return clean(value, 180)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
 }
 
 function reliableName(value, fallback = '') {
@@ -627,6 +650,62 @@ function mergeDocsById(rows = []) {
   const map = new Map();
   rows.filter(Boolean).forEach((row) => map.set(String(row.id || row.assignmentId || row.asignacion_id), row));
   return Array.from(map.values());
+}
+
+function chatRelationshipKey(chat = {}) {
+  const teacherUid = clean(chat.teacherUid || chat.profesor_id, 180);
+  const familyUid = clean(chat.familyUid || chat.familia_id, 180);
+  const studentId = clean(chat.studentId || chat.alumno_id, 180);
+  const subject = identityKey(chat.materia || chat.subject || '');
+  if (teacherUid && familyUid) return `participants:${teacherUid}:${familyUid}:${studentId || 'sin-alumno'}:${subject || 'sin-materia'}`;
+  const assignmentId = clean(chat.assignmentId || chat.asignacion_id, 180);
+  return assignmentId ? `assignment:${assignmentId}` : '';
+}
+
+function chatHasGeneratedIdentity(chat = {}) {
+  return [
+    chat.teacherName,
+    chat.profesor_nombre,
+    chat.studentName,
+    chat.alumno_nombre,
+    chat.familyName,
+    chat.familia_nombre,
+  ].some((value) => clean(value, 180) && isGenericIdentityLabel(value));
+}
+
+function chatIdentityScore(chat = {}, role = '') {
+  const title = chatTitle(chat, role);
+  let score = isUsefulChatIdentity(title) ? 20 : 0;
+  if (!chatHasGeneratedIdentity(chat)) score += 10;
+  if (clean(chat.assignmentId || chat.asignacion_id, 180)) score += 4;
+  if (clean(chat.teacherPhotoUrl || chat.profesor_foto_url, 300000)) score += 2;
+  if (clean(chat.lastMessageAt || chat.updatedAt, 80)) score += 1;
+  return score;
+}
+
+function dedupeGeneratedChats(chats = [], role = '') {
+  const byRelationship = new Map();
+  const passthrough = [];
+  for (const chat of chats) {
+    const key = chatRelationshipKey(chat);
+    if (!key) {
+      passthrough.push(chat);
+      continue;
+    }
+    const current = byRelationship.get(key);
+    if (!current) {
+      byRelationship.set(key, chat);
+      continue;
+    }
+    const currentGenerated = chatHasGeneratedIdentity(current);
+    const nextGenerated = chatHasGeneratedIdentity(chat);
+    if (!currentGenerated && !nextGenerated) {
+      passthrough.push(chat);
+      continue;
+    }
+    byRelationship.set(key, chatIdentityScore(chat, role) >= chatIdentityScore(current, role) ? chat : current);
+  }
+  return [...byRelationship.values(), ...passthrough];
 }
 
 async function loadFirestoreChatsBy(field, value) {
@@ -722,8 +801,8 @@ function realChatTitle(chat, role) {
 }
 
 function isUsefulChatIdentity(value) {
-  const normalized = clean(value, 120).toLowerCase();
-  return normalized && normalized.length > 1 && !isGenericIdentityLabel(normalized);
+  const text = clean(value, 120);
+  return text.length > 1 && !isGenericIdentityLabel(text);
 }
 
 function readableChatIdentity(...values) {
@@ -731,8 +810,8 @@ function readableChatIdentity(...values) {
 }
 
 function shortChatEntityLabel(label, id = '') {
-  const suffix = clean(id, 180).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
-  return suffix ? `${label} ${suffix}` : `${label} pendiente de nombre`;
+  const roleLabel = clean(label, 40);
+  return roleLabel ? `${roleLabel} pendiente de nombre` : 'Nombre pendiente';
 }
 
 function isExpectedPermissionFallback(error) {
@@ -744,7 +823,8 @@ function chatSubtitle(chat, role, preference = {}) {
   const parts = [];
   const realTitle = realChatTitle(chat, role);
   const defaultTitle = defaultChatTitle(chat, role);
-  if (preference.displayNameOverride && isUsefulChatIdentity(realTitle)) parts.push(`Nombre real: ${realTitle}`);
+  const override = reliableName(preference.displayNameOverride, '');
+  if (override && isUsefulChatIdentity(realTitle) && identityKey(realTitle) !== identityKey(override)) parts.push(`Nombre real: ${realTitle}`);
   const familyName = readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail);
   const studentName = readableChatIdentity(chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
   if (role === 'profesor' && familyName && familyName !== defaultTitle) parts.push(familyName);
@@ -896,7 +976,7 @@ async function loadChats(dbCompat, role, profileId, usuario, actorIds = []) {
       orderBy('updatedAt', 'desc'),
       limit(200),
     ));
-    const chats = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+    const chats = dedupeGeneratedChats(snap.docs.map((item) => ({ id: item.id, ...item.data() })), role);
     chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
     return chats;
   }
@@ -911,7 +991,7 @@ async function loadChats(dbCompat, role, profileId, usuario, actorIds = []) {
     return null;
   }))))
     .filter(Boolean);
-  const chats = mergeDocsById([...firestoreChats, ...assignmentChats]);
+  const chats = dedupeGeneratedChats(mergeDocsById([...firestoreChats, ...assignmentChats]), role);
   chats.sort((a, b) => String(normalizeDate(b.lastMessageAt || b.updatedAt)).localeCompare(String(normalizeDate(a.lastMessageAt || a.updatedAt))));
   return chats;
 }
@@ -1719,7 +1799,33 @@ async function hydrateMessageAttachments(box) {
   }));
 }
 
-function renderMessages(container, messages, currentUid) {
+function messageSenderDisplayName(message = {}, chat = {}, currentUid = '', currentDisplayName = '') {
+  const senderUid = clean(message.senderUid, 180);
+  const senderRole = clean(message.senderRole, 40).toLowerCase();
+  if (senderUid === 'system' || senderRole === 'system') return 'ClasesDe10';
+  const directName = readableChatIdentity(message.senderName);
+  const currentName = readableChatIdentity(currentDisplayName);
+  if (senderUid && senderUid === currentUid) return currentName || directName || 'Tu';
+  const teacherIds = [
+    chat.teacherUserUid,
+    chat.teacherUid,
+    chat.profesor_id,
+  ].map((value) => clean(value, 180)).filter(Boolean);
+  const familyIds = [
+    chat.familyUserUid,
+    chat.familyUid,
+    chat.familia_id,
+  ].map((value) => clean(value, 180)).filter(Boolean);
+  if ((senderUid && teacherIds.includes(senderUid)) || senderRole === 'profesor') {
+    return readableChatIdentity(chat.teacherName, chat.profesor_nombre, chat.teacherEmail) || directName || 'Profesor pendiente de nombre';
+  }
+  if ((senderUid && familyIds.includes(senderUid)) || senderRole === 'familia') {
+    return readableChatIdentity(chat.familyName, chat.familia_nombre, chat.familyEmail) || directName || currentName || 'Familia pendiente de nombre';
+  }
+  return directName || currentName || 'Usuario';
+}
+
+function renderMessages(container, messages, currentUid, chat = {}, currentDisplayName = '') {
   const box = container.querySelector('[data-chat-messages]');
   const hadMessages = Boolean(box.querySelector('.chat-message'));
   const distanceFromBottom = box.scrollHeight - box.scrollTop - box.clientHeight;
@@ -1733,9 +1839,10 @@ function renderMessages(container, messages, currentUid) {
     const mine = message.senderUid === currentUid;
     const attachment = normalizeChatAttachment(message.attachment);
     const body = clean(message.body, 2000);
+    const senderDisplayName = messageSenderDisplayName(message, chat, currentUid, currentDisplayName);
     return `
       <div class="chat-message ${mine ? 'mine' : ''}">
-        <div class="chat-message-meta">${escapeHtml(message.senderName || message.senderRole || 'Usuario')} - ${escapeHtml(formatDateTime(message.createdAt))}</div>
+        <div class="chat-message-meta">${escapeHtml(senderDisplayName)} - ${escapeHtml(formatDateTime(message.createdAt))}</div>
         ${body ? `<div class="chat-message-body">${renderMessageText(body)}</div>` : ''}
         ${attachment ? renderMessageAttachment(attachment) : ''}
       </div>`;
@@ -1961,7 +2068,7 @@ export async function initChatWidget({
     usuario.id,
     profileId,
   ].map((value) => clean(value, 180)).filter(Boolean));
-  const senderName = fullName(usuario.nombre, usuario.apellidos) || usuario.email || role;
+  const senderName = readableChatIdentity(fullName(usuario.nombre, usuario.apellidos), usuario.displayName, usuario.email) || role;
 
   function disposeRealtimeListeners() {
     state.disposed = true;
@@ -2203,7 +2310,7 @@ export async function initChatWidget({
     );
     state.unsubscribe = onSnapshot(messagesQuery, (snap) => {
       if (!isCurrentSessionActive()) return;
-      renderMessages(container, snap.docs.map((item) => ({ id: item.id, ...item.data() })), currentUid);
+      renderMessages(container, snap.docs.map((item) => ({ id: item.id, ...item.data() })), currentUid, chat, senderName);
     }, (error) => {
       handleRealtimeError('No se pudo abrir el chat', 'Chat no disponible', 'No se pudo abrir la conversacion.', error);
     });

@@ -72,10 +72,17 @@ function calendarPersonName(role, id = '', ...values) {
   for (const value of values) {
     const candidate = cleanCalendarText(value, 180);
     const key = candidate.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (candidate && !generic.has(key)) return candidate;
+    const generated = candidate
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+    const token = generated?.[1]?.replace(/[^A-Za-z0-9]/g, '') || '';
+    const generatedName = /^[a-z]$/i.test(candidate)
+      || (generated && (token.length <= 1 || /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token)));
+    if (candidate && !generic.has(key) && !generatedName) return candidate;
   }
-  const cleanId = cleanCalendarText(id, 180);
-  return cleanId ? `${role} ${cleanId.slice(0, 6)}` : `${role} pendiente de nombre`;
+  return `${role} pendiente de nombre`;
 }
 
 export function classCalendarDescription(classData = {}) {

@@ -688,9 +688,9 @@ import {
   paymentScheduleDocumentId,
   paymentScheduleLabel,
   paymentStatusForBadge,
-} from '../../js/payment-engine.js?v=20260704-prorated-duration';
+} from '../../js/payment-engine.js?v=20260705-person-names';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260705-payment-alerts';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260705-person-names';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260701-journey-clarity';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
@@ -700,7 +700,7 @@ import {
   canCancelClassFromCalendar,
   CLASS_CANCELLATION_PENALTY_POINTS,
 } from '../../js/class-cancellation.js?v=20260703-recurring-cancel';
-import { buildIcsCalendar } from '../../js/calendar-sync.js?v=20260706-calendar-export';
+import { buildIcsCalendar } from '../../js/calendar-sync.js?v=20260705-person-names';
 import {
   ensureRecurringClassOccurrencesForRange,
   loadParticipantClasses,
@@ -859,7 +859,17 @@ function nameLookupKey(value) {
 
 function isGenericPersonLabel(value) {
   const key = nameLookupKey(value);
-  return !key || GENERIC_PERSON_LABELS.has(key);
+  if (!key || GENERIC_PERSON_LABELS.has(key)) return true;
+  const text = normalizeDisplayName(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (/^[a-z]$/i.test(text)) return true;
+  const generated = text.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+  if (!generated) return false;
+  const token = generated[1].replace(/[^A-Za-z0-9]/g, '');
+  if (token.length <= 1) return true;
+  return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
 }
 
 function meaningfulPersonName(...values) {
@@ -867,8 +877,7 @@ function meaningfulPersonName(...values) {
 }
 
 function personFallbackLabel(role, id = '') {
-  const suffix = normalizeDisplayName(id).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase();
-  return suffix ? `${role} ${suffix}` : `${role} pendiente de nombre`;
+  return `${role} pendiente de nombre`;
 }
 
 function personDisplayName(role, id = '', ...values) {

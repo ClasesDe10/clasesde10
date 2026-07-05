@@ -210,9 +210,13 @@ export function getTeacherName(teacher) {
 
 function teacherNameOrFallback(name = '', id = '') {
   const candidate = clean(name, 180);
-  if (candidate) return candidate;
-  const cleanId = clean(id, 180);
-  return cleanId ? `Profesor ${cleanId.slice(0, 6)}` : 'Profesor pendiente de nombre';
+  const ascii = candidate.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
+  const generated = ascii.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente)\s+([A-Za-z0-9_-]{1,12})$/i);
+  const token = generated?.[1]?.replace(/[^A-Za-z0-9]/g, '') || '';
+  const generatedName = /^[a-z]$/i.test(ascii)
+    || (generated && (token.length <= 1 || /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token)));
+  if (candidate && !generatedName) return candidate;
+  return 'Profesor pendiente de nombre';
 }
 
 function subjectTags(value) {

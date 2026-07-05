@@ -1208,7 +1208,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260705-payment-alerts';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260705-person-names';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
@@ -1244,7 +1244,7 @@ import {
   normalizeClassStatus,
   validateClassTimeRange,
 } from '../../js/calendar-engine.js?v=20260704-prorated-duration';
-import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260628-calendar';
+import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260705-person-names';
 import {
   PAID_PAYMENT_STATUSES,
   applyClassPaymentContext,
@@ -1268,7 +1268,7 @@ import {
   reviewPaymentWithAssistant,
   shouldAutoValidatePaymentReview,
   shouldReopenFamilyClassPayment,
-} from '../../js/payment-engine.js?v=20260705-payment-alerts';
+} from '../../js/payment-engine.js?v=20260705-person-names';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -1586,13 +1586,21 @@ function adminPersonKey(value) {
 
 function isGenericAdminPersonLabel(value) {
   const key = adminPersonKey(value);
-  return !key || ADMIN_GENERIC_PERSON_LABELS.has(key);
+  if (!key || ADMIN_GENERIC_PERSON_LABELS.has(key)) return true;
+  const text = cleanAdminNotificationText(value, 180)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (/^[a-z]$/i.test(text)) return true;
+  const generated = text.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+  if (!generated) return false;
+  const token = generated[1].replace(/[^A-Za-z0-9]/g, '');
+  if (token.length <= 1) return true;
+  return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
 }
 
 function adminPersonFallback(role, id = '') {
   const label = cleanAdminNotificationText(role, 40) || 'Persona';
-  const cleanId = cleanAdminNotificationText(id, 180);
-  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
   return `${label} pendiente de nombre`;
 }
 

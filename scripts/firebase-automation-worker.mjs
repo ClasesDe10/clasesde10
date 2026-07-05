@@ -223,13 +223,21 @@ function workerPersonKey(value) {
 
 function isGenericWorkerPersonLabel(value) {
   const key = workerPersonKey(value);
-  return !key || WORKER_GENERIC_PERSON_LABELS.has(key);
+  if (!key || WORKER_GENERIC_PERSON_LABELS.has(key)) return true;
+  const text = clean(value, 180)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (/^[a-z]$/i.test(text)) return true;
+  const generated = text.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+  if (!generated) return false;
+  const token = generated[1].replace(/[^A-Za-z0-9]/g, '');
+  if (token.length <= 1) return true;
+  return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
 }
 
 function workerPersonFallback(role, id = '') {
   const label = clean(role, 40) || 'Persona';
-  const cleanId = clean(id, 180);
-  if (cleanId) return `${label} ${cleanId.slice(0, 6)}`;
   return `${label} pendiente de nombre`;
 }
 

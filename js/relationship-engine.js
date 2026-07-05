@@ -198,9 +198,20 @@ function relationshipPersonKey(value) {
 function relationshipPersonFallback(role, item = {}) {
   const label = clean(role, 40);
   if (!label) return '';
-  const id = idOf(item);
-  if (id) return `${label} ${id.slice(0, 6)}`;
   return `${label} pendiente de nombre`;
+}
+
+function isGeneratedRelationshipPersonLabel(value) {
+  const text = clean(value, 180)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ');
+  if (/^[a-z]$/i.test(text)) return true;
+  const generated = text.match(/^(?:profesor(?:a|\/a)?|profesor asignado|docente|alumno(?:a|\/a)?|familia)\s+([A-Za-z0-9_-]{1,12})$/i);
+  if (!generated) return false;
+  const token = generated[1].replace(/[^A-Za-z0-9]/g, '');
+  if (token.length <= 1) return true;
+  return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
 }
 
 function nameOf(item = {}, fallback = '') {
@@ -215,7 +226,7 @@ function nameOf(item = {}, fallback = '') {
   ];
   for (const value of values) {
     const candidate = clean(value, 180);
-    if (candidate && !GENERIC_RELATIONSHIP_PERSON_LABELS.has(relationshipPersonKey(candidate))) return candidate;
+    if (candidate && !GENERIC_RELATIONSHIP_PERSON_LABELS.has(relationshipPersonKey(candidate)) && !isGeneratedRelationshipPersonLabel(candidate)) return candidate;
   }
   return relationshipPersonFallback(fallback, item);
 }
