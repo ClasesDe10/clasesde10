@@ -534,13 +534,17 @@ const GENERIC_IDENTITY_LABELS = new Set([
   'profesor/a',
   'profesor asignado',
   'profesor sin nombre',
+  'profesor pendiente de nombre',
   'familia',
   'familia sin nombre',
+  'familia pendiente de nombre',
   'alumno',
   'alumna',
   'alumno/a',
   'alumno sin nombre',
   'alumno/a sin nombre',
+  'alumno pendiente de nombre',
+  'nombre pendiente',
   'estudiante',
   'docente',
   'contacto',
@@ -2999,6 +3003,9 @@ export async function initChatWidget({
       if (cleanUid) participantUids[cleanUid] = true;
     });
     const buildOccurrencePayload = (occurrence) => {
+      const classFamilyName = readableChatIdentity(state.selectedChat.familyName, state.selectedChat.familia_nombre, state.selectedChat.familyEmail);
+      const classTeacherName = readableChatIdentity(state.selectedChat.teacherName, state.selectedChat.profesor_nombre, state.selectedChat.teacherEmail);
+      const classStudentName = readableChatIdentity(state.selectedChat.studentName, state.selectedChat.alumno_nombre, state.selectedChat.studentDisplayName);
       const occurrenceFields = buildAdminClassPayload({
         ...baseInput,
         fecha: occurrence.fecha,
@@ -3062,12 +3069,12 @@ export async function initChatWidget({
         schedulingStatus: 'confirmed',
         modality: proposal.modalidad || 'por_acordar',
         modalidad: proposal.modalidad || 'por_acordar',
-        familyName: clean(state.selectedChat.familyName, 160),
-        teacherName: clean(state.selectedChat.teacherName, 160),
-        studentName: clean(state.selectedChat.studentName, 160),
-        familia_nombre: clean(state.selectedChat.familyName, 160),
-        profesor_nombre: clean(state.selectedChat.teacherName, 160),
-        alumno_nombre: clean(state.selectedChat.studentName, 160),
+        familyName: classFamilyName,
+        teacherName: classTeacherName,
+        studentName: classStudentName,
+        familia_nombre: classFamilyName,
+        profesor_nombre: classTeacherName,
+        alumno_nombre: classStudentName,
         participantUids,
         createdByUid: currentUid,
         createdByRole: role,

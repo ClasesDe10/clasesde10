@@ -39,6 +39,18 @@ assert(
   'Schedule-only payment markers must be distinguishable from payable groups.',
 );
 assert(
+  familyDashboard.includes('hydratePaymentSchedulesForCalendar(identityResolver)'),
+  'Family calendar must enrich schedule-only markers with resolved student and teacher names before rendering.',
+);
+assert(
+  familyDashboard.includes('familyPaymentGroupTitle(group)'),
+  'Family payment cards must render names through the shared safe title helper.',
+);
+assert(
+  familyDashboard.includes('alumno pendiente de nombre'),
+  'Family dashboard must treat pending-name fallbacks as generic labels, not as real names.',
+);
+assert(
   familyDashboard.includes('calendarExportItems = [...paymentEvents, ...clasesMes]'),
   'Family payment events must be ordered before classes so the day chip shows payment day.',
 );

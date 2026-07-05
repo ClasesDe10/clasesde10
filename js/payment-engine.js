@@ -68,6 +68,7 @@ const GENERIC_PAYMENT_PERSON_LABELS = new Set([
   'profesor/a',
   'profesor asignado',
   'profesor sin nombre',
+  'profesor pendiente de nombre',
   'alumno',
   'alumna',
   'alumno/a',
@@ -75,6 +76,9 @@ const GENERIC_PAYMENT_PERSON_LABELS = new Set([
   'alumno/a sin nombre',
   'familia',
   'familia sin nombre',
+  'familia pendiente de nombre',
+  'alumno pendiente de nombre',
+  'nombre pendiente',
   'sin nombre',
   'contacto',
 ]);
@@ -375,6 +379,8 @@ export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
   const safeGraceHours = Number.isFinite(graceHours)
     ? Math.max(DEFAULT_FAMILY_PAYMENT_GRACE_HOURS, Math.min(168, graceHours))
     : DEFAULT_FAMILY_PAYMENT_GRACE_HOURS;
+  const studentName = paymentPersonName('Alumno', input.studentId || input.alumno_id, input.studentName, input.alumno_nombre, input.studentDisplayName);
+  const teacherName = paymentPersonName('Profesor', input.teacherUid || input.profesor_id, input.teacherName, input.profesor_nombre, input.teacherDisplayName);
   return {
     id: input.id || paymentScheduleDocumentId(input),
     type: 'weekly_family_teacher_payment',
@@ -387,6 +393,10 @@ export function buildWeeklyPaymentSchedulePayload(input = {}, options = {}) {
     profesor_id: input.profesor_id || input.teacherUid || '',
     studentId: input.studentId || input.alumno_id || '',
     alumno_id: input.alumno_id || input.studentId || '',
+    studentName: isGenericPaymentPersonLabel(studentName) ? '' : studentName,
+    alumno_nombre: isGenericPaymentPersonLabel(studentName) ? '' : studentName,
+    teacherName: isGenericPaymentPersonLabel(teacherName) ? '' : teacherName,
+    profesor_nombre: isGenericPaymentPersonLabel(teacherName) ? '' : teacherName,
     assignmentId: input.assignmentId || input.asignacion_id || '',
     asignacion_id: input.asignacion_id || input.assignmentId || '',
     frequency,

@@ -1,0 +1,71 @@
+.calendar-page-layout,
+.calendar-day-panel,
+.calendar-day-panel .card-header,
+.calendar-day-panel .card-body,
+.calendar-day,
+.clase-item,
+.clase-info,
+.calendar-payment-due-item,
+.calendar-class-item {
+  min-width: 0;
+}
+
+.calendar-day-panel {
+  overflow: hidden;
+}
+
+.calendar-day-panel .card-title,
+#cal-dia-titulo,
+.clase-nombre,
+.clase-materia,
+.calendar-payout-empty,
+.calendar-payout-more,
+.calendar-bizum-hint {
+  overflow-wrap: anywhere;
+}
+
+.day-event-summary {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.day-chip {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-count {
+  flex: 0 0 auto;
+}
+
+.calendar-day-panel .clase-item {
+  overflow: hidden;
+}
+
+.calendar-payout-row {
+  min-width: 0;
+  grid-template-columns: minmax(62px, 78px) minmax(0, 1fr) max-content;
+}
+
+.calendar-payout-row span,
+.calendar-payout-row em {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .calendar-page-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendar-day-panel .card-body {
+    max-height: none;
+  }
+}

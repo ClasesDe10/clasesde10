@@ -9,8 +9,9 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-indicators">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-fit">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260706-calendar-indicators">
+<link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-fit">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -688,9 +689,9 @@ import {
   paymentScheduleDocumentId,
   paymentScheduleLabel,
   paymentStatusForBadge,
-} from '../../js/payment-engine.js?v=20260705-person-names';
+} from '../../js/payment-engine.js?v=20260706-calendar-names';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260706-chat-contact-actions';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260706-calendar-names';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260701-journey-clarity';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
@@ -837,13 +838,17 @@ const GENERIC_PERSON_LABELS = new Set([
   'profesor/a',
   'profesor asignado',
   'profesor sin nombre',
+  'profesor pendiente de nombre',
   'familia',
   'familia sin nombre',
+  'familia pendiente de nombre',
   'alumno',
   'alumna',
   'alumno/a',
   'alumno sin nombre',
   'alumno/a sin nombre',
+  'alumno pendiente de nombre',
+  'nombre pendiente',
   'sin nombre',
   'este alumno',
   'este profesor',
@@ -965,6 +970,133 @@ function teacherDisplayName(source = {}) {
     source.profesores?.usuarios?.email,
     source.profesores?.email,
   );
+}
+
+function setResolvedPersonName(map, key, ...values) {
+  const cleanKey = String(key || '').trim();
+  const name = meaningfulPersonName(...values);
+  if (cleanKey && name && !map.has(cleanKey)) map.set(cleanKey, name);
+}
+
+function resolvedPersonName(map, ...keys) {
+  for (const key of keys.map((item) => String(item || '').trim()).filter(Boolean)) {
+    const value = map.get(key);
+    if (value) return value;
+  }
+  return '';
+}
+
+function buildFamilyCalendarIdentityResolver({ hijos = [], clases = [], chats = [] } = {}) {
+  const resolver = {
+    studentById: new Map(),
+    teacherById: new Map(),
+    studentByAssignment: new Map(),
+    teacherByAssignment: new Map(),
+  };
+  (hijos || []).forEach((hijo) => {
+    setResolvedPersonName(resolver.studentById, hijo.id, fullPersonName(hijo.nombre, hijo.apellidos), hijo.nombre);
+  });
+  (chats || []).forEach((chat) => {
+    const assignmentId = chat.assignmentId || chat.asignacion_id || chat.id;
+    const studentId = chat.studentId || chat.alumno_id;
+    const teacherUid = chat.teacherUid || chat.profesor_id;
+    setResolvedPersonName(resolver.studentById, studentId, chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
+    setResolvedPersonName(resolver.studentByAssignment, assignmentId, chat.studentName, chat.alumno_nombre, chat.studentDisplayName);
+    setResolvedPersonName(resolver.teacherById, teacherUid, chat.teacherName, chat.profesor_nombre, chat.teacherDisplayName, chat.teacherEmail);
+    setResolvedPersonName(resolver.teacherByAssignment, assignmentId, chat.teacherName, chat.profesor_nombre, chat.teacherDisplayName, chat.teacherEmail);
+  });
+  (clases || []).forEach((clase) => {
+    const assignmentId = clase.assignmentId || clase.asignacion_id;
+    const studentId = clase.studentId || clase.alumno_id;
+    const teacherUid = clase.teacherUid || clase.profesor_id;
+    setResolvedPersonName(resolver.studentById, studentId, clase.studentDisplayName, clase.alumno_nombre, clase.studentName, clase.studentFullName);
+    setResolvedPersonName(resolver.studentByAssignment, assignmentId, clase.studentDisplayName, clase.alumno_nombre, clase.studentName, clase.studentFullName);
+    setResolvedPersonName(resolver.teacherById, teacherUid, clase.teacherDisplayName, clase.profesor_nombre, clase.teacherName);
+    setResolvedPersonName(resolver.teacherByAssignment, assignmentId, clase.teacherDisplayName, clase.profesor_nombre, clase.teacherName);
+  });
+  return resolver;
+}
+
+function calendarStudentDisplayName(source = {}, resolver = {}) {
+  const studentId = source.studentId || source.alumno_id || '';
+  const assignmentId = source.assignmentId || source.asignacion_id || '';
+  return personDisplayName(
+    'Alumno',
+    studentId,
+    source.studentDisplayName,
+    source.alumno_nombre,
+    source.studentName,
+    source.studentFullName,
+    resolvedPersonName(resolver.studentByAssignment || new Map(), assignmentId),
+    resolvedPersonName(resolver.studentById || new Map(), studentId),
+  );
+}
+
+function calendarTeacherDisplayName(source = {}, resolver = {}) {
+  const teacherUid = source.teacherUid || source.profesor_id || '';
+  const assignmentId = source.assignmentId || source.asignacion_id || '';
+  return personDisplayName(
+    'Profesor',
+    teacherUid,
+    source.teacherDisplayName,
+    source.profesor_nombre,
+    source.teacherName,
+    resolvedPersonName(resolver.teacherByAssignment || new Map(), assignmentId),
+    resolvedPersonName(resolver.teacherById || new Map(), teacherUid),
+  );
+}
+
+function hydrateCalendarClassIdentity(clase = {}, resolver = {}) {
+  const studentName = calendarStudentDisplayName(clase, resolver);
+  const teacherName = calendarTeacherDisplayName(clase, resolver);
+  return {
+    ...clase,
+    studentDisplayName: studentName,
+    alumno_nombre: studentName,
+    studentName,
+    profesor_nombre: teacherName,
+    teacherName,
+  };
+}
+
+function hydrateFamilyPaymentGroupIdentity(group = {}, resolver = {}) {
+  const studentName = calendarStudentDisplayName(group, resolver);
+  const teacherName = calendarTeacherDisplayName(group, resolver);
+  return {
+    ...group,
+    studentName,
+    alumno_nombre: studentName,
+    teacherName,
+    profesor_nombre: teacherName,
+    label: group.classCount
+      ? `${group.classCount} clase(s) de ${studentName} con ${teacherName}`
+      : group.label,
+  };
+}
+
+function hydratePaymentScheduleIdentity(schedule = {}, resolver = {}) {
+  const studentName = calendarStudentDisplayName(schedule, resolver);
+  const teacherName = calendarTeacherDisplayName(schedule, resolver);
+  return {
+    ...schedule,
+    studentName,
+    alumno_nombre: studentName,
+    teacherName,
+    profesor_nombre: teacherName,
+  };
+}
+
+function hydratePaymentSchedulesForCalendar(resolver = {}) {
+  const byId = new Map();
+  for (const schedule of paymentSchedulesCache.values()) {
+    if (schedule?.id && !byId.has(schedule.id)) byId.set(schedule.id, hydratePaymentScheduleIdentity(schedule, resolver));
+  }
+  paymentSchedulesCache = new Map();
+  byId.forEach((schedule) => indexPaymentSchedule(schedule));
+}
+
+function familyPaymentGroupTitle(group = {}) {
+  return `${personDisplayName('Alumno', group.studentId || group.alumno_id, group.studentName, group.alumno_nombre)} con ${personDisplayName('Profesor', group.teacherUid || group.profesor_id, group.teacherName, group.profesor_nombre)}`;
 }
 
 function renderQualityPanel(targetId, evaluation) {
@@ -1887,16 +2019,20 @@ async function cargarClasesCalendario(anio, mes) {
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = isoDateLocal(new Date(anio, mes + 1, 0));
   const desdeCalculo = isoDateLocal(new Date(anio, mes - 1, 1));
-  const [data, pagos] = await Promise.all([
+  const [data, pagos, chats] = await Promise.all([
     cargarClasesFamilia({ hijos: hijosFamilia, ids, hijosPorId, desde: desdeCalculo, hasta, limit: 500 }),
     cargarPagosFamiliaFirestore(),
+    cargarChatsUsuarioActual(),
   ]);
-  const clasesConPago = applyClassPaymentContext(data, pagos);
+  const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijosFamilia, clases: data, chats });
+  hydratePaymentSchedulesForCalendar(identityResolver);
+  const clasesConPago = applyClassPaymentContext(data, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const clasesMes = clasesConPago.filter((clase) => {
     const dateIso = classDateIso(clase);
     return dateIso >= desde && dateIso <= hasta;
   });
-  const groups = buildFamilyPaymentConfirmationGroups(clasesConPago, pagos, paymentScheduleIndexFamilia());
+  const groups = buildFamilyPaymentConfirmationGroups(clasesConPago, pagos, paymentScheduleIndexFamilia())
+    .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
   const paymentEvents = buildFamilyPaymentCalendarEvents(groups, anio, mes);
   familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
   calendarClassById = new Map(clasesMes.map((clase) => [String(clase.id), clase]));
@@ -2502,6 +2638,10 @@ function buildFamilyPaymentScheduleCalendarEvents(groups = [], anio, mes) {
             overdue: false,
             status: 'programado',
             label: paymentScheduleLabel(schedule),
+            studentName: personDisplayName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre),
+            alumno_nombre: personDisplayName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre),
+            teacherName: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre),
+            profesor_nombre: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre),
           },
           overdue: false,
         };
@@ -2523,7 +2663,7 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
       calendarEventType: 'family_payment_due',
       calendarTitle: group.overdue ? 'ClasesDe10 - Pago vencido' : 'ClasesDe10 - Dia de pago',
       calendarDescription: [
-        `${personDisplayName('Alumno', group.studentId || group.alumno_id, group.studentName)} con ${personDisplayName('Profesor', group.teacherUid || group.profesor_id, group.teacherName)}`,
+        familyPaymentGroupTitle(group),
         `Importe: ${formatEuros(group.amount || 0)}`,
         `${group.classCount || group.classIds?.length || 1} clase(s) incluidas`,
       ].join('\n'),
@@ -2546,7 +2686,7 @@ function bizumPhoneForGroup(group = {}) {
 }
 
 function bizumConceptForGroup(group = {}) {
-  return `ClasesDe10 ${group.studentName || ''} ${group.classCount || group.classIds?.length || 1} clase(s)`.trim();
+  return `ClasesDe10 ${personDisplayName('Alumno', group.studentId || group.alumno_id, group.studentName, group.alumno_nombre)} ${group.classCount || group.classIds?.length || 1} clase(s)`.trim();
 }
 
 function bizumUrlForGroup(group = {}) {
@@ -2593,7 +2733,7 @@ function renderFamilyPaymentDueCalendarCard(event = {}) {
         <div class="clase-time-fin">${sanitize(formatFechaCorta(event.fecha))}</div>
       </div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(personDisplayName('Alumno', group.studentId || group.alumno_id, group.studentName))} con ${sanitize(personDisplayName('Profesor', group.teacherUid || group.profesor_id, group.teacherName))}</div>
+        <div class="clase-nombre">${sanitize(familyPaymentGroupTitle(group))}</div>
         <div class="clase-materia">${sanitize(schedule ? paymentScheduleLabel(schedule) : 'Día de pago')}</div>
         <div class="calendar-payout-summary">
           <span class="badge ${group.overdue ? 'badge-danger' : group.scheduleOnly ? 'badge-info' : 'badge-warning'}">${group.overdue ? 'Vencido' : group.scheduleOnly ? 'Programado' : 'Pendiente'}</span>
@@ -2698,6 +2838,8 @@ function abrirPlanPago(asignacion = {}, alumno = {}) {
   document.getElementById('plan-pago-assignment-id').value = ids.assignmentId;
   document.getElementById('plan-pago-teacher-id').value = ids.teacherUid;
   document.getElementById('plan-pago-student-id').value = ids.studentId;
+  document.getElementById('plan-pago-teacher-id').dataset.teacherName = teacherName;
+  document.getElementById('plan-pago-student-id').dataset.studentName = studentName;
   document.getElementById('plan-pago-frecuencia').value = frequency;
   document.getElementById('plan-pago-dia').value = String(schedule.dayOfWeek || schedule.paymentDay || schedule.dia_semana_pago || 5);
   document.getElementById('plan-pago-fecha-inicio').value = String(schedule.anchorDate || schedule.paymentAnchorDate || schedule.fecha_inicio_pago || fechaHoy()).slice(0, 10);
@@ -2996,6 +3138,10 @@ document.getElementById('btn-guardar-plan-pago')?.addEventListener('click', asyn
       alumno_id: studentId,
       assignmentId,
       asignacion_id: assignmentId,
+      studentName: document.getElementById('plan-pago-student-id').dataset.studentName,
+      alumno_nombre: document.getElementById('plan-pago-student-id').dataset.studentName,
+      teacherName: document.getElementById('plan-pago-teacher-id').dataset.teacherName,
+      profesor_nombre: document.getElementById('plan-pago-teacher-id').dataset.teacherName,
       frequency,
       anchorDate,
       dayOfWeek,
@@ -3418,9 +3564,10 @@ function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = fal
 
 async function cargarPagos() {
   if (!familiaId) return;
-  const [pagos, { data: hijos }] = await Promise.all([
+  const [pagos, { data: hijos }, chats] = await Promise.all([
     cargarPagosFamiliaFirestore(),
     db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId),
+    cargarChatsUsuarioActual(),
   ]);
   await cargarPaymentSchedulesFamilia();
   const hijosPorId = new Map((hijos || []).map((hijo) => [
@@ -3433,7 +3580,11 @@ async function cargarPagos() {
     hijosPorId,
     limit: 320,
   });
-  const groups = buildFamilyPaymentConfirmationGroups(clases, pagos, paymentScheduleIndexFamilia());
+  const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijos || [], clases, chats });
+  hydratePaymentSchedulesForCalendar(identityResolver);
+  const clasesConIdentidad = clases.map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const groups = buildFamilyPaymentConfirmationGroups(clasesConIdentidad, pagos, paymentScheduleIndexFamilia())
+    .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
   familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
   renderFamilyPaymentWorkbench(groups, pagos, Boolean((hijos || []).length || clases.length));
 

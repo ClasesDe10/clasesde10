@@ -9,7 +9,8 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260705-calendar-side-panel">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-fit">
+<link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-fit">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1208,7 +1209,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260706-chat-contact-actions';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260706-calendar-names';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
@@ -1268,7 +1269,7 @@ import {
   reviewPaymentWithAssistant,
   shouldAutoValidatePaymentReview,
   shouldReopenFamilyClassPayment,
-} from '../../js/payment-engine.js?v=20260705-person-names';
+} from '../../js/payment-engine.js?v=20260706-calendar-names';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
