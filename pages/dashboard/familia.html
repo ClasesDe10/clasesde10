@@ -827,6 +827,7 @@ import {
 } from '../../js/calendar-engine.js?v=20260815-calendar-semantics';
 import {
   applyClassPaymentContext,
+  buildFamilyAllDuePaymentGroup,
   buildFamilyClassPaymentConfirmationPayload,
   buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentAccessState,
@@ -841,7 +842,7 @@ import {
   paymentScheduleLabel,
   paymentStatusForBadge,
   samePaymentRelation,
-} from '../../js/payment-engine.js?v=20260815-family-payment-lock';
+} from '../../js/payment-engine.js?v=20260815-family-all-due';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260815-clear-notices';
 import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-clear-notices';
@@ -947,6 +948,7 @@ let alumnosFamiliaPerfilCache = [];
 let disponibilidadHijosCache = new Map();
 let paymentSchedulesCache = new Map();
 let familyPaymentGroupsCache = new Map();
+let familyAccessClassesCache = [];
 let activePaymentGroup = null;
 let familyPaymentAccess = {
   locked: familiaData?.paymentAccessLocked === true,
@@ -1044,6 +1046,7 @@ async function refreshFamilyPaymentAccessState(classes = null) {
   try {
     await cargarPaymentSchedulesFamilia();
     const sourceClasses = Array.isArray(classes) ? classes : await loadFamilyClassesForAccessCheck();
+    familyAccessClassesCache = mergeById(sourceClasses);
     const derived = buildFamilyPaymentAccessState(sourceClasses, paymentScheduleIndexFamilia());
     applyFamilyPaymentAccessState(derived);
     return derived;
@@ -2864,7 +2867,9 @@ async function buildFullFamilyCalendarExportItems() {
   hydratePaymentSchedulesForCalendar(identityResolver);
   const propuestasPuntuales = data.filter(isOneOffProposalRow).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const clasesReales = data.filter((clase) => !isOneOffProposalRow(clase));
-  const clasesConPago = applyClassPaymentContext(clasesReales, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const clasesParaPago = mergeById([...familyAccessClassesCache, ...clasesReales])
+    .map((clase) => normalizeClassRow(clase, hijosPorId));
+  const clasesConPago = applyClassPaymentContext(clasesParaPago, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const groups = buildFamilyPaymentConfirmationGroups(clasesConPago, pagos, paymentScheduleIndexFamilia())
     .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
   const paymentEvents = calendarMonthsBetween(range.start, range.end)
@@ -2993,7 +2998,9 @@ async function cargarClasesCalendario(anio, mes) {
   hydratePaymentSchedulesForCalendar(identityResolver);
   const propuestasPuntuales = data.filter(isOneOffProposalRow).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const clasesReales = data.filter((clase) => !isOneOffProposalRow(clase));
-  const clasesConPago = applyClassPaymentContext(clasesReales, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const clasesParaPago = mergeById([...familyAccessClassesCache, ...clasesReales])
+    .map((clase) => normalizeClassRow(clase, hijosPorId));
+  const clasesConPago = applyClassPaymentContext(clasesParaPago, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   applyFamilyPaymentAccessState(buildFamilyPaymentAccessState(clasesConPago, paymentScheduleIndexFamilia()));
   const clasesMes = clasesConPago.filter((clase) => {
     const dateIso = classDateIso(clase);
@@ -3744,26 +3751,35 @@ function mergedPaymentGroupForScheduleDate(schedule = {}, dateIso = '', groups =
 function familyPaymentWorkbenchGroups(groups = [], nowMs = Date.now()) {
   const result = [];
   const consumedKeys = new Set();
-  const schedules = uniqueFamilyPaymentSchedules();
-  schedules.forEach((schedule) => {
-    const relationGroups = groups.filter((group) => familyPaymentSameRelation(schedule, group));
-    const dueGroups = relationGroups.filter((group) => {
-      const dueMs = group.dueAt ? new Date(group.dueAt).getTime() : NaN;
-      return Number.isFinite(dueMs) && dueMs <= nowMs;
+  const today = isoDateLocal(new Date(nowMs));
+  const dueGroups = (groups || []).filter((group) => {
+    const dueMs = group.dueAt ? new Date(group.dueAt).getTime() : NaN;
+    return Number.isFinite(dueMs)
+      ? dueMs <= nowMs
+      : group.dueNow === true || group.overdue === true || !group.upcoming;
+  });
+  if (dueGroups.length) {
+    const latestDue = dueGroups
+      .filter((group) => paymentGroupDateIso(group))
+      .sort((left, right) => String(right.dueAt || '').localeCompare(String(left.dueAt || '')))[0] || null;
+    const latestDate = paymentGroupDateIso(latestDue || {}) || today;
+    const merged = buildFamilyAllDuePaymentGroup(groups, latestDate, {
+      dateKey: paymentGroupDateIso,
+      dueAt: latestDue?.dueAt || `${latestDate}T23:59:59.999Z`,
+      includeUndated: true,
+      key: `family-all-due-${latestDate}`,
+      nowMs,
     });
-    if (dueGroups.length) {
-      const latestDue = dueGroups.slice().sort((a, b) => String(b.dueAt || '').localeCompare(String(a.dueAt || '')))[0];
-      const latestDate = paymentGroupDateIso(latestDue);
-      const merged = mergedPaymentGroupForScheduleDate(schedule, latestDate, groups);
+    if (merged) {
       result.push({
         ...merged,
-        dueNow: !merged.overdue,
+        dueNow: true,
         upcoming: false,
         paymentWindow: merged.overdue ? 'overdue' : 'due_now',
       });
-      dueGroups.forEach((group) => consumedKeys.add(group.key));
+      merged.sourceGroupKeys.forEach((key) => consumedKeys.add(key));
     }
-  });
+  }
   groups.forEach((group) => {
     if (!consumedKeys.has(group.key) && !result.some((item) => item.key === group.key)) result.push(group);
   });
@@ -3806,50 +3822,70 @@ function paymentScheduleDatesForMonth(schedule = {}, anio, mes) {
 }
 
 function buildFamilyPaymentScheduleCalendarEvents(groups = [], anio, mes) {
-  return uniqueFamilyPaymentSchedules().flatMap((schedule) => (
-    paymentScheduleDatesForMonth(schedule, anio, mes)
-      .map((dateIso) => {
-        const paymentGroup = mergedPaymentGroupForScheduleDate(schedule, dateIso, groups);
-        return {
-          id: `family-payment-schedule-${schedule.id}-${dateIso}`,
-          calendarEventType: 'family_payment_due',
-          calendarTitle: paymentGroup.overdue ? 'ClasesDe10 - Pago con impagos' : 'ClasesDe10 - Dia de pago',
-          calendarDescription: [
-            paymentScheduleLabel(schedule),
-            paymentGroup.classCount
-              ? `${paymentGroup.classCount} clase(s) incluidas. Importe: ${formatEuros(paymentGroup.amount || 0)}.`
-              : 'No hay clases pendientes agrupadas en este vencimiento.',
-            paymentGroup.hasOverdueCarryover
-              ? `Incluye ${paymentGroup.overdueClassCount} impago(s) anterior(es) por ${formatEuros(paymentGroup.overdueAmount || 0)}.`
-              : '',
-            'Bizum a Miguel G. G. (613016665). ClasesDe10 liquidara despues al profesor.',
-          ].join('\n'),
-          fecha: dateIso,
-          date: dateIso,
-          dueDate: dateIso,
-          paymentGroupKey: paymentGroup.key,
-          paymentGroup,
-          overdue: paymentGroup.overdue === true,
-        };
-      })
+  const schedulesByDate = new Map();
+  uniqueFamilyPaymentSchedules().forEach((schedule) => {
+    paymentScheduleDatesForMonth(schedule, anio, mes).forEach((dateIso) => {
+      if (!schedulesByDate.has(dateIso)) schedulesByDate.set(dateIso, []);
+      schedulesByDate.get(dateIso).push(schedule);
+    });
+  });
+  return Array.from(schedulesByDate.entries()).map(([dateIso, schedules]) => {
+    const latestDueAt = schedules
+      .map((schedule) => paymentScheduleDueAtForDate(schedule, dateIso))
       .filter(Boolean)
-  ));
+      .sort()
+      .at(-1) || `${dateIso}T23:59:59.999Z`;
+    const fallbackGroup = mergedPaymentGroupForScheduleDate(schedules[0], dateIso, groups);
+    const paymentGroup = buildFamilyAllDuePaymentGroup(groups, dateIso, {
+      dateKey: paymentGroupDateIso,
+      dueAt: latestDueAt,
+      includeUndated: true,
+      key: `family-all-due-${dateIso}`,
+    }) || fallbackGroup;
+    const scheduleLabel = schedules.length === 1
+      ? paymentScheduleLabel(schedules[0])
+      : `${schedules.length} planes de pago coinciden este dia`;
+    return {
+      id: `family-payment-schedule-all-${dateIso}`,
+      calendarEventType: 'family_payment_due',
+      calendarTitle: paymentGroup.overdue ? 'ClasesDe10 - Pago con impagos' : 'ClasesDe10 - Dia de pago',
+      calendarDescription: [
+        scheduleLabel,
+        paymentGroup.classCount
+          ? `${paymentGroup.classCount} clase(s) incluidas. Importe: ${formatEuros(paymentGroup.amount || 0)}.`
+          : 'No hay clases pendientes agrupadas en este vencimiento.',
+        paymentGroup.hasOverdueCarryover
+          ? `Incluye ${paymentGroup.overdueClassCount} impago(s) anterior(es) por ${formatEuros(paymentGroup.overdueAmount || 0)}.`
+          : '',
+        'Bizum a Miguel G. G. (613016665). ClasesDe10 liquidara despues al profesor.',
+      ].join('\n'),
+      fecha: dateIso,
+      date: dateIso,
+      dueDate: dateIso,
+      paymentGroupKey: paymentGroup.key,
+      paymentGroup,
+      overdue: paymentGroup.overdue === true,
+    };
+  });
 }
 
 function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
   const monthStart = `${anio}-${String(mes + 1).padStart(2, '0')}-01`;
   const monthEnd = isoDateLocal(new Date(anio, mes + 1, 0));
   const scheduleEvents = buildFamilyPaymentScheduleCalendarEvents(groups, anio, mes);
-  const scheduleKeys = new Set(scheduleEvents.map((event) => event.paymentGroupKey).filter(Boolean));
-  const scheduleRelations = uniqueFamilyPaymentSchedules();
-  const dueEvents = (groups || [])
-    .filter((group) => {
-      const dueDate = paymentGroupDueDateIso(group);
-      const isScheduledRelation = scheduleRelations.some((schedule) => familyPaymentSameRelation(schedule, group));
-      return dueDate && dueDate >= monthStart && dueDate <= monthEnd && !scheduleKeys.has(group.key) && !isScheduledRelation;
-    })
-    .map((group) => ({
-      id: `family-payment-due-${group.key}`,
+  const scheduledDates = new Set(scheduleEvents.map((event) => event.dueDate).filter(Boolean));
+  const orphanDates = Array.from(new Set((groups || [])
+    .map(paymentGroupDueDateIso)
+    .filter((dueDate) => dueDate && dueDate >= monthStart && dueDate <= monthEnd && !scheduledDates.has(dueDate))));
+  const dueEvents = orphanDates.map((dueDate) => {
+    const group = buildFamilyAllDuePaymentGroup(groups, dueDate, {
+      dateKey: paymentGroupDateIso,
+      includeUndated: true,
+      key: `family-all-due-${dueDate}`,
+    });
+    if (!group) return null;
+    return {
+      id: `family-payment-due-all-${dueDate}`,
       calendarEventType: 'family_payment_due',
       calendarTitle: group.overdue ? 'ClasesDe10 - Pago vencido' : 'ClasesDe10 - Dia de pago',
       calendarDescription: [
@@ -3858,12 +3894,14 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
         `${group.classCount || group.classIds?.length || 1} clase(s) incluidas`,
         'Bizum a Miguel G. G. (613016665). ClasesDe10 recibe el pago y despues liquida al profesor correspondiente.',
       ].join('\n'),
-      fecha: paymentGroupDueDateIso(group),
-      date: paymentGroupDueDateIso(group),
+      fecha: dueDate,
+      date: dueDate,
+      dueDate,
       paymentGroupKey: group.key,
       paymentGroup: group,
       overdue: group.overdue === true,
-    }));
+    };
+  }).filter(Boolean);
   return [...dueEvents, ...scheduleEvents].sort((a, b) => (
     String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || ''))
       || Number(b.overdue === true) - Number(a.overdue === true)
@@ -4914,9 +4952,6 @@ function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = fal
 
 async function cargarPagos() {
   if (!familiaId) return;
-  const now = new Date();
-  const desdePagos = isoDateLocal(new Date(now.getFullYear(), now.getMonth() - 2, 1));
-  const hastaPagos = isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 12, 0));
   const [pagos, { data: hijos }, chats] = await Promise.all([
     cargarPagosFamiliaFirestore(),
     db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId),
@@ -4931,9 +4966,7 @@ async function cargarPagos() {
     hijos: hijos || [],
     ids: (hijos || []).map((hijo) => hijo.id),
     hijosPorId,
-    desde: desdePagos,
-    hasta: hastaPagos,
-    limit: 320,
+    limit: 2000,
   });
   const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijos || [], clases, chats });
   hydratePaymentSchedulesForCalendar(identityResolver);

@@ -3,6 +3,7 @@ import {
   buildClassPaymentPatch,
   buildFamilyPaymentAccessPatch,
   buildFamilyPaymentAccessState,
+  buildFamilyAllDuePaymentGroup,
   buildFamilyClassPaymentConfirmationPayload,
   buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentPayload,
@@ -218,6 +219,41 @@ const overdueConfirmationGroups = buildFamilyPaymentConfirmationGroups(classes, 
 });
 assert(overdueConfirmationGroups[0].paymentWindow === 'overdue', 'Past payment windows must be labelled as overdue.');
 assert(overdueConfirmationGroups[0].classes.every((item) => item.paymentBucket === 'overdue'), 'Overdue groups must mark every selectable class as unpaid.');
+const allFamilyDebt = buildFamilyAllDuePaymentGroup([
+  {
+    key: 'relation_1_old', familyUid: 'family_1', teacherUid: 'teacher_1', studentId: 'student_1',
+    studentName: 'Juan', teacherName: 'Miguel', dueAt: '2026-06-20T20:00:00.000Z', overdue: true,
+    subjects: ['Matematicas'], classes: [{ id: 'all_c1', date: '2026-06-18', amount: 20 }],
+  },
+  {
+    key: 'relation_1_current', familyUid: 'family_1', teacherUid: 'teacher_1', studentId: 'student_1',
+    studentName: 'Juan', teacherName: 'Miguel', dueAt: '2026-06-27T20:00:00.000Z',
+    subjects: ['Fisica'], classes: [{ id: 'all_c2', date: '2026-06-25', amount: 30 }, { id: 'all_c1', date: '2026-06-18', amount: 20 }],
+  },
+  {
+    key: 'relation_2_old', familyUid: 'family_1', teacherUid: 'teacher_2', studentId: 'student_2',
+    studentName: 'Ana', teacherName: 'Lucia', dueAt: '2026-06-25T20:00:00.000Z', overdue: true,
+    subjects: ['Ingles'], classes: [{ id: 'all_c3', date: '2026-06-24', amount: 40 }],
+  },
+  {
+    key: 'relation_2_future', familyUid: 'family_1', teacherUid: 'teacher_2', studentId: 'student_2',
+    studentName: 'Ana', teacherName: 'Lucia', dueAt: '2026-07-02T20:00:00.000Z',
+    subjects: ['Ingles'], classes: [{ id: 'all_c4', date: '2026-07-01', amount: 50 }],
+  },
+  {
+    key: 'undated_debt', familyUid: 'family_1', teacherUid: 'teacher_3', studentId: 'student_3',
+    studentName: 'Pablo', teacherName: 'Marta', dueNow: true,
+    subjects: ['Lengua'], classes: [{ id: 'all_c5', date: '2026-06-10', amount: 10 }],
+  },
+], '2026-06-27', {
+  nowMs: new Date('2026-06-27T21:00:00.000Z').getTime(),
+});
+assert(allFamilyDebt.amount === 100, 'A payment day must total every older family debt plus the current period across all relations.');
+assert(allFamilyDebt.currentPeriodAmount === 30 && allFamilyDebt.overdueAmount === 70, 'The family-wide payment must separate current classes from all carryover.');
+assert(JSON.stringify(allFamilyDebt.classIds.slice().sort()) === JSON.stringify(['all_c1', 'all_c2', 'all_c3', 'all_c5']), 'The mandatory payment must include every due class and exclude future classes.');
+assert(allFamilyDebt.classIds.length === new Set(allFamilyDebt.classIds).size, 'A class repeated by overlapping schedule groups must only be charged once.');
+assert(allFamilyDebt.studentName === '3 alumnos' && allFamilyDebt.teacherName === '3 profesores', 'Multi-relation payments must not mislabel one child or teacher as the only relation.');
+assert(allFamilyDebt.relationCount === 3 && allFamilyDebt.hasOverdueCarryover, 'Family-wide payment metadata must expose all covered relations and debt carryover.');
 const paymentAccessClasses = [
   {
     id: 'old_debt',

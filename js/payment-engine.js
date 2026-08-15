@@ -1231,6 +1231,127 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
   });
 }
 
+/**
+ * Builds the single mandatory payment that a family owes on one payment day.
+ * It crosses student/teacher relations so no older debt can be left behind by
+ * submitting only one of several otherwise independent payment groups.
+ */
+export function buildFamilyAllDuePaymentGroup(groups = [], dueDateIso = '', options = {}) {
+  const targetDate = cleanPaymentText(dueDateIso, 10).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return null;
+  const dateKey = typeof options.dateKey === 'function'
+    ? options.dateKey
+    : (group) => cleanPaymentText(group.dueDate || group.date || group.fecha || group.dueAt || group.due_at, 40).slice(0, 10);
+  const eligible = (groups || []).filter((group) => {
+    const dueDate = cleanPaymentText(dateKey(group), 10).slice(0, 10);
+    return dueDate ? dueDate <= targetDate : options.includeUndated !== false;
+  });
+  if (!eligible.length) return null;
+
+  const currentGroups = eligible.filter((group) => cleanPaymentText(dateKey(group), 10).slice(0, 10) === targetDate);
+  const carryoverGroups = eligible.filter((group) => cleanPaymentText(dateKey(group), 10).slice(0, 10) !== targetDate);
+  const mergeLines = (sourceGroups, bucket) => {
+    const lines = new Map();
+    sourceGroups.forEach((group) => {
+      (group.classes || []).forEach((classData) => {
+        const id = cleanPaymentText(classData.id || classData.classId || classData.calendarUid, 180);
+        if (!id || lines.has(id)) return;
+        lines.set(id, {
+          ...classData,
+          id,
+          paymentBucket: bucket,
+          paymentDueAt: classData.paymentDueAt || group.dueAt || group.due_at || '',
+          originalDueAt: classData.originalDueAt || group.dueAt || group.due_at || '',
+          amount: paymentAmount({ amount: classData.amount }),
+        });
+      });
+    });
+    return Array.from(lines.values()).sort((left, right) => (
+      String(left.date || left.fecha || '').localeCompare(String(right.date || right.fecha || ''))
+        || String(left.startTime || left.hora_inicio || '').localeCompare(String(right.startTime || right.hora_inicio || ''))
+        || String(left.id).localeCompare(String(right.id))
+    ));
+  };
+  const overdueClasses = mergeLines(carryoverGroups, 'overdue');
+  const overdueClassIds = new Set(overdueClasses.map((item) => item.id));
+  const currentPeriodClasses = mergeLines(currentGroups, 'due')
+    .filter((item) => !overdueClassIds.has(item.id));
+  const classes = [...overdueClasses, ...currentPeriodClasses];
+  if (!classes.length && options.allowScheduleOnly !== true) return null;
+
+  const sumLines = (lines) => Math.round(lines.reduce((sum, item) => sum + paymentAmount({ amount: item.amount }), 0) * 100) / 100;
+  const currentPeriodAmount = sumLines(currentPeriodClasses);
+  const overdueAmount = sumLines(overdueClasses);
+  const amount = Math.round((currentPeriodAmount + overdueAmount) * 100) / 100;
+  const sourceGroups = [...carryoverGroups, ...currentGroups];
+  const first = sourceGroups[0] || {};
+  const uniqueValues = (...keys) => Array.from(new Set(sourceGroups
+    .flatMap((group) => keys.map((key) => cleanPaymentText(group[key], 180)))
+    .filter(Boolean)));
+  const studentNames = uniqueValues('studentName', 'alumno_nombre');
+  const teacherNames = uniqueValues('teacherName', 'profesor_nombre');
+  const studentIds = uniqueValues('studentId', 'alumno_id');
+  const teacherIds = uniqueValues('teacherUid', 'profesor_id');
+  const assignmentIds = uniqueValues('assignmentId', 'asignacion_id');
+  const studentCount = studentIds.length || studentNames.length || 1;
+  const teacherCount = teacherIds.length || teacherNames.length || 1;
+  const studentLabel = studentCount === 1 && studentNames[0] ? studentNames[0] : `${studentCount} alumno${studentCount === 1 ? '' : 's'}`;
+  const teacherLabel = teacherCount === 1 && teacherNames[0] ? teacherNames[0] : `${teacherCount} profesor${teacherCount === 1 ? '' : 'es'}`;
+  const dueAt = options.dueAt
+    || currentGroups.map((group) => group.dueAt || group.due_at).filter(Boolean).sort().at(-1)
+    || `${targetDate}T23:59:59.999Z`;
+  const dueMs = new Date(dueAt).getTime();
+  const nowMs = Number(options.nowMs ?? Date.now());
+  const overdue = overdueClasses.length > 0 || sourceGroups.some((group) => group.overdue === true);
+  const dueNow = Number.isFinite(dueMs) ? dueMs <= nowMs : targetDate <= new Date(nowMs).toISOString().slice(0, 10);
+  const subjects = Array.from(new Set(sourceGroups.flatMap((group) => group.subjects || []).map((item) => cleanPaymentText(item, 160)).filter(Boolean)));
+
+  return {
+    ...first,
+    key: options.key || `family-all-due|${targetDate}`,
+    familyUid: first.familyUid || first.familia_id || '',
+    familia_id: first.familia_id || first.familyUid || '',
+    teacherUid: teacherIds.length === 1 ? teacherIds[0] : '',
+    profesor_id: teacherIds.length === 1 ? teacherIds[0] : '',
+    studentId: studentIds.length === 1 ? studentIds[0] : '',
+    alumno_id: studentIds.length === 1 ? studentIds[0] : '',
+    assignmentId: assignmentIds.length === 1 ? assignmentIds[0] : '',
+    asignacion_id: assignmentIds.length === 1 ? assignmentIds[0] : '',
+    studentName: studentLabel,
+    alumno_nombre: studentLabel,
+    teacherName: teacherLabel,
+    profesor_nombre: teacherLabel,
+    dueAt,
+    dueDate: targetDate,
+    paymentPeriodStart: currentGroups.map((group) => group.paymentPeriodStart).filter(Boolean).sort()[0] || '',
+    paymentPeriodEnd: dueAt,
+    amount,
+    currentPeriodAmount,
+    overdueAmount,
+    classIds: classes.map((item) => item.id),
+    classes,
+    currentPeriodClasses,
+    overdueClasses,
+    classCount: classes.length,
+    currentPeriodClassCount: currentPeriodClasses.length,
+    overdueClassCount: overdueClasses.length,
+    overdue,
+    hasOverdueCarryover: overdueClasses.length > 0,
+    dueNow,
+    upcoming: !dueNow,
+    paymentWindow: overdue ? 'overdue' : dueNow ? 'due_now' : 'upcoming',
+    status: overdue ? 'vencido' : dueNow ? 'pendiente' : 'programado',
+    scheduleOnly: amount <= 0,
+    subjects,
+    sourceGroupKeys: Array.from(new Set(sourceGroups.map((group) => group.key).filter(Boolean))),
+    relationCount: new Set(sourceGroups.map((group) => [
+      group.assignmentId || group.asignacion_id || '',
+      group.teacherUid || group.profesor_id || '',
+      group.studentId || group.alumno_id || '',
+    ].join('|'))).size,
+  };
+}
+
 export function buildFamilyClassPaymentConfirmationPayload(group = {}, input = {}, options = {}) {
   const classIds = Array.isArray(input.classIds) && input.classIds.length
     ? input.classIds.map(String).filter(Boolean)

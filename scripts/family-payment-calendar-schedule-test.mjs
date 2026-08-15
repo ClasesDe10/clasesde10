@@ -27,12 +27,12 @@ assert(
   'Family calendar must calculate weekly/biweekly schedule dates for the visible month.',
 );
 assert(
-  familyDashboard.includes("id: `family-payment-schedule-${schedule.id}-${dateIso}`"),
-  'Family payment schedule markers must have deterministic ids per schedule day.',
+  familyDashboard.includes("id: `family-payment-schedule-all-${dateIso}`"),
+  'Family payment schedule markers must have one deterministic family-wide id per payment day.',
 );
 assert(
-  familyDashboard.includes('mergedPaymentGroupForScheduleDate(schedule, dateIso, groups)'),
-  'Family calendar must merge real payable classes into the scheduled payment day marker.',
+  familyDashboard.includes('buildFamilyAllDuePaymentGroup(groups, dateIso'),
+  'Family calendar must merge every due relation into the scheduled payment day marker.',
 );
 assert(
   familyDashboard.includes('samePaymentRelation(left, right)') && familyDashboard.includes('familyPaymentSameRelation(schedule, group)'),
@@ -41,6 +41,22 @@ assert(
 assert(
   familyDashboard.includes('overdueClasses') && familyDashboard.includes('currentPeriodClasses'),
   'Family payment day markers must distinguish current-period classes from overdue carryover.',
+);
+assert(
+  familyDashboard.includes('family-all-due-${latestDate}') && familyDashboard.includes('merged.sourceGroupKeys.forEach'),
+  'The payment workbench must collapse every payable family relation into one mandatory payment.',
+);
+assert(
+  familyDashboard.includes('limit: 2000') && !familyDashboard.includes('desdePagos') && !familyDashboard.includes('hastaPagos'),
+  'The payment workbench must load all historical family classes instead of only the last two months.',
+);
+assert(
+  (familyDashboard.match(/mergeById\(\[\.\.\.familyAccessClassesCache, \.\.\.clasesReales\]\)/g) || []).length >= 2,
+  'Both the visible calendar and its export must include debt classes from the all-history access cache.',
+);
+assert(
+  familyDashboard.includes('El pago debe estar completo') && familyDashboard.includes('requiredIds.every'),
+  'The submitted proof must be rejected unless it includes the exact mandatory class set and amount.',
 );
 assert(
   familyDashboard.includes('scheduleOnly: amount <= 0'),
