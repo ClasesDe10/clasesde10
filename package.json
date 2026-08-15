@@ -37,6 +37,7 @@
     "audit:admin:payments": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/admin-payments-smoke.playwright.js",
     "audit:admin:classes": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/admin-class-finance-smoke.playwright.js",
     "audit:admin:calendar-economic": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/admin-calendar-economic-smoke.playwright.js",
+    "audit:admin:calendar-economic:public-render": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/admin-economic-calendar-public-render.playwright.js",
     "audit:admin:finance": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/admin-finance-smoke.playwright.js",
     "audit:admin:analytics": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/admin-analytics-smoke.playwright.js",
     "audit:admin:experiments": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/admin-experimentation-smoke.playwright.js",
