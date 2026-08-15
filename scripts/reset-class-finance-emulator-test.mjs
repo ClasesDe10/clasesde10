@@ -139,7 +139,27 @@ async function seed(db, bucket) {
       activeClassIds: ['class_past', 'class_future'],
       classSeriesId: 'series_1',
       seriesEndDate: '2026-09-30',
+      lastMessage: 'Horario semanal aceptado. Se han creado 2 clases hasta septiembre.',
+      lastMessageId: 'schedule_message',
+      lastMessageByUid: 'family_1',
+      lastMessageType: 'text',
+      lastMessageAt: '2026-08-15T12:00:00.000Z',
       crmLabel: 'Relacion conservada',
+    }),
+    setDocument(db, 'chats/chat_2', {
+      familyUid: 'family_1',
+      teacherUid: 'teacher_1',
+      lastMessage: 'Hola, este mensaje normal debe conservarse.',
+      lastMessageId: 'normal_message',
+      lastMessageByUid: 'family_1',
+      lastMessageType: 'text',
+      lastMessageAt: '2026-08-15T11:00:00.000Z',
+      crmLabel: 'Otra relacion conservada',
+    }),
+    setDocument(db, 'chats/chat_2/mensajes/normal_message', {
+      body: 'Hola, este mensaje normal debe conservarse.',
+      senderUid: 'family_1',
+      createdAt: '2026-08-15T11:00:00.000Z',
     }),
     setDocument(db, 'familias/family_1', {
       nombre: 'Maria',
@@ -225,6 +245,15 @@ async function assertReset(db, bucket, result, manifests) {
   assert.equal(chat.classSeriesId, null);
   assert.equal(chat.seriesEndDate, null);
   assert.equal(chat.relationshipStage, 'pendiente_horario');
+  assert.equal('lastMessage' in chat, false);
+  assert.equal('lastMessageId' in chat, false);
+  assert.equal('lastMessageAt' in chat, false);
+
+  const normalChat = (await db.doc('chats/chat_2').get()).data();
+  assert.equal(normalChat.crmLabel, 'Otra relacion conservada');
+  assert.equal(normalChat.lastMessage, 'Hola, este mensaje normal debe conservarse.');
+  assert.equal(normalChat.lastMessageId, 'normal_message');
+  assert.equal(await documentExists(db, 'chats/chat_2/mensajes/normal_message'), true);
 
   const family = (await db.doc('familias/family_1').get()).data();
   assert.equal(family.nombre, 'Maria');
@@ -248,6 +277,7 @@ async function assertReset(db, bucket, result, manifests) {
   assert.equal((await bucket.file('documents/identity.txt').exists())[0], true);
 
   assert.equal(result.verification.clean, true);
+  assert.deepEqual(result.verification.remainingChatSchedulePreviews, []);
   assert.equal(result.verification.remainingPaymentStorageFiles, 0);
   assert(result.deletedFirestoreDocuments >= 30);
   assert.equal(result.deletedStorageFiles, 2);

@@ -28,6 +28,8 @@ assert(source.includes("parsed.pathname.match(/\\/o\\/([^/?]+)/i)"), 'Production
 assert(source.includes("file.download({ destination })"), 'Production reset must copy receipt binaries locally before deletion.');
 assert(source.includes('remainingPaymentStoragePaths'), 'Production reset must verify every targeted receipt path after deletion.');
 assert(source.includes("collectionGroup('programaciones')") && source.includes("collectionGroup('mensajes')"), 'Production reset must remove scheduled-class artifacts embedded in chats.');
+assert(source.includes('scheduleMessageText(data.lastMessage)') && source.includes('lastMessageId: deletedField'), 'Production reset must clear chat previews that still expose deleted class schedules.');
+assert(source.includes('remainingChatSchedulePreviews'), 'Production reset must verify that no class-schedule preview remains in a chat document.');
 assert(source.includes('remainingDerivedTargets') && source.includes('remainingLockedFamilies'), 'Production reset must verify derived data and family locks are empty after deletion.');
 assert(source.includes('if (!verification.clean) process.exitCode = 2'), 'Production reset must fail when final zero-state verification is not clean.');
 

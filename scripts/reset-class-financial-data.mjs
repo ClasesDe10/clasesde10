@@ -63,8 +63,10 @@ const scheduleMessageNeedles = [
   'Horario semanal aceptado',
   'Horario semanal fijo propuesto',
   'Horario semanal propuesto',
+  'Horario rechazado',
   'Clase puntual aceptada',
   'Clase puntual propuesta',
+  'Clase puntual rechazada',
   'clase creada',
 ];
 const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendance|asistencia|schedule|horario|payment|pago(?:s)?|bizum|justificante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b/i;
@@ -153,6 +155,11 @@ function directReferenceIds(data = {}) {
     data.classId, data.class_id, data.clase_id, data.paymentId, data.payment_id,
     data.pago_id, data.documentId, data.documento_id, data.scheduleProposalId,
   ].filter((value) => value !== undefined && value !== null && value !== '').map(String);
+}
+
+function scheduleMessageText(value) {
+  const body = String(value || '').trim().toLowerCase();
+  return Boolean(body) && scheduleMessageNeedles.some((needle) => body.includes(needle.toLowerCase()));
 }
 
 function shouldDeleteFiltered(collectionName, doc, context) {
@@ -262,7 +269,7 @@ async function collectTargets(db, seedContext = {}) {
   messages.docs.filter((doc) => {
     const data = doc.data() || {};
     const body = String(data.body || data.text || data.message || '');
-    return scheduleMessageNeedles.some((needle) => body.includes(needle))
+    return scheduleMessageText(body)
       || directReferenceIds(data).some((id) => context.classIds.has(id) || context.paymentIds.has(id));
   }).forEach(add);
 
@@ -342,17 +349,28 @@ async function resetProfilesAndChats(db, chatDocs, familyDocs, professorDocs) {
   writer.onWriteError((error) => error.failedAttempts < 4);
   const deletedField = admin.firestore.FieldValue.delete();
   const serverTimestamp = admin.firestore.FieldValue.serverTimestamp();
-  chatDocs.forEach((doc) => writer.set(doc.ref, {
-    activeClassId: null,
-    activeClassIds: [],
-    classSeriesId: null,
-    seriesEndDate: null,
-    schedulingStatus: 'pendiente_horario',
-    relationshipStage: 'pendiente_horario',
-    lastRelationshipEvent: 'class_finance_data_reset',
-    relationshipUpdatedAt: serverTimestamp,
-    updatedAt: serverTimestamp,
-  }, { merge: true }));
+  chatDocs.forEach((doc) => {
+    const data = doc.data() || {};
+    const previewReset = scheduleMessageText(data.lastMessage) ? {
+      lastMessage: deletedField,
+      lastMessageAt: deletedField,
+      lastMessageByUid: deletedField,
+      lastMessageId: deletedField,
+      lastMessageType: deletedField,
+    } : {};
+    writer.set(doc.ref, {
+      ...previewReset,
+      activeClassId: null,
+      activeClassIds: [],
+      classSeriesId: null,
+      seriesEndDate: null,
+      schedulingStatus: 'pendiente_horario',
+      relationshipStage: 'pendiente_horario',
+      lastRelationshipEvent: 'class_finance_data_reset',
+      relationshipUpdatedAt: serverTimestamp,
+      updatedAt: serverTimestamp,
+    }, { merge: true });
+  });
   familyDocs.forEach((doc) => {
     const trustReset = Object.fromEntries(trustSnapshotFields.map((field) => [field, deletedField]));
     writer.set(doc.ref, {
@@ -385,11 +403,13 @@ async function verify(db, bucket, deletedStoragePaths = []) {
   }
   const remainingPaymentDocs = (await listDocs(db, 'documentos')).filter((doc) => paymentDocument(doc.data())).length;
   const { targets: remainingDerivedTargets } = await collectTargets(db);
-  const remainingChatClassState = (await listDocs(db, 'chats')).filter((doc) => {
+  const remainingChatDocs = await listDocs(db, 'chats');
+  const remainingChatClassState = remainingChatDocs.filter((doc) => {
     const data = doc.data() || {};
     return Boolean(data.activeClassId || data.classSeriesId || data.seriesEndDate)
       || (Array.isArray(data.activeClassIds) && data.activeClassIds.length > 0);
   });
+  const remainingChatSchedulePreviews = remainingChatDocs.filter((doc) => scheduleMessageText(doc.data()?.lastMessage));
   const remainingLockedFamilies = (await listDocs(db, 'familias')).filter((doc) => doc.data()?.paymentAccessLocked === true);
   const [remainingPaymentPrefixStorage] = await bucket.getFiles({ prefix: 'pagos/' });
   const explicitlyRemainingStorage = [];
@@ -406,6 +426,7 @@ async function verify(db, bucket, deletedStoragePaths = []) {
     remainingPaymentDocuments: remainingPaymentDocs,
     remainingDerivedTargets: remainingDerivedTargets.map((doc) => doc.ref.path),
     remainingChatClassState: remainingChatClassState.map((doc) => doc.ref.path),
+    remainingChatSchedulePreviews: remainingChatSchedulePreviews.map((doc) => doc.ref.path),
     remainingLockedFamilies: remainingLockedFamilies.map((doc) => doc.ref.path),
     remainingPaymentStorageFiles: remainingStoragePaths.length,
     remainingPaymentStoragePaths: remainingStoragePaths,
@@ -413,6 +434,7 @@ async function verify(db, bucket, deletedStoragePaths = []) {
       && remainingPaymentDocs === 0
       && remainingDerivedTargets.length === 0
       && remainingChatClassState.length === 0
+      && remainingChatSchedulePreviews.length === 0
       && remainingLockedFamilies.length === 0
       && remainingStoragePaths.length === 0,
   };
