@@ -96,6 +96,7 @@
     "test:payment-engine": "node scripts/payment-engine-test.mjs",
     "test:family-payment-access": "node scripts/family-payment-access-ui-test.mjs",
     "test:reset-class-finance": "node scripts/reset-class-finance-test.mjs",
+    "test:reset-class-finance:emulator": "node scripts/reset-class-finance-emulator-test.mjs",
     "test:product-ux": "node scripts/product-ux-test.mjs",
     "test:dashboard-empty-state": "node scripts/dashboard-empty-state-test.mjs",
     "test:dashboard-responsive": "node scripts/dashboard-responsive-static-test.mjs",

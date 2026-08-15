@@ -11,7 +11,12 @@ const APPLY_TOKEN = 'DELETE_CLASS_FINANCE_DATA';
 const args = new Set(process.argv.slice(2));
 const apply = args.has('--apply');
 const confirmed = process.argv.includes(`--confirm=${APPLY_TOKEN}`);
-const backupRoot = path.resolve(process.cwd(), '..', 'migration-private', 'backups');
+const simulateFailureAfterCoreDelete = args.has('--simulate-failure-after-core-delete');
+const backupRoot = path.resolve(
+  process.env.CLASS_FINANCE_BACKUP_ROOT
+    || path.resolve(process.cwd(), '..', 'migration-private', 'backups'),
+);
+const resetStatePath = path.join(backupRoot, 'class-finance-reset-state.json');
 const wholeCollections = [
   'clases',
   'pagos',
@@ -170,14 +175,63 @@ async function listDocs(db, collectionName) {
   return snap.docs;
 }
 
-async function collectTargets(db) {
-  const targets = new Map();
-  const context = {
-    classIds: new Set(),
-    paymentIds: new Set(),
-    paymentDocumentIds: new Set(),
-    storagePaths: new Set(),
+function setFrom(values = []) {
+  return new Set(Array.from(values || []).map(String).filter(Boolean));
+}
+
+function resetContext(seed = {}) {
+  return {
+    classIds: setFrom(seed.classIds),
+    paymentIds: setFrom(seed.paymentIds),
+    paymentDocumentIds: setFrom(seed.paymentDocumentIds),
+    storagePaths: setFrom(seed.storagePaths),
   };
+}
+
+function serializableContext(context = {}) {
+  return {
+    classIds: Array.from(context.classIds || []).sort(),
+    paymentIds: Array.from(context.paymentIds || []).sort(),
+    paymentDocumentIds: Array.from(context.paymentDocumentIds || []).sort(),
+    storagePaths: Array.from(context.storagePaths || []).sort(),
+  };
+}
+
+function safeFirestoreDocumentPath(value) {
+  const documentPath = String(value || '').trim();
+  const segments = documentPath.split('/').filter(Boolean);
+  if (!documentPath || segments.length < 2 || segments.length % 2 !== 0 || segments.some((segment) => segment === '.' || segment === '..')) {
+    throw new Error(`Unsafe Firestore recovery path: ${documentPath}`);
+  }
+  return segments.join('/');
+}
+
+async function loadResetState() {
+  try {
+    const state = JSON.parse(await fs.readFile(resetStatePath, 'utf8'));
+    if (state.projectId !== PROJECT_ID || !['prepared', 'completed'].includes(state.status)) return null;
+    return {
+      ...state,
+      targetPaths: Array.from(new Set((state.targetPaths || []).map(safeFirestoreDocumentPath))),
+      storagePaths: Array.from(new Set((state.storagePaths || []).map(normalizeStoragePath).filter(Boolean))),
+      context: serializableContext(resetContext(state.context)),
+      backupPaths: Array.from(new Set((state.backupPaths || []).map(String).filter(Boolean))),
+      backupDirectories: Array.from(new Set((state.backupDirectories || []).map(String).filter(Boolean))),
+    };
+  } catch (error) {
+    if (error?.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function writeResetState(state) {
+  await fs.mkdir(backupRoot, { recursive: true });
+  await fs.writeFile(resetStatePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+}
+
+async function collectTargets(db, seedContext = {}) {
+  const targets = new Map();
+  const context = resetContext(seedContext);
   const add = (doc) => targets.set(doc.ref.path, doc);
 
   for (const collectionName of wholeCollections) {
@@ -366,16 +420,47 @@ async function verify(db, bucket, deletedStoragePaths = []) {
 
 async function main() {
   if (apply && !confirmed) throw new Error(`Apply mode requires --confirm=${APPLY_TOKEN}`);
+  if (simulateFailureAfterCoreDelete && (!process.env.FIRESTORE_EMULATOR_HOST || !PROJECT_ID.startsWith('demo-'))) {
+    throw new Error('Failure simulation is restricted to a demo-* Firestore emulator project.');
+  }
   initFirebase();
   const db = admin.firestore();
   const bucket = admin.storage().bucket();
+  const existingState = apply ? await loadResetState() : null;
+  if (existingState?.status === 'completed') {
+    const verification = await verify(db, bucket, existingState.storagePaths);
+    if (!verification.clean) {
+      throw new Error('The class/finance reset was already completed; refusing to delete data created afterwards.');
+    }
+    console.log(JSON.stringify({
+      ok: true,
+      mode: 'apply',
+      projectId: PROJECT_ID,
+      alreadyCompleted: true,
+      resetStatePath,
+      backupPaths: existingState.backupPaths,
+      backupDirectories: existingState.backupDirectories,
+      verification,
+    }, null, 2));
+    return;
+  }
+  const recoveryState = existingState?.status === 'prepared' ? existingState : null;
+  const recoveredContext = resetContext(recoveryState?.context);
+  (recoveryState?.storagePaths || []).forEach((storagePath) => recoveredContext.storagePaths.add(storagePath));
   const [{ targets, context }, chatDocs, familyDocs, professorDocs] = await Promise.all([
-    collectTargets(db),
+    collectTargets(db, recoveredContext),
     listDocs(db, 'chats'),
     listDocs(db, 'familias'),
     listDocs(db, 'profesores'),
   ]);
   const storagePaths = await storageTargets(bucket, context.storagePaths);
+  const plannedTargets = new Map();
+  (recoveryState?.targetPaths || []).forEach((documentPath) => {
+    const safePath = safeFirestoreDocumentPath(documentPath);
+    plannedTargets.set(safePath, { ref: db.doc(safePath), data: () => ({}) });
+  });
+  targets.forEach((doc) => plannedTargets.set(doc.ref.path, doc));
+  const targetsToDelete = Array.from(plannedTargets.values());
   const countsByCollection = targets.reduce((counts, doc) => {
     const collection = doc.ref.parent.id;
     counts[collection] = (counts[collection] || 0) + 1;
@@ -386,6 +471,8 @@ async function main() {
     mode: apply ? 'apply' : 'dry-run',
     projectId: PROJECT_ID,
     firestoreTargets: targets.length,
+    plannedFirestoreTargets: targetsToDelete.length,
+    recoveredFromPreparedReset: Boolean(recoveryState),
     countsByCollection,
     paymentStorageTargets: storagePaths.length,
     chatsToReset: chatDocs.length,
@@ -397,13 +484,45 @@ async function main() {
     return;
   }
   const backup = await writeBackup(bucket, targets, storagePaths, chatDocs, familyDocs, professorDocs);
-  const deletedFirestoreDocuments = await deleteFirestoreTargets(db, targets);
+  const preparedState = {
+    version: 1,
+    projectId: PROJECT_ID,
+    status: 'prepared',
+    startedAt: recoveryState?.startedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    attempts: Number(recoveryState?.attempts || 0) + 1,
+    targetPaths: Array.from(plannedTargets.keys()).sort(),
+    storagePaths,
+    context: serializableContext(context),
+    backupPaths: Array.from(new Set([...(recoveryState?.backupPaths || []), backup.backupPath])),
+    backupDirectories: Array.from(new Set([...(recoveryState?.backupDirectories || []), backup.backupDirectory])),
+  };
+  await writeResetState(preparedState);
+  if (simulateFailureAfterCoreDelete) {
+    const coreCollections = new Set(['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'resumenMensual']);
+    const coreTargets = targetsToDelete.filter((doc) => coreCollections.has(doc.ref.parent.id));
+    await deleteFirestoreTargets(db, coreTargets);
+    throw new Error('Simulated failure after core Firestore deletion.');
+  }
+  const deletedFirestoreDocuments = await deleteFirestoreTargets(db, targetsToDelete);
   const profileReset = await resetProfilesAndChats(db, chatDocs, familyDocs, professorDocs);
   const deletedStorageFiles = await deleteStorageFiles(bucket, storagePaths);
   const verification = await verify(db, bucket, storagePaths);
+  if (verification.clean) {
+    await writeResetState({
+      ...preparedState,
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      verification,
+    });
+  }
   console.log(JSON.stringify({
     ...inventory,
     ...backup,
+    backupPaths: preparedState.backupPaths,
+    backupDirectories: preparedState.backupDirectories,
+    resetStatePath,
     deletedFirestoreDocuments,
     deletedStorageFiles,
     ...profileReset,

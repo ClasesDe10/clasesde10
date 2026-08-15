@@ -14,7 +14,11 @@ const source = fs.readFileSync(new URL('./reset-class-financial-data.mjs', impor
 
 assert(source.includes("const APPLY_TOKEN = 'DELETE_CLASS_FINANCE_DATA'"), 'Production reset must require an explicit confirmation token.');
 assert(source.includes("const apply = args.has('--apply')"), 'Production reset must remain a dry-run by default.');
+assert(source.includes('process.env.CLASS_FINANCE_BACKUP_ROOT'), 'The reset must support an isolated backup root for emulator verification.');
 assert(source.indexOf('writeBackup(bucket, targets') < source.indexOf('deleteFirestoreTargets(db, targets)'), 'Backup must complete before any Firestore deletion.');
+assert(source.indexOf('await writeResetState(preparedState)') < source.indexOf('const deletedFirestoreDocuments = await deleteFirestoreTargets'), 'A recoverable deletion plan must be persisted before Firestore deletion.');
+assert(source.includes('loadResetState()') && source.includes('recoveredFromPreparedReset'), 'Interrupted resets must resume their original backed-up target plan.');
+assert(source.includes('refusing to delete data created afterwards'), 'A completed reset must never delete classes created after its completion.');
 for (const collection of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'resumenMensual', 'platformHealthChecks', 'importAudits', 'legacyImports']) {
   assert(source.includes(`'${collection}'`), `Production reset must cover ${collection}.`);
 }
