@@ -31,6 +31,12 @@ assert(
 const atomicRejection = adminHtml.slice(adminHtml.indexOf('} else if (isFamilyRejection'), adminHtml.indexOf('if (!paymentUpdatedAtomically)'));
 assert(atomicRejection.includes('ownedClassIds.has') && atomicRejection.includes('await batch.commit()'), 'Rejected proofs must only reopen classes owned by that family and update atomically.');
 assert(worker.includes('familyPaymentAccessLocksApplied'), 'Scheduled automation must materialize overdue family access locks.');
+const workerPaymentSweep = worker.slice(worker.indexOf('async function processPaymentReminders'), worker.indexOf('async function createPaymentRequestForClassWorker'));
+const workerCompleteAccessContext = worker.slice(worker.indexOf('async function loadCompleteFamilyPaymentAccessContext'), worker.indexOf('function familyPaymentAccessProfileUid'));
+assert(worker.includes('loadCompleteFamilyPaymentAccessContext') && workerPaymentSweep.includes('paymentAccessClasses'), 'The access-lock sweep must inspect every class in the current reset generation.');
+assert(!workerCompleteAccessContext.includes('.limit(') && workerCompleteAccessContext.includes("db.collection('paymentSchedules').get()"), 'The access-lock context must not inherit the notification batch limit.');
+assert(workerPaymentSweep.indexOf('loadCompleteFamilyPaymentAccessContext') < workerPaymentSweep.indexOf("listCollection(db, 'clases', limit)"), 'The exhaustive access decision must run before the intentionally limited notification batch.');
+assert(workerPaymentSweep.includes('familyPaymentAccessLocksRestored') && workerPaymentSweep.includes('profile.paymentAccessLockedAt || isoNow()'), 'The worker must restore stale locks and preserve the original lock timestamp.');
 assert(css.includes('.family-payment-access-locked'), 'The dashboard must hide unavailable navigation while payment-locked.');
 
 console.log('Family payment access UI validation passed.');

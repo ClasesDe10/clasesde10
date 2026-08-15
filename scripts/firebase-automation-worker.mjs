@@ -939,6 +939,50 @@ async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
   return collectionName === 'clases' ? filterAfterClassReset(rows) : rows;
 }
 
+async function loadCompleteFamilyPaymentAccessContext(db) {
+  const [classesSnap, schedulesSnap, lockedFamiliesSnap] = await Promise.all([
+    db.collection('clases').where('classResetGeneration', '==', CLASS_RESET_GENERATION).get(),
+    db.collection('paymentSchedules').get(),
+    db.collection('familias').where('paymentAccessLocked', '==', true).get(),
+  ]);
+  const classes = filterAfterClassReset(classesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref })));
+  const paymentSchedules = schedulesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
+  const lockedFamilies = lockedFamiliesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
+  return { classes, paymentSchedules, lockedFamilies };
+}
+
+function familyPaymentAccessProfileUid(profile = {}) {
+  return clean(profile.userUid || profile.usuario_id || profile.uid || profile.id, 180);
+}
+
+function sameStringSet(left = [], right = []) {
+  const normalize = (values) => Array.from(new Set((values || []).map(String).filter(Boolean))).sort();
+  return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
+}
+
+function familyPaymentAccessFactsMatch(profile = {}, access = {}) {
+  return profile.paymentAccessLocked === true
+    && clean(profile.paymentAccessReason, 120) === clean(access.reason || 'unpaid_classes_over_30_days', 120)
+    && Number(profile.paymentAccessDebtClassCount || 0) === Number(access.debtClassCount || 0)
+    && Math.abs(Number(profile.paymentAccessDebtAmount || 0) - Number(access.debtAmount || 0)) < 0.01
+    && sameStringSet(profile.paymentAccessDebtClassIds, access.debtClassIds);
+}
+
+async function resolveFamilyPaymentAccessProfile(db, familyUid, knownProfiles = new Map()) {
+  const known = knownProfiles.get(familyUid);
+  if (known?.__ref) return known;
+  const direct = await db.collection('familias').doc(familyUid).get();
+  if (direct.exists) return { id: direct.id, ...direct.data(), __ref: direct.ref };
+  for (const field of ['userUid', 'usuario_id']) {
+    const snap = await db.collection('familias').where(field, '==', familyUid).limit(1).get();
+    if (!snap.empty) {
+      const doc = snap.docs[0];
+      return { id: doc.id, ...doc.data(), __ref: doc.ref };
+    }
+  }
+  return { id: familyUid, userUid: familyUid, __ref: db.collection('familias').doc(familyUid) };
+}
+
 async function listRecentCollection(db, collectionName, maxDocs = trustContextLimit, orderField = 'updatedAt') {
   const ref = collectionName === 'clases'
     ? db.collection(collectionName).where('classResetGeneration', '==', CLASS_RESET_GENERATION)
@@ -4009,8 +4053,6 @@ function paymentOverduePenaltyReason(step) {
 
 async function processPaymentReminders(db, stats) {
   const paymentsSnap = await db.collection('pagos').limit(limit).get();
-  const paymentSchedules = await listCollection(db, 'paymentSchedules', limit);
-  const scheduleIndex = buildPaymentScheduleIndex(paymentSchedules);
   for (const doc of paymentsSnap.docs) {
     const data = doc.data();
     const status = paymentStatus(data);
@@ -4037,38 +4079,78 @@ async function processPaymentReminders(db, stats) {
     }
   }
 
-  const classes = await listCollection(db, 'clases', limit);
+  // Access restriction is a correctness gate, not a notification batch. It
+  // must inspect the complete post-reset generation regardless of --limit.
+  const {
+    classes: paymentAccessClasses,
+    paymentSchedules,
+    lockedFamilies,
+  } = await loadCompleteFamilyPaymentAccessContext(db);
+  const scheduleIndex = buildPaymentScheduleIndex(paymentSchedules);
   const classesByFamily = new Map();
-  classes.forEach((classData) => {
+  paymentAccessClasses.forEach((classData) => {
     const familyUid = clean(classData.familyUid || classData.familia_id, 180);
     if (!familyUid) return;
     if (!classesByFamily.has(familyUid)) classesByFamily.set(familyUid, []);
     classesByFamily.get(familyUid).push(classData);
   });
-  for (const [familyUid, familyClasses] of classesByFamily) {
+  const lockedProfilesByUid = new Map();
+  lockedFamilies.forEach((profile) => {
+    [profile.id, profile.userUid, profile.usuario_id, profile.uid].map((value) => clean(value, 180)).filter(Boolean)
+      .forEach((uid) => lockedProfilesByUid.set(uid, profile));
+  });
+  const familiesToEvaluate = new Set([
+    ...classesByFamily.keys(),
+    ...lockedFamilies.map((profile) => familyPaymentAccessProfileUid(profile)).filter(Boolean),
+  ]);
+  for (const familyUid of familiesToEvaluate) {
+    const familyClasses = classesByFamily.get(familyUid) || [];
     const access = buildFamilyPaymentAccessState(familyClasses, scheduleIndex);
-    if (!access.locked) continue;
-    await writeDoc(db.collection('familias'), familyUid, {
-      ...buildFamilyPaymentAccessPatch(access),
-      updatedAt: now(),
-      updated_at: isoNow(),
-    });
-    stats.familyPaymentAccessLocksApplied += 1;
-    await notifyUserOnce(
-      db,
-      familyUid,
-      'Acceso limitado por pagos pendientes',
-      `Hay ${access.debtClassCount} clase(s) con mas de 30 dias de impago. Puedes entrar al calendario y subir el justificante; el acceso completo volvera cuando el administrador lo valide.`,
-      {
-        type: 'family_payment_access_locked',
-        debtClassCount: access.debtClassCount,
-        debtAmount: access.debtAmount,
-        classIds: access.debtClassIds,
-        url: '/pages/dashboard/familia.html#calendario',
-      },
-      `family_payment_access_locked_${familyUid}`,
-    );
+    const lockedProfile = lockedProfilesByUid.get(familyUid) || null;
+    if (access.locked) {
+      const profile = lockedProfile || await resolveFamilyPaymentAccessProfile(db, familyUid, lockedProfilesByUid);
+      const wasLocked = profile.paymentAccessLocked === true;
+      if (!familyPaymentAccessFactsMatch(profile, access)) {
+        const patch = buildFamilyPaymentAccessPatch(access, {
+          lockedAt: profile.paymentAccessLockedAt || isoNow(),
+        });
+        patch.paymentAccessDebtClassIds = Array.from(new Set(patch.paymentAccessDebtClassIds.map(String))).sort();
+        await writeDoc(db.collection('familias'), profile.id || familyUid, {
+          ...patch,
+          updatedAt: now(),
+          updated_at: isoNow(),
+        });
+        stats.familyPaymentAccessLocksApplied += 1;
+      }
+      if (!wasLocked) {
+        await notifyUserOnce(
+          db,
+          familyUid,
+          'Acceso limitado por pagos pendientes',
+          `Hay ${access.debtClassCount} clase(s) con mas de 30 dias de impago. Puedes entrar al calendario y subir el justificante; el acceso completo volvera cuando el administrador lo valide.`,
+          {
+            type: 'family_payment_access_locked',
+            debtClassCount: access.debtClassCount,
+            debtAmount: access.debtAmount,
+            classIds: access.debtClassIds,
+            url: '/pages/dashboard/familia.html#calendario',
+          },
+          `family_payment_access_locked_${familyUid}_${access.debtClassIds.slice().sort()[0] || 'debt'}`,
+        );
+      }
+    } else if (lockedProfile?.paymentAccessLocked === true) {
+      await writeDoc(db.collection('familias'), lockedProfile.id || familyUid, {
+        ...buildFamilyPaymentAccessPatch(access),
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+      stats.familyPaymentAccessLocksRestored += 1;
+    }
   }
+
+  // Reminder volume remains deliberately batched; only the access decision is
+  // exhaustive. Notification keys keep later runs concise and idempotent.
+  const classes = await listCollection(db, 'clases', limit);
   for (const data of classes) {
     const doc = data.__ref ? { id: data.id, ref: data.__ref } : null;
     if (!doc) continue;
@@ -6179,11 +6261,38 @@ async function main() {
       throw new Error('Self-test failed: maintenance health did not classify critical supervision correctly.');
     }
 
+    const paymentAccessFixture = {
+      locked: true,
+      reason: 'unpaid_classes_over_30_days',
+      debtClassCount: 2,
+      debtAmount: 60,
+      debtClassIds: ['class_old', 'class_current'],
+    };
+    if (!familyPaymentAccessFactsMatch({
+      paymentAccessLocked: true,
+      paymentAccessReason: 'unpaid_classes_over_30_days',
+      paymentAccessDebtClassCount: 2,
+      paymentAccessDebtAmount: 60,
+      paymentAccessDebtClassIds: ['class_current', 'class_old'],
+    }, paymentAccessFixture)) {
+      throw new Error('Self-test failed: equivalent family payment access facts were not stable.');
+    }
+    if (familyPaymentAccessFactsMatch({
+      paymentAccessLocked: true,
+      paymentAccessReason: 'unpaid_classes_over_30_days',
+      paymentAccessDebtClassCount: 1,
+      paymentAccessDebtAmount: 25,
+      paymentAccessDebtClassIds: ['class_old'],
+    }, paymentAccessFixture)) {
+      throw new Error('Self-test failed: changed family payment debt was incorrectly treated as stable.');
+    }
+
     console.log(JSON.stringify({
       selfTest: 'passed',
       matchingVersion: MATCHING_VERSION,
       maintenanceHealthVersion: MAINTENANCE_HEALTH_VERSION,
       maintenanceStatus: maintenanceHealth.status,
+      familyPaymentAccessSweep: 'passed',
       best: aiMerged[0],
     }, null, 2));
     return;
@@ -6224,6 +6333,7 @@ async function main() {
     weeklyPaymentRemindersCreated: 0,
     paymentEscalationNoticesCreated: 0,
     familyPaymentAccessLocksApplied: 0,
+    familyPaymentAccessLocksRestored: 0,
     classPaymentContextsUpdated: 0,
     lifecycleClassesEvaluated: 0,
     lifecycleTransitionsApplied: 0,
