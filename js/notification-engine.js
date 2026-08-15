@@ -505,6 +505,113 @@ function notificationCreatedAtMs(value) {
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }
 
+function notificationMoney(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return '';
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+}
+
+function readableSentence(value, fallback = '') {
+  const text = cleanNotificationText(value, 1200).replace(/\s+/g, ' ');
+  const finalText = text || fallback;
+  if (!finalText) return '';
+  return /[.!?]$/.test(finalText) ? finalText : `${finalText}.`;
+}
+
+function looksLikeInternalCopy(value) {
+  const text = cleanNotificationText(value, 1200);
+  return /(?:^|\s)(?:id|uid|fingerprint|confidence|source|gateway|duplicate|payload|classId|paymentId)\s*[:=]/i.test(text)
+    || /\b[a-z]+_[a-z0-9_]{3,}\b/.test(text)
+    || /\b(?:auto_validate|admin_review|requires_action)\b/i.test(text);
+}
+
+/** One stable visual group for repeated notices about the same real-world issue. */
+export function notificationDisplayGroupKey(notification = {}) {
+  const type = normalizeNotificationType(notification.type || notification.payload?.type);
+  const payload = notification.payload || {};
+  const action = notificationActionUrl(notification);
+  const createdDay = notificationDateBucket(notification.createdAt || notification.created_at);
+  const familyKey = notificationPolicyKey(payload.familyUid || payload.familia_id || payload.familyName);
+  const teacherKey = notificationPolicyKey(payload.teacherUid || payload.profesor_id || payload.teacherId);
+  const classKey = notificationPolicyKey(payload.classId || payload.clase_id);
+  const paymentKey = notificationPolicyKey(payload.paymentId || payload.pago_id);
+
+  if ([
+    NOTIFICATION_EVENTS.PAYMENT_OVERDUE,
+    NOTIFICATION_EVENTS.PAYMENT_OVERDUE_REMINDER,
+    NOTIFICATION_EVENTS.PAYMENT_TEACHER_PAUSE_WARNING,
+    NOTIFICATION_EVENTS.WEEKLY_PAYMENT_DUE,
+  ].includes(type) && familyKey) return ['family_debt', familyKey, action].join('|');
+  if (type === NOTIFICATION_EVENTS.TEACHER_PAYOUT_PENDING) {
+    const dueDay = notificationDateBucket(payload.dueAt || payload.payoutDate || notification.createdAt);
+    return ['teacher_payout', teacherKey || paymentKey || 'teacher', dueDay, action].join('|');
+  }
+  if ([NOTIFICATION_EVENTS.CLASS_UNMARKED_AFTER_1H, NOTIFICATION_EVENTS.CLASS_UNMARKED_AFTER_24H].includes(type) && classKey) {
+    return ['class_unmarked', classKey, action].join('|');
+  }
+  if (paymentKey) return [type, paymentKey, action].join('|');
+  if (classKey) return [type, classKey, action].join('|');
+  return [type, familyKey || teacherKey, action, createdDay].join('|');
+}
+
+/** Converts legacy or technical notification records into concise, complete sentences. */
+export function humanReadableNotificationCopy(notification = {}, role = '') {
+  const type = normalizeNotificationType(notification.type || notification.payload?.type);
+  const normalizedRole = normalizeNotificationRole(role || notification.role);
+  const payload = notification.payload || {};
+  const originalTitle = cleanNotificationText(notification.title || notification.titulo, 160);
+  const originalBody = cleanNotificationText(notification.body || notification.cuerpo, 1200);
+  const familyName = cleanNotificationText(payload.familyName || payload.familia_nombre, 180) || 'Una familia';
+  const teacherName = cleanNotificationText(payload.teacherName || payload.profesor_nombre, 180) || 'el profesor';
+  const amount = notificationMoney(payload.amount || payload.totalAmount || payload.payoutAmount);
+  const classCount = Math.max(0, Number(payload.classCount || payload.classIds?.length || 0));
+
+  if (type === NOTIFICATION_EVENTS.ADMIN_MANUAL) {
+    return { title: originalTitle || 'Aviso del equipo', body: readableSentence(originalBody) };
+  }
+  if ([NOTIFICATION_EVENTS.PAYMENT_OVERDUE, NOTIFICATION_EVENTS.PAYMENT_OVERDUE_REMINDER, NOTIFICATION_EVENTS.PAYMENT_TEACHER_PAUSE_WARNING].includes(type)) {
+    if (normalizedRole === 'admin') {
+      const detail = classCount ? ` por ${classCount} ${classCount === 1 ? 'clase' : 'clases'}` : '';
+      return {
+        title: amount ? `${familyName} debe ${amount}` : `${familyName} tiene un pago vencido`,
+        body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, `${familyName} tiene un pago pendiente${amount ? ` de ${amount}` : ''}${detail}. Revísalo en el calendario`),
+      };
+    }
+    return {
+      title: 'Tienes un pago pendiente',
+      body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, `Revisa las clases pendientes${amount ? ` y sube el justificante de ${amount}` : ' y sube el justificante'} desde el calendario`),
+    };
+  }
+  if (type === NOTIFICATION_EVENTS.TEACHER_PAYOUT_PENDING) {
+    return normalizedRole === 'admin'
+      ? { title: amount ? `Debes pagar ${amount} a ${teacherName}` : `Tienes un pago pendiente para ${teacherName}`, body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, 'Comprueba la fecha y las clases incluidas en el calendario') }
+      : { title: 'Tienes un cobro pendiente', body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, `Revisa en Ingresos cuándo recibirás${amount ? ` ${amount}` : ' el pago'}`) };
+  }
+  if ([NOTIFICATION_EVENTS.CLASS_UNMARKED_AFTER_1H, NOTIFICATION_EVENTS.CLASS_UNMARKED_AFTER_24H, NOTIFICATION_EVENTS.CLASS_CONFIRMATION_NEEDED].includes(type)) {
+    return {
+      title: 'Falta indicar si la clase se dio',
+      body: 'Marca la clase como dada o no dada para que su pago pueda tramitarse.',
+    };
+  }
+  if (type === NOTIFICATION_EVENTS.FAMILY_PAYMENT_PENDING && normalizedRole === 'admin') {
+    return {
+      title: 'Hay un justificante pendiente de revisión',
+      body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, 'Comprueba el importe, las clases incluidas y el archivo desde el calendario'),
+    };
+  }
+  if (type === NOTIFICATION_EVENTS.DOCUMENT_REVIEW_PENDING) {
+    return { title: 'Hay un documento pendiente de revisión', body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, 'Comprueba el archivo y decide si se puede aceptar') };
+  }
+  if ([NOTIFICATION_EVENTS.MATCHING_NO_MATCH, NOTIFICATION_EVENTS.MATCHING_ACTIVE_INTERVENTION].includes(type)) {
+    return { title: 'Una solicitud necesita ayuda para encontrar profesor', body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, 'Revisa los requisitos y decide el siguiente paso') };
+  }
+
+  return {
+    title: !looksLikeInternalCopy(originalTitle) && originalTitle ? originalTitle : notificationCategoryLabel(type),
+    body: readableSentence(!looksLikeInternalCopy(originalBody) && originalBody, 'Revisa este asunto para decidir el siguiente paso'),
+  };
+}
+
 function notificationHasEntityAction(notification = {}) {
   const payload = notification.payload || {};
   return [
@@ -517,6 +624,8 @@ function notificationHasEntityAction(notification = {}) {
     payload.incidentId,
     payload.profileId,
     payload.teacherId,
+    payload.teacherUid,
+    payload.familyUid,
   ].some(Boolean);
 }
 
@@ -527,7 +636,7 @@ export function isNotificationUnread(notification = {}) {
 /**
  * Low-noise policy for the visible notification centre.
  * Chat messages live in Chat, not in the action inbox. High/critical items stay
- * visible for 30 days; normal confirmations expire after 3 days once read.
+ * visible for 7 days; normal confirmations leave after one day once read.
  */
 export function shouldDisplayNotification(notification = {}, role = '', nowMs = Date.now()) {
   const type = normalizeNotificationType(notification.type || notification.payload?.type);
@@ -550,7 +659,7 @@ export function shouldDisplayNotification(notification = {}, role = '', nowMs = 
   const createdAt = notificationCreatedAtMs(notification.createdAt);
   if (!createdAt || unread) return true;
   const ageMs = Math.max(0, Number(nowMs) - createdAt);
-  const retentionDays = ['critical', 'high'].includes(level) ? 30 : 3;
+  const retentionDays = ['critical', 'high'].includes(level) ? 7 : 1;
   return ageMs <= retentionDays * 24 * 60 * 60 * 1000;
 }
 
@@ -566,7 +675,7 @@ export function visibleNotificationsForRole(notifications = [], role = '', nowMs
       if (priorityDelta) return priorityDelta;
       return notificationCreatedAtMs(b.createdAt) - notificationCreatedAtMs(a.createdAt);
     })
-    .slice(0, 40);
+    .slice(0, 24);
 }
 
 export function normalizeNotificationRole(role = '') {

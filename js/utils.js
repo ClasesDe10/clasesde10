@@ -2,7 +2,7 @@
  * ClasesDe10 — Utilidades globales
  */
 
-import { watchUnreadNotifications } from './notifications-provider.js?v=20260808-action-center';
+import { watchUnreadNotifications } from './notifications-provider.js?v=20260815-clear-notices';
 
 // ─── SANITIZACIÓN XSS ───────────────────────────────────────────
 export function sanitize(str) {

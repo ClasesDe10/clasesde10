@@ -33,6 +33,12 @@
   gap: 3px;
 }
 
+.day-event-summary.is-multiple {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
 .day-chip {
   max-width: 100%;
   min-width: 0;

@@ -49,14 +49,17 @@ import {
   saveNotificationSettings,
   showBrowserNotification,
   watchUserNotifications,
-} from './notifications-provider.js?v=20260808-action-center';
+} from './notifications-provider.js?v=20260815-clear-notices';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
+  humanReadableNotificationCopy,
   mergeNotificationSettings,
   notificationActionUrl,
   notificationCategoryLabel,
+  notificationDisplayGroupKey,
   notificationPriorityClass,
-} from './notification-engine.js?v=20260808-action-center';
+  visibleNotificationsForRole,
+} from './notification-engine.js?v=20260815-clear-notices';
 import {
   registerPushNotifications,
   watchForegroundPushMessages,
@@ -2218,12 +2221,12 @@ function renderMessages(container, messages, currentUid, chat = {}, currentDispl
   box.scrollTop = shouldStickToBottom ? box.scrollHeight : previousScrollTop;
 }
 
-function notificationTitle(notification) {
-  return notification.title || notification.titulo || 'Notificacion';
+function notificationTitle(notification, role = '') {
+  return humanReadableNotificationCopy(notification, role).title || 'Notificacion';
 }
 
-function notificationBody(notification) {
-  return notification.body || notification.cuerpo || '';
+function notificationBody(notification, role = '') {
+  return humanReadableNotificationCopy(notification, role).body || '';
 }
 
 function isNotificationUnread(notification) {
@@ -2247,13 +2250,7 @@ function notificationSourceLabel(notification = {}) {
 }
 
 function notificationDisplayKey(notification) {
-  const date = normalizeDate(notification.createdAt).slice(0, 16);
-  return [
-    notification.type || '',
-    notificationTitle(notification),
-    notificationBody(notification),
-    date,
-  ].map((value) => clean(value, 220)).join('|');
+  return notificationDisplayGroupKey(notification);
 }
 
 function notificationDisplayItems(notifications = []) {
@@ -2284,6 +2281,7 @@ function dashboardSectionForNotification(notification, role = '') {
     return { section: type === 'class_reminder' || type === 'class_schedule_change' ? 'calendario' : 'clases', label: 'Revisar clase' };
   }
   if (payload.paymentId || type.includes('payment') || type.includes('payout')) {
+    if (role === 'admin') return { section: 'calendario', label: 'Ver deuda en calendario' };
     return { section: role === 'profesor' ? 'ingresos' : 'pagos', label: role === 'profesor' ? 'Ver ingresos' : 'Ver pagos' };
   }
   if (payload.documentId || type.startsWith('document_') || type === 'verification_pending') {
@@ -2342,8 +2340,8 @@ function renderNotifications(container, notifications) {
       <article class="notification-item ${unread ? 'unread' : ''} priority-${escapeHtml(priority)}" data-notification-id="${escapeHtml(notification.id)}">
         <div>
           <div class="notification-kicker">${escapeHtml(label)}${priorityLabel ? ` · ${escapeHtml(priorityLabel)}` : ''}</div>
-          <div class="notification-title">${escapeHtml(notificationTitle(notification))}</div>
-          <div class="notification-body">${escapeHtml(notificationBody(notification))}</div>
+          <div class="notification-title">${escapeHtml(notificationTitle(notification, container.dataset.chatRole || ''))}</div>
+          <div class="notification-body">${escapeHtml(notificationBody(notification, container.dataset.chatRole || ''))}</div>
           <div class="notification-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="notification-actions">
@@ -5290,13 +5288,14 @@ export async function initChatWidget({
     }
     if (showNotifications) {
       state.unsubscribeNotifications = watchUserNotifications(currentUid, (notifications) => {
-        const unreadCount = notifications.filter(isNotificationUnread).length;
-        const latestUnread = notifications.find(isNotificationUnread);
-        state.notifications = notifications;
-        renderNotifications(container, notifications);
+        const visibleNotifications = visibleNotificationsForRole(notifications, role);
+        const unreadCount = visibleNotifications.filter(isNotificationUnread).length;
+        const latestUnread = visibleNotifications.find(isNotificationUnread);
+        state.notifications = visibleNotifications;
+        renderNotifications(container, visibleNotifications);
 
         if (state.notificationsReady && unreadCount > state.lastUnreadCount && latestUnread) {
-          showBrowserNotification(notificationTitle(latestUnread), notificationBody(latestUnread), {
+          showBrowserNotification(notificationTitle(latestUnread, role), notificationBody(latestUnread, role), {
             url: '/pages/login.html',
             notificationId: latestUnread.id,
           });

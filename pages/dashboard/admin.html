@@ -1326,13 +1326,19 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260815-chat-r8';
-import { initNotificationCenter } from '../../js/notification-center.js?v=20260808-action-center';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260815-clear-notices';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-clear-notices';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
-} from '../../js/notification-engine.js?v=20260707-low-noise';
-import { isAfterClassReset } from '../../js/class-reset.js?v=20260629-reset';
+} from '../../js/notification-engine.js?v=20260815-clear-notices';
+import { CLASS_RESET_CUTOFF_ISO, isAfterClassReset } from '../../js/class-reset.js?v=20260816-reset';
+import {
+  buildAdminFinancialDaySummaries,
+  buildTeacherPayoutDebtBreakdown,
+  groupFamilyDebtEntries,
+  uniqueTeacherDebtAmount,
+} from '../../js/admin-economic-calendar.js?v=20260815-admin-debt';
 import {
   addDoc,
   collection,
@@ -1406,7 +1412,7 @@ import {
   formatFechaCorta, formatHora, formatEuros, badgeEstado, nombreMes,
   getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js?v=20260815-calendar-semantics';
+import { Calendario } from '../../js/calendario.js?v=20260815-economic-summaries';
 
 // ── PROTEGER RUTA ────────────────────────────────────────────────
 const usuario = await requireAuth(['admin']);
@@ -1946,60 +1952,50 @@ function adminClassPaymentStatus(clase = {}) {
   );
 }
 
-function adminOverdueClassNotificationBody(clase = {}, state = {}) {
-  const familyId = firstAdminValue(clase.familyUid, clase.familia_id);
-  const studentId = firstAdminValue(clase.studentId, clase.alumno_id);
-  const teacherId = firstAdminValue(clase.teacherUid, clase.profesor_id);
-  const familyName = adminPersonName(
-    'Familia',
-    familyId,
-    clase.familia_nombre,
-    clase.familyName,
-    clase.familiaName,
-    clase.parentName,
-  );
-  const studentName = adminPersonName('Alumno', studentId, clase.alumno_nombre, clase.studentName, clase.alumnoName);
-  const teacherName = adminPersonName('Profesor', teacherId, clase.profesor_nombre, clase.teacherName, clase.teacherDisplayName);
-  const subject = firstAdminValue(clase.materia, clase.subject, 'clase');
-  const amount = classTotal(clase);
-  const dueText = formatAdminDateTime(state.dueAt);
-  const overdueText = state.graceHours ? `${state.graceHours} h de margen` : 'margen superado';
-  return `La familia ${familyName} falta por pagar/justificar la clase de ${subject} de ${studentName} con ${teacherName}. Importe familia: ${amount ? formatEuros(amount) : 'sin importe'}. Limite: ${dueText || 'sin fecha registrada'} (${overdueText}).`;
+function adminFamilyDebtNotificationBody(group = {}) {
+  const dueText = formatAdminDateTime(group.oldestDueAt);
+  const classCount = group.classCount || group.classes?.length || 0;
+  const classText = `${classCount} ${classCount === 1 ? 'clase' : 'clases'}`;
+  return `${group.familyName || 'Una familia'} debe exactamente ${formatEuros(group.amount)} por ${classText}. El pago mas antiguo vencio ${dueText ? `el ${dueText}` : 'y sigue pendiente'}. Revisa el detalle en el calendario.`;
 }
 
-async function writeAdminPaymentOverdueNotification(adminUser, clase, state) {
+async function writeAdminPaymentOverdueNotification(adminUser, group = {}) {
   const type = NOTIFICATION_EVENTS.PAYMENT_OVERDUE;
-  const classId = cleanAdminNotificationText(clase.id, 180);
+  const familyKey = cleanAdminNotificationText(group.familyUid || group.key || group.familyName, 180);
   const adminUid = cleanAdminNotificationText(adminUser.id || adminUser.uid, 180);
-  if (!classId || !adminUid) return false;
-  const id = adminNotificationDocId(type, classId, adminUid);
+  if (!familyKey || !adminUid) return false;
+  const id = adminNotificationDocId(type, `family_${familyKey}`, adminUid);
   const ref = firestoreDoc(firebaseDb, 'notificaciones', id);
   const existing = await getDoc(ref).catch(() => null);
-  if (existing?.exists()) return false;
+  const fingerprint = [
+    ...(group.classIds || []).map(String).sort(),
+    roundMoney(group.amount),
+    group.oldestDueAt || '',
+  ].join('|');
+  if (existing?.exists() && existing.data()?.debtFingerprint === fingerprint) return false;
   const nowIso = new Date().toISOString();
   await setDoc(ref, {
     ...buildNotificationDocument({
       userUid: adminUid,
       role: 'admin',
-      title: 'Pago familiar vencido',
-      body: adminOverdueClassNotificationBody(clase, state),
+      title: `${group.familyName || 'Una familia'} debe ${formatEuros(group.amount)}`,
+      body: adminFamilyDebtNotificationBody(group),
       type,
       priority: 'critical',
       category: 'pagos',
       source: 'system',
       payload: {
         type,
-        classId,
-        clase_id: classId,
-        familyUid: clase.familyUid || clase.familia_id || '',
-        teacherUid: clase.teacherUid || clase.profesor_id || '',
-        studentId: clase.studentId || clase.alumno_id || '',
-        amount: classTotal(clase),
-        dueAt: state.dueAt || '',
-        graceHours: state.graceHours || 24,
+        familyUid: group.familyUid || group.key || '',
+        familyName: group.familyName || '',
+        classIds: group.classIds || [],
+        classCount: group.classCount || group.classes?.length || 0,
+        amount: roundMoney(group.amount),
+        dueAt: group.oldestDueAt || '',
         url: '/pages/dashboard/admin.html#calendario',
       },
     }),
+    debtFingerprint: fingerprint,
     idempotencyKey: id,
     notificationKey: id,
     createdAt: serverTimestamp(),
@@ -2011,28 +2007,37 @@ async function writeAdminPaymentOverdueNotification(adminUser, clase, state) {
 }
 
 async function ensureAdminOverdueClassPaymentNotifications() {
-  const [{ data, error }, scheduleIndex, admins] = await Promise.all([
+  const [{ data, error }, paymentContext, admins] = await Promise.all([
     db.from('v_clases_completas').select('*').order('fecha', { ascending: false }).limit(500),
-    loadAdminPaymentScheduleIndex(),
+    loadAdminPaymentContext({ force: true }),
     loadAdminNotificationRecipients(),
   ]);
   if (error) throw error;
   if (!admins.length) return 0;
 
-  const overdueClasses = (data || [])
+  const overdueClasses = applyClassPaymentContext(data || [], paymentContext.payments)
     .filter((clase) => isAfterClassReset(clase))
     .filter((clase) => claseRealizada(clase))
+    .filter((clase) => isFamilyConfirmedGivenClass(clase))
     .filter((clase) => classTotal(clase) > 0)
     .filter((clase) => !PAID_PAYMENT_STATUSES.includes(adminClassPaymentStatus(clase)))
     .map((clase) => ({
       clase,
-      state: classFamilyPaymentState(clase, paymentScheduleForClass(clase, scheduleIndex), {
+      state: classFamilyPaymentState(clase, paymentScheduleForClass(clase, paymentContext.scheduleIndex), {
         classEndAt: adminClassEndAt(clase),
         nowMs: Date.now(),
       }),
     }))
     .filter(({ state }) => state.overdue)
-    .slice(0, 50);
+    .slice(0, 250);
+
+  const debtGroups = groupFamilyDebtEntries(overdueClasses.map(({ clase, state }) => ({
+    ...clase,
+    familyUid: firstAdminValue(clase.familyUid, clase.familia_id),
+    familyName: adminPersonName('Familia', firstAdminValue(clase.familyUid, clase.familia_id), clase.familia_nombre, clase.familyName, clase.familiaName, clase.parentName),
+    amount: classTotal(clase),
+    dueAt: state.dueAt || '',
+  })));
 
   let created = 0;
   for (const { clase, state } of overdueClasses) {
@@ -2051,8 +2056,10 @@ async function ensureAdminOverdueClassPaymentNotifications() {
         console.warn('No se pudo marcar clase como pago vencido', clase.id, error);
       }
     }
+  }
+  for (const group of debtGroups) {
     for (const adminUser of admins) {
-      if (await writeAdminPaymentOverdueNotification(adminUser, clase, state)) created += 1;
+      if (await writeAdminPaymentOverdueNotification(adminUser, group)) created += 1;
     }
   }
   return created;
@@ -3260,18 +3267,16 @@ function buildAdminTeacherPayoutCalendarEvents(classes = [], teacherProfiles = [
       const previousDate = adminPreviousTeacherPayoutDate(preference, payoutDate);
       const payoutDateIso = adminIsoDateLocal(payoutDate);
       const periodStartIso = adminIsoDateLocal(adminAddLocalDays(previousDate, 1));
-      const periodClasses = (classes || [])
-        .filter((clase) => {
-          const classDate = adminParseIsoLocalDate(adminClassDateIso(clase));
-          return classDate
-            && (teacherIds.has(adminClassTeacherUid(clase)) || teacherIds.has(String(clase.teacherUid || '').trim()) || teacherIds.has(String(clase.profesor_id || '').trim()))
-            && classDate > previousDate
-            && classDate <= payoutDate
-            && adminClassEarnsTeacherPayout(clase)
-            && !adminClassTeacherPayoutPaid(clase);
-        })
-        .sort((a, b) => String(adminClassDateIso(a)).localeCompare(String(adminClassDateIso(b))) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')));
-      const payoutAmount = roundMoney(periodClasses.reduce((sum, clase) => sum + classTeacherAmount(clase), 0));
+      const breakdown = buildTeacherPayoutDebtBreakdown(classes, {
+        teacherIds: [...teacherIds],
+        payoutDate: payoutDateIso,
+        periodStart: periodStartIso,
+        classDate: adminClassDateIso,
+        teacherKey: adminClassTeacherUid,
+        earnsPayout: adminClassEarnsTeacherPayout,
+        isPaid: adminClassTeacherPayoutPaid,
+        amount: classTeacherAmount,
+      });
       return {
         id: `admin-teacher-payout-${teacherUid}-${payoutDateIso}`,
         calendarEventType: 'admin_teacher_payout_day',
@@ -3285,11 +3290,59 @@ function buildAdminTeacherPayoutCalendarEvents(classes = [], teacherProfiles = [
         teacherName,
         payoutFrequency: preference.frequency,
         payoutFrequencyLabel: adminTeacherPayoutFrequencyLabel(preference.frequency),
-        payoutAmount,
-        payoutClasses: periodClasses,
+        payoutAmount: breakdown.amount,
+        payoutClasses: breakdown.classes,
+        carryoverAmount: breakdown.carryoverAmount,
+        currentPeriodAmount: breakdown.currentPeriodAmount,
+        hasCarryover: breakdown.carryoverAmount > 0,
       };
     });
   });
+}
+
+function buildAdminFamilyDebtCalendarEvents(classes = [], year, monthIndex) {
+  const today = fechaHoy();
+  const viewedMonth = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+  if (!today.startsWith(viewedMonth)) return [];
+  const entries = (classes || [])
+    .filter((clase) => isFamilyConfirmedGivenClass(clase))
+    .map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }))
+    .filter(({ economic }) => economic.state === 'overdue' && money(economic.familyAmount) > 0)
+    .map(({ clase, economic }) => ({
+      ...clase,
+      familyUid: firstAdminValue(clase.familyUid, clase.familia_id),
+      familyName: adminPersonName('Familia', firstAdminValue(clase.familyUid, clase.familia_id), clase.familia_nombre, clase.familyName, clase.familiaName, clase.parentName),
+      amount: economic.familyAmount,
+      dueAt: economic.dueAt || clase.familyPaymentDueAt || clase.paymentDueAt || '',
+    }));
+
+  return groupFamilyDebtEntries(entries).map((group) => ({
+    id: `admin-family-debt-${group.familyUid || group.key}-${today}`,
+    calendarEventType: 'admin_family_debt_alert',
+    fecha: today,
+    date: today,
+    dueDate: adminDateOnly(group.oldestDueAt),
+    overdue: true,
+    amount: group.amount,
+    latestPayment: null,
+    paymentGroup: {
+      ...group,
+      dueAt: group.oldestDueAt,
+      state: 'vencido',
+      overdue: true,
+      hasOverdueCarryover: true,
+      overdueAmount: group.amount,
+      currentPeriodAmount: 0,
+      classes: group.classes.map((clase) => ({
+        ...clase,
+        date: adminClassDateIso(clase),
+        startTime: clase.hora_inicio || clase.startTime || '',
+        subject: clase.materia || clase.subject || 'Clase',
+        amount: classTotal(clase),
+        paymentBucket: 'overdue',
+      })),
+    },
+  }));
 }
 
 function updateClaseMoneyPreview() {
@@ -4015,9 +4068,9 @@ function renderAdminTeacherPayoutPlanner(events = []) {
     const detailRows = classes.slice(0, 4).map((clase) => {
       const studentName = adminPersonName('Alumno', firstAdminValue(clase.studentId, clase.alumno_id), clase.alumno_nombre, clase.studentName);
       return `
-        <div class="admin-teacher-payout-class">
+        <div class="admin-teacher-payout-class ${clase.payoutBucket === 'carryover' ? 'is-overdue' : ''}">
           <span>${sanitize(formatFechaCorta(adminClassDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
-          <strong>${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
+          <strong>${clase.payoutBucket === 'carryover' ? '<em>Pendiente anterior</em> ' : ''}${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
           <em>${sanitize(formatEuros(classTeacherAmount(clase)))}</em>
         </div>
       `;
@@ -4035,10 +4088,12 @@ function renderAdminTeacherPayoutPlanner(events = []) {
           <div class="admin-teacher-payout-head">
             <div>
               <strong>${sanitize(event.teacherName || 'Profesor pendiente de nombre')}</strong>
-              <small>${sanitize(event.payoutFrequencyLabel || 'Dia de cobro')} · Periodo ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</small>
+              <small>${sanitize(event.payoutFrequencyLabel || 'Fecha acordada de pago')} · Periodo actual ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</small>
             </div>
             <strong class="admin-teacher-payout-amount">${sanitize(formatEuros(event.payoutAmount))}</strong>
           </div>
+          <div class="calendar-economic-callout is-payout">El ${sanitize(formatFechaCorta(event.payoutDate || event.date))} debes pagar exactamente ${sanitize(formatEuros(event.payoutAmount))} a ${sanitize(event.teacherName || 'este profesor')}.</div>
+          ${event.hasCarryover ? `<div class="calendar-payment-split"><span>Periodo actual: ${sanitize(formatEuros(event.currentPeriodAmount || 0))}</span><span>Pendiente anterior: ${sanitize(formatEuros(event.carryoverAmount || 0))}</span></div>` : ''}
           <div class="admin-teacher-payout-classes">
             ${detailRows}
             ${extra}
@@ -4048,7 +4103,7 @@ function renderAdminTeacherPayoutPlanner(events = []) {
     `;
   }).join('');
   const extra = payable.length > 10
-    ? `<div class="admin-teacher-payout-more">+${payable.length - 10} cobro(s) mas en este mes</div>`
+    ? `<div class="admin-teacher-payout-more">+${payable.length - 10} pago(s) mas en este mes</div>`
     : '';
   return `
     <div class="admin-teacher-payout-summary">
@@ -4057,7 +4112,7 @@ function renderAdminTeacherPayoutPlanner(events = []) {
         <strong>${sanitize(formatEuros(total))}</strong>
       </div>
       <div>
-        <span>Dias de cobro con clases dadas</span>
+        <span>Fechas de pago con clases dadas</span>
         <strong>${sanitize(String(payable.length))}</strong>
       </div>
     </div>
@@ -4246,6 +4301,7 @@ async function iniciarCalendario() {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
       classDotClass: (item) => {
+        if (item.calendarEventType === 'admin_family_debt_alert') return 'dot-red';
         if (item.calendarEventType === 'admin_family_payment_day') {
           const status = normalizePaymentStatus(item.latestPayment?.estado || item.latestPayment?.status || item.paymentGroup?.state || '');
           if (['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status) || item.overdue) return 'dot-red';
@@ -4258,11 +4314,19 @@ async function iniciarCalendario() {
       },
       legendItems: [
         ...economicCalendarLegend(),
-        { className: 'dot-navy', label: 'Día de pago de familia' },
+        { className: 'dot-red', label: 'Familia debe dinero' },
+        { className: 'dot-navy', label: 'Cobro de familia' },
+        { className: 'dot-purple', label: 'Pago a profesor' },
       ],
+      dayIndicatorMode: 'summary',
+      daySummaryItems: (items) => buildAdminFinancialDaySummaries(items, {
+        formatMoney: formatEuros,
+        classTone: (item) => economicStateForAdminClass(item).dotClass,
+      }),
       daySummaryLabel: (item) => {
+        if (item.calendarEventType === 'admin_family_debt_alert') return `Deben ${formatEuros(item.amount)}`;
         if (item.calendarEventType === 'admin_family_payment_day') return item.overdue ? 'Pago vencido' : 'Pago familia';
-        if (item.calendarEventType === 'admin_teacher_payout_day') return 'Cobro prof.';
+        if (item.calendarEventType === 'admin_teacher_payout_day') return `Pagar ${formatEuros(item.payoutAmount)}`;
         return formatHora(item.hora_inicio || item.startTime || '') || 'Clase';
       },
       onDiaClick: mostrarClasesDiaEconomico,
@@ -4276,13 +4340,16 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const consultaDesde = adminIsoDateLocal(new Date(anio, mes - 1, 1)) || desde;
+  const consultaDesde = CLASS_RESET_CUTOFF_ISO.slice(0, 10);
+  const classQuery = hasta < consultaDesde
+    ? Promise.resolve({ data: [], error: null })
+    : db.from('v_clases_completas').select('*').gte('fecha', consultaDesde).lte('fecha', hasta);
   const [{ data }, paymentContext, profesoresResult] = await Promise.all([
-    db.from('v_clases_completas').select('*').gte('fecha', consultaDesde).lte('fecha', hasta),
+    classQuery,
     loadAdminPaymentContext(),
     db.from('profesores').select('*').range(0, adminReadLimit('profesores') - 1),
   ]);
-  const clasesConContexto = applyClassPaymentContext(data || [], paymentContext.payments);
+  const clasesConContexto = applyClassPaymentContext((data || []).filter((clase) => isAfterClassReset(clase)), paymentContext.payments);
   const clasesMes = clasesConContexto.filter((clase) => {
     const dateIso = adminClassDateIso(clase);
     return dateIso >= desde && dateIso <= hasta;
@@ -4306,7 +4373,8 @@ async function cargarClasesCalendario(anio, mes) {
     anio,
     mes,
   );
-  const calendarItems = [...familyPaymentEvents, ...teacherPayoutEvents, ...clasesMes];
+  const familyDebtEvents = buildAdminFamilyDebtCalendarEvents(clasesConContexto, anio, mes);
+  const calendarItems = [...familyDebtEvents, ...familyPaymentEvents, ...teacherPayoutEvents, ...clasesMes];
   adminCalendarClassById = new Map(clasesConContexto.map((clase) => [String(clase.id), clase]));
   cal.setClases(calendarItems);
   renderAdminCalendarMonthSummary(calendarItems);
@@ -4319,6 +4387,7 @@ function renderAdminCalendarMonthSummary(clases = []) {
   const cont = document.getElementById('admin-calendar-month-summary');
   if (!cont) return;
   const familyPaymentEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_family_payment_day');
+  const familyDebtEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_family_debt_alert');
   const teacherPayoutEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_teacher_payout_day');
   const classItems = (clases || []).filter((item) => !item.calendarEventType);
   const enriched = classItems.map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }));
@@ -4348,16 +4417,18 @@ function renderAdminCalendarMonthSummary(clases = []) {
     pendingTeacherPayout: 0,
     alerts: 0,
   });
-  const familyDueAmount = roundMoney(familyPaymentEvents.reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
-  const teacherDueAmount = roundMoney(teacherPayoutEvents.reduce((sum, event) => sum + money(event.payoutAmount), 0));
+  const familyDueAmount = roundMoney(familyPaymentEvents.filter((event) => !event.overdue).reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
+  const familyDebtAmount = roundMoney(familyDebtEvents.reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
+  const teacherDueAmount = uniqueTeacherDebtAmount(teacherPayoutEvents);
   const familyProofsInReview = familyPaymentEvents.filter((event) => {
     const status = normalizePaymentStatus(event.latestPayment?.estado || event.latestPayment?.status || '');
     return ['pendiente', 'solicitado', 'procesando', 'requiere_accion'].includes(status) && adminPaymentHasProof(event.latestPayment || {});
   }).length;
 
   const monthName = cal ? `${nombreMes(cal.mes)} ${cal.anio}` : 'este mes';
-  const alertText = totals.alerts
-    ? `${totals.alerts} clase(s) requieren revision`
+  const alertCount = familyDebtEvents.length + totals.alerts;
+  const alertText = alertCount
+    ? `${alertCount} asunto(s) requieren revision`
     : 'Sin alertas economicas abiertas';
   cont.innerHTML = `
     <div class="admin-calendar-month-head">
@@ -4365,16 +4436,17 @@ function renderAdminCalendarMonthSummary(clases = []) {
         <span class="section-eyebrow">Calendario economico</span>
         <h3>${sanitize(monthName)}</h3>
       </div>
-      <span class="badge ${totals.alerts ? 'badge-warning' : 'badge-success'}">${sanitize(alertText)}</span>
+      <span class="badge ${alertCount ? 'badge-warning' : 'badge-success'}">${sanitize(alertText)}</span>
     </div>
     <div class="admin-calendar-month-grid">
       ${[
         ['Clases', String(totals.classes), 'programadas este mes'],
         ['Facturacion', formatEuros(totals.family), 'importe familia'],
         ['Margen', formatEuros(totals.margin), 'ClasesDe10'],
-        ['Dias pago familia', String(familyPaymentEvents.length), `${formatEuros(familyDueAmount)} previsto`],
+        ['Familias que deben', String(familyDebtEvents.length), `${formatEuros(familyDebtAmount)} vencido`],
+        ['Cobros de familia', String(familyPaymentEvents.filter((event) => !event.overdue).length), `${formatEuros(familyDueAmount)} previsto`],
         ['Justificantes', String(familyProofsInReview), 'subidos/en revision'],
-        ['Dias cobro profesor', String(teacherPayoutEvents.length), `${formatEuros(teacherDueAmount)} previsto`],
+        ['Pagos a profesores', String(teacherPayoutEvents.filter((event) => money(event.payoutAmount) > 0).length), `${formatEuros(teacherDueAmount)} pendiente`],
         ['Pendiente cobro', formatEuros(totals.pendingCollection), 'familias'],
         ['Pendiente profesor', formatEuros(totals.pendingTeacherPayout || teacherDueAmount), 'liquidaciones'],
       ].map(([label, value, hint]) => `
@@ -4484,12 +4556,15 @@ function adminPaymentProofAction(payment = null) {
 
 function renderAdminFamilyPaymentCalendarCard(event = {}) {
   const group = event.paymentGroup || {};
+  const isDebt = event.calendarEventType === 'admin_family_debt_alert';
   const payment = event.latestPayment || group.latestPayment || null;
   const classes = group.classes || [];
   const hasAmount = money(group.amount) > 0;
-  const periodText = group.paymentPeriodStart
-    ? `Clases desde ${formatDateTimeHint(group.paymentPeriodStart)} hasta ${formatDateTimeHint(group.paymentPeriodEnd || group.dueAt)}`
-    : `Vencimiento ${formatFechaCorta(event.fecha || event.date)}`;
+  const periodText = isDebt
+    ? `El impago mas antiguo vencio ${group.dueAt || group.oldestDueAt ? formatDateTimeHint(group.dueAt || group.oldestDueAt) : 'en una fecha no registrada'}`
+    : group.paymentPeriodStart
+      ? `Clases desde ${formatDateTimeHint(group.paymentPeriodStart)} hasta ${formatDateTimeHint(group.paymentPeriodEnd || group.dueAt)}`
+      : `Vencimiento ${formatFechaCorta(event.fecha || event.date)}`;
   const rows = classes.slice(0, 6).map((clase) => `
     <div class="calendar-payout-row ${clase.paymentBucket === 'overdue' ? 'is-overdue' : ''}">
       <span>${sanitize(formatFechaCorta(clase.date))}${clase.startTime ? ` ${sanitize(formatHora(clase.startTime))}` : ''}</span>
@@ -4506,14 +4581,15 @@ function renderAdminFamilyPaymentCalendarCard(event = {}) {
   return `
     <div class="clase-item calendar-payment-due-item admin-family-payment-event ${group.overdue ? 'is-overdue' : ''}" style="padding:12px 16px">
       <div class="clase-time calendar-payment-due-time">
-        <div class="clase-time-hora">Pago</div>
-        <div class="clase-time-fin">${sanitize(formatFechaCorta(event.fecha || event.date))}</div>
+        <div class="clase-time-hora">${isDebt ? 'Debe' : 'Cobro'}</div>
+        <div class="clase-time-fin">${sanitize(formatFechaCorta(isDebt ? (event.dueDate || event.fecha) : (event.fecha || event.date)))}</div>
       </div>
       <div class="clase-info">
         <div class="clase-nombre">${sanitize(group.familyName || 'Familia pendiente de nombre')}</div>
         <div class="clase-materia">${sanitize(group.studentName || 'Alumno pendiente de nombre')} · ${sanitize(group.teacherName || 'Profesor pendiente de nombre')}</div>
         <div class="calendar-payment-period">${sanitize(periodText)}</div>
         ${paymentMeta}
+        ${isDebt ? `<div class="calendar-economic-callout is-debt">${sanitize(group.familyName || 'Esta familia')} debe exactamente ${sanitize(formatEuros(group.amount))} por ${sanitize(String(group.classCount || classes.length))} ${Number(group.classCount || classes.length) === 1 ? 'clase' : 'clases'}.</div>` : ''}
         <div class="calendar-payout-summary">
           ${adminPaymentStatusLabel(payment, group)}
           <strong>${hasAmount ? sanitize(formatEuros(group.amount)) : 'Sin importe pendiente'}</strong>
@@ -4542,9 +4618,9 @@ function renderAdminTeacherPayoutCalendarCard(event = {}) {
   const rows = classes.slice(0, 8).map((clase) => {
     const studentName = adminPersonName('Alumno', firstAdminValue(clase.studentId, clase.alumno_id), clase.alumno_nombre, clase.studentName);
     return `
-      <div class="calendar-payout-row">
+      <div class="calendar-payout-row ${clase.payoutBucket === 'carryover' ? 'is-overdue' : ''}">
         <span>${sanitize(formatFechaCorta(adminClassDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
-        <strong>${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
+        <strong>${clase.payoutBucket === 'carryover' ? '<em>Pendiente anterior</em> ' : ''}${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
         <em>${sanitize(formatEuros(classTeacherAmount(clase)))}</em>
       </div>
     `;
@@ -4555,16 +4631,18 @@ function renderAdminTeacherPayoutCalendarCard(event = {}) {
   return `
     <div class="clase-item calendar-payout-item admin-teacher-payout-event" style="padding:12px 16px">
       <div class="clase-time calendar-payout-time">
-        <div class="clase-time-hora">Cobro</div>
+        <div class="clase-time-hora">Pagar</div>
         <div class="clase-time-fin">${sanitize(formatFechaCorta(event.payoutDate))}</div>
       </div>
       <div class="clase-info">
         <div class="clase-nombre">${sanitize(event.teacherName || 'Profesor pendiente de nombre')}</div>
-        <div class="clase-materia">${sanitize(event.payoutFrequencyLabel || 'Dia de cobro')} · Periodo ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</div>
+        <div class="clase-materia">${sanitize(event.payoutFrequencyLabel || 'Fecha acordada de pago')} · Periodo actual ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</div>
+        ${total > 0 ? `<div class="calendar-economic-callout is-payout">El ${sanitize(formatFechaCorta(event.payoutDate))} debes pagar exactamente ${sanitize(formatEuros(total))} a ${sanitize(event.teacherName || 'este profesor')}.</div>` : ''}
         <div class="calendar-payout-summary">
           <span class="badge ${total > 0 ? 'badge-navy' : 'badge-gray'}">${classes.length} clase(s)</span>
           <strong>${sanitize(formatEuros(total))}</strong>
         </div>
+        ${event.hasCarryover ? `<div class="calendar-payment-split"><span>Periodo actual: ${sanitize(formatEuros(event.currentPeriodAmount || 0))}</span><span>Pendiente anterior: ${sanitize(formatEuros(event.carryoverAmount || 0))}</span></div>` : ''}
         <div class="calendar-payout-detail">
           ${rows || '<div class="calendar-payout-empty">No hay clases dadas pendientes de liquidar para este profesor en este periodo.</div>'}
           ${extra}
@@ -4581,7 +4659,8 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     cont.innerHTML = '<div class="empty-state"><div class="empty-icon">OK</div><div class="empty-title">Sin clases</div><div class="empty-desc">No hay actividad programada ni riesgo economico este dia.</div></div>';
     return;
   }
-  const familyPaymentEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_family_payment_day');
+  const familyPaymentEvents = (clases || []).filter((item) => ['admin_family_payment_day', 'admin_family_debt_alert'].includes(item.calendarEventType));
+  const familyDebtEvents = familyPaymentEvents.filter((item) => item.calendarEventType === 'admin_family_debt_alert');
   const teacherPayoutEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_teacher_payout_day');
   const classItems = (clases || []).filter((item) => !item.calendarEventType);
   const enriched = classItems
@@ -4594,14 +4673,16 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     acc[item.economic.state] = (acc[item.economic.state] || 0) + 1;
     return acc;
   }, { family: 0, teacher: 0, margin: 0 });
-  const familyDueAmount = roundMoney(familyPaymentEvents.reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
-  const teacherDueAmount = roundMoney(teacherPayoutEvents.reduce((sum, event) => sum + money(event.payoutAmount), 0));
+  const familyDueAmount = roundMoney(familyPaymentEvents.filter((event) => event.calendarEventType === 'admin_family_payment_day' && !event.overdue).reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
+  const familyDebtAmount = roundMoney(familyDebtEvents.reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
+  const teacherDueAmount = uniqueTeacherDebtAmount(teacherPayoutEvents);
   const kpis = [
     ['Facturacion', formatEuros(totals.family)],
     ['Profesor', formatEuros(totals.teacher)],
     ['Margen', formatEuros(totals.margin)],
-    ['Pagos familia', formatEuros(familyDueAmount)],
-    ['Cobros profesor', formatEuros(teacherDueAmount)],
+    ['Deuda familias', formatEuros(familyDebtAmount)],
+    ['Cobrar familias', formatEuros(familyDueAmount)],
+    ['Pagar profesores', formatEuros(teacherDueAmount)],
     ['Alertas', String((totals.missing_amount || 0) + (totals.missing_teacher_amount || 0) + (totals.overdue || 0) + (totals.rejected || 0) + (totals.in_review || 0))],
   ].map(([label, value]) => `<div class="admin-calendar-kpi"><span>${sanitize(label)}</span><strong>${sanitize(value)}</strong></div>`).join('');
 
@@ -7427,14 +7508,9 @@ function renderPaymentAiReview(review = {}) {
 
 function paymentAiNotificationBody(payment = {}, review = {}) {
   const amount = formatEuros(paymentAmount(payment));
-  const source = payment.gateway || payment.provider || payment.metodo || 'manual';
-  const risks = Array.isArray(review.risks) && review.risks.length
-    ? ` Motivo principal: ${review.risks[0]}`
-    : '';
-  const duplicates = Array.isArray(review.duplicatePaymentIds) && review.duplicatePaymentIds.length
-    ? ` Posibles duplicados: ${review.duplicatePaymentIds.join(', ')}.`
-    : '';
-  return `Pago de ${nombreOrigenPago(payment)} por ${amount} (${source}) necesita revision. Confianza IA: ${Math.round(Number(review.confidence || 0) * 100)}%. ${review.summary || ''}${risks}${duplicates}`;
+  const risk = cleanAdminNotificationText(Array.isArray(review.risks) ? review.risks[0] : '', 240);
+  const reason = risk ? ` porque ${risk.charAt(0).toLowerCase()}${risk.slice(1)}` : '';
+  return `${nombreOrigenPago(payment)} ha enviado un justificante de ${amount} que necesita revision${reason}. Comprueba el importe, las clases incluidas y el archivo en el calendario.`;
 }
 
 async function notifyPaymentAiReview(payment = {}, review = {}) {
@@ -7456,7 +7532,7 @@ async function notifyPaymentAiReview(payment = {}, review = {}) {
     ...buildNotificationDocument({
       userUid: adminUid,
       role: 'admin',
-      title: 'Revision inteligente de pago',
+      title: 'Este justificante necesita revision',
       body: paymentAiNotificationBody(payment, review),
       type: NOTIFICATION_EVENTS.FAMILY_PAYMENT_PENDING,
       priority: Array.isArray(review.risks) && review.risks.length ? 'high' : 'normal',

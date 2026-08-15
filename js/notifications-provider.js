@@ -26,7 +26,7 @@ import {
   buildNotificationDocument,
   mergeNotificationSettings,
   shouldDisplayNotification,
-} from './notification-engine.js?v=20260808-action-center';
+} from './notification-engine.js?v=20260815-clear-notices';
 
 function normalizeDate(value) {
   if (!value) return '';

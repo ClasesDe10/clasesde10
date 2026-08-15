@@ -3,9 +3,11 @@ import path from 'node:path';
 import process from 'node:process';
 import {
   buildNotificationDocument,
+  humanReadableNotificationCopy,
   inferNotificationRole,
   minimalUserNotificationCopy,
   notificationActionUrl,
+  notificationDisplayGroupKey,
   safeInternalActionUrl,
   shouldCreateUserFacingNotification,
   shouldDisplayNotification,
@@ -70,6 +72,8 @@ assert(engine.includes('safeInternalActionUrl'), 'Notification engine must sanit
 assert(engine.includes('shouldCreateUserFacingNotification'), 'Notification engine must centralize low-noise user notification policy.');
 assert(engine.includes('userFacingNotificationDedupeKey'), 'Notification engine must provide user-facing dedupe keys.');
 assert(engine.includes('minimalUserNotificationCopy'), 'Notification engine must simplify noisy user-facing copy.');
+assert(engine.includes('humanReadableNotificationCopy'), 'Notification engine must turn technical records into complete sentences.');
+assert(engine.includes('notificationDisplayGroupKey'), 'Notification engine must group repeated alerts by real-world issue.');
 assert(safeInternalActionUrl('/pages/dashboard/admin.html#pagos') === '/pages/dashboard/admin.html#pagos', 'Internal notification URLs must be preserved.');
 assert(safeInternalActionUrl('https://evil.example/phishing') === '/pages/login.html', 'External HTTPS notification URLs must be rejected.');
 assert(safeInternalActionUrl('//evil.example/phishing') === '/pages/login.html', 'Protocol-relative notification URLs must be rejected.');
@@ -131,6 +135,33 @@ const visibleUserNotifications = visibleNotificationsForRole([
   { id: 'payment', type: 'weekly_payment_due', priority: 'high', readAt: null },
 ], 'familia');
 assert(visibleUserNotifications.length === 1 && visibleUserNotifications[0].id === 'payment', 'Visible inbox must contain actions, not chat noise.');
+const familyDebtGroupA = notificationDisplayGroupKey({
+  type: 'payment_overdue',
+  payload: { familyUid: 'family-1', classId: 'class-a', url: '/pages/dashboard/admin.html#calendario' },
+});
+const familyDebtGroupB = notificationDisplayGroupKey({
+  type: 'payment_overdue_reminder',
+  payload: { familyUid: 'family-1', classId: 'class-b', url: '/pages/dashboard/admin.html#calendario' },
+});
+assert(familyDebtGroupA === familyDebtGroupB, 'All overdue class notices for one family must render as one issue.');
+const clearDebtCopy = humanReadableNotificationCopy({
+  type: 'payment_overdue',
+  role: 'admin',
+  title: 'PAYMENT_OVERDUE family_1',
+  body: 'fingerprint: abc source: worker',
+  payload: { familyUid: 'family-1', familyName: 'Familia Ruiz', amount: 75, classCount: 2 },
+}, 'admin');
+assert(clearDebtCopy.title.includes('Familia Ruiz') && clearDebtCopy.title.includes('75'), 'Admin debt title must name the family and exact amount.');
+assert(!/fingerprint|source|payment_overdue/i.test(`${clearDebtCopy.title} ${clearDebtCopy.body}`), 'Visible debt copy must never expose internal codes.');
+const visibleLimit = visibleNotificationsForRole(Array.from({ length: 30 }, (_, index) => ({
+  id: `debt-${index}`,
+  type: 'payment_overdue',
+  priority: 'high',
+  readAt: null,
+  createdAt: new Date(Date.now() - index * 1000).toISOString(),
+  payload: { familyUid: `family-${index}` },
+})), 'admin');
+assert(visibleLimit.length === 24, 'The low-noise inbox must cap visible items at 24.');
 
 assert(provider.includes('loadNotificationSettings'), 'Provider must load admin notification settings.');
 assert(provider.includes('saveNotificationSettings'), 'Provider must save admin notification settings.');
@@ -194,7 +225,7 @@ assert(notificationCenter.includes('data-resolve-notification'), 'Visible notifi
 assert(notificationCenter.includes('visibleNotificationsForRole'), 'Notification centre must apply the low-noise policy.');
 [familyDashboard, teacherDashboard, studentDashboard, adminDashboard].forEach((dashboard, index) => {
   assert(dashboard.includes('section-notificaciones'), `Dashboard ${index + 1} must have a dedicated notification section.`);
-  assert(dashboard.includes('notification-center.js?v=20260808-action-center'), `Dashboard ${index + 1} must load the notification centre.`);
+  assert(dashboard.includes('notification-center.js?v=20260815-clear-notices'), `Dashboard ${index + 1} must load the current notification centre.`);
 });
 
 console.log('Notification system validation passed.');

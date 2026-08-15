@@ -3852,6 +3852,18 @@ pre,
   font-style: normal;
   font-weight: 800;
 }
+.admin-teacher-payout-class.is-overdue {
+  border-radius: 6px;
+  background: rgba(220,38,38,.055);
+  padding: 5px 6px;
+}
+.admin-teacher-payout-class strong em {
+  color: var(--danger);
+  font-size: .66rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
 .admin-teacher-payout-more {
   font-size: .76rem;
 }
@@ -5930,6 +5942,26 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   background: rgba(15, 31, 61, .045);
   color: var(--gray-mid);
 }
+.calendar-economic-callout {
+  margin-top: 8px;
+  border: 1px solid rgba(15,31,61,.12);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: .78rem;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.calendar-economic-callout.is-debt {
+  border-color: rgba(180,35,24,.28);
+  background: rgba(180,35,24,.07);
+  color: #8f1d14;
+}
+.calendar-economic-callout.is-payout {
+  border-color: rgba(109,40,217,.24);
+  background: rgba(109,40,217,.07);
+  color: #5420a7;
+}
 .calendar-payment-overdue-note {
   background: rgba(220, 38, 38, .075);
   color: #991b1b;
@@ -6610,6 +6642,11 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 .payment-confirm-card.is-upcoming {
   border-left-color: #2563eb;
   background: rgba(37,99,235,.025);
+}
+.day-event-summary.is-multiple {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
 }
 .family-payment-access-banner,
 .family-payment-marking-banner {

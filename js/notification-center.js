@@ -13,16 +13,18 @@ import {
   saveNotificationSettings,
   showBrowserNotification,
   watchUserNotifications,
-} from './notifications-provider.js?v=20260808-action-center';
+} from './notifications-provider.js?v=20260815-clear-notices';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
+  humanReadableNotificationCopy,
   isNotificationUnread,
   mergeNotificationSettings,
   notificationActionUrl,
   notificationCategoryLabel,
+  notificationDisplayGroupKey,
   notificationPriorityClass,
   visibleNotificationsForRole,
-} from './notification-engine.js?v=20260808-action-center';
+} from './notification-engine.js?v=20260815-clear-notices';
 import {
   registerPushNotifications,
   watchForegroundPushMessages,
@@ -60,12 +62,12 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function notificationTitle(notification = {}) {
-  return clean(notification.title || notification.titulo || notificationCategoryLabel(notification.type), 160);
+function notificationTitle(notification = {}, role = '') {
+  return clean(humanReadableNotificationCopy(notification, role).title || notificationCategoryLabel(notification.type), 160);
 }
 
-function notificationBody(notification = {}) {
-  return clean(notification.body || notification.cuerpo || '', 1200);
+function notificationBody(notification = {}, role = '') {
+  return clean(humanReadableNotificationCopy(notification, role).body, 1200);
 }
 
 function notificationSource(notification = {}) {
@@ -97,15 +99,7 @@ function entityId(notification = {}) {
 }
 
 function displayGroupKey(notification = {}) {
-  const date = notificationDate(notification.createdAt);
-  const day = date ? date.toISOString().slice(0, 10) : '';
-  return [
-    clean(notification.type, 80),
-    entityId(notification),
-    notificationActionUrl(notification),
-    entityId(notification) ? '' : notificationTitle(notification),
-    entityId(notification) ? '' : day,
-  ].join('|');
+  return notificationDisplayGroupKey(notification);
 }
 
 function groupNotifications(notifications = []) {
@@ -147,7 +141,7 @@ function sectionAction(notification = {}, role = '') {
   if (payload.paymentId || type.includes('payment') || type.includes('payout')) {
     if (role === 'profesor') return { section: 'ingresos', label: 'Revisar cobro' };
     if (role === 'familia') return { section: 'pagos', label: type === 'family_payment_pending' ? 'Ver justificante' : 'Subir justificante' };
-    if (role === 'admin') return { section: 'pagos', label: 'Resolver pago' };
+    if (role === 'admin') return { section: 'calendario', label: 'Ver deuda en calendario' };
     return { section: 'clases', label: 'Ver estado' };
   }
 
@@ -254,14 +248,14 @@ function renderNotifications(container, notifications, role) {
       notificationSource(notification),
       notificationCategoryLabel(notification.type),
       formatDateTime(notification.createdAt),
-      notification.duplicateCount > 1 ? `${notification.duplicateCount} agrupados` : '',
+      notification.duplicateCount > 1 ? `${notification.duplicateCount} avisos reunidos` : '',
     ].filter(Boolean).join(' · ');
     return `
       <article class="notification-center-item priority-${escapeHtml(priority)} ${unread ? 'unread' : ''}" data-notification-id="${escapeHtml(notification.id)}">
         <div class="notification-center-copy">
           <div class="notification-center-priority">${escapeHtml(notificationPriorityLabel(notification))}</div>
-          <h3>${escapeHtml(notificationTitle(notification))}</h3>
-          ${notificationBody(notification) ? `<p>${escapeHtml(notificationBody(notification))}</p>` : ''}
+          <h3>${escapeHtml(notificationTitle(notification, role))}</h3>
+          ${notificationBody(notification, role) ? `<p>${escapeHtml(notificationBody(notification, role))}</p>` : ''}
           <div class="notification-center-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="notification-center-item-actions">
@@ -453,7 +447,7 @@ export function initNotificationCenter({
     refresh(notifications);
     if (state.ready && unreadCount > state.lastUnreadCount && latestUnread) {
       const action = sectionAction(latestUnread, role);
-      showBrowserNotification(notificationTitle(latestUnread), notificationBody(latestUnread), {
+      showBrowserNotification(notificationTitle(latestUnread, role), notificationBody(latestUnread, role), {
         notificationId: latestUnread.id,
         type: latestUnread.type,
         url: action?.url || notificationActionUrl(latestUnread),

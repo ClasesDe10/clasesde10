@@ -10,7 +10,7 @@ async (page) => {
   }, null, { timeout: 20000 });
 
   const legend = await page.locator('.calendar-legend').textContent().catch(() => '');
-  for (const label of ['Falta importe', 'Vencida/incidencia', 'En revision', 'Pendiente', 'Liquidar profesor', 'Liquidada', 'Dia pago familia', 'Cobro profesor']) {
+  for (const label of ['Falta importe', 'Vencida/incidencia', 'En revision', 'Pendiente', 'Liquidar profesor', 'Liquidada', 'Familia debe dinero', 'Cobro de familia', 'Pago a profesor']) {
     if (!legend.includes(label)) {
       throw new Error(`Economic calendar legend is missing "${label}": ${legend}`);
     }
@@ -31,7 +31,7 @@ async (page) => {
 
   const clickedDate = await page.evaluate(() => {
     const day = Array.from(document.querySelectorAll('.calendar-day[data-fecha]'))
-      .find((item) => item.querySelector('.day-dot'));
+      .find((item) => item.querySelector('.day-chip, .day-dot'));
     if (!day) return '';
     day.click();
     return day.dataset.fecha || '';

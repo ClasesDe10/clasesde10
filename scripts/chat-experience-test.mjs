@@ -15,9 +15,9 @@ const [chat, css, rules, familyDashboard, professorDashboard, adminDashboard] = 
 assert.match(familyDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'familia'[\s\S]*?showNotifications:\s*false/, 'Family dashboard must use the complete shared chat widget.');
 assert.match(professorDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'profesor'[\s\S]*?showNotifications:\s*false/, 'Professor dashboard must use the complete shared chat widget.');
 assert.match(adminDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'admin'[\s\S]*?showNotifications:\s*false/, 'Admin dashboard must use the complete shared chat widget.');
-assert.match(familyDashboard, /chat-widget\.js\?v=20260815-chat-r8/, 'Family chat must load the same shared widget version as professor chat.');
-assert.match(professorDashboard, /chat-widget\.js\?v=20260815-chat-r8/, 'Professor chat must load the same shared widget version as family chat.');
-assert.match(adminDashboard, /chat-widget\.js\?v=20260815-chat-r8/, 'Admin chat must load the same shared widget version as family and professor chats.');
+assert.match(familyDashboard, /chat-widget\.js\?v=20260815-clear-notices/, 'Family chat must load the same shared widget version as professor chat.');
+assert.match(professorDashboard, /chat-widget\.js\?v=20260815-clear-notices/, 'Professor chat must load the same shared widget version as family chat.');
+assert.match(adminDashboard, /chat-widget\.js\?v=20260815-clear-notices/, 'Admin chat must load the same shared widget version as family and professor chats.');
 
 assert.match(chat, /\[`unreadBy\.\$\{uid\}`\] = increment\(1\)/, 'Each recipient must receive an unread counter increment.');
 assert.match(chat, /deliveredAtBy/, 'The chat must persist delivered receipts.');

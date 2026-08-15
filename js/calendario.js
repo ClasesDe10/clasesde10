@@ -7,7 +7,7 @@ import { nombreMes, nombreDia, formatHora } from './utils.js';
 import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js?v=20260815-calendar-semantics';
 
 export class Calendario {
-  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, classIndicatorPriority, legendItems, dayIndicatorMode, daySummaryLabel }) {
+  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, classIndicatorPriority, legendItems, dayIndicatorMode, daySummaryLabel, daySummaryItems }) {
     this.contenedor  = contenedor;
     this.onDiaClick  = onDiaClick || (() => {});
     this.onMesChange = onMesChange || (() => {});
@@ -15,6 +15,7 @@ export class Calendario {
     this.classIndicatorPriority = classIndicatorPriority || null;
     this.dayIndicatorMode = dayIndicatorMode || 'dots';
     this.daySummaryLabel = daySummaryLabel || ((classData, items) => this.defaultDaySummaryLabel(classData, items));
+    this.daySummaryItems = typeof daySummaryItems === 'function' ? daySummaryItems : null;
     this.legendItems = Array.isArray(legendItems) && legendItems.length
       ? legendItems
       : [
@@ -71,6 +72,15 @@ export class Calendario {
     if (!clases.length) return '';
     const ordered = [...clases].sort((a, b) => this.indicatorPriority(b) - this.indicatorPriority(a));
     if (this.dayIndicatorMode === 'summary') {
+      const summaries = this.daySummaryItems?.(ordered);
+      if (Array.isArray(summaries) && summaries.length) {
+        const visible = summaries.slice(0, 3);
+        const extraCount = Math.max(0, summaries.length - visible.length);
+        return `<div class="day-event-summary is-multiple">${visible.map((summary) => {
+          const tone = summary.className || 'dot-navy';
+          return `<span class="day-chip ${this.escapeHtml(tone)}">${this.escapeHtml(summary.label || 'Evento')}</span>`;
+        }).join('')}${extraCount ? `<span class="day-count">+${extraCount}</span>` : ''}</div>`;
+      }
       const first = ordered[0];
       const tone = this.classDotClass(first);
       const label = this.daySummaryLabel(first, ordered);
@@ -86,8 +96,10 @@ export class Calendario {
   dayStatusSummary(clases = []) {
     if (!clases.length) return 'Sin eventos';
     const ordered = [...clases].sort((a, b) => this.indicatorPriority(b) - this.indicatorPriority(a));
-    const labels = ordered
-      .map((item) => this.daySummaryLabel(item, ordered))
+    const summaries = this.daySummaryItems?.(ordered);
+    const labels = (Array.isArray(summaries) && summaries.length
+      ? summaries.map((item) => item.label)
+      : ordered.map((item) => this.daySummaryLabel(item, ordered)))
       .map((label) => String(label || '').trim())
       .filter((label, index, list) => label && list.indexOf(label) === index);
     return `${clases.length} evento(s): ${labels.slice(0, 4).join(', ')}`;
