@@ -23,6 +23,8 @@ const verifierPath = path.join(workspace, 'scripts', 'verify-class-financial-res
 const firebaseClientSource = await fs.readFile(path.join(workspace, 'js', 'firebase-client.js'), 'utf8');
 const apiKey = firebaseClientSource.match(/apiKey:\s*'([^']+)'/)?.[1];
 const DAY_MS = 24 * 60 * 60 * 1000;
+const ACCEPTANCE_PREFIX = 'post_reset_acceptance_';
+const identityCollections = ['users', 'familias', 'profesores', 'alumnos'];
 const cleanupCollections = [
   'clases',
   'pagos',
@@ -110,7 +112,32 @@ function isoDateDaysAgo(days) {
 
 function containsFixtureMarker(data, markers) {
   const text = JSON.stringify(data ?? {});
-  return markers.some((marker) => marker && text.includes(marker));
+  return text.includes(ACCEPTANCE_PREFIX) || markers.some((marker) => marker && text.includes(marker));
+}
+
+function storagePathsFromFixtureData(data = {}) {
+  const paths = new Set();
+  const visit = (value, key = '') => {
+    if (typeof value === 'string') {
+      const clean = value.trim().replace(/^\/+/, '');
+      if (/(?:storage|file|document|proof|receipt).*path|^(?:path|ruta)$/i.test(key)
+        && clean
+        && !/^https?:\/\//i.test(clean)
+        && !/^gs:\/\//i.test(clean)) {
+        paths.add(clean);
+      }
+      if (/^gs:\/\//i.test(clean)) paths.add(clean.replace(/^gs:\/\/[^/]+\//i, ''));
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => visit(item, key));
+      return;
+    }
+    Object.entries(value).forEach(([childKey, child]) => visit(child, childKey));
+  };
+  visit(data);
+  return Array.from(paths);
 }
 
 async function deleteReferences(db, references = []) {
@@ -122,8 +149,21 @@ async function deleteReferences(db, references = []) {
   return references.length;
 }
 
-async function cleanupFixture(db, bucket, fixture) {
-  const markers = Array.from(new Set([
+async function listAcceptanceAuthUsers() {
+  const matches = [];
+  let pageToken;
+  do {
+    const page = await admin.auth().listUsers(1000, pageToken);
+    page.users.forEach((user) => {
+      if (String(user.email || '').startsWith(ACCEPTANCE_PREFIX)) matches.push(user);
+    });
+    pageToken = page.pageToken;
+  } while (pageToken);
+  return matches;
+}
+
+async function cleanupAcceptanceArtifacts(db, bucket, fixture = {}) {
+  const currentMarkers = Array.from(new Set([
     fixture.prefix,
     fixture.family?.localId,
     fixture.teacher?.localId,
@@ -134,39 +174,67 @@ async function cleanupFixture(db, bucket, fixture) {
     fixture.paymentId,
     fixture.documentId,
   ].filter(Boolean)));
+  const fixtureUids = new Set([fixture.family?.localId, fixture.teacher?.localId, fixture.adminUser?.localId].filter(Boolean));
+  const identityReferences = [];
+  for (const collectionName of identityCollections) {
+    const snapshot = await db.collection(collectionName).get();
+    snapshot.docs.forEach((document) => {
+      if (!document.id.startsWith(ACCEPTANCE_PREFIX) && !containsFixtureMarker(document.data(), currentMarkers)) return;
+      identityReferences.push(document.ref);
+      fixtureUids.add(document.id);
+      const data = document.data() || {};
+      [data.userUid, data.usuario_id, data.familyUid, data.familia_id].filter(Boolean).forEach((uid) => fixtureUids.add(String(uid)));
+    });
+  }
+  const authUsers = await listAcceptanceAuthUsers();
+  authUsers.forEach((user) => fixtureUids.add(user.uid));
+  const markers = Array.from(new Set([...currentMarkers, ...fixtureUids]));
   let deletedDocuments = 0;
+  const explicitStoragePaths = new Set();
   for (const collectionName of cleanupCollections) {
     const snapshot = await db.collection(collectionName).get();
-    const references = snapshot.docs
-      .filter((document) => document.id.startsWith(fixture.prefix) || containsFixtureMarker(document.data(), markers))
-      .map((document) => document.ref);
+    const references = [];
+    snapshot.docs.forEach((document) => {
+      if (!document.id.startsWith(ACCEPTANCE_PREFIX) && !containsFixtureMarker(document.data(), markers)) return;
+      references.push(document.ref);
+      storagePathsFromFixtureData(document.data() || {}).forEach((storagePath) => explicitStoragePaths.add(storagePath));
+    });
     deletedDocuments += await deleteReferences(db, references);
   }
+  deletedDocuments += await deleteReferences(db, identityReferences);
 
-  const exactPaths = [
-    fixture.studentId ? `alumnos/${fixture.studentId}` : '',
-    fixture.family?.localId ? `familias/${fixture.family.localId}` : '',
-    fixture.family?.localId ? `users/${fixture.family.localId}` : '',
-    fixture.teacher?.localId ? `profesores/${fixture.teacher.localId}` : '',
-    fixture.teacher?.localId ? `users/${fixture.teacher.localId}` : '',
-    fixture.adminUser?.localId ? `users/${fixture.adminUser.localId}` : '',
-  ].filter(Boolean);
-  deletedDocuments += await deleteReferences(db, exactPaths.map((documentPath) => db.doc(documentPath)));
-
-  const storagePrefixes = fixture.family?.localId ? [`pagos/${fixture.family.localId}/`] : [];
   let deletedStorageFiles = 0;
-  for (const prefix of storagePrefixes) {
+  for (const uid of fixtureUids) {
+    const prefix = `pagos/${uid}/`;
     const [files] = await bucket.getFiles({ prefix });
     for (const file of files) {
       await file.delete({ ignoreNotFound: true });
       deletedStorageFiles += 1;
     }
   }
+  for (const storagePath of explicitStoragePaths) {
+    const file = bucket.file(storagePath);
+    const [exists] = await file.exists();
+    if (!exists) continue;
+    await file.delete({ ignoreNotFound: true });
+    deletedStorageFiles += 1;
+  }
 
+  for (let index = 0; index < authUsers.length; index += 1000) {
+    await admin.auth().deleteUsers(authUsers.slice(index, index + 1000).map((user) => user.uid));
+  }
   for (const account of [fixture.family, fixture.teacher, fixture.adminUser]) {
     if (account?.idToken) await identity('delete', { idToken: account.idToken }).catch(() => {});
   }
-  return { deletedDocuments, deletedStorageFiles };
+  const remainingAuthUsers = await listAcceptanceAuthUsers();
+  assert.equal(remainingAuthUsers.length, 0, 'Temporary acceptance Auth users remain after cleanup.');
+  return {
+    deletedDocuments,
+    deletedStorageFiles,
+    deletedAuthUsers: authUsers.length,
+    remainingAuthUsers: remainingAuthUsers.length,
+    recoveredFixtureUids: fixtureUids.size,
+  };
 }
 
 function runIndependentVerification() {
@@ -598,8 +666,10 @@ const preconditions = await assertResetPreconditions();
 initializeFirebase();
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
+const preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket);
+const preFixtureVerification = runIndependentVerification();
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const prefix = `post_reset_acceptance_${suffix}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+const prefix = `${ACCEPTANCE_PREFIX}${suffix}`.replace(/[^a-zA-Z0-9_-]/g, '_');
 const fixture = {
   db,
   prefix,
@@ -664,7 +734,7 @@ try {
   ]);
   await browser?.close().catch(() => {});
   try {
-    cleanup = await cleanupFixture(db, bucket, fixture);
+    cleanup = await cleanupAcceptanceArtifacts(db, bucket, fixture);
     postCleanupVerification = runIndependentVerification();
   } catch (error) {
     flowError ||= error;
@@ -679,6 +749,13 @@ console.log(JSON.stringify({
   baseUrl,
   verifiedAt: new Date().toISOString(),
   preconditions,
+  preflightCleanup,
+  preFixtureVerification: {
+    mode: preFixtureVerification.mode,
+    clean: preFixtureVerification.clean,
+    verifiedAt: preFixtureVerification.verifiedAt,
+    preservedFamilyProfiles: preFixtureVerification.preservedFamilyProfiles,
+  },
   flow: flowResult,
   cleanup,
   postCleanupVerification: {

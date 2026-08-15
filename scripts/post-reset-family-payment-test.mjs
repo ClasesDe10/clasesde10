@@ -18,7 +18,10 @@ assert(source.includes("setInputFiles({") && source.includes('proofDocumentCreat
 assert(source.includes("window.validarPago(paymentId, 'validado'") && source.includes('atomic admin payment approval'), 'The flow must approve the proof through the authenticated admin application.');
 assert(source.includes('Admin CRM profile is missing') && source.includes('Hijo Aceptacion'), 'The flow must verify full family and child identity in the admin CRM.');
 assert(source.includes('liveUnlockWithoutReload') && source.includes("classList.contains('payment-paid')"), 'The flow must verify live unlock and green paid calendar state.');
-assert(source.includes('finally {') && source.includes('cleanupFixture(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');
+assert(source.includes('preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket)') && source.includes('preFixtureVerification = runIndependentVerification()'), 'A retry must remove orphan fixtures and prove a clean pre-test state.');
+assert(source.includes('finally {') && source.includes('cleanupAcceptanceArtifacts(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');
+assert(source.includes('listAcceptanceAuthUsers') && source.includes('admin.auth().deleteUsers') && source.includes('remainingAuthUsers.length, 0'), 'Cleanup must recover and remove temporary Firebase Auth accounts from prior attempts.');
+assert(source.indexOf('authUsers.forEach((user) => fixtureUids.add(user.uid))') < source.indexOf('for (const uid of fixtureUids)'), 'Auth UIDs must be recovered before proof-storage cleanup.');
 assert(source.includes("identity('delete'") && source.includes("bucket.getFiles({ prefix })"), 'Cleanup must remove temporary identities and proof files.');
 assert(source.includes('postCleanupVerification = runIndependentVerification()'), 'A second independent zero verification must run after cleanup.');
 
