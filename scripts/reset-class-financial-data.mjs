@@ -25,6 +25,11 @@ const wholeCollections = [
   'metricSnapshots',
   'analyticsDailyRollups',
   'resumenMensual',
+  'resumenProfesorMes',
+  'teacherMonthlySummaries',
+  'dashboardStats',
+  'adminStats',
+  'classViews',
   'platformHealthChecks',
   'preventiveRiskSnapshots',
   'alertPrioritySnapshots',
@@ -418,7 +423,7 @@ async function deleteStorageFiles(bucket, paths) {
 
 async function verify(db, bucket, deletedStoragePaths = []) {
   const remaining = {};
-  for (const collectionName of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'resumenMensual']) {
+  for (const collectionName of wholeCollections) {
     const snap = await db.collection(collectionName).limit(1).get();
     remaining[collectionName] = snap.size;
   }

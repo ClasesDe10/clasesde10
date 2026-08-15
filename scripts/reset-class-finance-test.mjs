@@ -28,6 +28,11 @@ for (const collection of [
   'metricSnapshots',
   'analyticsDailyRollups',
   'resumenMensual',
+  'resumenProfesorMes',
+  'teacherMonthlySummaries',
+  'dashboardStats',
+  'adminStats',
+  'classViews',
   'platformHealthChecks',
   'preventiveRiskSnapshots',
   'alertPrioritySnapshots',
@@ -66,6 +71,7 @@ assert(source.includes('remainingChatClassFinancePreviews'), 'Production reset m
 assert(source.includes("collectionGroup('reacciones')") && source.includes('context.chatMessageIds.has(messageId)'), 'Production reset must remove reactions orphaned by deleted class/payment chat messages.');
 assert(source.includes('data.attachment') && source.includes('storagePathsFromData(doc.data())'), 'Production reset must discover payment proofs attached inside chats.');
 assert(source.includes('remainingDerivedTargets') && source.includes('remainingLockedFamilies'), 'Production reset must verify derived data and family locks are empty after deletion.');
+assert(source.includes('for (const collectionName of wholeCollections)'), 'The reset must verify every whole derived collection, including historical aliases.');
 assert(source.includes('if (!verification.clean) process.exitCode = 2'), 'Production reset must fail when final zero-state verification is not clean.');
 assert(verifierSource.includes("mode: 'read_only_independent_verification'"), 'The independent verifier must identify its read-only mode.');
 assert(verifierSource.includes("resetState.status !== 'completed'") && verifierSource.includes('resetState.verification?.clean !== true'), 'The independent verifier must refuse to run without a completed clean reset state.');

@@ -75,6 +75,11 @@ async function seed(db, bucket) {
     'metricSnapshots/snapshot_1': { payments: { pending: 1 }, classes: { total: 2 } },
     'analyticsDailyRollups/2026-07-10': { payments: 1, classes: 2, revenue: 40 },
     'resumenMensual/2026-07': { ingresos: 40, clases: 2 },
+    'resumenProfesorMes/teacher_1_2026-07': { totalClases: 2, totalFacturado: 85, totalProfesor: 60 },
+    'teacherMonthlySummaries/teacher_1_2026-07': { classCount: 2, billedAmount: 85, teacherAmount: 60 },
+    'dashboardStats/current': { clasesMes: 2, ingresosMes: 85, comisionesMes: 25, pagosPendientes: 1 },
+    'adminStats/current': { classesThisMonth: 2, monthlyRevenue: 85, pendingPayments: 1 },
+    'classViews/class_past': { classId: 'class_past', familyAmount: 40, teacherAmount: 30 },
     'platformHealthChecks/health_1': { what: '1 pago pendiente', status: 'attention' },
     'preventiveRiskSnapshots/risk_snapshot_1': { classes: 2 },
     'alertPrioritySnapshots/alert_snapshot_1': { payments: 1 },
@@ -224,6 +229,11 @@ async function assertReset(db, bucket, result, manifests) {
     'metricSnapshots',
     'analyticsDailyRollups',
     'resumenMensual',
+    'resumenProfesorMes',
+    'teacherMonthlySummaries',
+    'dashboardStats',
+    'adminStats',
+    'classViews',
     'platformHealthChecks',
     'preventiveRiskSnapshots',
     'alertPrioritySnapshots',
@@ -319,6 +329,11 @@ async function assertReset(db, bucket, result, manifests) {
   assert(backedUpPaths.has('clases/class_future'));
   assert(backedUpPaths.has('pagos/payment_1'));
   assert(backedUpPaths.has('resumenMensual/2026-07'));
+  assert(backedUpPaths.has('resumenProfesorMes/teacher_1_2026-07'));
+  assert(backedUpPaths.has('teacherMonthlySummaries/teacher_1_2026-07'));
+  assert(backedUpPaths.has('dashboardStats/current'));
+  assert(backedUpPaths.has('adminStats/current'));
+  assert(backedUpPaths.has('classViews/class_past'));
   assert(backedUpPaths.has('documentos/payment_receipt'));
   assert.equal(backedUpPaths.has('documentos/identity_document'), false);
   const backedUpStoragePaths = new Set(manifests.flatMap((manifest) => manifest.storageFiles
