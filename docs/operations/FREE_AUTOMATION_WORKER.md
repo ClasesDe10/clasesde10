@@ -18,7 +18,7 @@ El worker usa Firebase Admin SDK con una cuenta de servicio guardada como secret
 
 ## Frecuencia
 
-- Cada 10 minutos: modo `critical`, para formularios nuevos, cuentas familiares asistidas, clases, pagos, justificantes, incidencias, recordatorios y jobs pendientes.
+- Cada 2 horas: modo `critical`, para formularios nuevos, cuentas familiares asistidas, clases, pagos, justificantes, incidencias, recordatorios y jobs pendientes, con un consumo de cuota compatible con Spark.
 - Cada noche a las 03:17 UTC: modo `full`, para analitica, confianza, escala y limpiezas mas pesadas.
 - Manual desde GitHub Actions: modos `critical`, `full` o `trust`, con opcion `dry_run`.
 

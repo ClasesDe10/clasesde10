@@ -15,7 +15,7 @@ const source = fs.readFileSync(new URL('./reset-class-financial-data.mjs', impor
 assert(source.includes("const APPLY_TOKEN = 'DELETE_CLASS_FINANCE_DATA'"), 'Production reset must require an explicit confirmation token.');
 assert(source.includes("const apply = args.has('--apply')"), 'Production reset must remain a dry-run by default.');
 assert(source.indexOf('writeBackup(bucket, targets') < source.indexOf('deleteFirestoreTargets(db, targets)'), 'Backup must complete before any Firestore deletion.');
-for (const collection of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'platformHealthChecks']) {
+for (const collection of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'resumenMensual', 'platformHealthChecks', 'importAudits', 'legacyImports']) {
   assert(source.includes(`'${collection}'`), `Production reset must cover ${collection}.`);
 }
 assert(source.includes("prefix: 'pagos/'"), 'Production reset must remove payment receipts from Storage.');

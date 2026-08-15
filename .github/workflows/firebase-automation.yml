@@ -94,6 +94,12 @@ jobs:
           REQUESTED_LIMIT: ${{ github.event.inputs.limit }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
+          # Reserve the one-off production reset window. The next scheduled run
+          # (10:17 UTC) remains enabled automatically after this dated guard.
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$(date -u +%Y-%m-%dT%H)" = "2026-08-16T08" ]; then
+            echo "Skipping the 2026-08-16 08:17 UTC worker during the class/finance reset window."
+            exit 0
+          fi
           MODE="$REQUESTED_MODE"
           if [ -z "$MODE" ]; then
             MODE="critical"
