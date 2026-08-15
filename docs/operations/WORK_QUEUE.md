@@ -59,6 +59,7 @@ Auditar y completar de forma autónoma toda la cola de solicitudes del hilo para
 ## Último punto de control
 
 - Fecha: 2026-08-15.
+- Auditoría de cierre requisito por requisito: `docs/operations/CLASS_FINANCE_COMPLETION_AUDIT.md`.
 - Completado: Q01-Q24 y Q27-Q28 reconciliados, implementados, desplegados y verificados en producción; Q25-Q26 y Q29 en curso.
 - Evidencia final Q24: batería integral verde; sesiones reales de admin, profesor y familia cerradas en `clasesde10.com`, confirmación visible y rutas protegidas rechazadas tras salir; caché PWA v87 activa.
 - Evidencia final Q27: batería integral verde; código productivo con deuda familiar agrupada, arrastre de pagos docentes, avisos humanizados y PWA v91; render de los módulos servidos por producción inspeccionado en navegador real y sin solapamientos.
