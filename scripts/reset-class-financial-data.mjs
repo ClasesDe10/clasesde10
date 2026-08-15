@@ -70,7 +70,7 @@ const scheduleMessageNeedles = [
   'clase creada',
 ];
 const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendance|asistencia|schedule|horario|payment|pago(?:s)?|bizum|justificante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b/i;
-const financialMessageWords = /(?:\b(?:payment|pago(?:s)?|bizum|justificante(?:s)?|impago(?:s)?|cobro(?:s)?|dinero|importe(?:s)?|euro(?:s)?|transferencia(?:s)?|recibo(?:s)?|factura(?:s)?|liquidaci[oó]n(?:es)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€)/i;
+const financialMessageWords = /(?:\b(?:payment|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|dinero|importe(?:s)?|euro(?:s)?|transferencia(?:s)?|recibo(?:s)?|factura(?:s)?|liquidaci[oó]n(?:es)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€)/i;
 const trustSnapshotFields = [
   'trustScore', 'trustLevel', 'trustLevelKey', 'trustLevelRank', 'trustLevelLabel',
   'trustVersion', 'trustUpdatedAtIso', 'trustUpdatedAt', 'trustBadges', 'trustWarnings',
