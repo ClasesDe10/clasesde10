@@ -57,7 +57,7 @@ const filteredCollections = [
   'importAudits',
   'legacyImports',
 ];
-const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendance|asistencia|schedule|horario|payment|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€/i;
+const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendances?|asistencias?|schedules?|horarios?|payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as)|revenues?|ingresos?|amounts?|importes?|euros?|commissions?|comisiones?|statistics?|estad[ií]sticas?|stats?|metrics?|analytics?)\b|€/i;
 const paymentDocumentWords = /(?:justificante|comprobante|receipt|recibo|payment|pago|bizum|transferencia|factura)/i;
 const familyResetFields = new Set([
   'updatedAt',
@@ -88,6 +88,12 @@ function initFirebase() {
 
 function jsonText(value) {
   return JSON.stringify(value ?? {}).slice(0, 200000);
+}
+
+function derivedSearchText(value) {
+  return jsonText(value)
+    .replace(/([a-záéíóúüñ0-9])([A-ZÁÉÍÓÚÜÑ])/g, '$1 $2')
+    .replace(/[_./:\\-]+/g, ' ');
 }
 
 function stable(value) {
@@ -244,7 +250,7 @@ async function main() {
     .map((item) => item.path)
     .sort();
   const remainingDerivedDocuments = filteredRows
-    .filter((item) => derivedWords.test(jsonText(item.data)))
+    .filter((item) => derivedWords.test(derivedSearchText(item.data)))
     .map((item) => item.path)
     .filter((documentPath) => !remainingPaymentDocuments.includes(documentPath))
     .sort();
@@ -252,13 +258,13 @@ async function main() {
   const chats = await listDocs(db, 'chats');
   const remainingChatClassState = chats.filter((item) => chatHasClassState(item.data)).map((item) => item.path).sort();
   const remainingChatClassFinancePreviews = chats
-    .filter((item) => derivedWords.test(jsonText(item.data.lastMessage)))
+    .filter((item) => derivedWords.test(derivedSearchText(item.data.lastMessage)))
     .map((item) => item.path)
     .sort();
   const scheduleRows = await collectionGroupDocs(db, 'programaciones');
   const messageRows = await collectionGroupDocs(db, 'mensajes');
   const remainingClassFinanceMessages = messageRows
-    .filter((item) => derivedWords.test(jsonText(item.data)))
+    .filter((item) => derivedWords.test(derivedSearchText(item.data)))
     .map((item) => item.path)
     .sort();
   const lockedFamilies = await db.collection('familias').where('paymentAccessLocked', '==', true).get();

@@ -99,6 +99,7 @@ async function seed(db, bucket) {
     'notificaciones/payment_notice': { type: 'family_payment_pending', message: 'Pago pendiente' },
     'incidencias/payment_incident': { classId: 'class_past', description: 'Revisar cobro' },
     'analyticsEvents/payment_event': { event: 'payment.created', paymentId: 'payment_1' },
+    'analyticsEvents/revenue_metric': { eventType: 'monthlyRevenueUpdated', pendingPayments: 2, value: 85 },
     'automationEvents/payment_automation': { type: 'payment.reminder', paymentId: 'payment_1' },
     'automationRuleRuns/payment_rule': { trigger: 'payment.overdue', paymentId: 'payment_1' },
     'auditLogs/payment_audit': { module: 'payments', entityId: 'payment_1' },
@@ -121,6 +122,7 @@ async function seed(db, bucket) {
       classResetGeneration: 'old-generation',
     },
     'chats/chat_1/mensajes/schedule_message': { body: 'Horario semanal aceptado', classId: 'class_future' },
+    'chats/chat_1/mensajes/technical_schedule_message': { type: 'weekly_schedule', proposalStatus: 'accepted' },
     'chats/chat_1/mensajes/payment_attachment': {
       body: 'Justificante de pago adjunto',
       attachment: {
@@ -142,6 +144,7 @@ async function seed(db, bucket) {
     'documentBlobChunks/identity_chunk': { documentId: 'identity_document', index: 0, bytes: 'identity' },
     'busySlots/manual_slot': { source: 'manual_availability', weekday: 2 },
     'notificaciones/profile_notice': { type: 'profile_complete', message: 'Todo correcto' },
+    'analyticsEvents/profile_event': { eventType: 'profile_completed', section: 'contact_details' },
     'incidencias/login_incident': { category: 'login', description: 'No puedo entrar' },
     'importAudits/contact_import': { description: 'Contactos importados' },
     'legacyImports/user_legacy': { source: 'usuarios', rows: 1 },
@@ -252,10 +255,12 @@ async function assertReset(db, bucket, result, manifests) {
     'busySlots/class_slot',
     'notificaciones/payment_notice',
     'incidencias/payment_incident',
+    'analyticsEvents/revenue_metric',
     'importAudits/class_import',
     'legacyImports/payment_legacy',
     'chats/chat_1/programaciones/proposal_1',
     'chats/chat_1/mensajes/schedule_message',
+    'chats/chat_1/mensajes/technical_schedule_message',
     'chats/chat_1/mensajes/payment_attachment',
     'chats/chat_1/reacciones/payment_attachment_family_1',
   ]) {
@@ -269,6 +274,7 @@ async function assertReset(db, bucket, result, manifests) {
     'busySlots/manual_slot',
     'notificaciones/profile_notice',
     'incidencias/login_incident',
+    'analyticsEvents/profile_event',
     'importAudits/contact_import',
     'legacyImports/user_legacy',
     'chats/chat_1/mensajes/hello_message',
@@ -334,6 +340,7 @@ async function assertReset(db, bucket, result, manifests) {
   assert(backedUpPaths.has('dashboardStats/current'));
   assert(backedUpPaths.has('adminStats/current'));
   assert(backedUpPaths.has('classViews/class_past'));
+  assert(backedUpPaths.has('analyticsEvents/revenue_metric'));
   assert(backedUpPaths.has('documentos/payment_receipt'));
   assert.equal(backedUpPaths.has('documentos/identity_document'), false);
   const backedUpStoragePaths = new Set(manifests.flatMap((manifest) => manifest.storageFiles

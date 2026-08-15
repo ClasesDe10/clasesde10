@@ -74,8 +74,8 @@ const scheduleMessageNeedles = [
   'Clase puntual rechazada',
   'clase creada',
 ];
-const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendance|asistencia|schedule|horario|payment|pago(?:s)?|bizum|justificante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b/i;
-const financialMessageWords = /(?:\b(?:payment|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|dinero|importe(?:s)?|euro(?:s)?|transferencia(?:s)?|recibo(?:s)?|factura(?:s)?|liquidaci[oó]n(?:es)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€)/i;
+const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendances?|asistencias?|schedules?|horarios?|payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as)|revenues?|ingresos?|amounts?|importes?|euros?|commissions?|comisiones?|statistics?|estad[ií]sticas?|stats?|metrics?|analytics?)\b/i;
+const financialMessageWords = /(?:\b(?:payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|dinero|amounts?|importe(?:s)?|euro(?:s)?|transferencia(?:s)?|recibo(?:s)?|factura(?:s)?|liquidaci[oó]n(?:es)?|revenues?|ingresos?|commissions?|comisiones?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€)/i;
 const trustSnapshotFields = [
   'trustScore', 'trustLevel', 'trustLevelKey', 'trustLevelRank', 'trustLevelLabel',
   'trustVersion', 'trustUpdatedAtIso', 'trustUpdatedAt', 'trustBadges', 'trustWarnings',
@@ -103,6 +103,12 @@ function stable(value) {
 
 function textOf(value) {
   return JSON.stringify(stable(value) || {}).slice(0, 100000);
+}
+
+function derivedSearchText(value) {
+  return textOf(value)
+    .replace(/([a-záéíóúüñ0-9])([A-ZÁÉÍÓÚÜÑ])/g, '$1 $2')
+    .replace(/[_./:\\-]+/g, ' ');
 }
 
 function normalizeStoragePath(value) {
@@ -151,10 +157,12 @@ function storagePathsFromData(data = {}) {
 }
 
 function paymentDocument(data = {}) {
-  const type = String(data.type || data.tipo || data.documentType || '').toLowerCase();
+  const type = derivedSearchText([
+    data.type, data.tipo, data.documentType, data.category, data.categoria, data.name, data.nombre,
+  ].filter(Boolean));
   const source = String(data.source || data.origen || '').toLowerCase();
   const storagePaths = storagePathsFromData(data).map((item) => item.toLowerCase());
-  return ['justificante_pago', 'pago', 'payment_receipt', 'receipt'].includes(type)
+  return /\b(justificantes?|comprobantes?|payment receipts?|receipts?|recibos?|payments?|pagos?|bizum|transferencias?|facturas?)\b/i.test(type)
     || source.includes('familia_pago')
     || storagePaths.some((storagePath) => storagePath.startsWith('pagos/') || storagePath.includes('/pagos/'));
 }
@@ -172,7 +180,8 @@ function scheduleMessageText(value) {
 }
 
 function classFinanceMessageText(value) {
-  return scheduleMessageText(value) || financialMessageWords.test(String(value || ''));
+  const searchable = derivedSearchText(value);
+  return scheduleMessageText(value) || derivedWords.test(searchable) || financialMessageWords.test(searchable);
 }
 
 function shouldDeleteFiltered(collectionName, doc, context) {
@@ -180,14 +189,14 @@ function shouldDeleteFiltered(collectionName, doc, context) {
   if (collectionName === 'documentos') return paymentDocument(data);
   if (collectionName === 'busySlots') {
     return Boolean(data.classId || data.class_id || data.clase_id || data.calendarUid)
-      || derivedWords.test(String(data.source || data.type || data.kind || data.status || ''));
+      || derivedWords.test(derivedSearchText({ source: data.source, type: data.type, kind: data.kind, status: data.status }));
   }
   if (['documentBlobs', 'documentBlobChunks'].includes(collectionName)) {
     const documentId = String(data.documentId || data.documento_id || data.parentDocumentId || '');
     return context.paymentDocumentIds.has(documentId) || paymentDocument(data);
   }
   if (directReferenceIds(data).some((id) => context.classIds.has(id) || context.paymentIds.has(id) || context.paymentDocumentIds.has(id))) return true;
-  return derivedWords.test(textOf(data));
+  return derivedWords.test(derivedSearchText(data));
 }
 
 async function listDocs(db, collectionName) {
@@ -579,7 +588,7 @@ async function main() {
   if (!verification.clean) process.exitCode = 2;
 }
 
-export { derivedWords, normalizeStoragePath, paymentDocument, storagePathsFromData };
+export { derivedSearchText, derivedWords, normalizeStoragePath, paymentDocument, storagePathsFromData };
 
 const launchedDirectly = Boolean(process.argv[1])
   && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;

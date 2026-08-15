@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import {
+  derivedSearchText,
   derivedWords,
   normalizeStoragePath,
   paymentDocument,
@@ -66,6 +67,7 @@ assert(source.includes("parsed.pathname.match(/\\/o\\/([^/?]+)/i)"), 'Production
 assert(source.includes("file.download({ destination })"), 'Production reset must copy receipt binaries locally before deletion.');
 assert(source.includes('remainingPaymentStoragePaths'), 'Production reset must verify every targeted receipt path after deletion.');
 assert(source.includes("collectionGroup('programaciones')") && source.includes("collectionGroup('mensajes')"), 'Production reset must remove scheduled-class artifacts embedded in chats.');
+assert(source.includes('derivedWords.test(searchable)') && source.includes('classFinanceMessageText'), 'Technical class and payment identifiers in chat messages must be removed.');
 assert(source.includes('classFinanceMessageText(data.lastMessage)') && source.includes('lastMessageId: deletedField'), 'Production reset must clear chat previews that still expose deleted class or financial data.');
 assert(source.includes('remainingChatClassFinancePreviews'), 'Production reset must verify that no class or financial preview remains in a chat document.');
 assert(source.includes("collectionGroup('reacciones')") && source.includes('context.chatMessageIds.has(messageId)'), 'Production reset must remove reactions orphaned by deleted class/payment chat messages.');
@@ -94,8 +96,12 @@ assert(
   'Current and historical receipt paths must be collected.',
 );
 assert(paymentDocument({ type: 'justificante_pago', receiptUrl: 'https://evil.example/a.png' }) === true, 'Receipt document types must be detected.');
+assert(paymentDocument({ category: 'pagos', name: 'Comprobante bancario' }) === true, 'Historical payment document categories must be detected.');
 assert(paymentDocument({ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/pagos%2Fa%2Fproof.png?alt=media' }) === true, 'Receipt download URLs must be detected.');
 assert(derivedWords.test('classification result') === false, 'Derived-data matching must not delete unrelated classification records.');
 assert(derivedWords.test('Pago de clases pendiente') === true, 'Payment and class-derived data must be detected.');
+assert(derivedWords.test(derivedSearchText({ eventType: 'overdue_payments', monthlyRevenue: 85, pendingPayments: 2 })) === true, 'Snake-case and camel-case financial metrics must be detected.');
+assert(derivedWords.test(derivedSearchText({ type: 'weekly_schedule', proposalStatus: 'accepted' })) === true, 'Technical chat scheduling identifiers must be detected.');
+assert(derivedWords.test(derivedSearchText({ eventType: 'profile_completed', section: 'contact_details' })) === false, 'Unrelated profile events must remain outside the reset.');
 
 console.log('Class and finance reset safety validation passed.');
