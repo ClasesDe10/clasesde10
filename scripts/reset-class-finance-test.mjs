@@ -1,4 +1,10 @@
 import fs from 'node:fs';
+import {
+  derivedWords,
+  normalizeStoragePath,
+  paymentDocument,
+  storagePathsFromData,
+} from './reset-class-financial-data.mjs';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -8,13 +14,33 @@ const source = fs.readFileSync(new URL('./reset-class-financial-data.mjs', impor
 
 assert(source.includes("const APPLY_TOKEN = 'DELETE_CLASS_FINANCE_DATA'"), 'Production reset must require an explicit confirmation token.');
 assert(source.includes("const apply = args.has('--apply')"), 'Production reset must remain a dry-run by default.');
-assert(source.indexOf('writeBackup(targets') < source.indexOf('deleteFirestoreTargets(db, targets)'), 'Backup must complete before any Firestore deletion.');
-for (const collection of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups']) {
+assert(source.indexOf('writeBackup(bucket, targets') < source.indexOf('deleteFirestoreTargets(db, targets)'), 'Backup must complete before any Firestore deletion.');
+for (const collection of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'platformHealthChecks']) {
   assert(source.includes(`'${collection}'`), `Production reset must cover ${collection}.`);
 }
 assert(source.includes("prefix: 'pagos/'"), 'Production reset must remove payment receipts from Storage.');
+assert(source.includes('storagePathsFromData(doc.data())'), 'Production reset must discover receipt files from payment and document records.');
+assert(source.includes("parsed.pathname.match(/\\/o\\/([^/?]+)/i)"), 'Production reset must decode Firebase download URLs into Storage paths.');
+assert(source.includes("file.download({ destination })"), 'Production reset must copy receipt binaries locally before deletion.');
+assert(source.includes('remainingPaymentStoragePaths'), 'Production reset must verify every targeted receipt path after deletion.');
 assert(source.includes("collectionGroup('programaciones')") && source.includes("collectionGroup('mensajes')"), 'Production reset must remove scheduled-class artifacts embedded in chats.');
 assert(source.includes('remainingDerivedTargets') && source.includes('remainingLockedFamilies'), 'Production reset must verify derived data and family locks are empty after deletion.');
 assert(source.includes('if (!verification.clean) process.exitCode = 2'), 'Production reset must fail when final zero-state verification is not clean.');
+
+assert(normalizeStoragePath('gs://clasesde10-50add.firebasestorage.app/pagos/family/receipt.png') === 'pagos/family/receipt.png', 'gs:// receipt paths must normalize.');
+assert(
+  normalizeStoragePath('https://firebasestorage.googleapis.com/v0/b/clasesde10-50add.firebasestorage.app/o/pagos%2Ffamily%2Freceipt.png?alt=media&token=x') === 'pagos/family/receipt.png',
+  'Firebase download URLs must normalize.',
+);
+assert(normalizeStoragePath('https://evil.example/receipt.png') === '', 'External URLs must never become local bucket deletion targets.');
+assert(
+  JSON.stringify(storagePathsFromData({ storagePath: 'pagos/a/current.png', versions: [{ storage_path: 'pagos/a/old.png' }] }).sort())
+    === JSON.stringify(['pagos/a/current.png', 'pagos/a/old.png']),
+  'Current and historical receipt paths must be collected.',
+);
+assert(paymentDocument({ type: 'justificante_pago', receiptUrl: 'https://evil.example/a.png' }) === true, 'Receipt document types must be detected.');
+assert(paymentDocument({ url: 'https://firebasestorage.googleapis.com/v0/b/x/o/pagos%2Fa%2Fproof.png?alt=media' }) === true, 'Receipt download URLs must be detected.');
+assert(derivedWords.test('classification result') === false, 'Derived-data matching must not delete unrelated classification records.');
+assert(derivedWords.test('Pago de clases pendiente') === true, 'Payment and class-derived data must be detected.');
 
 console.log('Class and finance reset safety validation passed.');

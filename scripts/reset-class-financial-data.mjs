@@ -2,6 +2,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import admin from 'firebase-admin';
 import { buildFamilyPaymentAccessPatch } from '../js/payment-engine.js';
 
@@ -18,6 +19,7 @@ const wholeCollections = [
   'classLifecycleEvents',
   'metricSnapshots',
   'analyticsDailyRollups',
+  'platformHealthChecks',
   'preventiveRiskSnapshots',
   'alertPrioritySnapshots',
   'platformSupervisionSnapshots',
@@ -46,6 +48,8 @@ const filteredCollections = [
   'relationshipFollowups',
   'proactiveAssistSignals',
   'internalAiInsights',
+  'adminAiQueries',
+  'crmNotes',
 ];
 const scheduleMessageNeedles = [
   'Horario semanal aceptado',
@@ -55,7 +59,7 @@ const scheduleMessageNeedles = [
   'Clase puntual propuesta',
   'clase creada',
 ];
-const derivedWords = /(class|clase|attendance|asistencia|schedule|horario|payment|pago|bizum|justificante|impago|cobro|economic|financ)/i;
+const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendance|asistencia|schedule|horario|payment|pago(?:s)?|bizum|justificante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b/i;
 const trustSnapshotFields = [
   'trustScore', 'trustLevel', 'trustLevelKey', 'trustLevelRank', 'trustLevelLabel',
   'trustVersion', 'trustUpdatedAtIso', 'trustUpdatedAt', 'trustBadges', 'trustWarnings',
@@ -85,14 +89,55 @@ function textOf(value) {
   return JSON.stringify(stable(value) || {}).slice(0, 100000);
 }
 
+function normalizeStoragePath(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^gs:\/\//i.test(raw)) {
+    return raw.replace(/^gs:\/\/[^/]+\//i, '').replace(/^\/+/, '');
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const parsed = new URL(raw);
+      const googleStorageHost = parsed.hostname === 'firebasestorage.googleapis.com'
+        || parsed.hostname === 'storage.googleapis.com'
+        || parsed.hostname.endsWith('.storage.googleapis.com');
+      if (!googleStorageHost) return '';
+      const firebaseObject = parsed.pathname.match(/\/o\/([^/?]+)/i);
+      if (firebaseObject) return decodeURIComponent(firebaseObject[1]).replace(/^\/+/, '');
+      const storageObject = parsed.hostname === 'storage.googleapis.com'
+        ? parsed.pathname.replace(/^\/[^/]+\//, '')
+        : parsed.pathname.replace(/^\/+/, '');
+      return decodeURIComponent(storageObject).replace(/^\/+/, '');
+    } catch {
+      return '';
+    }
+  }
+  return raw.replace(/^\/+/, '');
+}
+
+function storagePathsFromData(data = {}) {
+  const values = [
+    data.storagePath, data.storage_path, data.path, data.url,
+    data.proofPath, data.proof_path, data.receiptPath, data.receipt_path,
+    data.proofUrl, data.receiptUrl, data.downloadUrl, data.download_url,
+  ];
+  for (const list of [data.versions, data.versiones, data.files, data.archivos]) {
+    if (!Array.isArray(list)) continue;
+    list.forEach((item) => {
+      if (item && typeof item === 'object') values.push(...storagePathsFromData(item));
+      else values.push(item);
+    });
+  }
+  return Array.from(new Set(values.map(normalizeStoragePath).filter(Boolean)));
+}
+
 function paymentDocument(data = {}) {
   const type = String(data.type || data.tipo || data.documentType || '').toLowerCase();
   const source = String(data.source || data.origen || '').toLowerCase();
-  const storagePath = String(data.storagePath || data.storage_path || data.path || data.url || '').toLowerCase();
+  const storagePaths = storagePathsFromData(data).map((item) => item.toLowerCase());
   return ['justificante_pago', 'pago', 'payment_receipt', 'receipt'].includes(type)
     || source.includes('familia_pago')
-    || storagePath.startsWith('pagos/')
-    || storagePath.includes('/pagos/');
+    || storagePaths.some((storagePath) => storagePath.startsWith('pagos/') || storagePath.includes('/pagos/'));
 }
 
 function directReferenceIds(data = {}) {
@@ -136,21 +181,17 @@ async function collectTargets(db) {
     const docs = await listDocs(db, collectionName);
     docs.forEach(add);
     if (collectionName === 'clases') docs.forEach((doc) => context.classIds.add(doc.id));
-    if (collectionName === 'pagos') docs.forEach((doc) => context.paymentIds.add(doc.id));
+    if (collectionName === 'pagos') docs.forEach((doc) => {
+      context.paymentIds.add(doc.id);
+      storagePathsFromData(doc.data()).forEach((storagePath) => context.storagePaths.add(storagePath));
+    });
   }
 
   const paymentDocs = await listDocs(db, 'documentos');
   paymentDocs.filter((doc) => paymentDocument(doc.data())).forEach((doc) => {
     add(doc);
     context.paymentDocumentIds.add(doc.id);
-    const data = doc.data() || {};
-    const storagePath = data.storagePath || data.storage_path || data.path || data.url;
-    if (storagePath && !/^https?:/i.test(String(storagePath))) {
-      const normalizedPath = String(storagePath)
-        .replace(/^gs:\/\/[^/]+\//i, '')
-        .replace(/^\/+/, '');
-      if (normalizedPath) context.storagePaths.add(normalizedPath);
-    }
+    storagePathsFromData(doc.data()).forEach((storagePath) => context.storagePaths.add(storagePath));
   });
 
   for (const collectionName of filteredCollections.filter((name) => name !== 'documentos')) {
@@ -173,27 +214,58 @@ async function collectTargets(db) {
 
 async function storageTargets(bucket, explicitPaths) {
   const paths = new Set(explicitPaths);
-  const [files] = await bucket.getFiles({ prefix: 'pagos/' }).catch(() => [[]]);
+  const [files] = await bucket.getFiles({ prefix: 'pagos/' });
   files.forEach((file) => paths.add(file.name));
   return Array.from(paths).filter(Boolean).sort();
 }
 
-async function writeBackup(targets, storagePaths, chatDocs, familyDocs, professorDocs) {
+async function writeBackup(bucket, targets, storagePaths, chatDocs, familyDocs, professorDocs) {
   await fs.mkdir(backupRoot, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(backupRoot, `class-finance-reset-${stamp}.json`);
+  const backupDirectory = path.join(backupRoot, `class-finance-reset-${stamp}`);
+  const storageBackupDirectory = path.join(backupDirectory, 'storage');
+  const backupPath = path.join(backupDirectory, 'firestore-and-storage-manifest.json');
+  await fs.mkdir(storageBackupDirectory, { recursive: true });
+  const storageFiles = [];
+  for (const storagePath of storagePaths) {
+    const destination = path.resolve(storageBackupDirectory, ...storagePath.split('/').filter(Boolean));
+    const expectedRoot = `${path.resolve(storageBackupDirectory)}${path.sep}`;
+    if (!destination.startsWith(expectedRoot)) throw new Error(`Unsafe Storage backup path: ${storagePath}`);
+    const file = bucket.file(storagePath);
+    const [exists] = await file.exists();
+    if (!exists) {
+      storageFiles.push({ path: storagePath, existed: false });
+      continue;
+    }
+    await fs.mkdir(path.dirname(destination), { recursive: true });
+    await file.download({ destination });
+    const [metadata] = await file.getMetadata();
+    storageFiles.push({
+      path: storagePath,
+      existed: true,
+      localRelativePath: path.relative(backupDirectory, destination),
+      size: Number(metadata.size || 0),
+      contentType: metadata.contentType || '',
+      md5Hash: metadata.md5Hash || '',
+    });
+  }
   const payload = {
     projectId: PROJECT_ID,
     createdAt: new Date().toISOString(),
     scope: 'classes, payments, payment receipts, schedules, class/payment derived data',
     firestoreDocuments: targets.map((doc) => ({ path: doc.ref.path, data: stable(doc.data()) })),
     storagePaths,
+    storageFiles,
     chatDocumentsBeforeReset: chatDocs.map((doc) => ({ path: doc.ref.path, data: stable(doc.data()) })),
     familyProfilesBeforeDerivedReset: familyDocs.map((doc) => ({ path: doc.ref.path, data: stable(doc.data()) })),
     professorProfilesBeforeDerivedReset: professorDocs.map((doc) => ({ path: doc.ref.path, data: stable(doc.data()) })),
   };
   await fs.writeFile(backupPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-  return backupPath;
+  return {
+    backupPath,
+    backupDirectory,
+    backedUpStorageFiles: storageFiles.filter((file) => file.existed).length,
+  };
 }
 
 async function deleteFirestoreTargets(db, targets) {
@@ -248,7 +320,7 @@ async function deleteStorageFiles(bucket, paths) {
   return results.length;
 }
 
-async function verify(db, bucket) {
+async function verify(db, bucket, deletedStoragePaths = []) {
   const remaining = {};
   for (const collectionName of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups']) {
     const snap = await db.collection(collectionName).limit(1).get();
@@ -262,20 +334,30 @@ async function verify(db, bucket) {
       || (Array.isArray(data.activeClassIds) && data.activeClassIds.length > 0);
   });
   const remainingLockedFamilies = (await listDocs(db, 'familias')).filter((doc) => doc.data()?.paymentAccessLocked === true);
-  const [remainingStorage] = await bucket.getFiles({ prefix: 'pagos/', maxResults: 1 }).catch(() => [[]]);
+  const [remainingPaymentPrefixStorage] = await bucket.getFiles({ prefix: 'pagos/' });
+  const explicitlyRemainingStorage = [];
+  for (const storagePath of deletedStoragePaths) {
+    const [exists] = await bucket.file(storagePath).exists();
+    if (exists) explicitlyRemainingStorage.push(storagePath);
+  }
+  const remainingStoragePaths = Array.from(new Set([
+    ...remainingPaymentPrefixStorage.map((file) => file.name),
+    ...explicitlyRemainingStorage,
+  ])).sort();
   return {
     remaining,
     remainingPaymentDocuments: remainingPaymentDocs,
     remainingDerivedTargets: remainingDerivedTargets.map((doc) => doc.ref.path),
     remainingChatClassState: remainingChatClassState.map((doc) => doc.ref.path),
     remainingLockedFamilies: remainingLockedFamilies.map((doc) => doc.ref.path),
-    remainingPaymentStorageFiles: remainingStorage.length,
+    remainingPaymentStorageFiles: remainingStoragePaths.length,
+    remainingPaymentStoragePaths: remainingStoragePaths,
     clean: Object.values(remaining).every((count) => count === 0)
       && remainingPaymentDocs === 0
       && remainingDerivedTargets.length === 0
       && remainingChatClassState.length === 0
       && remainingLockedFamilies.length === 0
-      && remainingStorage.length === 0,
+      && remainingStoragePaths.length === 0,
   };
 }
 
@@ -311,14 +393,14 @@ async function main() {
     console.log(JSON.stringify(inventory, null, 2));
     return;
   }
-  const backupPath = await writeBackup(targets, storagePaths, chatDocs, familyDocs, professorDocs);
+  const backup = await writeBackup(bucket, targets, storagePaths, chatDocs, familyDocs, professorDocs);
   const deletedFirestoreDocuments = await deleteFirestoreTargets(db, targets);
   const profileReset = await resetProfilesAndChats(db, chatDocs, familyDocs, professorDocs);
   const deletedStorageFiles = await deleteStorageFiles(bucket, storagePaths);
-  const verification = await verify(db, bucket);
+  const verification = await verify(db, bucket, storagePaths);
   console.log(JSON.stringify({
     ...inventory,
-    backupPath,
+    ...backup,
     deletedFirestoreDocuments,
     deletedStorageFiles,
     ...profileReset,
@@ -327,14 +409,21 @@ async function main() {
   if (!verification.clean) process.exitCode = 2;
 }
 
-main().catch((error) => {
-  console.error(error?.stack || error?.message || error);
-  if (error?.code || error?.details || error?.metadata) {
-    console.error(JSON.stringify({
-      code: error.code,
-      details: error.details,
-      metadata: error.metadata?.getMap ? error.metadata.getMap() : error.metadata,
-    }, null, 2));
-  }
-  process.exit(1);
-});
+export { derivedWords, normalizeStoragePath, paymentDocument, storagePathsFromData };
+
+const launchedDirectly = Boolean(process.argv[1])
+  && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+
+if (launchedDirectly) {
+  main().catch((error) => {
+    console.error(error?.stack || error?.message || error);
+    if (error?.code || error?.details || error?.metadata) {
+      console.error(JSON.stringify({
+        code: error.code,
+        details: error.details,
+        metadata: error.metadata?.getMap ? error.metadata.getMap() : error.metadata,
+      }, null, 2));
+    }
+    process.exit(1);
+  });
+}
