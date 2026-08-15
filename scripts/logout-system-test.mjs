@@ -33,6 +33,7 @@ assert.match(firebaseAuth, /window\.location\.replace\(logoutOptions\.redirectTo
 assert.match(login, /const logoutCompleted = loginParams\.get\('logout'\) === '1';/, 'Login must recognize a completed logout.');
 assert.match(login, /showSuccess\('Has cerrado sesión correctamente\.'\);/, 'Login must confirm the completed logout.');
 assert.match(css, /\.sidebar-logout:disabled,[\s\S]*?cursor: wait;[\s\S]*?opacity: \.7;/, 'The pending logout state must be visually clear.');
-assert.match(serviceWorker, /clasesde10-pwa-v87/, 'The hardened logout must ship with a new PWA cache revision.');
+const pwaCacheRevision = Number(serviceWorker.match(/clasesde10-pwa-v(\d+)/)?.[1] || 0);
+assert.ok(pwaCacheRevision >= 87, 'The hardened logout must keep its PWA cache revision or a newer one.');
 
 console.log('Logout system: OK (admin, professor and family).');

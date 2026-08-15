@@ -37,7 +37,23 @@ async (page) => {
   await page.locator('[data-action="ver-familia"]').first().click();
   await page.locator('#modal-familia-detalle').waitFor({ state: 'visible', timeout: 12000 });
   const modalText = await page.locator('#familia-detalle-body').textContent().catch(() => '');
-  if (!modalText.includes('Ficha CRM') || !modalText.includes('Cronologia operacional') || !modalText.includes('Notas privadas y tareas')) {
+  const requiredFamilySections = [
+    'Ficha CRM familiar',
+    'Datos propios de la familia',
+    'Contacto familiar',
+    'Domicilio y zona de servicio',
+    'Alumnos y servicio contratado',
+    'Confianza familiar',
+    'Cronologia de la familia',
+    'Notas y seguimiento familiar',
+    'Documentos y justificantes',
+  ];
+  const missingFamilySections = requiredFamilySections.filter((text) => !modalText.includes(text));
+  if (missingFamilySections.length) {
+    throw new Error(`Admin family CRM detail modal is missing: ${missingFamilySections.join(', ')}.`);
+  }
+  const professorOnlyConcepts = /horas impartidas|puntualidad|respuesta media|aceptacion|Formacion y experiencia|Tarifa profesor\/h|Tiene coche|Cobro y operacion|Verificar profesor|Diagnostico IA/i;
+  if (professorOnlyConcepts.test(modalText)) {
     throw new Error('Admin family CRM detail modal did not render the expected CRM sections.');
   }
 
@@ -51,7 +67,8 @@ async (page) => {
     hasBulkToolbar: Boolean(hasBulkToolbar),
     hasRiskFilter: Boolean(hasRiskFilter),
     hasSelectionColumn: Boolean(hasSelectionColumn),
-    modalHasCrm: modalText.includes('Ficha CRM'),
+    modalHasCrm: modalText.includes('Ficha CRM familiar'),
+    modalHasOnlyFamilyConcepts: !professorOnlyConcepts.test(modalText),
     legacyUnavailable: tableText.includes('No hay datos disponibles para este modulo'),
     empty: tableText.includes('Sin resultados.'),
     firstRow: tableText.replace(/\s+/g, ' ').trim().slice(0, 180),

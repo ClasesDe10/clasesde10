@@ -47,6 +47,7 @@ export const PAID_PAYMENT_STATUSES = Object.freeze(['validado', 'pagado', 'paid'
 export const OPEN_PAYMENT_STATUSES = Object.freeze(['pendiente', 'solicitado', 'procesando', 'requiere_accion']);
 export const REOPEN_FAMILY_PAYMENT_STATUSES = Object.freeze(['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado']);
 export const DEFAULT_FAMILY_PAYMENT_GRACE_HOURS = 48;
+export const FAMILY_PAYMENT_ACCESS_LOCK_DAYS = 30;
 const PAYMENT_DAY_MS = 24 * 60 * 60 * 1000;
 export const FAMILY_PAYMENT_RECIPIENT = Object.freeze({
   name: 'Miguel G. G.',
@@ -932,14 +933,128 @@ export function buildGatewayPaymentUpdate(event = {}, options = {}) {
   };
 }
 
+function familyAttendanceDecision(classData = {}) {
+  return cleanPaymentText(
+    classData.familyConfirmationStatus
+    || classData.confirmacion_familia
+    || classData.familyAttendanceStatus,
+    40,
+  ).toLowerCase();
+}
+
+export function hasFamilyAttendanceDecision(classData = {}) {
+  return ['realizada', 'no_realizada', 'incidencia'].includes(familyAttendanceDecision(classData));
+}
+
+export function isFamilyConfirmedGivenClass(classData = {}) {
+  return familyAttendanceDecision(classData) === 'realizada';
+}
+
+function classEndMsForPayment(classData = {}) {
+  const explicit = classData.endAt || classData.endsAt || classData.end_at || classData.classEndAt;
+  if (explicit?.toDate) return explicit.toDate().getTime();
+  if (Number.isFinite(explicit?.seconds)) return explicit.seconds * 1000;
+  if (explicit) {
+    const parsed = new Date(explicit).getTime();
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  const date = cleanPaymentText(classData.fecha || classData.date, 20).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NaN;
+  const time = cleanPaymentText(classData.hora_fin || classData.endTime || classData.hora_inicio || classData.startTime || '23:59', 8).slice(0, 5);
+  const parsed = new Date(`${date}T${/^\d{2}:\d{2}$/.test(time) ? time : '23:59'}:00`).getTime();
+  return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function classIsCancelledForPayment(classData = {}) {
+  const status = cleanPaymentText(classData.estado || classData.status || classData.lifecycleStatus, 60).toLowerCase();
+  return ['cancelada', 'cancelado', 'no_realizada', 'reprogramada'].includes(status);
+}
+
 export function unpaidFamilyClasses(classes = []) {
   return classes.filter((item) => {
-    const classStatus = cleanPaymentText(item.estado || item.status, 40).toLowerCase();
     const paymentStatus = normalizePaymentStatus(item.familyPaymentStatus || item.estado_pago_familia || item.estado_pago || item.paymentStatus);
-    return ['realizada', 'completada', 'completed'].includes(classStatus)
+    return isFamilyConfirmedGivenClass(item)
+      && !classIsCancelledForPayment(item)
       && !PAID_PAYMENT_STATUSES.includes(paymentStatus)
       && classPaymentAmount(item) > 0;
   });
+}
+
+/**
+ * Derives the family payment gate from class facts only. A proof that is still
+ * being reviewed deliberately does not unlock access: the linked classes only
+ * become paid after an administrator validates that proof.
+ */
+export function buildFamilyPaymentAccessState(classes = [], scheduleIndex = new Map(), options = {}) {
+  const nowMs = Number(options.nowMs ?? Date.now());
+  const lockDays = Math.max(1, Number(options.lockDays ?? FAMILY_PAYMENT_ACCESS_LOCK_DAYS) || FAMILY_PAYMENT_ACCESS_LOCK_DAYS);
+  const lockAgeMs = lockDays * PAYMENT_DAY_MS;
+  const activeClasses = (classes || []).filter((item) => !classIsCancelledForPayment(item));
+  const unpaidClasses = unpaidFamilyClasses(activeClasses);
+  const overdueDebtClasses = [];
+
+  for (const classData of unpaidClasses) {
+    const schedule = paymentScheduleForClass(classData, scheduleIndex);
+    const dueAt = weeklyPaymentDueAtForClass(classData, schedule, options);
+    const dueMs = dueAt ? new Date(dueAt).getTime() : classEndMsForPayment(classData);
+    if (!Number.isFinite(dueMs) || nowMs - dueMs <= lockAgeMs) continue;
+    overdueDebtClasses.push({
+      ...classData,
+      paymentDueAt: dueAt || new Date(dueMs).toISOString(),
+      paymentOverdueDays: Math.floor((nowMs - dueMs) / PAYMENT_DAY_MS),
+      paymentAmount: classPaymentAmount(classData),
+    });
+  }
+
+  const unmarkedDueClasses = activeClasses.filter((classData) => {
+    if (hasFamilyAttendanceDecision(classData)) return false;
+    const endedMs = classEndMsForPayment(classData);
+    if (!Number.isFinite(endedMs) || endedMs > nowMs) return false;
+    const schedule = paymentScheduleForClass(classData, scheduleIndex);
+    const dueAt = weeklyPaymentDueAtForClass(classData, schedule, options);
+    const dueMs = dueAt ? new Date(dueAt).getTime() : endedMs;
+    return Number.isFinite(dueMs) && dueMs <= nowMs;
+  }).map((classData) => ({
+    ...classData,
+    paymentDueAt: weeklyPaymentDueAtForClass(classData, paymentScheduleForClass(classData, scheduleIndex), options),
+  }));
+
+  const oldestDebt = overdueDebtClasses
+    .slice()
+    .sort((a, b) => String(a.paymentDueAt || '').localeCompare(String(b.paymentDueAt || '')))[0] || null;
+  const debtAmount = Math.round(overdueDebtClasses.reduce((sum, item) => sum + classPaymentAmount(item), 0) * 100) / 100;
+
+  return {
+    locked: overdueDebtClasses.length > 0,
+    reason: overdueDebtClasses.length ? 'unpaid_classes_over_30_days' : '',
+    lockDays,
+    debtAmount,
+    debtClassCount: overdueDebtClasses.length,
+    debtClassIds: overdueDebtClasses.map((item) => String(item.id || '')).filter(Boolean),
+    overdueDebtClasses,
+    oldestDebtDueAt: oldestDebt?.paymentDueAt || '',
+    oldestDebtDays: Number(oldestDebt?.paymentOverdueDays || 0),
+    unmarkedDueClassCount: unmarkedDueClasses.length,
+    unmarkedDueClassIds: unmarkedDueClasses.map((item) => String(item.id || '')).filter(Boolean),
+    unmarkedDueClasses,
+    paymentSubmissionBlocked: unmarkedDueClasses.length > 0,
+  };
+}
+
+export function buildFamilyPaymentAccessPatch(access = {}, options = {}) {
+  const nowIso = options.nowIso || new Date().toISOString();
+  return {
+    paymentAccessLocked: access.locked === true,
+    paymentAccessStatus: access.locked === true ? 'blocked_overdue_payment' : 'active',
+    paymentAccessReason: access.locked === true ? (access.reason || 'unpaid_classes_over_30_days') : null,
+    paymentAccessDebtAmount: access.locked === true ? Math.round(Number(access.debtAmount || 0) * 100) / 100 : 0,
+    paymentAccessDebtClassCount: access.locked === true ? Number(access.debtClassCount || 0) : 0,
+    paymentAccessDebtClassIds: access.locked === true ? (access.debtClassIds || []).map(String).filter(Boolean).slice(0, 100) : [],
+    paymentAccessOldestDebtDueAt: access.locked === true ? (access.oldestDebtDueAt || null) : null,
+    paymentAccessLockedAt: access.locked === true ? (options.lockedAt || nowIso) : null,
+    paymentAccessRestoredAt: access.locked === true ? null : nowIso,
+    paymentAccessUpdatedAt: nowIso,
+  };
 }
 
 function paymentHasReviewableProof(payment = {}) {

@@ -55,6 +55,6 @@ assert(worker.includes("schemaVersion: audit.schemaVersion || 'audit_log_v1'"), 
 assert(worker.includes('processEntityAutomationBackfill'), 'Worker must materialize audit events without deployed Functions.');
 
 assert(pkg.includes('test:audit-system'), 'package.json must expose audit system test.');
-assert(pkg.includes('js/audit-client.js'), 'Syntax check must include audit client.');
+assert(pkg.includes('scripts/syntax-check.mjs'), 'Package scripts must use the recursive syntax validator that covers the audit client.');
 
 console.log(JSON.stringify({ ok: true, checked: 'audit_system' }, null, 2));

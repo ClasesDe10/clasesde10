@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-calendar-semantics">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-family-payment-lock">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -99,6 +99,25 @@
     </header>
 
     <div class="page-content">
+      <section class="family-payment-access-banner" id="family-payment-access-banner" hidden aria-live="assertive">
+        <div>
+          <span class="family-payment-access-kicker">Acceso limitado por pagos pendientes</span>
+          <h2>Regulariza las clases pendientes para recuperar todo el panel</h2>
+          <p id="family-payment-access-copy">Puedes seguir entrando al calendario y enviar el justificante. El acceso completo volvera cuando el administrador lo valide.</p>
+        </div>
+        <div class="family-payment-access-actions">
+          <button class="btn btn-primary" type="button" data-section="calendario">Revisar calendario</button>
+          <button class="btn btn-outline" type="button" data-section="pagos">Subir justificante</button>
+        </div>
+      </section>
+
+      <section class="family-payment-marking-banner" id="family-payment-marking-banner" hidden aria-live="polite">
+        <div>
+          <strong>Antes de pagar, marca las clases pasadas</strong>
+          <span id="family-payment-marking-copy">Indica en el calendario si cada clase se dio o no se dio.</span>
+        </div>
+        <button class="btn btn-outline btn-sm" type="button" data-section="calendario">Marcar clases</button>
+      </section>
 
       <!-- ══ INICIO ══ -->
       <section id="section-inicio" class="dash-section">
@@ -810,6 +829,7 @@ import {
   applyClassPaymentContext,
   buildFamilyClassPaymentConfirmationPayload,
   buildFamilyPaymentConfirmationGroups,
+  buildFamilyPaymentAccessState,
   buildFamilyPaymentPayload,
   buildPaymentScheduleIndex,
   buildWeeklyPaymentSchedulePayload,
@@ -821,7 +841,7 @@ import {
   paymentScheduleLabel,
   paymentStatusForBadge,
   samePaymentRelation,
-} from '../../js/payment-engine.js?v=20260710-calendar-polish2';
+} from '../../js/payment-engine.js?v=20260815-family-payment-lock';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260815-chat-r8';
 import { initNotificationCenter } from '../../js/notification-center.js?v=20260808-action-center';
@@ -857,7 +877,7 @@ import {
   oneOffClassId,
   oneOffProposalToClassRow,
 } from '../../js/one-off-proposal-actions.js?v=20260707-visible-one-off-v1';
-import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, onSnapshot, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
   showToast, initModals, initSidebar, openModal, closeModal, confirmAction, promptAction,
@@ -928,6 +948,16 @@ let disponibilidadHijosCache = new Map();
 let paymentSchedulesCache = new Map();
 let familyPaymentGroupsCache = new Map();
 let activePaymentGroup = null;
+let familyPaymentAccess = {
+  locked: familiaData?.paymentAccessLocked === true,
+  debtAmount: Number(familiaData?.paymentAccessDebtAmount || 0),
+  debtClassCount: Number(familiaData?.paymentAccessDebtClassCount || 0),
+  unmarkedDueClassCount: 0,
+  paymentSubmissionBlocked: false,
+};
+let familyPaymentAccessLocked = familyPaymentAccess.locked;
+let persistedPaymentAccessLocked = familiaData?.paymentAccessLocked === true;
+let familyUnlockedFeaturesInitialized = false;
 let oneOffPlannerChatsCache = [];
 let oneOffProposalRowsById = new Map();
 const FAMILY_ONE_OFF_OVERRIDABLE_AVAILABILITY_REASONS = new Set([
@@ -959,6 +989,69 @@ function familyPaymentQueryIds() {
 function formatEuros(value) {
   const amount = Number(value || 0);
   return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+const FAMILY_PAYMENT_ALLOWED_SECTIONS = new Set(['calendario', 'pagos']);
+
+function applyFamilyPaymentAccessState(nextState = {}) {
+  const hasExplicitLockState = typeof nextState.locked === 'boolean';
+  const locked = hasExplicitLockState
+    ? nextState.locked === true
+    : persistedPaymentAccessLocked || familyPaymentAccess.locked === true;
+  familyPaymentAccess = {
+    ...familyPaymentAccess,
+    ...nextState,
+    locked,
+    debtAmount: Number(nextState.debtAmount ?? familyPaymentAccess.debtAmount ?? familiaData?.paymentAccessDebtAmount ?? 0),
+    debtClassCount: Number(nextState.debtClassCount ?? familyPaymentAccess.debtClassCount ?? familiaData?.paymentAccessDebtClassCount ?? 0),
+  };
+  familyPaymentAccessLocked = locked;
+  document.body.classList.toggle('family-payment-access-locked', locked);
+
+  const accessBanner = document.getElementById('family-payment-access-banner');
+  const accessCopy = document.getElementById('family-payment-access-copy');
+  if (accessBanner) accessBanner.hidden = !locked;
+  if (accessCopy && locked) {
+    const classes = familyPaymentAccess.debtClassCount || 1;
+    const amount = familyPaymentAccess.debtAmount > 0 ? ` (${formatEuros(familyPaymentAccess.debtAmount)})` : '';
+    accessCopy.textContent = `Hay ${classes} clase${classes === 1 ? '' : 's'} con mas de 30 dias de impago${amount}. Solo puedes usar el calendario y enviar el justificante hasta que el administrador lo valide.`;
+  }
+
+  const markingCount = Number(nextState.unmarkedDueClassCount ?? familyPaymentAccess.unmarkedDueClassCount ?? 0);
+  const markingBanner = document.getElementById('family-payment-marking-banner');
+  const markingCopy = document.getElementById('family-payment-marking-copy');
+  if (markingBanner) markingBanner.hidden = markingCount <= 0;
+  if (markingCopy && markingCount > 0) {
+    markingCopy.textContent = `Tienes ${markingCount} clase${markingCount === 1 ? '' : 's'} pasada${markingCount === 1 ? '' : 's'} sin marcar. Indica si se dio o no se dio; solo las impartidas entraran en el pago.`;
+  }
+
+  if (locked) {
+    const visibleSection = document.querySelector('.dash-section:not([style*="display:none"])')?.id?.replace('section-', '') || '';
+    if (visibleSection && !FAMILY_PAYMENT_ALLOWED_SECTIONS.has(visibleSection)) irA('calendario');
+  }
+}
+
+async function loadFamilyClassesForAccessCheck() {
+  const familyIds = familyPaymentQueryIds();
+  const [byFamilyUid, byFamiliaId] = await Promise.all([
+    cargarFirestoreIn('clases', 'familyUid', familyIds),
+    cargarFirestoreIn('clases', 'familia_id', familyIds),
+  ]);
+  return mergeById([...byFamilyUid, ...byFamiliaId]);
+}
+
+async function refreshFamilyPaymentAccessState(classes = null) {
+  try {
+    await cargarPaymentSchedulesFamilia();
+    const sourceClasses = Array.isArray(classes) ? classes : await loadFamilyClassesForAccessCheck();
+    const derived = buildFamilyPaymentAccessState(sourceClasses, paymentScheduleIndexFamilia());
+    applyFamilyPaymentAccessState(derived);
+    return derived;
+  } catch (error) {
+    console.warn('No se pudo recalcular el acceso familiar por pagos', error);
+    applyFamilyPaymentAccessState(familyPaymentAccess);
+    return familyPaymentAccess;
+  }
 }
 
 function parseIsoLocalDate(value) {
@@ -1433,7 +1526,8 @@ function renderFamilyCalendarActions(clase, attendance) {
 }
 
 function irA(sec, options = {}) {
-  if (profileCompletionRequired && sec !== 'perfil') sec = 'perfil';
+  if (familyPaymentAccessLocked && !FAMILY_PAYMENT_ALLOWED_SECTIONS.has(sec)) sec = 'calendario';
+  else if (profileCompletionRequired && sec !== 'perfil') sec = 'perfil';
   if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
   document.getElementById(`section-${sec}`).style.display = '';
@@ -1466,14 +1560,19 @@ initSidebar();
   if (overlay?.parentElement !== document.body) document.body.appendChild(overlay);
 });
 initModals();
-initNotificacionesBadge(usuario.uid || usuario.id, db);
-initNotificationCenter({
-  container: document.getElementById('notification-center-familia'),
-  usuario,
-  role: 'familia',
-  showToast,
-  navigateSection: (section) => { irA(section); return true; },
-});
+function initFamilyUnlockedFeatures() {
+  if (familyUnlockedFeaturesInitialized || familyPaymentAccessLocked) return;
+  familyUnlockedFeaturesInitialized = true;
+  initNotificacionesBadge(usuario.uid || usuario.id, db);
+  initNotificationCenter({
+    container: document.getElementById('notification-center-familia'),
+    usuario,
+    role: 'familia',
+    showToast,
+    navigateSection: (section) => { irA(section); return true; },
+  });
+  cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
+}
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (!btn) return;
@@ -2330,11 +2429,11 @@ async function cargarClasesFamilia(options = {}) {
   const studentIds = [...new Set((options.ids || hijos.map((hijo) => hijo.id)).filter(Boolean))];
   const familyIds = familyPaymentQueryIds();
   const [byParticipant, byStudent, byFamilyUid, byFamiliaId, chatsRelacion] = await Promise.all([
-    cargarClasesParticipanteFamilia(),
+    familyPaymentAccessLocked ? Promise.resolve([]) : cargarClasesParticipanteFamilia(),
     studentIds.length ? cargarClasesPorAlumnos(studentIds, { ...options, hijosPorId }) : Promise.resolve([]),
     cargarFirestoreIn('clases', 'familyUid', familyIds),
     cargarFirestoreIn('clases', 'familia_id', familyIds),
-    cargarChatsUsuarioActual(),
+    familyPaymentAccessLocked ? Promise.resolve([]) : cargarChatsUsuarioActual(),
   ]);
   let rows = mergeById([
     ...byParticipant,
@@ -2342,25 +2441,27 @@ async function cargarClasesFamilia(options = {}) {
     ...byFamilyUid,
     ...byFamiliaId,
   ]).map((clase) => normalizeClassRow(clase, hijosPorId));
-  const recurrenceSeeds = await loadAcceptedRecurringScheduleSeeds({
-    firebaseDb,
-    firestoreCollection,
-    getDocs,
-    chats: chatsRelacion || [],
-    classes: rows,
-  });
-  const extendedRows = await asegurarClasesRecurrentesFamilia(rows, {
-    ...options,
-    recurrenceSeeds,
-  });
-  if (extendedRows.length) {
-    rows = mergeById([...rows, ...extendedRows]).map((clase) => normalizeClassRow(clase, hijosPorId));
-  }
-  const pendingOneOffRows = await cargarPropuestasPuntualesFamilia(chatsRelacion || []);
-  if (pendingOneOffRows.length) {
-    rows = mergeById([...rows, ...pendingOneOffRows]).map((clase) => (
-      isOneOffProposalRow(clase) ? clase : normalizeClassRow(clase, hijosPorId)
-    ));
+  if (!familyPaymentAccessLocked) {
+    const recurrenceSeeds = await loadAcceptedRecurringScheduleSeeds({
+      firebaseDb,
+      firestoreCollection,
+      getDocs,
+      chats: chatsRelacion || [],
+      classes: rows,
+    });
+    const extendedRows = await asegurarClasesRecurrentesFamilia(rows, {
+      ...options,
+      recurrenceSeeds,
+    });
+    if (extendedRows.length) {
+      rows = mergeById([...rows, ...extendedRows]).map((clase) => normalizeClassRow(clase, hijosPorId));
+    }
+    const pendingOneOffRows = await cargarPropuestasPuntualesFamilia(chatsRelacion || []);
+    if (pendingOneOffRows.length) {
+      rows = mergeById([...rows, ...pendingOneOffRows]).map((clase) => (
+        isOneOffProposalRow(clase) ? clase : normalizeClassRow(clase, hijosPorId)
+      ));
+    }
   }
 
   if (options.strictStudentFilter && studentIds.length) {
@@ -2886,13 +2987,14 @@ async function cargarClasesCalendario(anio, mes) {
   const [data, pagos, chats] = await Promise.all([
     cargarClasesFamilia({ hijos: hijosFamilia, ids, hijosPorId, desde: desdeCalculo, hasta, limit: 500 }),
     cargarPagosFamiliaFirestore(),
-    cargarChatsUsuarioActual(),
+    familyPaymentAccessLocked ? Promise.resolve([]) : cargarChatsUsuarioActual(),
   ]);
   const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijosFamilia, clases: data, chats });
   hydratePaymentSchedulesForCalendar(identityResolver);
   const propuestasPuntuales = data.filter(isOneOffProposalRow).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const clasesReales = data.filter((clase) => !isOneOffProposalRow(clase));
   const clasesConPago = applyClassPaymentContext(clasesReales, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  applyFamilyPaymentAccessState(buildFamilyPaymentAccessState(clasesConPago, paymentScheduleIndexFamilia()));
   const clasesMes = clasesConPago.filter((clase) => {
     const dateIso = classDateIso(clase);
     return dateIso >= desde && dateIso <= hasta;
@@ -3594,7 +3696,7 @@ function mergedPaymentGroupForScheduleDate(schedule = {}, dateIso = '', groups =
     return dueDate && dueDate < dateIso;
   });
   const sourceGroups = [...carryoverGroups, ...currentGroups];
-  const currentPeriodClasses = mergeFamilyPaymentClasses(currentGroups, 'current');
+  const currentPeriodClasses = mergeFamilyPaymentClasses(currentGroups, 'due');
   const overdueClasses = mergeFamilyPaymentClasses(carryoverGroups, 'overdue');
   const classes = [...overdueClasses, ...currentPeriodClasses];
   const key = paymentScheduleGroupKey(schedule, dateIso);
@@ -3637,6 +3739,39 @@ function mergedPaymentGroupForScheduleDate(schedule = {}, dateIso = '', groups =
     teacherName: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, sourceGroups[0]?.teacherName, sourceGroups[0]?.profesor_nombre),
     profesor_nombre: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, sourceGroups[0]?.teacherName, sourceGroups[0]?.profesor_nombre),
   };
+}
+
+function familyPaymentWorkbenchGroups(groups = [], nowMs = Date.now()) {
+  const result = [];
+  const consumedKeys = new Set();
+  const schedules = uniqueFamilyPaymentSchedules();
+  schedules.forEach((schedule) => {
+    const relationGroups = groups.filter((group) => familyPaymentSameRelation(schedule, group));
+    const dueGroups = relationGroups.filter((group) => {
+      const dueMs = group.dueAt ? new Date(group.dueAt).getTime() : NaN;
+      return Number.isFinite(dueMs) && dueMs <= nowMs;
+    });
+    if (dueGroups.length) {
+      const latestDue = dueGroups.slice().sort((a, b) => String(b.dueAt || '').localeCompare(String(a.dueAt || '')))[0];
+      const latestDate = paymentGroupDateIso(latestDue);
+      const merged = mergedPaymentGroupForScheduleDate(schedule, latestDate, groups);
+      result.push({
+        ...merged,
+        dueNow: !merged.overdue,
+        upcoming: false,
+        paymentWindow: merged.overdue ? 'overdue' : 'due_now',
+      });
+      dueGroups.forEach((group) => consumedKeys.add(group.key));
+    }
+  });
+  groups.forEach((group) => {
+    if (!consumedKeys.has(group.key) && !result.some((item) => item.key === group.key)) result.push(group);
+  });
+  return result.sort((a, b) => {
+    if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    if (a.dueNow !== b.dueNow) return a.dueNow ? -1 : 1;
+    return String(a.dueAt || '9999').localeCompare(String(b.dueAt || '9999'));
+  });
 }
 
 function paymentScheduleDatesForMonth(schedule = {}, anio, mes) {
@@ -4601,6 +4736,13 @@ function renderPaymentGroupCard(group = {}) {
     : '';
   const rows = (group.classes || []).slice(0, 4).map(renderPaymentClassLine).join('');
   const extra = group.classCount > 4 ? `<li><span>Y ${group.classCount - 4} clase(s) mas</span><strong></strong></li>` : '';
+  const isUpcoming = group.paymentWindow === 'upcoming' || group.upcoming;
+  const attendanceBlocked = familyPaymentAccess.paymentSubmissionBlocked === true;
+  const action = isUpcoming
+    ? '<em class="payment-action-unavailable">Disponible cuando llegue el dia de pago.</em>'
+    : attendanceBlocked
+      ? '<button class="btn btn-outline btn-sm" type="button" data-section="calendario">Marcar clases antes de pagar</button>'
+      : `<button class="btn btn-primary btn-sm" data-action="confirmar-pago-grupo" data-key="${sanitize(group.key)}">Pagar todas y subir justificante</button>`;
   return `
     <article class="payment-confirm-card ${paymentWindow.cardClass}">
       <div class="payment-confirm-card-head">
@@ -4620,7 +4762,7 @@ function renderPaymentGroupCard(group = {}) {
           <strong>${sanitize(formatEuros(group.amount))}</strong>
           <em>Limite: ${sanitize(due)}</em>
         </div>
-        <button class="btn btn-primary btn-sm" data-action="confirmar-pago-grupo" data-key="${sanitize(group.key)}">Elegir clases y registrar</button>
+        ${action}
       </div>
     </article>`;
 }
@@ -4796,8 +4938,10 @@ async function cargarPagos() {
   const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijos || [], clases, chats });
   hydratePaymentSchedulesForCalendar(identityResolver);
   const clasesConIdentidad = clases.map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
-  const groups = buildFamilyPaymentConfirmationGroups(clasesConIdentidad, pagos, paymentScheduleIndexFamilia())
+  applyFamilyPaymentAccessState(buildFamilyPaymentAccessState(clasesConIdentidad, paymentScheduleIndexFamilia()));
+  const rawGroups = buildFamilyPaymentConfirmationGroups(clasesConIdentidad, pagos, paymentScheduleIndexFamilia())
     .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
+  const groups = familyPaymentWorkbenchGroups(rawGroups);
   familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
   renderFamilyPaymentWorkbench(groups, pagos, Boolean((hijos || []).length || clases.length));
 
@@ -4907,6 +5051,7 @@ function renderPaymentClassSelection(group = {}) {
         <label class="payment-class-selection-row ${copy.rowClass}">
           <input type="checkbox"
                  checked
+                 disabled
                  data-payment-bucket="${sanitize(bucket)}"
                  data-payment-class-id="${sanitize(clase.id)}"
                  data-payment-class-amount="${sanitize(amount)}">
@@ -4924,7 +5069,7 @@ function renderPaymentClassSelection(group = {}) {
             <strong>${sanitize(copy.title)}</strong>
             <span>${sanitize(copy.description)}</span>
           </div>
-          <button type="button" data-payment-select-bucket="${sanitize(bucket)}">Desmarcar</button>
+          <span>Incluidas obligatoriamente</span>
         </div>
         <div class="payment-class-selection-list">${rows}</div>
       </section>`;
@@ -4935,7 +5080,7 @@ function renderPaymentClassSelection(group = {}) {
       <span id="pago-clases-seleccionadas-count"></span>
     </div>
     <div class="payment-class-selection-groups">${groupedRows}</div>
-    <p>Marca solo las clases que has pagado con este Bizum. El equipo revisará el justificante junto a las clases seleccionadas.</p>`;
+    <p>El pago incluye obligatoriamente todas las clases impagadas vencidas y las que corresponden a este periodo.</p>`;
 }
 
 function selectedPaymentClassesFromModal() {
@@ -4970,6 +5115,15 @@ function updatePaymentClassSelection() {
 }
 
 function abrirModalPagoGrupo(group = {}) {
+  if (familyPaymentAccess.paymentSubmissionBlocked) {
+    showToast('Primero marca las clases', 'Ve al calendario e indica si cada clase pasada se dio o no se dio. Después aparecerá el importe exacto a pagar.', 'warning');
+    irA('calendario');
+    return;
+  }
+  if (group.paymentWindow === 'upcoming' || group.upcoming) {
+    showToast('Todavía no toca este pago', 'El pago se habilitará el día acordado.', 'info');
+    return;
+  }
   activePaymentGroup = group;
   const recipient = platformPaymentRecipient();
   const periodText = group.paymentPeriodStart && group.paymentPeriodEnd
@@ -5028,12 +5182,14 @@ function abrirModalPagoManual() {
 }
 
 function abrirPagoConClasesPendientes() {
-  const firstPaymentGroup = familyPaymentGroupsCache.values().next().value;
+  const firstPaymentGroup = Array.from(familyPaymentGroupsCache.values()).find((group) => (
+    group.paymentWindow !== 'upcoming' && !group.upcoming
+  ));
   if (firstPaymentGroup) {
     abrirModalPagoGrupo(firstPaymentGroup);
     return;
   }
-  abrirModalPagoManual();
+  showToast('No hay pagos disponibles', 'La plataforma habilitará el importe y las clases cuando llegue el próximo día de pago.', 'info');
 }
 
 document.getElementById('btn-nuevo-pago').addEventListener('click', () => {
@@ -5076,6 +5232,17 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
   if (isGroupedPayment && !classIds.length) {
     showToast('Marca al menos una clase', 'El justificante debe quedar vinculado a las clases que estas pagando.', 'warning');
     return;
+  }
+  if (isGroupedPayment) {
+    const requiredIds = (group.classIds || []).map(String).filter(Boolean).sort();
+    const submittedIds = classIds.map(String).filter(Boolean).sort();
+    const exactClasses = requiredIds.length === submittedIds.length
+      && requiredIds.every((id, index) => id === submittedIds[index]);
+    const exactAmount = Math.abs(Number(group.amount || 0) - monto) < 0.01;
+    if (!exactClasses || !exactAmount) {
+      showToast('El pago debe estar completo', 'Incluye todas las clases impagadas vencidas y todas las de este periodo.', 'warning');
+      return;
+    }
   }
   if (!isGroupedPayment && !classIds.length && !referencia && !notas) {
     showToast('Falta detalle', 'Indica una referencia o una nota breve para poder revisar el pago.', 'warning');
@@ -5542,8 +5709,28 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
 });
 
 // ── INIT ─────────────────────────────────────────────────────────
-cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
-irA(sectionFromHash(), { fromHash: true });
+await refreshFamilyPaymentAccessState();
+initFamilyUnlockedFeatures();
+irA(sectionFromHash(familyPaymentAccessLocked ? 'calendario' : 'inicio'), { fromHash: true });
+onSnapshot(firestoreDoc(firebaseDb, 'familias', familiaFirestoreId), async (snapshot) => {
+  if (!snapshot.exists()) return;
+  const wasPersistedLocked = persistedPaymentAccessLocked;
+  const latestFamilyData = snapshot.data() || {};
+  persistedPaymentAccessLocked = latestFamilyData.paymentAccessLocked === true;
+  familiaData = { ...familiaData, ...latestFamilyData };
+  if (persistedPaymentAccessLocked) {
+    applyFamilyPaymentAccessState({
+      locked: true,
+      debtAmount: Number(latestFamilyData.paymentAccessDebtAmount || familyPaymentAccess.debtAmount || 0),
+      debtClassCount: Number(latestFamilyData.paymentAccessDebtClassCount || familyPaymentAccess.debtClassCount || 0),
+    });
+    return;
+  }
+  if (wasPersistedLocked || familyPaymentAccessLocked) {
+    await refreshFamilyPaymentAccessState();
+    initFamilyUnlockedFeatures();
+  }
+}, (error) => console.warn('No se pudo observar el bloqueo de pagos de la familia', error));
 </script>
 <script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
 </body>

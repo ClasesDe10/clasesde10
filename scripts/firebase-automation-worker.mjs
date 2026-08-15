@@ -64,6 +64,8 @@ import {
   OPEN_PAYMENT_STATUSES,
   PAID_PAYMENT_STATUSES,
   buildClassPaymentPatch,
+  buildFamilyPaymentAccessPatch,
+  buildFamilyPaymentAccessState,
   buildPaymentValidationPayload,
   isFamilyPayment,
   isPaymentOverdue,
@@ -4036,6 +4038,37 @@ async function processPaymentReminders(db, stats) {
   }
 
   const classes = await listCollection(db, 'clases', limit);
+  const classesByFamily = new Map();
+  classes.forEach((classData) => {
+    const familyUid = clean(classData.familyUid || classData.familia_id, 180);
+    if (!familyUid) return;
+    if (!classesByFamily.has(familyUid)) classesByFamily.set(familyUid, []);
+    classesByFamily.get(familyUid).push(classData);
+  });
+  for (const [familyUid, familyClasses] of classesByFamily) {
+    const access = buildFamilyPaymentAccessState(familyClasses, scheduleIndex);
+    if (!access.locked) continue;
+    await writeDoc(db.collection('familias'), familyUid, {
+      ...buildFamilyPaymentAccessPatch(access),
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    stats.familyPaymentAccessLocksApplied += 1;
+    await notifyUserOnce(
+      db,
+      familyUid,
+      'Acceso limitado por pagos pendientes',
+      `Hay ${access.debtClassCount} clase(s) con mas de 30 dias de impago. Puedes entrar al calendario y subir el justificante; el acceso completo volvera cuando el administrador lo valide.`,
+      {
+        type: 'family_payment_access_locked',
+        debtClassCount: access.debtClassCount,
+        debtAmount: access.debtAmount,
+        classIds: access.debtClassIds,
+        url: '/pages/dashboard/familia.html#calendario',
+      },
+      `family_payment_access_locked_${familyUid}`,
+    );
+  }
   for (const data of classes) {
     const doc = data.__ref ? { id: data.id, ref: data.__ref } : null;
     if (!doc) continue;
@@ -6190,6 +6223,7 @@ async function main() {
     paymentsNeedingReview: 0,
     weeklyPaymentRemindersCreated: 0,
     paymentEscalationNoticesCreated: 0,
+    familyPaymentAccessLocksApplied: 0,
     classPaymentContextsUpdated: 0,
     lifecycleClassesEvaluated: 0,
     lifecycleTransitionsApplied: 0,
@@ -6384,18 +6418,18 @@ async function main() {
   await processLinkedFamilyPaymentContext(db, stats);
   await processClassLifecycle(db, stats);
   await processPaymentReminders(db, stats);
-  await processPlatformSelfSupervision(db, stats);
-  await processRelationshipFollowups(db, stats);
-  await processProactiveAssist(db, stats);
-  await processInternalAiAssistant(db, stats);
-  await processPendingPushNotifications(db, stats);
-
   if (criticalOnly) {
+    await processPendingPushNotifications(db, stats);
     await writeMaintenanceHealthSnapshot(db, stats, 'github_actions_critical_worker');
     await writeWorkerHeartbeat(db, 'finished', stats, { trigger: 'critical_schedule' });
     console.log(JSON.stringify(stats, null, 2));
     return;
   }
+  await processPlatformSelfSupervision(db, stats);
+  await processRelationshipFollowups(db, stats);
+  await processProactiveAssist(db, stats);
+  await processInternalAiAssistant(db, stats);
+  await processPendingPushNotifications(db, stats);
 
   await processPlatformAutomationSweep(db, stats);
   await processPreventiveIncidentRadar(db, stats);

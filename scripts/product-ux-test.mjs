@@ -66,7 +66,7 @@ assertMatches(dashboardCss, /\.upload-zone\s*\{\s*display:\s*flex;/, 'Upload zon
 assertIncludes(dashboardCss, '.upload-zone > .cd10-smart-hint { display: none !important; }', 'Upload zone hints must never render inside the dashed drop area.');
 assertIncludes(pwa, "uploadZone.querySelectorAll('.cd10-smart-hint').forEach((item) => item.remove())", 'PWA must move file hints outside upload zones.');
 assertIncludes(packageJson.scripts['check:quality'], 'test:product-ux', 'check:quality must run product UX validation.');
-assertIncludes(packageJson.scripts['check:syntax'], 'scripts/product-ux-test.mjs', 'check:syntax must parse product UX validation.');
+assertIncludes(packageJson.scripts['check:syntax'], 'scripts/syntax-check.mjs', 'check:syntax must use the recursive source validator.');
 
 if (failures.length) {
   console.error('Product UX validation failed:');

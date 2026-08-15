@@ -21,7 +21,7 @@ on:
         required: false
         default: "25"
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "17 0-2,4-23 * * *"
     - cron: "17 3 * * *"
 
 concurrency:

@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-calendar-semantics">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-family-payment-lock">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260809-teacher-calendar">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -1135,7 +1135,7 @@
 <div class="modal-overlay" id="modal-familia-detalle">
   <div class="modal" style="max-width:1120px">
     <div class="modal-header">
-      <span class="modal-title">Perfil completo de la familia</span>
+      <span class="modal-title">Ficha CRM de la familia</span>
       <button class="modal-close">x</button>
     </div>
     <div class="modal-body" id="familia-detalle-body"></div>
@@ -1367,16 +1367,20 @@ import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260705-perso
 import {
   PAID_PAYMENT_STATUSES,
   applyClassPaymentContext,
+  buildFamilyPaymentAccessPatch,
+  buildFamilyPaymentAccessState,
   buildFamilyPaymentConfirmationGroups,
   buildPaymentAiReviewPatch,
   buildPaymentScheduleIndex,
   buildClassFamilyPaymentReopenPatch,
   buildClassPaymentPatch,
   buildPaymentValidationPayload,
+  classPaymentAmount,
   classEconomicState,
   classFamilyPaymentState,
   economicCalendarLegend,
   isFamilyPayment,
+  isFamilyConfirmedGivenClass,
   isPaymentOverdue,
   isPaymentVerified,
   isTeacherPayout,
@@ -1390,7 +1394,7 @@ import {
   samePaymentRelation,
   shouldAutoValidatePaymentReview,
   shouldReopenFamilyClassPayment,
-} from '../../js/payment-engine.js?v=20260710-calendar-polish2';
+} from '../../js/payment-engine.js?v=20260815-family-payment-lock';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -5009,8 +5013,9 @@ function renderTrustBadges(badges = [], limit = 4) {
   }).join(' ');
 }
 
-function renderTrustPanel(trust) {
+function renderTrustPanel(trust, type = 'profesor') {
   if (!trust) return '';
+  const isFamily = type === 'familia';
   const metrics = trust.metrics || {};
   const publicStats = trust.publicStats || {};
   const adminStats = trust.adminStats || {};
@@ -5035,46 +5040,69 @@ function renderTrustPanel(trust) {
     </div>` : '';
   const actionsHtml = nextActions.length ? `
     <div class="trust-next-actions">
-      <strong>Acciones que suben confianza real</strong>
+      <strong>${isFamily ? 'Acciones de seguimiento familiar' : 'Acciones que suben confianza real'}</strong>
       <div class="trust-next-action-buttons">
         ${nextActions.map((item) => `<button class="btn btn-ghost btn-sm" type="button" data-section="${sanitize(item.section || 'operaciones')}" title="${sanitize(item.detail || '')}">${sanitize(item.label)}</button>`).join('')}
       </div>
     </div>` : '';
   const warnings = (trust.warnings || []).slice(0, 4);
+  const mainStats = isFamily ? [
+    [publicStats.activeStudents ?? metrics.activeStudents ?? 0, 'alumnos activos'],
+    [publicStats.completedClasses ?? metrics.completedClasses ?? 0, 'clases recibidas'],
+    [`${publicStats.completedHours ?? metrics.completedHours ?? 0}h`, 'horas de clase'],
+    [formatTrustPercent(publicStats.paymentReliability ?? metrics.paymentReliability), 'pagos al dia'],
+    [formatTrustPercent(publicStats.cancellationRate ?? metrics.cancellationRate), 'cancelacion'],
+    [`${Math.round(Number(publicStats.profileCompletionPercent ?? metrics.profileCompletionPercent ?? 0))}%`, 'perfil completo'],
+  ] : [
+    [publicStats.completedClasses ?? metrics.completedClasses ?? 0, 'clases realizadas'],
+    [`${publicStats.completedHours ?? metrics.completedHours ?? 0}h`, 'horas impartidas'],
+    [publicStats.activeStudents ?? metrics.activeStudents ?? 0, 'alumnos activos'],
+    [formatTrustPercent(publicStats.completionRate ?? metrics.completionRate), 'realizacion'],
+    [formatTrustPercent(publicStats.cancellationRate ?? metrics.cancellationRate), 'cancelacion'],
+    [formatTrustPercent(publicStats.punctualityRate ?? metrics.punctualityRate), 'puntualidad'],
+    [formatTrustHours(publicStats.averageResponseHours ?? metrics.averageResponseHours), 'respuesta media'],
+  ];
+  const secondaryStats = isFamily ? [
+    [metrics.paidPayments ?? 0, 'pagos validados'],
+    [metrics.pendingPayments ?? adminStats.pendingPayments ?? 0, 'pagos pendientes'],
+    [metrics.overdueClassPayments ?? adminStats.overdueClassPayments ?? 0, 'justificantes vencidos'],
+    [metrics.openIncidents ?? adminStats.openIncidents ?? 0, 'incidencias abiertas'],
+    [publicStats.tenureMonths ?? '-', 'meses en la plataforma'],
+    [publicStats.recentlyActive ? 'Si' : 'No', 'actividad reciente'],
+  ] : [
+    [formatTrustPercent(publicStats.acceptanceRate ?? metrics.acceptanceRate), 'aceptacion'],
+    [metrics.verifiedDocuments ?? publicStats.verifiedDocuments ?? 0, 'docs validados'],
+    [metrics.openIncidents ?? adminStats.openIncidents ?? 0, 'incidencias abiertas'],
+    [formatTrustPercent(adminStats.sampleConfidence), 'confianza muestra'],
+  ];
+  const renderStats = (items) => items.map(([value, label]) => `<div><strong>${sanitize(value)}</strong><span>${sanitize(label)}</span></div>`).join('');
 
   return `
-    <div class="trust-panel">
+    <div class="trust-panel" data-trust-role="${isFamily ? 'familia' : 'profesor'}">
       <div class="trust-panel-head">
         <div>
-          <div class="trust-kicker">Confianza y reputacion</div>
+          <div class="trust-kicker">${isFamily ? 'Confianza familiar' : 'Confianza y reputacion'}</div>
           <h4>${Math.round(Number(trust.score || 0))}/100 · ${sanitize(trust.level || trust.trustLevel || 'inicial')}</h4>
         </div>
         <div class="trust-score-ring">${Math.round(Number(trust.score || 0))}</div>
       </div>
       <div class="trust-badges">${renderTrustBadges(trust.badges, 6)}</div>
       <div class="trust-public-stats">
-        <div><strong>${sanitize(publicStats.completedClasses ?? metrics.completedClasses ?? 0)}</strong><span>clases realizadas</span></div>
-        <div><strong>${sanitize(publicStats.completedHours ?? metrics.completedHours ?? 0)}h</strong><span>horas impartidas</span></div>
-        <div><strong>${sanitize(publicStats.activeStudents ?? metrics.activeStudents ?? 0)}</strong><span>alumnos activos</span></div>
-        <div><strong>${formatTrustPercent(publicStats.completionRate ?? metrics.completionRate)}</strong><span>realizacion</span></div>
-        <div><strong>${formatTrustPercent(publicStats.cancellationRate ?? metrics.cancellationRate)}</strong><span>cancelacion</span></div>
-        <div><strong>${formatTrustPercent(publicStats.punctualityRate ?? metrics.punctualityRate)}</strong><span>puntualidad</span></div>
-        <div><strong>${formatTrustHours(publicStats.averageResponseHours ?? metrics.averageResponseHours)}</strong><span>respuesta media</span></div>
+        ${renderStats(mainStats)}
       </div>
       <div class="trust-public-stats trust-public-stats-compact" style="margin-top:10px">
-        <div><strong>${formatTrustPercent(publicStats.acceptanceRate ?? metrics.acceptanceRate)}</strong><span>aceptacion</span></div>
-        <div><strong>${sanitize(metrics.verifiedDocuments ?? publicStats.verifiedDocuments ?? 0)}</strong><span>docs validados</span></div>
-        <div><strong>${sanitize(metrics.openIncidents ?? adminStats.openIncidents ?? 0)}</strong><span>incidencias abiertas</span></div>
-        <div><strong>${formatTrustPercent(adminStats.sampleConfidence)}</strong><span>confianza muestra</span></div>
+        ${renderStats(secondaryStats)}
       </div>
       <div class="trust-explain">
-        <strong>Por que confiar</strong>
-        <span>Se calcula con documentos, revisiones, actividad real, pagos, incidencias, respuesta y consistencia del perfil. No depende solo de lo que el usuario escribe.</span>
+        <strong>${isFamily ? 'Como se valora la relacion familiar' : 'Por que confiar'}</strong>
+        <span>${isFamily
+          ? 'Solo utiliza informacion propia de la familia y de su relacion con el servicio: contacto, perfil, alumnos, solicitudes, clases, pagos o justificantes e incidencias.'
+          : 'Se calcula con documentos, revisiones, actividad real, pagos, incidencias, respuesta y consistencia del perfil. No depende solo de lo que el usuario escribe.'}</span>
       </div>
       ${evidenceHtml}
       ${actionsHtml}
       ${components ? `<div class="trust-components">${components}</div>` : ''}
-      ${warnings.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Senales a revisar</div>${warnings.map(sanitize).join(' · ')}</div></div>` : ''}
+      ${warnings.length ? `<div class="alert alert-warning" style="margin-top:12px"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">${isFamily ? 'Aspectos familiares a revisar' : 'Senales a revisar'}</div>${warnings.map(sanitize).join(' · ')}</div></div>` : ''}
     </div>`;
 }
 
@@ -5332,8 +5360,59 @@ function renderAdminCompleteProfile(entity = {}, type = 'profesor') {
   </details>`;
 }
 
+function renderFamilyCrmProfile(entity = {}, data = {}) {
+  const contactName = crmUserName(entity, 'familia');
+  const sections = [
+    ['Contacto familiar', [
+      ['Persona de contacto', contactName],
+      ['Email', firstCrm(entity.usuarios?.email, entity.email)],
+      ['Telefono', firstCrm(entity.usuarios?.telefono, entity.telefono, entity.phone)],
+      ['Canal preferido', firstCrm(entity.contacto_preferido, entity.preferredContact)],
+      ['Idiomas de contacto', firstCrm(entity.idiomas, entity.languages)],
+    ]],
+    ['Domicilio y zona de servicio', [
+      ['Direccion', firstCrm(entity.direccion, entity.address, entity.streetAddress)],
+      ['Ciudad', firstCrm(entity.ciudad, entity.city)],
+      ['Codigo postal', firstCrm(entity.codigo_postal, entity.cp, entity.postalCode)],
+      ['Zona preferente', firstCrm(entity.zona, entity.zone, entity.serviceArea)],
+    ]],
+    ['Contexto y seguimiento', [
+      ['Contacto de emergencia', firstCrm(entity.emergencia_nombre, entity.emergencyContactName)],
+      ['Telefono de emergencia', firstCrm(entity.emergencia_telefono, entity.emergencyContactPhone)],
+      ['Alumnos vinculados', data.students?.length || 0],
+      ['Solicitudes realizadas', data.requests?.length || 0],
+      ['Asignaciones de servicio', data.assignments?.length || 0],
+      ['Notas familiares', firstCrm(entity.notas, entity.notes, entity.familyNotes)],
+    ]],
+    ['Estado de la cuenta', [
+      ['Cuenta activa', entity.active !== false && entity.activo !== false],
+      ['Perfil completo', firstCrm(entity.profileComplete, entity.perfil_completo, entity.profileCompletionRequired === false)],
+      ['Origen del alta', firstCrm(entity.onboardingSource, entity.origen_alta, entity.source)],
+      ['Creada', firstCrm(entity.createdAt, entity.created_at, entity.usuarios?.created_at)],
+      ['Actualizada', firstCrm(entity.updatedAt, entity.updated_at)],
+    ]],
+  ];
+  return `<section class="admin-complete-profile family-crm-data" data-family-crm-profile>
+    <div class="admin-complete-profile-body">
+      <div class="admin-complete-profile-heading">
+        <div>
+          <div class="trust-kicker">Datos propios de la familia</div>
+          <h4>Contacto, hogar y relacion con el servicio</h4>
+        </div>
+      </div>
+      ${sections.map(([title, fields]) => `<section class="admin-complete-profile-section">
+        <h4>${sanitize(title)}</h4>
+        <div class="admin-complete-profile-grid">
+          ${fields.map(([label, value]) => renderAdminCompleteField(label, value)).join('')}
+        </div>
+      </section>`).join('')}
+    </div>
+  </section>`;
+}
+
 function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
   const data = buildCrmDataset(entity, type, context);
+  const isFamily = type === 'familia';
   const trust = entity.trustProfile || (type === 'familia' ? buildFamilyTrustProfile(entity, context) : buildTeacherTrustProfile(entity, context));
   const metrics = trust.metrics || {};
   const name = crmUserName(entity, type);
@@ -5345,12 +5424,31 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
   const aiSummary = type === 'profesor' ? summarizeTeacherProfile(entity) : null;
   const entityId = sanitize(entity.id || entity.userUid || '');
   const entityType = sanitize(type);
+  const linkedTeachers = [...new Set(data.assignments
+    .map((item) => firstCrm(item.teacherName, item.profesor_nombre, item.profesorName, item.teacher?.name))
+    .filter(Boolean)
+    .map((item) => String(item).trim()))];
+  const topStats = isFamily ? [
+    [data.students.length, 'alumnos vinculados'],
+    [data.requests.length, 'solicitudes'],
+    [metrics.completedClasses ?? 0, 'clases recibidas'],
+    [pendingPayments.length, 'pagos pendientes'],
+    [openIncidents.length, 'incidencias abiertas'],
+    [openTasks.length, 'seguimientos abiertos'],
+  ] : [
+    [data.classes.length, 'clases'],
+    [metrics.completedClasses ?? 0, 'realizadas'],
+    [data.payments.length, 'pagos'],
+    [pendingPayments.length, 'pagos pendientes'],
+    [openIncidents.length, 'incidencias abiertas'],
+    [openTasks.length, 'tareas abiertas'],
+  ];
 
   return `
     <div class="crm-profile" data-crm-type="${entityType}" data-crm-id="${entityId}">
       <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px">
         <div>
-          <div class="trust-kicker">Ficha CRM ${sanitize(type)}</div>
+          <div class="trust-kicker">${isFamily ? 'Ficha CRM familiar' : 'Ficha CRM profesor'}</div>
           <h3 style="margin:4px 0;color:var(--navy)">${sanitize(name)}</h3>
           <div style="color:var(--gray-mid);font-size:.86rem">${sanitize(email || '-')} · ${sanitize(phone || '-')}</div>
         </div>
@@ -5365,19 +5463,14 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
         <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${entityId}" data-estado="rechazado">Rechazar</button>
       </div>` : ''}
       <div class="trust-public-stats" style="margin-bottom:14px">
-        <div><strong>${sanitize(data.classes.length)}</strong><span>clases</span></div>
-        <div><strong>${sanitize(metrics.completedClasses ?? 0)}</strong><span>realizadas</span></div>
-        <div><strong>${sanitize(data.payments.length)}</strong><span>pagos</span></div>
-        <div><strong>${sanitize(pendingPayments.length)}</strong><span>pagos pendientes</span></div>
-        <div><strong>${sanitize(openIncidents.length)}</strong><span>incidencias abiertas</span></div>
-        <div><strong>${sanitize(openTasks.length)}</strong><span>tareas abiertas</span></div>
+        ${topStats.map(([value, label]) => `<div><strong>${sanitize(value)}</strong><span>${sanitize(label)}</span></div>`).join('')}
       </div>
-      ${renderAdminCompleteProfile(entity, type)}
-      ${renderTrustPanel(trust)}
+      ${isFamily ? renderFamilyCrmProfile(entity, data) : renderAdminCompleteProfile(entity, type)}
+      ${renderTrustPanel(trust, type)}
       ${aiSummary ? `<div style="margin-top:14px">${renderProfesorAiPanel(entity)}</div>` : ''}
       <div class="crm-profile-main-grid">
         <section class="card" style="margin:0">
-          <div class="card-header"><span class="card-title">Cronologia operacional</span><span class="badge badge-gray">${data.timeline.length}</span></div>
+          <div class="card-header"><span class="card-title">${isFamily ? 'Cronologia de la familia' : 'Cronologia operacional'}</span><span class="badge badge-gray">${data.timeline.length}</span></div>
           <div class="card-body control-timeline" style="max-height:420px;overflow:auto">
             ${renderCrmList(data.timeline.slice(0, 40), 'Sin historial todavia', (item) => `
               <article class="control-timeline-item">
@@ -5391,12 +5484,12 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
           </div>
         </section>
         <section class="card" style="margin:0">
-          <div class="card-header"><span class="card-title">Notas privadas y tareas</span></div>
+          <div class="card-header"><span class="card-title">${isFamily ? 'Notas y seguimiento familiar' : 'Notas privadas y tareas'}</span></div>
           <div class="card-body" style="display:grid;gap:12px">
-            <textarea class="form-control" id="crm-note-body" rows="3" placeholder="Anadir nota privada para operaciones..."></textarea>
+            <textarea class="form-control" id="crm-note-body" rows="3" placeholder="${isFamily ? 'Anadir una nota privada sobre la familia...' : 'Anadir nota privada para operaciones...'}"></textarea>
             <button class="btn btn-primary btn-sm" data-action="crm-add-note" data-crm-type="${entityType}" data-crm-id="${entityId}">Guardar nota</button>
             <div style="display:grid;grid-template-columns:1fr 120px;gap:8px">
-              <input class="form-control" id="crm-task-title" placeholder="Nueva tarea o recordatorio">
+              <input class="form-control" id="crm-task-title" placeholder="${isFamily ? 'Recordatorio sobre la familia' : 'Nueva tarea o recordatorio'}">
               <input class="form-control" id="crm-task-due" type="date">
             </div>
             <button class="btn btn-outline btn-sm" data-action="crm-add-task" data-crm-type="${entityType}" data-crm-id="${entityId}">Crear tarea</button>
@@ -5412,27 +5505,28 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
       </div>
       <div class="crm-profile-side-grid">
         <section class="card" style="margin:0">
-          <div class="card-header"><span class="card-title">Relaciones</span></div>
+          <div class="card-header"><span class="card-title">${isFamily ? 'Alumnos y servicio contratado' : 'Relaciones'}</span></div>
           <div class="card-body" style="display:grid;gap:8px;font-size:.86rem">
             <div><strong>Alumnos:</strong> ${data.students.map((item) => sanitize([item.nombre, item.apellidos].filter(Boolean).join(' ') || item.id)).join(', ') || '-'}</div>
-            <div><strong>Asignaciones:</strong> ${sanitize(data.assignments.length)}</div>
+            ${isFamily ? `<div><strong>Profesores vinculados:</strong> ${linkedTeachers.map(sanitize).join(', ') || sanitize(data.assignments.length)}</div>` : ''}
+            <div><strong>${isFamily ? 'Servicios asignados' : 'Asignaciones'}:</strong> ${sanitize(data.assignments.length)}</div>
             <div><strong>Solicitudes:</strong> ${sanitize(data.requests.length)}</div>
-            <div><strong>Chats:</strong> ${sanitize(data.chats.length)}</div>
-            <div><strong>Notificaciones:</strong> ${sanitize(data.notifications.length)}</div>
+            <div><strong>${isFamily ? 'Conversaciones' : 'Chats'}:</strong> ${sanitize(data.chats.length)}</div>
+            <div><strong>${isFamily ? 'Avisos' : 'Notificaciones'}:</strong> ${sanitize(data.notifications.length)}</div>
           </div>
         </section>
         <section class="card" style="margin:0">
-          <div class="card-header"><span class="card-title">Documentos</span></div>
+          <div class="card-header"><span class="card-title">${isFamily ? 'Documentos y justificantes' : 'Documentos'}</span></div>
           <div class="card-body" style="display:grid;gap:8px">
             ${renderCrmList(data.documents.slice(0, 8), 'Sin documentos', (doc) => `<div style="display:flex;justify-content:space-between;gap:8px"><span>${sanitize(firstCrm(doc.tipo, doc.documentType, 'documento'))}</span>${crmBadge(firstCrm(doc.estado, doc.status, 'pendiente'))}</div>`)}
           </div>
         </section>
         <section class="card" style="margin:0">
-          <div class="card-header"><span class="card-title">Alertas CRM</span></div>
+          <div class="card-header"><span class="card-title">${isFamily ? 'Seguimiento familiar' : 'Alertas CRM'}</span></div>
           <div class="card-body" style="display:grid;gap:8px">
-            ${pendingPayments.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Pagos pendientes</div>${pendingPayments.length} pago(s) requieren seguimiento.</div></div>` : ''}
+            ${pendingPayments.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">${isFamily ? 'Pagos o justificantes pendientes' : 'Pagos pendientes'}</div>${pendingPayments.length} pago(s) requieren seguimiento.</div></div>` : ''}
             ${openIncidents.length ? `<div class="alert alert-danger" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Incidencias abiertas</div>${openIncidents.length} incidencia(s) activas.</div></div>` : ''}
-            ${trust.warnings?.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">Confianza</div>${trust.warnings.slice(0, 3).map(sanitize).join(', ')}</div></div>` : '<div class="alert alert-success" style="margin:0"><span class="alert-icon">OK</span><div class="alert-body"><div class="alert-title">Sin alertas criticas</div>Expediente operativo estable.</div></div>'}
+            ${trust.warnings?.length ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">${isFamily ? 'Datos familiares a completar' : 'Confianza'}</div>${trust.warnings.slice(0, 3).map(sanitize).join(', ')}</div></div>` : `<div class="alert alert-success" style="margin:0"><span class="alert-icon">OK</span><div class="alert-body"><div class="alert-title">${isFamily ? 'Sin alertas familiares' : 'Sin alertas criticas'}</div>${isFamily ? 'Relacion familiar y servicio al dia.' : 'Expediente operativo estable.'}</div></div>`}
           </div>
         </section>
       </div>
@@ -6410,7 +6504,7 @@ function renderFamiliaDetalle(f) {
         <h3 style="margin:0;color:var(--navy)">${sanitize(nombreFamilia(f))}</h3>
         <div style="color:var(--gray-mid);font-size:.84rem">${sanitize(f.usuarios?.email || f.email || '')}</div>
       </div>
-      ${renderTrustPanel(trust)}
+      ${renderTrustPanel(trust, 'familia')}
       <div class="trust-detail-grid">
         ${fila('Telefono', f.usuarios?.telefono || f.telefono)}
         ${fila('Zona', [f.zona || f.zone, f.ciudad || f.city, f.codigo_postal || f.postalCode].filter(Boolean).join(', '))}
@@ -7603,16 +7697,43 @@ window.validarPago = async (id, estado, options = {}) => {
   if (!linkedClassIds.length && singleLinkedClassId) linkedClassIds = [singleLinkedClassId];
   let reconciliationStatus = pagoActual.reconciliationStatus || 'pending_match';
   let reconciliationReason = pagoActual.reconciliationReason || '';
+  let clasesFamiliaParaAcceso = [];
 
   if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado)) {
     const familyUid = pagoActual.familyUid || pagoActual.familia_id;
-    const { data: clasesFamilia } = familyUid
-      ? await db.from('clases').select('*').eq('familia_id', familyUid)
-      : { data: [] };
-    const match = matchPaymentToClasses({ ...pagoActual, id }, clasesFamilia || []);
+    if (familyUid) {
+      const [legacyClasses, canonicalClasses] = await Promise.all([
+        db.from('clases').select('*').eq('familia_id', familyUid),
+        db.from('clases').select('*').eq('familyUid', familyUid),
+      ]);
+      clasesFamiliaParaAcceso = Array.from(new Map([
+        ...(legacyClasses.data || []),
+        ...(canonicalClasses.data || []),
+      ].map((item) => [String(item.id || item.calendarUid || ''), item])).values());
+    }
+    const match = matchPaymentToClasses({ ...pagoActual, id }, clasesFamiliaParaAcceso);
     linkedClassIds = linkedClassIds.length ? linkedClassIds : match.classIds;
     reconciliationStatus = match.status;
     reconciliationReason = match.reason;
+
+    const familyClassesById = new Map(clasesFamiliaParaAcceso.map((clase) => [String(clase.id || ''), clase]));
+    const linkedClasses = linkedClassIds.map((classId) => familyClassesById.get(String(classId))).filter(Boolean);
+    const everyLinkedClassExists = linkedClasses.length === linkedClassIds.length && linkedClassIds.length > 0;
+    const everyLinkedClassWasGiven = linkedClasses.every((clase) => isFamilyConfirmedGivenClass(clase));
+    const linkedAmount = Math.round(linkedClasses.reduce((sum, clase) => sum + classPaymentAmount(clase), 0) * 100) / 100;
+    const exactLinkedAmount = Math.abs(linkedAmount - Number(pagoActual.monto || pagoActual.amount || 0)) < 0.01;
+    if (!everyLinkedClassExists || !everyLinkedClassWasGiven || !exactLinkedAmount) {
+      if (!options.silent) {
+        showToast(
+          'No se puede validar este pago',
+          !everyLinkedClassWasGiven
+            ? 'Todas las clases deben estar marcadas por la familia como dadas antes de cobrarlas.'
+            : 'El justificante debe incluir exactamente todas sus clases y el importe calculado por la plataforma.',
+          'warning',
+        );
+      }
+      return;
+    }
   }
 
   const payload = {
@@ -7641,13 +7762,27 @@ window.validarPago = async (id, estado, options = {}) => {
   }
 
   if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado) && linkedClassIds.length) {
-    const updates = linkedClassIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id, paymentType: 'family_payment' }, classId, { nowIso: fechaValidacion })).eq('id', classId));
+    const paidClassPatch = buildClassPaymentPatch({ ...pagoActual, id, paymentType: 'family_payment' }, '', { nowIso: fechaValidacion });
+    const updates = linkedClassIds.map((classId) => db.from('clases').update({ ...paidClassPatch, familyPaymentId: id }).eq('id', classId));
     const results = await Promise.all(updates);
     const failed = results.find((result) => result.error);
     if (failed) {
       if (!options.silent) showToast('Pago actualizado', 'El pago se valido, pero alguna clase no pudo marcarse como cobrada.', 'warning');
       if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
       return;
+    }
+    const familyUid = pagoActual.familyUid || pagoActual.familia_id;
+    if (familyUid && clasesFamiliaParaAcceso.length) {
+      const paidIds = new Set(linkedClassIds.map(String));
+      const reconciledClasses = clasesFamiliaParaAcceso.map((clase) => (
+        paidIds.has(String(clase.id)) ? { ...clase, ...paidClassPatch, familyPaymentId: id } : clase
+      ));
+      const access = buildFamilyPaymentAccessState(reconciledClasses, await loadAdminPaymentScheduleIndex());
+      await setDoc(firestoreDoc(firebaseDb, 'familias', familyUid), {
+        ...buildFamilyPaymentAccessPatch(access, { nowIso: fechaValidacion }),
+        updatedAt: serverTimestamp(),
+        updated_at: fechaValidacion,
+      }, { merge: true });
     }
   }
 

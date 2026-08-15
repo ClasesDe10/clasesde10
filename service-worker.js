@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'clasesde10-pwa-v87';
+const CACHE_VERSION = 'clasesde10-pwa-v89';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const FIREBASE_CONFIG = {

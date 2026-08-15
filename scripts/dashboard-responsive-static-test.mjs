@@ -5,7 +5,7 @@ import process from 'node:process';
 
 const root = process.cwd();
 const failures = [];
-const cssVersion = '20260815-calendar-semantics';
+const cssVersion = '20260815-family-payment-lock';
 
 function read(file) {
   return fs.readFileSync(path.join(root, file), 'utf8');

@@ -1,6 +1,8 @@
 import {
   applyClassPaymentContext,
   buildClassPaymentPatch,
+  buildFamilyPaymentAccessPatch,
+  buildFamilyPaymentAccessState,
   buildFamilyClassPaymentConfirmationPayload,
   buildFamilyPaymentConfirmationGroups,
   buildFamilyPaymentPayload,
@@ -25,6 +27,7 @@ import {
   reviewPaymentWithAssistant,
   samePaymentRelation,
   shouldAutoValidatePaymentReview,
+  unpaidFamilyClasses,
   economicCalendarLegend,
   weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
@@ -101,9 +104,9 @@ assert(validation.verified === true && validation.validatedByUid === 'admin_1', 
 assert(isPaymentVerified({ ...familyPayment, ...validation }), 'Validated payment must be verified.');
 
 const classes = [
-  { id: 'c1', estado: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 20, fecha: '2026-06-20', teacherUid: 'teacher_1', studentId: 'student_1', studentName: 'Juan', teacherName: 'Miguel', materia: 'Matematicas' },
-  { id: 'c2', estado: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 30, fecha: '2026-06-21', teacherUid: 'teacher_1', studentId: 'student_1', studentName: 'Juan', teacherName: 'Miguel', materia: 'Fisica' },
-  { id: 'c3', estado: 'realizada', familyPaymentStatus: 'pagado', precio_total: 20, fecha: '2026-06-22' },
+  { id: 'c1', estado: 'realizada', familyConfirmationStatus: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 20, fecha: '2026-06-20', teacherUid: 'teacher_1', studentId: 'student_1', studentName: 'Juan', teacherName: 'Miguel', materia: 'Matematicas' },
+  { id: 'c2', estado: 'realizada', familyConfirmationStatus: 'realizada', familyPaymentStatus: 'pendiente', precio_total: 30, fecha: '2026-06-21', teacherUid: 'teacher_1', studentId: 'student_1', studentName: 'Juan', teacherName: 'Miguel', materia: 'Fisica' },
+  { id: 'c3', estado: 'realizada', familyConfirmationStatus: 'realizada', familyPaymentStatus: 'pagado', precio_total: 20, fecha: '2026-06-22' },
 ];
 const match = matchPaymentToClasses({ ...familyPayment, monto: 50 }, classes);
 assert(match.status === 'matched' && match.classIds.length === 2, 'Exact payment amount must reconcile to unpaid classes.');
@@ -194,6 +197,13 @@ assert(confirmationGroups[0].dueNow === false && confirmationGroups[0].upcoming 
 assert(confirmationGroups[0].classes.every((item) => item.paymentBucket === 'upcoming'), 'Each class must expose its payment-window bucket.');
 assert(confirmationGroups[0].bizumPhone === '613016665', 'Family confirmation groups must use ClasesDe10 central Bizum phone.');
 assert(confirmationGroups[0].teacherPhone === '', 'Family confirmation groups must not expose the teacher real phone for payment.');
+assert(unpaidFamilyClasses([{
+  id: 'family_marked_before_worker',
+  estado: 'confirmada',
+  familyConfirmationStatus: 'realizada',
+  familyPaymentStatus: 'pendiente',
+  precio_total: 25,
+}]).length === 1, 'A class marked as given by the family must become payable without waiting for a background lifecycle worker.');
 const dueNowConfirmationGroups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, {
   nowMs: new Date('2026-06-27T10:00:00').getTime(),
 });
@@ -208,6 +218,44 @@ const overdueConfirmationGroups = buildFamilyPaymentConfirmationGroups(classes, 
 });
 assert(overdueConfirmationGroups[0].paymentWindow === 'overdue', 'Past payment windows must be labelled as overdue.');
 assert(overdueConfirmationGroups[0].classes.every((item) => item.paymentBucket === 'overdue'), 'Overdue groups must mark every selectable class as unpaid.');
+const paymentAccessClasses = [
+  {
+    id: 'old_debt',
+    estado: 'realizada',
+    familyConfirmationStatus: 'realizada',
+    familyPaymentStatus: 'pendiente',
+    precio_total: 40,
+    fecha: '2026-05-01',
+    hora_fin: '18:00',
+    teacherUid: 'teacher_1',
+    studentId: 'student_1',
+  },
+  {
+    id: 'unmarked_due',
+    estado: 'realizada',
+    familyPaymentStatus: 'pendiente',
+    precio_total: 30,
+    fecha: '2026-06-19',
+    hora_fin: '18:00',
+    teacherUid: 'teacher_1',
+    studentId: 'student_1',
+  },
+];
+const lockedAccess = buildFamilyPaymentAccessState(paymentAccessClasses, scheduleIndex, {
+  nowMs: new Date('2026-07-10T21:00:00').getTime(),
+});
+assert(lockedAccess.locked === true && lockedAccess.debtClassIds.includes('old_debt'), 'A family must be locked when a confirmed given class remains unpaid for more than 30 days.');
+assert(lockedAccess.paymentSubmissionBlocked === true && lockedAccess.unmarkedDueClassIds.includes('unmarked_due'), 'Due payments must wait until the family marks every past class as given or not given.');
+assert(lockedAccess.debtAmount === 40, 'The access lock must expose the exact outstanding accepted-class amount.');
+const lockedPatch = buildFamilyPaymentAccessPatch(lockedAccess, { nowIso: '2026-07-10T21:00:00.000Z' });
+assert(lockedPatch.paymentAccessLocked === true && lockedPatch.paymentAccessStatus === 'blocked_overdue_payment', 'The stored family gate must record a blocked payment status.');
+const restoredAccess = buildFamilyPaymentAccessState(paymentAccessClasses.map((item) => (
+  item.id === 'old_debt' ? { ...item, familyPaymentStatus: 'validado' } : { ...item, familyConfirmationStatus: 'no_realizada' }
+)), scheduleIndex, {
+  nowMs: new Date('2026-07-10T21:00:00').getTime(),
+});
+assert(restoredAccess.locked === false && restoredAccess.paymentSubmissionBlocked === false, 'Admin validation plus an attendance decision must restore normal family access.');
+assert(buildFamilyPaymentAccessPatch(restoredAccess).paymentAccessStatus === 'active', 'The restored family gate must return to active.');
 const orphanContextClasses = applyClassPaymentContext(classes, [{
   id: 'pay_orphan',
   paymentType: 'family_payment',
