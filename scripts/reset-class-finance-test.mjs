@@ -19,7 +19,39 @@ assert(source.indexOf('writeBackup(bucket, targets') < source.indexOf('deleteFir
 assert(source.indexOf('await writeResetState(preparedState)') < source.indexOf('const deletedFirestoreDocuments = await deleteFirestoreTargets'), 'A recoverable deletion plan must be persisted before Firestore deletion.');
 assert(source.includes('loadResetState()') && source.includes('recoveredFromPreparedReset'), 'Interrupted resets must resume their original backed-up target plan.');
 assert(source.includes('refusing to delete data created afterwards'), 'A completed reset must never delete classes created after its completion.');
-for (const collection of ['clases', 'pagos', 'paymentSchedules', 'classLifecycleEvents', 'metricSnapshots', 'analyticsDailyRollups', 'resumenMensual', 'platformHealthChecks', 'importAudits', 'legacyImports']) {
+for (const collection of [
+  'clases',
+  'pagos',
+  'paymentSchedules',
+  'classLifecycleEvents',
+  'metricSnapshots',
+  'analyticsDailyRollups',
+  'resumenMensual',
+  'platformHealthChecks',
+  'preventiveRiskSnapshots',
+  'alertPrioritySnapshots',
+  'platformSupervisionSnapshots',
+  'relationshipFollowupSnapshots',
+  'proactiveAssistSnapshots',
+  'internalAiInsightSnapshots',
+  'automationEvents',
+  'automationRuleRuns',
+  'auditLogs',
+  'opsAlerts',
+  'crmTasks',
+  'systemJobs',
+  'deadLetters',
+  'preventiveRisks',
+  'alertDecisions',
+  'platformSupervisionFindings',
+  'relationshipFollowups',
+  'proactiveAssistSignals',
+  'internalAiInsights',
+  'adminAiQueries',
+  'crmNotes',
+  'importAudits',
+  'legacyImports',
+]) {
   assert(source.includes(`'${collection}'`), `Production reset must cover ${collection}.`);
 }
 assert(source.includes("prefix: 'pagos/'"), 'Production reset must remove payment receipts from Storage.');
