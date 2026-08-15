@@ -49,10 +49,11 @@ Auditar y completar de forma autónoma toda la cola de solicitudes del hilo para
 | Q21 | Producción obligatoria en todos los prompts y publicación de todo cambio acumulado local | completado | Regla permanente añadida a `AGENTS.md`; 447 archivos reconciliados, validados y fusionados mediante la PR #1 con ambos controles CI aprobados; Firebase Hosting y reglas de Firestore publicados en `clasesde10-50add`; auditorías productivas superadas y dependencias con 0 vulnerabilidades conocidas. |
 | Q22 | Evitar correos en “escribiendo…” y mostrar el nombre personal o el nombre asignado al contacto | completado | Resolución corregida en el chat compartido por familia, profesor y admin: alias privado del receptor, nombre de pila del perfil/chat y etiqueta neutra; los correos se rechazan también en datos antiguos. Validación integral superada, PWA v85 desplegada y el código servido por `clasesde10.com` pasó la prueba productiva de privacidad de identidad. |
 | Q23 | Hacer visible y accesible la llamada desde el chat actual | completado | Botón principal “Llamar” y videollamada integrados en la cabecera; acciones secundarias ceden espacio en móvil; familia, profesor y admin comparten controles y audio seguro. Batería integral superada, Hosting y reglas de Firestore publicados y marcadores productivos verificados en los tres paneles. |
+| Q24 | Revisar y garantizar el cierre de sesión en admin, profesor y familia | completado | Telemetría desacoplada y auditoría acotada para no bloquear Firebase Auth; estado de carga, error visible, confirmación y reemplazo de historial. Batería integral verde y prueba autenticada productiva superada en admin, profesor y familia, incluida la denegación de reentrada; usuarios temporales eliminados. |
 
 ## Último punto de control
 
 - Fecha: 2026-08-15.
-- Completado: Q01-Q23 reconciliados, implementados, desplegados y verificados en producción.
-- Evidencia final Q23: batería integral verde, botón “Llamar” y videollamada servidos por `clasesde10.com`, paneles familia/profesor/admin en revisión r8, caché PWA v86 activa y reglas de llamada publicadas.
-- Acción siguiente: ninguna; la cola está cerrada.
+- Completado: Q01-Q24 reconciliados, implementados, desplegados y verificados en producción.
+- Evidencia final Q24: batería integral verde; sesiones reales de admin, profesor y familia cerradas en `clasesde10.com`, confirmación visible y rutas protegidas rechazadas tras salir; caché PWA v87 activa.
+- Acción siguiente: revisar y corregir la ficha CRM de familias para retirar conceptos propios del profesor.

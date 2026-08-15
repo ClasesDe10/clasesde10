@@ -977,6 +977,11 @@ pre,
   background: none; border: none; width: 100%; padding: 8px 0;
 }
 .sidebar-logout:hover { color: var(--danger); }
+.sidebar-logout:disabled,
+.sidebar-logout[aria-busy="true"] {
+  cursor: wait;
+  opacity: .7;
+}
 
 /* ── TOPBAR ──────────────────────────────────────────────────── */
 .topbar {

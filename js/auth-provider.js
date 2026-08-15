@@ -24,4 +24,4 @@ export {
   resetPassword,
   isPasswordSetupLink,
   setPasswordAfterEmailVerification,
-} from './auth.js?v=20260815-onboarding-gate';
+} from './auth.js?v=20260815-logout-r1';

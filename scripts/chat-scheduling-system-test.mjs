@@ -187,7 +187,7 @@ assert(rules.includes("'classResetCutoffIso'"), 'Firestore rules must allow clas
 assert(rules.includes('chatTeacherUid(get(chatPath).data)'), 'Class creation rules must accept canonical or legacy chat teacher ids.');
 assert(rules.includes("request.resource.data.participantUids[request.auth.uid] == true"), 'Class creation rules must require the creator in participantUids.');
 assert(rules.includes('match /preferencias/{userUid}'), 'Firestore rules must protect per-user chat preferences.');
-assert(rules.includes("isAdmin()\n              || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)"), 'Admin calls must retain the secure audio fallback used by chat participants.');
+assert(/isAdmin\(\)\s*\|\|\s*isChatParticipant\(get\(\/databases\/\$\(database\)\/documents\/chats\/\$\(chatId\)\)\.data\)/.test(rules), 'Admin calls must retain the secure audio fallback used by chat participants.');
 assert(rules.includes('validChatPreferenceCreate'), 'Firestore rules must validate chat preference creation.');
 assert(rules.includes('availabilityTeacherBelongsToAuth'), 'Availability rules must support teacher profile ids as well as auth uids.');
 assert(rules.includes("'assignmentIntroSentAt'"), 'Chat creation rules must allow the assignment intro marker.');
