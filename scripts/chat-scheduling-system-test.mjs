@@ -106,6 +106,12 @@ assert(chat.includes('chatUnreadCount') && chat.includes('data-chat-total-unread
 assert(chat.includes('markChatDelivered') && chat.includes('markChatRead'), 'Chat must distinguish delivered messages from read messages.');
 assert(chat.includes('renderMessageReceipt') && chat.includes('Entregado') && chat.includes('Visto'), 'Outgoing messages must show sent, delivered and seen receipts.');
 assert(chat.includes('watchTyping') && chat.includes('está escribiendo'), 'Chat must show a real-time typing indicator.');
+assert(chat.includes('isEmailLikeChatIdentity') && chat.includes("text.includes('@')"), 'Chat identities must reject email addresses before rendering them.');
+assert(chat.includes('!isEmailLikeChatIdentity(fallbackText)'), 'Chat names and private aliases must also reject email fallbacks.');
+assert(chat.includes('currentChatSenderName(usuario, role)'), 'Typing and messages must publish the profile first name instead of an email fallback.');
+assert(chat.includes('chatParticipantDisplayName(chat, role, senderName)'), 'Typing must recover the sender name from the chat participant profile when the session lacks it.');
+assert(chat.includes('typingCounterpartDisplayName(chat, role'), 'Typing indicators must resolve the receiver alias or the sender first name.');
+assert(!chat.includes('usuario.displayName, usuario.email) || role'), 'Chat sender identity must never fall back to the account email.');
 assert(chat.includes('syncChatRealtimeSubscriptions'), 'Conversation list metadata must update in real time outside the selected thread.');
 assert(chat.includes('showBrowserNotification') && chat.includes('chat-nav-unread'), 'Incoming messages must surface outside the open chat.');
 assert(chat.includes("'hidden style=\"display:none\"'"), 'The dedicated notification centre must stay visually separate when chat notifications are disabled.');

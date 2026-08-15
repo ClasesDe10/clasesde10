@@ -693,9 +693,9 @@ function identityKey(value) {
 
 function reliableName(value, fallback = '') {
   const text = clean(value, 180);
-  if (text.length > 1 && !isGenericIdentityLabel(text)) return text;
+  if (text.length > 1 && !isEmailLikeChatIdentity(text) && !isGenericIdentityLabel(text)) return text;
   const fallbackText = clean(fallback, 180);
-  return fallbackText.length > 1 && !isGenericIdentityLabel(fallbackText) ? fallbackText : '';
+  return fallbackText.length > 1 && !isEmailLikeChatIdentity(fallbackText) && !isGenericIdentityLabel(fallbackText) ? fallbackText : '';
 }
 
 function hydrateChatNames(data = {}, fallback = {}) {
@@ -905,13 +905,59 @@ function realChatTitle(chat, role) {
   return [family, teacher].filter(Boolean).join(' / ');
 }
 
+function isEmailLikeChatIdentity(value = '') {
+  const text = clean(value, 180);
+  return text.includes('@') || /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/.test(text);
+}
+
 function isUsefulChatIdentity(value) {
   const text = clean(value, 120);
-  return text.length > 1 && !isGenericIdentityLabel(text);
+  return text.length > 1 && !isEmailLikeChatIdentity(text) && !isGenericIdentityLabel(text);
 }
 
 function readableChatIdentity(...values) {
   return values.map((value) => clean(value, 180)).find(isUsefulChatIdentity) || '';
+}
+
+function firstPersonalChatName(value = '') {
+  const identity = readableChatIdentity(value);
+  if (!identity) return '';
+  const firstName = clean(identity.split(/\s+/)[0], 80);
+  return firstName && !isGenericIdentityLabel(firstName) ? firstName : identity;
+}
+
+function currentChatSenderName(usuario = {}, role = '') {
+  const profileName = readableChatIdentity(
+    usuario.nombre,
+    usuario.firstName,
+    usuario.displayName,
+    fullName(usuario.nombre, usuario.apellidos),
+    usuario.name,
+  );
+  if (profileName) return firstPersonalChatName(profileName);
+  if (role === 'familia') return 'Familia';
+  if (role === 'profesor') return 'Profesor';
+  if (role === 'admin') return 'ClasesDe10';
+  return 'La otra persona';
+}
+
+function chatParticipantDisplayName(chat = {}, role = '', fallbackName = '') {
+  if (role === 'familia') {
+    return firstPersonalChatName(readableChatIdentity(chat.familyName, chat.familia_nombre, fallbackName)) || 'Familia';
+  }
+  if (role === 'profesor') {
+    return firstPersonalChatName(readableChatIdentity(chat.teacherName, chat.profesor_nombre, fallbackName)) || 'Profesor';
+  }
+  return firstPersonalChatName(fallbackName) || (role === 'admin' ? 'ClasesDe10' : 'La otra persona');
+}
+
+function typingCounterpartDisplayName(chat = {}, role = '', preference = {}, publishedName = '') {
+  const customName = readableChatIdentity(preference.displayNameOverride);
+  if (customName) return customName;
+  const senderFirstName = firstPersonalChatName(publishedName);
+  if (senderFirstName) return senderFirstName;
+  const counterpartFirstName = firstPersonalChatName(realChatTitle(chat, role));
+  return counterpartFirstName || 'La otra persona';
 }
 
 function shortChatEntityLabel(label, id = '') {
@@ -2413,7 +2459,7 @@ export async function initChatWidget({
     usuario.id,
     profileId,
   ].map((value) => clean(value, 180)).filter(Boolean));
-  const senderName = readableChatIdentity(fullName(usuario.nombre, usuario.apellidos), usuario.displayName, usuario.email) || role;
+  const senderName = currentChatSenderName(usuario, role);
   const draftStorageKey = `cd10_chat_drafts_${currentUid || 'anonimo'}`;
 
   try {
@@ -2641,7 +2687,7 @@ export async function initChatWidget({
     batch.set(messageRef, {
       senderUid: currentUid,
       senderRole: role,
-      senderName,
+      senderName: chatParticipantDisplayName(chat, role, senderName),
       body,
       createdAt: serverTimestamp(),
       readBy: { [currentUid]: true },
@@ -2654,7 +2700,10 @@ export async function initChatWidget({
     if (!state.selectedChat) return;
     const safeBody = clean(body || chatAttachmentLabel(attachment), 2000);
     if (!safeBody && !attachment) return;
-    const safeSenderName = readableChatIdentity(senderDisplayName, senderName) || role;
+    const safeSenderName = readableChatIdentity(
+      senderDisplayName,
+      chatParticipantDisplayName(state.selectedChat, role, senderName),
+    ) || role;
     const safeCallId = clean(callId, 180);
     const safeCallKind = clean(callKind, 20);
     const chatRef = doc(firebaseDb, 'chats', state.selectedChat.id);
@@ -3936,9 +3985,10 @@ export async function initChatWidget({
   async function publishTyping(chatId, isTyping) {
     const safeChatId = clean(chatId, 180);
     if (!safeChatId || !currentUid) return;
+    const chat = state.chats.find((item) => item.id === safeChatId) || state.selectedChat || {};
     await setDoc(doc(firebaseDb, 'chats', safeChatId, 'typing', currentUid), {
       uid: currentUid,
-      name: senderName,
+      name: chatParticipantDisplayName(chat, role, senderName),
       isTyping: Boolean(isTyping),
       updatedAt: serverTimestamp(),
     }, { merge: true }).catch(() => {});
@@ -3974,8 +4024,11 @@ export async function initChatWidget({
         && entry.isTyping === true
         && Date.now() - timestampMs(entry.updatedAt) < 8000
       ));
+      const typingName = active
+        ? typingCounterpartDisplayName(chat, role, state.chatPreferencesById[chat.id] || {}, active.name)
+        : '';
       indicator.hidden = !active;
-      indicator.textContent = active ? `${readableChatIdentity(active.name) || 'La otra persona'} está escribiendo…` : '';
+      indicator.textContent = active ? `${typingName} está escribiendo…` : '';
       const presence = container.querySelector('[data-chat-presence]');
       if (presence) {
         presence.textContent = active ? 'escribiendo…' : (presence.dataset.defaultText || chatSubtitle(chat, role, state.chatPreferencesById[chat.id] || {}));

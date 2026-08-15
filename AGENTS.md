@@ -22,7 +22,6 @@
 - Esta autorización incluye instalar o actualizar dependencias; ejecutar Node.js, npm, Playwright, Firebase y otras herramientas; modificar archivos y configuración; crear cuentas y datos temporales; ejecutar migraciones, pruebas y auditorías; corregir los problemas encontrados; desplegar en producción; repetir verificaciones; y limpiar los artefactos temporales.
 - Entregar siempre el resultado terminado y verificado. No trasladar al usuario pasos manuales, configuraciones o comprobaciones que el agente pueda realizar por sí mismo.
 - Si una herramienta o la plataforma muestra una autorización técnica obligatoria, solicitarla directamente mediante el mecanismo de la plataforma y continuar en cuanto esté disponible, sin convertirla en una pregunta de planificación ni pedir confirmación adicional en la conversación.
-- Agotar primero todas las alternativas seguras y autónomas. Solo detenerse si falta un dato imposible de deducir, existe un bloqueo externo real o la acción excede materialmente la tarea solicitada y tendría consecuencias irreversibles sobre datos o terceros.
 
 # Continuidad, interrupciones y cola de trabajo
 

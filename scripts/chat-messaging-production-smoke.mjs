@@ -78,16 +78,16 @@ async function openChat(session) {
 }
 
 async function seed() {
-  family = await adminAuth.createUser({ email: familyEmail, password, emailVerified: true, displayName: 'Familia Prueba Mensajes' });
-  teacher = await adminAuth.createUser({ email: teacherEmail, password, emailVerified: true, displayName: 'Profesor Prueba Mensajes' });
+  family = await adminAuth.createUser({ email: familyEmail, password, emailVerified: true, displayName: familyEmail });
+  teacher = await adminAuth.createUser({ email: teacherEmail, password, emailVerified: true, displayName: teacherEmail });
   const now = FieldValue.serverTimestamp();
   const participantUids = { [family.uid]: true, [teacher.uid]: true };
   const batch = adminDb.batch();
-  batch.set(adminDb.doc(`users/${family.uid}`), { email: familyEmail, nombre: 'Familia Prueba', apellidos: 'Mensajes', role: 'familia', rol: 'familia', active: true, createdAt: now, updatedAt: now });
-  batch.set(adminDb.doc(`familias/${family.uid}`), { id: family.uid, userUid: family.uid, usuario_id: family.uid, email: familyEmail, nombre: 'Familia Prueba', apellidos: 'Mensajes', status: 'activo', active: true, createdAt: now, updatedAt: now });
-  batch.set(adminDb.doc(`users/${teacher.uid}`), { email: teacherEmail, nombre: 'Profesor Prueba', apellidos: 'Mensajes', role: 'profesor', rol: 'profesor', active: true, createdAt: now, updatedAt: now });
-  batch.set(adminDb.doc(`profesores/${teacher.uid}`), { id: teacher.uid, userUid: teacher.uid, usuario_id: teacher.uid, email: teacherEmail, nombre: 'Profesor Prueba', apellidos: 'Mensajes', estado_verificacion: 'verificado', verificationStatus: 'verificado', status: 'activo', active: true, createdAt: now, updatedAt: now });
-  batch.set(adminDb.doc(`alumnos/${studentId}`), { id: studentId, familia_id: family.uid, familyUid: family.uid, nombre: 'Alumno Prueba', apellidos: 'Mensajes', activo: true, active: true, createdAt: now, updatedAt: now });
+  batch.set(adminDb.doc(`users/${family.uid}`), { email: familyEmail, role: 'familia', rol: 'familia', active: true, createdAt: now, updatedAt: now });
+  batch.set(adminDb.doc(`familias/${family.uid}`), { id: family.uid, userUid: family.uid, usuario_id: family.uid, email: familyEmail, status: 'activo', active: true, createdAt: now, updatedAt: now });
+  batch.set(adminDb.doc(`users/${teacher.uid}`), { email: teacherEmail, role: 'profesor', rol: 'profesor', active: true, createdAt: now, updatedAt: now });
+  batch.set(adminDb.doc(`profesores/${teacher.uid}`), { id: teacher.uid, userUid: teacher.uid, usuario_id: teacher.uid, email: teacherEmail, estado_verificacion: 'verificado', verificationStatus: 'verificado', status: 'activo', active: true, createdAt: now, updatedAt: now });
+  batch.set(adminDb.doc(`alumnos/${studentId}`), { id: studentId, familia_id: family.uid, familyUid: family.uid, nombre: 'Daniel', apellidos: 'Prueba', activo: true, active: true, createdAt: now, updatedAt: now });
   batch.set(adminDb.doc(`chats/${chatId}`), {
     id: chatId,
     assignmentId: chatId,
@@ -99,12 +99,12 @@ async function seed() {
     studentId,
     alumno_id: studentId,
     materia: 'Matemáticas',
-    familyName: 'Familia Prueba Mensajes',
-    familia_nombre: 'Familia Prueba Mensajes',
-    teacherName: 'Profesor Prueba Mensajes',
-    profesor_nombre: 'Profesor Prueba Mensajes',
-    studentName: 'Alumno Prueba Mensajes',
-    alumno_nombre: 'Alumno Prueba Mensajes',
+    familyName: 'Lucía Rivera',
+    familia_nombre: 'Lucía Rivera',
+    teacherName: 'Marcos Ortega',
+    profesor_nombre: 'Marcos Ortega',
+    studentName: 'Daniel Prueba',
+    alumno_nombre: 'Daniel Prueba',
     participantUids,
     unreadBy: { [family.uid]: 0, [teacher.uid]: 0 },
     deliveredAtBy: {},
@@ -113,6 +113,11 @@ async function seed() {
     lastMessageAt: null,
     active: true,
     relationshipStatus: 'active',
+    createdAt: now,
+    updatedAt: now,
+  });
+  batch.set(adminDb.doc(`chats/${chatId}/preferencias/${teacher.uid}`), {
+    displayNameOverride: 'Mamá de Daniel',
     createdAt: now,
     updatedAt: now,
   });
@@ -142,10 +147,11 @@ try {
 
   const familyInput = familySession.page.locator('[data-chat-input]');
   await familyInput.fill(firstMessage);
-  await teacherSession.page.waitForFunction(() => {
+  await teacherSession.page.waitForFunction((expectedName) => {
     const indicator = document.querySelector('[data-chat-typing-indicator]');
-    return indicator && !indicator.hidden && /escribiendo/.test(indicator.textContent || '');
-  }, null, { timeout: 10000 });
+    const text = indicator?.textContent || '';
+    return indicator && !indicator.hidden && text === `${expectedName} está escribiendo…` && !text.includes('@');
+  }, 'Mamá de Daniel', { timeout: 10000 });
   await familyInput.press('Enter');
 
   await teacherSession.page.waitForFunction((expected) => {
@@ -162,10 +168,11 @@ try {
 
   const teacherInput = teacherSession.page.locator('[data-chat-input]');
   await teacherInput.fill(replyMessage);
-  await familySession.page.waitForFunction(() => {
+  await familySession.page.waitForFunction((expectedName) => {
     const indicator = document.querySelector('[data-chat-typing-indicator]');
-    return indicator && !indicator.hidden && /escribiendo/.test(indicator.textContent || '');
-  }, null, { timeout: 10000 });
+    const text = indicator?.textContent || '';
+    return indicator && !indicator.hidden && text === `${expectedName} está escribiendo…` && !text.includes('@');
+  }, 'Marcos', { timeout: 10000 });
   await teacherInput.press('Enter');
   await familySession.page.waitForFunction((expected) => document.querySelector('[data-chat-messages]')?.textContent?.includes(expected), replyMessage, { timeout: 15000 });
   await teacherSession.page.waitForSelector('.chat-message.mine .chat-message-receipt.read', { timeout: 15000 });
@@ -174,7 +181,7 @@ try {
   await teacherSession.page.screenshot({ path: 'output/playwright/chat-professional-desktop.png', fullPage: false });
 
   const search = teacherSession.page.locator('[data-chat-search]');
-  await search.fill('Familia Prueba');
+  await search.fill('Mamá de Daniel');
   if (await teacherSession.page.locator(`[data-chat-id="${chatId}"]`).count() !== 1) throw new Error('Conversation search did not preserve the matching chat.');
   await search.fill('No existe');
   await teacherSession.page.waitForSelector('.chat-list .chat-empty-state', { state: 'visible', timeout: 5000 });
@@ -193,7 +200,7 @@ try {
     baseUrl,
     projectId,
     chatId,
-    checks: ['typing_both_directions', 'unread_sidebar_badge', 'delivered_receipt', 'read_receipt', 'real_time_preview', 'conversation_search', 'desktop_visual', 'mobile_thread_navigation'],
+    checks: ['typing_alias_without_email', 'typing_profile_first_name_without_email', 'unread_sidebar_badge', 'delivered_receipt', 'read_receipt', 'real_time_preview', 'conversation_search', 'desktop_visual', 'mobile_thread_navigation'],
   }, null, 2));
 } finally {
   await browser?.close().catch(() => {});
