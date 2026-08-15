@@ -96,6 +96,8 @@ export function classCalendarDescription(classData = {}) {
       `Profesor: ${calendarPersonName('Profesor', group.teacherUid || group.profesor_id, group.teacherName)}`,
       group.amount ? `Importe: ${group.amount} EUR` : '',
       group.classCount ? `Clases incluidas: ${group.classCount}` : '',
+      `Bizum a: ${group.paymentRecipientName || 'Miguel G. G.'} (${group.paymentRecipientPhone || '613016665'})`,
+      'ClasesDe10 recibe el pago y despues liquida al profesor correspondiente.',
     ].filter(Boolean).join('\n');
   }
   if (classData.calendarEventType === 'teacher_payout_day') {

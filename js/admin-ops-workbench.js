@@ -12,7 +12,7 @@ import {
   buildAdminOpsModel,
   searchOpsIndex,
   summarizeOpsForClipboard,
-} from './admin-ops-engine.js?v=20260629-ops';
+} from './admin-ops-engine.js?v=20260710-actionable-incidents';
 import { filterAfterClassReset } from './class-reset.js';
 
 export const ADMIN_OPS_WORKBENCH_VERSION = 'admin-ops-workbench-2026-07-01';
@@ -176,6 +176,7 @@ function routineCard({
   query = '',
   tone = 'info',
 }) {
+  const primaryLabel = section === 'incidencias' ? 'Arreglar' : 'Abrir';
   return `
     <article class="ops-routine-card ops-routine-${escapeHtml(toneBadge(tone))}">
       <div>
@@ -185,7 +186,7 @@ function routineCard({
       </div>
       <div class="ops-routine-actions">
         <button class="btn btn-outline btn-sm" type="button" data-ops-focus="${escapeHtml(focus)}" data-ops-query="${escapeHtml(query)}">Ver cola</button>
-        <button class="btn btn-primary btn-sm" type="button" data-ops-nav="${escapeHtml(section)}">Abrir</button>
+        <button class="btn btn-primary btn-sm" type="button" data-ops-nav="${escapeHtml(section)}">${escapeHtml(primaryLabel)}</button>
       </div>
     </article>`;
 }

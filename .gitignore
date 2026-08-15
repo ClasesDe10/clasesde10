@@ -31,5 +31,17 @@ desktop.ini
 # Temporales
 *.tmp
 *.bak
+tmp/
 .playwright-cli/
 output/
+.tools/
+
+# Android / TWA
+android/twa-build/
+android/**/signing/
+android/**/clasesde10-release.keystore
+android/**/clasesde10-release-passwords.txt
+android/**/*.keystore
+android/**/*.jks
+*.apk
+*.aab

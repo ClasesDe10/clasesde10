@@ -607,16 +607,13 @@ export function evaluateTeacherProfile(teacher = {}) {
   if (!profile.address) issues.push({ field: 'direccion', label: 'Completar calle/direccion', weight: 7 });
   if (!profile.city) issues.push({ field: 'ciudad', label: 'Completar ciudad', weight: 4 });
   if (!profile.postalCode) issues.push({ field: 'codigo_postal', label: 'Completar codigo postal', weight: 4 });
-  if (!profile.zone) issues.push({ field: 'zona', label: 'Completar zona donde da clase', weight: 8 });
-  else strengths.push('Zona definida');
   if (profile.hasCar === null) issues.push({ field: 'movilidad', label: 'Indicar si tiene coche', weight: 3 });
   else strengths.push(profile.hasCar ? 'Tiene coche para desplazarse' : 'Movilidad sin coche declarada');
   if (!profile.subjects.length) issues.push({ field: 'materias', label: 'Anadir materias', weight: 14 });
   else strengths.push(`${profile.subjects.length} materia(s)`);
   if (!profile.levels.length) issues.push({ field: 'niveles', label: 'Anadir niveles educativos', weight: 12 });
   else strengths.push(`${profile.levels.length} nivel(es)`);
-  if (!profile.studyLevel) issues.push({ field: 'tipo_formacion', label: 'Indicar tipo de formacion principal', weight: 5 });
-  if (!profile.exactStudy) issues.push({ field: 'estudio_exacto', label: 'Completar estudio exacto o titulacion', weight: 8 });
+  if (!profile.exactStudy) issues.push({ field: 'estudio_exacto', label: 'Completar grado, carrera o titulacion', weight: 8 });
   else strengths.push(`Formacion: ${profile.exactStudy}`);
   if (!profile.schoolName) issues.push({ field: 'colegio', label: 'Completar colegio donde estudio', weight: 6 });
   else strengths.push(`Colegio: ${profile.schoolName}`);

@@ -21,7 +21,6 @@ const SUPPORTED_SYSTEM_JOBS = new Set([
 ]);
 
 const workerCode = readFileSync(new URL('./firebase-automation-worker.mjs', import.meta.url), 'utf8');
-const functionsCode = readFileSync(new URL('../functions/index.js', import.meta.url), 'utf8');
 
 function assertHas(items, predicate, message) {
   assert.ok(items.some(predicate), message);
@@ -99,10 +98,12 @@ const overdueClassPlan = buildAutomationPlan({
   },
 });
 
-assertHas(overdueClassPlan.notifications, (item) => item.userUid === 'teacher_user_1' && item.type === 'class_unmarked_after_1h', 'overdue class must notify teacher');
-assertHas(overdueClassPlan.notifications, (item) => item.userUid === 'family_user_1' && item.type === 'class_unmarked_after_1h', 'overdue class must notify family');
+assertHas(overdueClassPlan.notifications, (item) => item.userUid === 'teacher_user_1' && item.type === 'class_unmarked_after_24h', 'overdue class must notify teacher after 24h');
+assertHas(overdueClassPlan.notifications, (item) => item.userUid === 'family_user_1' && item.type === 'class_unmarked_after_24h', 'overdue class must notify family after 24h');
 assertHas(overdueClassPlan.crmTasks, (item) => item.priority === 'high' && item.entityId === 'class_1', 'overdue class must create CRM task');
 assertHas(overdueClassPlan.patches, (item) => item.collection === 'clases' && item.docId === 'class_1' && item.data.needsAttendanceConfirmation === true, 'overdue class must patch class state');
+assertHas(overdueClassPlan.patches, (item) => item.collection === 'clases' && item.data.trustPenaltyEvents?.class_unmarked_teacher?.points === -2, 'overdue class must penalize teacher responsibility');
+assertHas(overdueClassPlan.patches, (item) => item.collection === 'clases' && item.data.trustPenaltyEvents?.class_unmarked_family?.points === -2, 'overdue class must penalize family responsibility');
 assertOnlySupportedJobs(overdueClassPlan);
 
 const completedClassPlan = buildAutomationPlan({
@@ -138,6 +139,7 @@ assertHas(paymentPlan.notifications, (item) => item.userUid === 'family_user_1' 
 assertHas(paymentPlan.notifications, (item) => item.targetRole === 'admin' && item.priority === 'critical', 'payment.overdue must notify admin critically');
 assertHas(paymentPlan.opsAlerts, (item) => item.type === 'payment_overdue', 'payment.overdue must create ops alert');
 assertHas(paymentPlan.patches, (item) => item.collection === 'pagos' && item.data.status === 'vencido', 'payment.overdue must patch payment status');
+assertHas(paymentPlan.patches, (item) => item.collection === 'pagos' && item.data.trustPenaltyEvents?.payment_overdue_family?.points === -2, 'payment.overdue must penalize family trust');
 assertOnlySupportedJobs(paymentPlan);
 
 const paymentCreatedPlan = buildAutomationPlan({
@@ -348,11 +350,11 @@ assert.match(workerCode, /systemJobsRecoveredLeases/, 'GitHub worker must expose
 assert.match(workerCode, /systemJobsSkippedClaims/, 'GitHub worker must expose skipped concurrent claim counts.');
 assert.match(workerCode, /adminNotificationDedupeKey/, 'GitHub worker admin notifications must use stable dedupe keys.');
 assert.doesNotMatch(workerCode, /admins\.map\(\(user\) => writeDoc\(db\.collection\('notificaciones'\), null/, 'GitHub worker admin notifications must not use random IDs.');
-assert.match(functionsCode, /systemJobLeaseExpired/, 'Cloud Functions worker must detect expired processing leases.');
-assert.match(functionsCode, /expiredSnap/, 'Cloud Functions worker must scan expired processing jobs.');
-assert.match(functionsCode, /claimSystemJob\(doc\.ref, workerId\)/, 'Cloud Functions worker must claim each job through the transaction helper.');
-assert.match(functionsCode, /adminNotificationDedupeKey/, 'Cloud Functions admin notifications must use stable dedupe keys.');
-assert.match(functionsCode, /writeNotificationOnce\(user\.id, title, body, payload, key/, 'Cloud Functions admin notifications must be idempotent.');
+assert.match(workerCode, /workerJobLeaseExpired/, 'GitHub worker must detect expired processing leases.');
+assert.match(workerCode, /claimWorkerSystemJob\(db, job, workerId\)/, 'GitHub worker must claim each job through the transaction helper.');
+assert.match(workerCode, /adminNotificationDedupeKey/, 'GitHub worker admin notifications must use stable dedupe keys.');
+assert.match(workerCode, /notifyUserOnce\(db, user\.id/, 'GitHub worker admin notifications must be idempotent.');
+assert.match(workerCode, /processPendingPushNotifications/, 'GitHub worker must deliver pending push notifications without Cloud Functions.');
 
 for (const eventType of [
   'user.registered',

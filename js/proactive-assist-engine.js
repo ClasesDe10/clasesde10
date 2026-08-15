@@ -344,6 +344,12 @@ function proactiveSignal(input) {
 function pushSignal(signals, previousSignals, signal, nowMs, counters, maxUserNotifications) {
   if (!signal?.id) return;
   if (hasPreviousSignal(previousSignals, signal.dedupeKey, signal.cooldownHours, nowMs)) return;
+  signal.recipients = toArray(signal.recipients).filter((recipient) => {
+    const priority = lower(recipient.priority || signal.priority);
+    if (priority === 'low') return false;
+    if (signal.category === 'profile') return ['critical', 'high'].includes(priority);
+    return true;
+  });
   const nextRecipientCount = signal.recipients.length;
   if (nextRecipientCount && counters.userNotifications + nextRecipientCount > maxUserNotifications) {
     signal.recipients = [];
@@ -626,7 +632,7 @@ function buildTeacherPayoutReadinessSignals(dataset, options, nowMs, push) {
       priority: bucket.count >= 2 ? 'high' : 'normal',
       title: `Falta Bizum para pagar a ${name}`,
       description: `${bucket.count} clase(s) completadas tienen ${Math.round(bucket.amount)} EUR pendientes para el profesor, pero no hay Bizum operativo.`,
-      reason: 'Si no se pide antes, el cierre quincenal exigira gestion manual y retrasara el pago al profesor.',
+      reason: 'Si no se pide antes, el proximo cierre de cobro exigira gestion manual y retrasara el pago al profesor.',
       expectedOutcome: 'El profesor anade Bizum y el admin puede pagar sin perseguir datos.',
       recommendedAction: 'Pedir Bizum al profesor y completar su perfil antes del proximo cierre.',
       section: 'ingresos',
@@ -781,7 +787,7 @@ export function buildProactiveAssistPlan(dataset = {}, options = {}) {
     userNotificationCooldownHours: number(options.userNotificationCooldownHours, 72),
     adminCooldownHours: number(options.adminCooldownHours, 24),
     adminEscalationHours: number(options.adminEscalationHours, 48),
-    maxUserNotifications: number(options.maxUserNotifications, 30),
+    maxUserNotifications: number(options.maxUserNotifications, 6),
   };
   const previousSignals = dataset.previousSignals || dataset.proactiveAssistSignals || [];
   const signals = [];

@@ -9,7 +9,9 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260701-role-ux">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-calendar-semantics">
+<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260809-teacher-calendar">
+<link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -49,6 +51,10 @@
       <button class="sidebar-link" data-section="profesor">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         Mi profesor
+      </button>
+      <button class="sidebar-link" data-section="notificaciones">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-12 0v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0a3 3 0 11-6 0"/></svg>
+        Avisos
       </button>
     </nav>
     <div class="sidebar-footer">
@@ -125,12 +131,16 @@
 
       <!-- ══ CALENDARIO ══ -->
       <section id="section-calendario" class="dash-section" style="display:none">
-        <div style="display:grid;grid-template-columns:1fr 300px;gap:20px">
+        <div class="calendar-page-layout">
           <div id="calendario-wrapper"></div>
-          <div class="card">
+          <div class="card calendar-day-panel">
             <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
             <div class="card-body" style="padding:0" id="cal-clases-dia">
-              <div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>
+              <div class="empty-state dashboard-empty-state is-compact">
+                <div class="empty-icon" aria-hidden="true">📅</div>
+                <div class="empty-title">Selecciona un día</div>
+                <div class="empty-desc">Verás aquí tus clases de ese día.</div>
+              </div>
             </div>
           </div>
         </div>
@@ -170,19 +180,30 @@
         </div>
       </section>
 
+      <section id="section-notificaciones" class="dash-section" style="display:none">
+        <div id="notification-center-alumno"></div>
+      </section>
+
     </div>
   </div>
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
+import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-onboarding-gate';
 import {
   showToast, initSidebar, formatFechaCorta, formatHora,
   badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js?v=20260701-selected-refresh';
+import { Calendario } from '../../js/calendario.js?v=20260815-calendar-semantics';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260808-action-center';
 import { classStatusForBadge, isScheduledClassStatus } from '../../js/calendar-engine.js?v=20260628-calendar';
+import {
+  loadParticipantClasses,
+  missingRecurringOccurrences,
+} from '../../js/recurring-class-sync.js?v=20260706-recurring-calendar-sync';
+import { collection as firestoreCollection, getDocs, query as firestoreQuery, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 
 const usuario = await requireAuth(['alumno']);
 if (!usuario) throw new Error('No autorizado');
@@ -193,10 +214,160 @@ document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre
 
 // Obtener registro alumno
 const { data: alumnoData } = await db.from('alumnos').select('*').eq('usuario_id', usuario.id).single();
-const alumnoId = alumnoData?.id;
+const alumnoId = alumnoData?.id || alumnoData?.studentId || alumnoData?.studentUid || '';
+
+function ownerUid() {
+  return usuario.uid || usuario.firebase_uid || usuario.id || '';
+}
+
+function isExpectedPermissionFallback(error) {
+  const message = String(error?.message || error?.code || '').toLowerCase();
+  return message.includes('permission') || message.includes('missing or insufficient');
+}
+
+function isoDateLocal(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function classDateIso(clase = {}) {
+  const raw = clase.fecha || clase.date || clase.startAtIso || clase.startsAt || '';
+  if (typeof raw?.toDate === 'function') return isoDateLocal(raw.toDate());
+  if (Number.isFinite(raw?.seconds)) return isoDateLocal(new Date(raw.seconds * 1000));
+  const value = String(raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : isoDateLocal(date);
+}
+
+function alumnoClassIds() {
+  return [...new Set([
+    alumnoId,
+    alumnoData?.id,
+    alumnoData?.studentId,
+    alumnoData?.studentUid,
+    alumnoData?.usuario_id,
+    usuario.uid,
+    usuario.firebase_uid,
+    usuario.id,
+  ].filter(Boolean).map(String))];
+}
+
+function mergeById(rows = []) {
+  const map = new Map();
+  rows.filter(Boolean).forEach((row, index) => {
+    const key = String(row.id || row.calendarUid || `${row.fecha || row.date}-${row.hora_inicio || row.startTime}-${index}`);
+    if (!map.has(key)) map.set(key, row);
+  });
+  return Array.from(map.values());
+}
+
+function normalizeAlumnoClassRow(clase = {}) {
+  const fecha = classDateIso(clase);
+  const teacherName = [
+    clase.profesor_nombre,
+    clase.teacherName,
+    clase.profesorName,
+    clase.profesores?.usuarios?.nombre && [clase.profesores?.usuarios?.nombre, clase.profesores?.usuarios?.apellidos].filter(Boolean).join(' '),
+  ].map((value) => String(value || '').trim()).find(Boolean) || 'Profesor pendiente';
+  return {
+    ...clase,
+    studentId: clase.studentId || clase.alumno_id || alumnoId,
+    alumno_id: clase.alumno_id || clase.studentId || alumnoId,
+    fecha,
+    date: fecha,
+    hora_inicio: clase.hora_inicio || clase.startTime || '',
+    startTime: clase.startTime || clase.hora_inicio || '',
+    hora_fin: clase.hora_fin || clase.endTime || '',
+    endTime: clase.endTime || clase.hora_fin || '',
+    materia: clase.materia || clase.subject || '',
+    subject: clase.subject || clase.materia || '',
+    duracion_minutos: Number(clase.duracion_minutos || clase.durationMinutes || clase.duration || 60) || 60,
+    durationMinutes: Number(clase.durationMinutes || clase.duracion_minutos || clase.duration || 60) || 60,
+    profesor_nombre: teacherName,
+    teacherName,
+    notas_profesor: clase.notas_profesor || clase.teacherNotes || clase.notasProfesor || '',
+  };
+}
+
+function classBelongsToAlumno(clase = {}) {
+  const ids = new Set(alumnoClassIds().map((id) => id.toLowerCase()));
+  return [
+    clase.studentId,
+    clase.alumno_id,
+    clase.studentUid,
+  ].some((id) => id && ids.has(String(id).toLowerCase()));
+}
+
+async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
+  if (valor === undefined || valor === null || valor === '') return [];
+  try {
+    const snap = await getDocs(firestoreQuery(
+      firestoreCollection(firebaseDb, nombreColeccion),
+      where(campo, operador, valor),
+    ));
+    return snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  } catch (error) {
+    if (!isExpectedPermissionFallback(error)) console.warn(`No se pudo cargar ${nombreColeccion} para el alumno`, error);
+    return [];
+  }
+}
+
+async function cargarClasesParticipanteAlumno() {
+  try {
+    return await loadParticipantClasses({
+      firebaseDb,
+      firestoreCollection,
+      getDocs,
+      firestoreQuery,
+      where,
+      uid: ownerUid(),
+    });
+  } catch (error) {
+    if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron cargar clases por participante del alumno', error);
+    return [];
+  }
+}
+
+async function cargarClasesAlumno(options = {}) {
+  const ids = alumnoClassIds();
+  if (!ids.length) return [];
+  const legacyReads = ids.map((id) => db.from('v_clases_completas').select('*').eq('alumno_id', id).limit(options.limit || 800));
+  const directReads = ids.flatMap((id) => [
+    cargarFirestoreWhere('clases', 'studentId', '==', id),
+    cargarFirestoreWhere('clases', 'alumno_id', '==', id),
+    cargarFirestoreWhere('clases', 'studentUid', '==', id),
+  ]);
+  const [legacyResults, participantRows, directRows] = await Promise.all([
+    Promise.all(legacyReads),
+    cargarClasesParticipanteAlumno(),
+    Promise.all(directReads),
+  ]);
+  let rows = mergeById([
+    ...legacyResults.flatMap((result) => result.data || []),
+    ...participantRows,
+    ...directRows.flat(),
+  ]).map(normalizeAlumnoClassRow).filter(classBelongsToAlumno);
+
+  if (options.desde && options.hasta) {
+    const virtualRows = missingRecurringOccurrences(rows, options.desde, options.hasta, {
+      currentUid: ownerUid(),
+      currentRole: 'alumno',
+      bufferDays: 35,
+      maxWrites: 80,
+    });
+    if (virtualRows.length) {
+      rows = mergeById([...rows, ...virtualRows]).map(normalizeAlumnoClassRow).filter(classBelongsToAlumno);
+    }
+  }
+
+  if (options.desde) rows = rows.filter((clase) => classDateIso(clase) >= options.desde);
+  if (options.hasta) rows = rows.filter((clase) => classDateIso(clase) <= options.hasta);
+  rows.sort((a, b) => String(classDateIso(a)).localeCompare(String(classDateIso(b))) || String(a.hora_inicio || '').localeCompare(String(b.hora_inicio || '')));
+  return rows;
+}
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
-const TITULOS = { inicio:'Mi panel', calendario:'Mi calendario', clases:'Mis clases', profesor:'Mi profesor' };
+const TITULOS = { inicio:'Mi panel', calendario:'Mi calendario', clases:'Mis clases', profesor:'Mi profesor', notificaciones:'Centro de avisos' };
 
 function irA(sec) {
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
@@ -214,10 +385,16 @@ document.addEventListener('click', (e) => {
 });
 initSidebar();
 initNotificacionesBadge(usuario.uid || usuario.id, db);
+initNotificationCenter({
+  container: document.getElementById('notification-center-alumno'),
+  usuario,
+  role: 'alumno',
+  showToast,
+  navigateSection: (section) => { irA(section); return true; },
+});
 document.getElementById('btn-logout').addEventListener('click', logout);
 document.getElementById('btn-notificaciones')?.addEventListener('click', () => {
-  irA('clases');
-  showToast('Notificaciones', 'Revisa tus clases y avisos pendientes desde este panel.', 'info');
+  irA('notificaciones');
 });
 
 // ── INICIO ───────────────────────────────────────────────────────
@@ -225,20 +402,25 @@ async function cargarInicio() {
   if (!alumnoId) return;
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
+  const now = new Date();
+  const mesFin = isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const futuroHasta = isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 6, 0));
 
-  const [{ data: proximaRaw }, { data: clasesMes }, { data: asig }, { data: total }] = await Promise.all([
-    db.from('v_clases_completas').select('fecha,hora_inicio').eq('alumno_id', alumnoId)
-      .gte('fecha', hoy).order('fecha').limit(10),
-    db.from('clases').select('duracion_minutos,estado').eq('alumno_id', alumnoId).gte('fecha', mesInicio),
+  const [clasesRango, { data: asig }, { data: total }] = await Promise.all([
+    cargarClasesAlumno({ desde: mesInicio, hasta: futuroHasta, limit: 1000 }),
     db.from('asignaciones').select('profesor_id').eq('alumno_id', alumnoId).eq('activa', true),
     db.from('clases').select('id',{count:'exact',head:true}).eq('alumno_id', alumnoId).eq('estado','realizada'),
   ]);
 
-  const proxima = (proximaRaw || []).filter((clase) => isScheduledClassStatus(clase.estado || clase.status)).slice(0, 1);
+  const proxima = (clasesRango || [])
+    .filter((clase) => classDateIso(clase) >= hoy)
+    .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
+    .slice(0, 1);
   document.getElementById('stat-proxima').textContent = proxima?.[0]
     ? `${formatFechaCorta(proxima[0].fecha)}`
     : 'Sin programar';
 
+  const clasesMes = (clasesRango || []).filter((clase) => classDateIso(clase) >= mesInicio && classDateIso(clase) <= mesFin);
   const realizadas = (clasesMes||[]).filter(c => c.estado === 'realizada');
   document.getElementById('stat-realizadas-mes').textContent = realizadas.length;
   const horas = realizadas.reduce((s,c) => s + (c.duracion_minutos||0), 0);
@@ -256,9 +438,8 @@ async function cargarInicio() {
   document.getElementById('prog-label').textContent = `${pct}% hacia tu meta de ${meta} clases`;
 
   // Próximas
-  const { data: proximasRaw } = await db.from('v_clases_completas')
-    .select('*').eq('alumno_id', alumnoId).gte('fecha', hoy).order('fecha').limit(20);
-  const proximas = (proximasRaw || [])
+  const proximas = (clasesRango || [])
+    .filter((clase) => classDateIso(clase) >= hoy)
     .filter((clase) => isScheduledClassStatus(clase.estado || clase.status))
     .slice(0, 5);
 
@@ -284,12 +465,21 @@ async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
+      dayIndicatorMode: 'summary',
+      daySummaryLabel: (clase) => formatHora(clase.hora_inicio || clase.startTime || '') || 'Clase',
+      legendItems: [
+        { className: 'dot-red', label: 'Revisar incidencia' },
+        { className: 'dot-amber', label: 'Acción pendiente' },
+        { className: 'dot-blue', label: 'Programada o en curso' },
+        { className: 'dot-emerald', label: 'Realizada' },
+        { className: 'dot-gray', label: 'Cancelada' },
+      ],
       onDiaClick: (fecha, clases) => {
         document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
         const cont = document.getElementById('cal-clases-dia');
         if (!clases.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases</div></div>'; return; }
         cont.innerHTML = clases.map(c => `
-          <div class="clase-item" style="padding:10px 16px">
+          <div class="clase-item calendar-class-item calendar-simple-class" style="padding:10px 16px">
             <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
             <div class="clase-info">
               <div class="clase-nombre">${sanitize(c.materia||'')}</div>
@@ -307,10 +497,13 @@ async function iniciarCalendario() {
 async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
-  const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const { data } = await db.from('v_clases_completas').select('fecha,estado,status,hora_inicio,materia,profesor_nombre,familyPaymentStatus,estado_pago')
-    .eq('alumno_id', alumnoId).gte('fecha',desde).lte('fecha',hasta);
-  cal.setClases(data||[]);
+  const hasta = isoDateLocal(new Date(anio, mes + 1, 0));
+  const desdeCalculo = isoDateLocal(new Date(anio, mes - 1, 1));
+  const data = await cargarClasesAlumno({ desde: desdeCalculo, hasta, limit: 1000 });
+  cal.setClases((data || []).filter((clase) => {
+    const dateIso = classDateIso(clase);
+    return dateIso >= desde && dateIso <= hasta;
+  }));
 }
 
 // ── MIS CLASES ───────────────────────────────────────────────────
@@ -319,19 +512,17 @@ async function cargarMisClases() {
   const estado = document.getElementById('filtro-estado').value;
   const mes    = document.getElementById('filtro-mes').value;
 
-  let q = db.from('v_clases_completas').select('*').eq('alumno_id', alumnoId);
-  if (estado && estado !== 'confirmada') q = q.eq('estado', estado);
-  if (mes) q = q.gte('fecha', mes+'-01').lte('fecha', mes+'-31');
-  q = q.order('fecha', {ascending:false});
-
-  const { data } = await q;
+  const now = new Date();
+  const desde = mes ? `${mes}-01` : isoDateLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const hasta = mes ? isoDateLocal(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)) : isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 6, 0));
+  const data = await cargarClasesAlumno({ desde, hasta, limit: 1000 });
   const clases = estado === 'confirmada'
     ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
-    : (data || []);
+    : (data || []).filter((clase) => !estado || clase.estado === estado || clase.status === estado);
   const tbody = document.getElementById('tbody-clases');
   if (!clases.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin clases.</td></tr>'; return; }
 
-  tbody.innerHTML = clases.map(c => `<tr>
+  tbody.innerHTML = clases.slice().sort((a, b) => String(classDateIso(b)).localeCompare(String(classDateIso(a))) || String(b.hora_inicio || '').localeCompare(String(a.hora_inicio || ''))).map(c => `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
     <td><strong>${sanitize(c.materia)}</strong></td>
@@ -396,6 +587,6 @@ async function cargarProfesor() {
 // ── INIT ─────────────────────────────────────────────────────────
 cargarInicio();
 </script>
-<script src="/js/pwa.js" defer></script>
+<script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
 </body>
 </html>

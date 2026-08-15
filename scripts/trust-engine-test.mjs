@@ -99,6 +99,26 @@ assert.equal(teacherTrust.metrics.openIncidents, 0);
 assert.equal(teacherTrust.adminStats.reputationCanBeManipulatedByProfileOnly, false);
 assert.ok(teacherTrust.adminStats.sampleConfidence < 0.5);
 
+const teacherPenaltyTrust = buildTeacherTrustProfile(teacher, {
+  ...context,
+  classes: context.classes.map((item) => item.id === 'c1'
+    ? {
+        ...item,
+        trustPenaltyEvents: {
+          class_unmarked_teacher: {
+            appliedToRole: 'profesor',
+            appliedToUid: 'teacher_1',
+            notificationType: 'class_unmarked_after_24h',
+            points: -2,
+          },
+        },
+      }
+    : item),
+});
+assert.equal(teacherPenaltyTrust.metrics.trustPenaltyEvents, 1);
+assert.equal(teacherPenaltyTrust.metrics.trustPenaltyPoints, -2);
+assert.ok(teacherPenaltyTrust.score < teacherTrust.score, 'Teacher responsibility notifications must reduce teacher trust.');
+
 const weakTrust = buildTeacherTrustProfile(weakTeacher, context);
 assert.ok(weakTrust.score < teacherTrust.score);
 assert.ok(weakTrust.warnings.length > 0);
@@ -121,6 +141,37 @@ assert.equal(familyTrust.metrics.activeStudents, 1);
 assert.equal(familyTrust.metrics.pendingPayments, 0);
 assert.ok(familyTrust.evidence.some((item) => item.key === 'payments' && item.state === 'positive'));
 
+const familyPenaltyTrust = buildFamilyTrustProfile({
+  id: 'family_1',
+  familyUid: 'family_1',
+  userUid: 'family_1',
+  email: 'familia@example.com',
+  telefono: '600333444',
+  direccion: 'Calle Familia 1',
+  codigo_postal: '28010',
+  profileCompletionPercent: 92,
+  status: 'verificado',
+  active: true,
+}, {
+  ...context,
+  classes: context.classes.map((item) => item.id === 'c2'
+    ? {
+        ...item,
+        trustPenaltyEvents: {
+          payment_overdue_family: {
+            appliedToRole: 'familia',
+            appliedToUid: 'family_1',
+            notificationType: 'payment_overdue',
+            points: -2,
+          },
+        },
+      }
+    : item),
+});
+assert.equal(familyPenaltyTrust.metrics.trustPenaltyEvents, 1);
+assert.equal(familyPenaltyTrust.metrics.trustPenaltyPoints, -2);
+assert.ok(familyPenaltyTrust.score < familyTrust.score, 'Family proof notifications must reduce family trust.');
+
 const overdueFamilyTrust = buildFamilyTrustProfile({
   id: 'family_overdue',
   familyUid: 'family_overdue',
@@ -133,7 +184,7 @@ const overdueFamilyTrust = buildFamilyTrustProfile({
   status: 'verificado',
   active: true,
 }, {
-  now,
+  now: new Date('2026-06-29T12:00:00Z'),
   documents: [{ ownerUid: 'family_overdue', tipo: 'dni', estado: 'validado' }],
   students: [{ id: 'student_overdue', familyUid: 'family_overdue', active: true }],
   classes: [{
@@ -155,7 +206,7 @@ const overdueFamilyTrust = buildFamilyTrustProfile({
     studentId: 'student_overdue',
     dayOfWeek: 5,
     time: '20:00',
-    graceHours: 24,
+    graceHours: 48,
     active: true,
   }],
   payments: [],

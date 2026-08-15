@@ -35,13 +35,16 @@ async (page) => {
   }, { email, password });
 
   await page.goto(`${baseUrl}/pages/dashboard/familia.html`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.locator('.family-journey-card[data-family-journey-stage="no_student"]').waitFor({ state: 'visible', timeout: 30000 });
-  const text = await page.locator('.family-journey-card').textContent();
-  if (!text.includes('Anade el primer alumno') || !text.includes('Progreso')) {
-    throw new Error(`Family journey initial guidance is incomplete: ${text}`);
+  await page.locator('#lista-proximas-inicio [data-family-journey-action="add_student"]').first().waitFor({ state: 'visible', timeout: 30000 });
+  const journeyPanel = await page.locator('#family-journey-panel').evaluate((node) => ({
+    hidden: node.hidden,
+    stage: node.dataset.familyStage || '',
+  }));
+  if (!journeyPanel.hidden || journeyPanel.stage !== 'no_student') {
+    throw new Error(`The compact family journey state is inconsistent: ${JSON.stringify(journeyPanel)}`);
   }
 
-  await page.locator('.family-journey-card [data-family-journey-action="add_student"]').first().click();
+  await page.locator('#lista-proximas-inicio [data-family-journey-action="add_student"]').first().click();
   await page.locator('#modal-hijo.open').waitFor({ state: 'visible', timeout: 15000 });
   const modalText = await page.locator('#modal-hijo').textContent();
   if (!modalText.includes('te guiaremos directamente para pedir profesor')) {
@@ -49,14 +52,12 @@ async (page) => {
   }
 
   await page.locator('[data-close-modal="modal-hijo"]').click();
-  await page.locator('button.sidebar-link[data-section="inicio"]').click();
-  await page.locator('.family-journey-card').waitFor({ state: 'visible', timeout: 15000 });
-  await page.locator('.family-journey-card [data-family-journey-action="complete_profile"]').first().click();
+  await page.locator('button.sidebar-link[data-section="perfil"]').click();
   await page.locator('#section-perfil').waitFor({ state: 'visible', timeout: 15000 });
 
   return {
     uid: setup.uid,
-    stage: await page.locator('.family-journey-card').getAttribute('data-family-journey-stage'),
+    stage: journeyPanel.stage,
     topbar: await page.locator('#topbar-title').textContent().catch(() => ''),
   };
 }

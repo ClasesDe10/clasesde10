@@ -48,6 +48,14 @@ export const OPEN_PAYMENT_STATUSES = Object.freeze(['pendiente', 'solicitado', '
 export const REOPEN_FAMILY_PAYMENT_STATUSES = Object.freeze(['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado']);
 export const DEFAULT_FAMILY_PAYMENT_GRACE_HOURS = 48;
 const PAYMENT_DAY_MS = 24 * 60 * 60 * 1000;
+export const FAMILY_PAYMENT_RECIPIENT = Object.freeze({
+  name: 'Miguel G. G.',
+  phone: '613016665',
+  label: 'ClasesDe10 - Miguel G. G.',
+  role: 'platform_admin',
+  fundsFlow: 'platform_collects_then_teacher_payout',
+  explanation: 'ClasesDe10 recibe el pago de la familia y despues liquida al profesor correspondiente.',
+});
 export const WEEKLY_PAYMENT_DAY_LABELS = Object.freeze({
   1: 'Lunes',
   2: 'Martes',
@@ -60,6 +68,10 @@ export const WEEKLY_PAYMENT_DAY_LABELS = Object.freeze({
 
 export function cleanPaymentText(value, max = 500) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
+}
+
+export function familyPaymentRecipient() {
+  return { ...FAMILY_PAYMENT_RECIPIENT };
 }
 
 const GENERIC_PAYMENT_PERSON_LABELS = new Set([
@@ -343,6 +355,22 @@ export function paymentScheduleKeysFor(item = {}) {
   return keys;
 }
 
+export function paymentStrongRelationKeys(item = {}) {
+  const strongPrefixes = ['assignment:', 'teacher-student:', 'teacher_student:', 'teacher-family:', 'teacher_family:'];
+  return Array.from(new Set(
+    paymentScheduleKeysFor(item)
+      .map((key) => cleanPaymentText(key, 240).toLowerCase())
+      .filter((key) => strongPrefixes.some((prefix) => key.startsWith(prefix))),
+  ));
+}
+
+export function samePaymentRelation(left = {}, right = {}) {
+  const leftKeys = paymentStrongRelationKeys(left);
+  const rightKeys = new Set(paymentStrongRelationKeys(right));
+  if (!leftKeys.length || !rightKeys.size) return false;
+  return leftKeys.some((key) => rightKeys.has(key));
+}
+
 export function buildPaymentScheduleIndex(schedules = []) {
   const index = new Map();
   for (const schedule of schedules || []) {
@@ -472,7 +500,7 @@ export function classFamilyPaymentState(classData = {}, schedule = null, options
       state: 'paid',
       label: 'Justificante validado',
       badge: 'Pagada',
-      dotClass: 'dot-teal',
+      dotClass: 'dot-emerald',
       tone: 'success',
       dueAt: classData.familyPaymentValidatedAt || classData.paidAt || '',
       overdue: false,
@@ -491,7 +519,7 @@ export function classFamilyPaymentState(classData = {}, schedule = null, options
       state: 'paid',
       label: 'Justificante validado',
       badge: 'Pagada',
-      dotClass: 'dot-teal',
+      dotClass: 'dot-emerald',
       tone: 'success',
       dueAt: classData.linkedFamilyPaymentValidatedAt || classData.linkedFamilyPaymentUpdatedAt || '',
       overdue: false,
@@ -535,7 +563,7 @@ export function classFamilyPaymentState(classData = {}, schedule = null, options
     state: overdue ? 'overdue' : 'pending',
     label: overdue ? 'Justificante vencido' : 'Justificante pendiente',
     badge: overdue ? 'Vencida +48h' : 'Pendiente',
-    dotClass: overdue ? 'dot-red' : 'dot-gold',
+    dotClass: overdue ? 'dot-red' : 'dot-amber',
     tone: overdue ? 'danger' : 'warning',
     dueAt,
     overdue,
@@ -574,6 +602,7 @@ export function applyClassPaymentContext(classes = [], payments = []) {
   for (const payment of payments || []) {
     if (!isFamilyPayment(payment) || !Array.isArray(payment.classIds) || !payment.classIds.length) continue;
     if (isDiscardedFamilyPayment(payment)) continue;
+    if (!paymentShouldEnrichFamilyClass(payment)) continue;
     const rawStatus = normalizePaymentStatus(payment.estado || payment.status);
     const priority = familyPaymentContextPriority(payment);
     const updatedAtMs = comparableDateValue(payment.updated_at || payment.updatedAt || payment.created_at || payment.createdAt);
@@ -618,9 +647,11 @@ export function classTeacherPaymentAmount(classData = {}) {
 }
 
 export function classPlatformFeeAmount(classData = {}) {
+  const familyAmount = classPaymentAmount(classData);
+  const teacherAmount = classTeacherPaymentAmount(classData);
+  if (familyAmount || teacherAmount) return Math.round((familyAmount - teacherAmount) * 100) / 100;
   const explicit = paymentAmount({ amount: classData.comision_clasesde10 ?? classData.platformFee ?? classData.marginAmount });
-  if (explicit) return explicit;
-  return Math.round((classPaymentAmount(classData) - classTeacherPaymentAmount(classData)) * 100) / 100;
+  return explicit;
 }
 
 export function classEconomicState(classData = {}, schedule = null, options = {}) {
@@ -643,7 +674,7 @@ export function classEconomicState(classData = {}, schedule = null, options = {}
   let state = 'pending';
   let label = 'Pendiente de justificar';
   let badge = 'Pendiente';
-  let dotClass = 'dot-gold';
+  let dotClass = 'dot-amber';
   let tone = 'warning';
   let sortRank = 40;
 
@@ -658,7 +689,7 @@ export function classEconomicState(classData = {}, schedule = null, options = {}
     state = 'missing_amount';
     label = 'Falta importe de familia';
     badge = 'Sin importe';
-    dotClass = 'dot-purple';
+    dotClass = 'dot-rose';
     tone = 'danger';
     sortRank = 10;
   } else if (familyState.state === 'rejected') {
@@ -686,21 +717,21 @@ export function classEconomicState(classData = {}, schedule = null, options = {}
     state = 'missing_teacher_amount';
     label = 'Falta importe del profesor';
     badge = 'Sin importe prof.';
-    dotClass = 'dot-purple';
+    dotClass = 'dot-rose';
     tone = 'danger';
     sortRank = 21;
   } else if (familyState.state === 'paid' && teacherAmount > 0 && !teacherPaid) {
     state = 'payout_pending';
     label = 'Familia cobrada, profesor pendiente';
     badge = 'Liquidar profesor';
-    dotClass = 'dot-navy';
+    dotClass = 'dot-indigo';
     tone = 'navy';
     sortRank = 25;
   } else if (familyState.state === 'paid') {
     state = 'settled';
     label = 'Cobrada y liquidada';
     badge = 'Liquidada';
-    dotClass = 'dot-teal';
+    dotClass = 'dot-emerald';
     tone = 'success';
     sortRank = 80;
   }
@@ -735,12 +766,12 @@ export function classEconomicState(classData = {}, schedule = null, options = {}
 
 export function economicCalendarLegend() {
   return [
-    { className: 'dot-purple', label: 'Falta importe' },
+    { className: 'dot-rose', label: 'Falta importe' },
     { className: 'dot-red', label: 'Vencida/incidencia' },
     { className: 'dot-blue', label: 'En revision' },
-    { className: 'dot-gold', label: 'Pendiente' },
-    { className: 'dot-navy', label: 'Liquidar profesor' },
-    { className: 'dot-teal', label: 'Liquidada' },
+    { className: 'dot-amber', label: 'Pendiente' },
+    { className: 'dot-indigo', label: 'Liquidar profesor' },
+    { className: 'dot-emerald', label: 'Liquidada' },
   ];
 }
 
@@ -779,6 +810,7 @@ export function buildFamilyPaymentPayload(input = {}, options = {}) {
   const dueDays = Number(options.defaultPaymentDueDays ?? options.paymentDueDays ?? 7);
   const safeDueDays = Number.isFinite(dueDays) ? Math.max(0, dueDays) : 7;
   const classIds = Array.isArray(input.classIds) ? input.classIds.map(String).filter(Boolean) : [];
+  const recipient = familyPaymentRecipient();
 
   return {
     tipo: 'pago_familia',
@@ -800,6 +832,13 @@ export function buildFamilyPaymentPayload(input = {}, options = {}) {
     concepto: cleanPaymentText(input.concepto || input.notes || input.notas_familia, 240),
     notas_familia: cleanPaymentText(input.notas_familia || input.familyNotes, 1000),
     familyNotes: cleanPaymentText(input.familyNotes || input.notas_familia, 1000),
+    paymentRecipientName: recipient.name,
+    paymentRecipientPhone: recipient.phone,
+    paymentRecipientLabel: recipient.label,
+    paymentRecipientRole: recipient.role,
+    platformCollectsPayment: true,
+    fundsFlow: recipient.fundsFlow,
+    fundsFlowExplanation: recipient.explanation,
     classIds,
     classCount: classIds.length,
     reconciliationStatus: input.reconciliationStatus || (classIds.length ? 'matched' : 'pending_match'),
@@ -903,12 +942,36 @@ export function unpaidFamilyClasses(classes = []) {
   });
 }
 
+function paymentHasReviewableProof(payment = {}) {
+  return Boolean(
+    payment.documentId
+    || payment.documento_id
+    || payment.storage_path
+    || payment.storagePath
+    || payment.proofUrl
+    || payment.receiptUrl
+  );
+}
+
+function paymentShouldEnrichFamilyClass(payment = {}) {
+  const status = normalizePaymentStatus(payment.estado || payment.status);
+  if (PAID_PAYMENT_STATUSES.includes(status)) return true;
+  if (['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado'].includes(status)) return false;
+  if (OPEN_PAYMENT_STATUSES.includes(status) || status === 'vencido') {
+    return paymentHasReviewableProof(payment) || isAutomaticGateway(payment);
+  }
+  return true;
+}
+
 function paymentBlocksClassConfirmation(payment = {}) {
   const status = normalizePaymentStatus(payment.estado || payment.status);
-  return isFamilyPayment(payment)
-    && !['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado'].includes(status)
-    && Array.isArray(payment.classIds)
-    && payment.classIds.length > 0;
+  if (!isFamilyPayment(payment) || !Array.isArray(payment.classIds) || !payment.classIds.length) return false;
+  if (['rechazado', 'fallido', 'devuelto', 'disputado', 'cancelado'].includes(status)) return false;
+  if (PAID_PAYMENT_STATUSES.includes(status)) return true;
+  if (OPEN_PAYMENT_STATUSES.includes(status) || status === 'vencido') {
+    return paymentHasReviewableProof(payment) || isAutomaticGateway(payment);
+  }
+  return true;
 }
 
 export function classPaymentAmount(classData = {}) {
@@ -919,19 +982,8 @@ export function classPaymentAmount(classData = {}) {
   );
 }
 
-function classTeacherBizumPhone(classData = {}) {
-  return cleanPaymentText(
-    classData.teacherBizumPhone
-    || classData.bizumPhone
-    || classData.telefono_bizum
-    || classData.teacherPhone
-    || classData.profesor_telefono
-    || classData.telefono_profesor
-    || classData.profesores?.telefono
-    || classData.profesores?.usuarios?.telefono
-    || '',
-    40,
-  );
+function familyCollectionBizumPhone() {
+  return FAMILY_PAYMENT_RECIPIENT.phone;
 }
 
 function classPaymentGroupKey(classData = {}, state = {}) {
@@ -940,6 +992,15 @@ function classPaymentGroupKey(classData = {}, state = {}) {
   const studentId = cleanPaymentText(classData.studentId || classData.alumno_id, 180);
   const dueKey = state.dueAt ? String(state.dueAt).slice(0, 10) : 'sin-plan';
   return [assignmentId || `${teacherUid}:${studentId}`, dueKey].join('|');
+}
+
+function previousPaymentDueAtForSchedule(dueAt = '', schedule = null) {
+  if (!dueAt || !schedule || schedule.active === false) return '';
+  const date = new Date(dueAt);
+  if (Number.isNaN(date.getTime())) return '';
+  const frequency = normalizePaymentScheduleFrequency(schedule.frequency ?? schedule.paymentFrequency ?? schedule.frecuencia_pago);
+  date.setDate(date.getDate() - (frequency === 'quincenal' ? 14 : 7));
+  return date.toISOString();
 }
 
 export function buildFamilyPaymentConfirmationGroups(classes = [], payments = [], scheduleIndex = new Map(), options = {}) {
@@ -958,6 +1019,8 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
     const state = classFamilyPaymentState(classData, schedule, options);
     const key = classPaymentGroupKey(classData, state);
     const amount = classPaymentAmount(classData);
+    const paymentPeriodEnd = state.dueAt || '';
+    const paymentPeriodStart = previousPaymentDueAtForSchedule(paymentPeriodEnd, schedule);
     if (!groups.has(key)) {
       groups.set(key, {
         key,
@@ -971,32 +1034,59 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
         asignacion_id: classData.asignacion_id || classData.assignmentId || '',
         studentName: paymentPersonName('Alumno', classData.studentId || classData.alumno_id, classData.studentName, classData.alumno_nombre, classData.alumnoNombre),
         teacherName: paymentPersonName('Profesor', classData.teacherUid || classData.profesor_id, classData.teacherName, classData.profesor_nombre, classData.profesorNombre),
-        teacherPhone: classTeacherBizumPhone(classData),
-        bizumPhone: classTeacherBizumPhone(classData),
+        paymentRecipientName: FAMILY_PAYMENT_RECIPIENT.name,
+        paymentRecipientPhone: familyCollectionBizumPhone(),
+        paymentRecipientLabel: FAMILY_PAYMENT_RECIPIENT.label,
+        paymentRecipientRole: FAMILY_PAYMENT_RECIPIENT.role,
+        fundsFlow: FAMILY_PAYMENT_RECIPIENT.fundsFlow,
+        fundsFlowExplanation: FAMILY_PAYMENT_RECIPIENT.explanation,
+        teacherPhone: '',
+        bizumPhone: familyCollectionBizumPhone(),
         dueAt: state.dueAt || '',
+        paymentPeriodStart,
+        paymentPeriodEnd,
         state: state.state,
         overdue: state.overdue === true,
+        hasOverdueCarryover: false,
+        overdueAmount: 0,
+        currentPeriodAmount: 0,
         graceHours: state.graceHours || null,
         amount: 0,
         classIds: [],
         classes: [],
+        currentPeriodClasses: [],
+        overdueClasses: [],
         subjects: new Set(),
       });
     }
 
     const group = groups.get(key);
     group.amount = Math.round((group.amount + amount) * 100) / 100;
+    group.currentPeriodAmount = Math.round((group.currentPeriodAmount + amount) * 100) / 100;
     group.classIds.push(classId);
-    if (!group.teacherPhone) group.teacherPhone = classTeacherBizumPhone(classData);
-    if (!group.bizumPhone) group.bizumPhone = classTeacherBizumPhone(classData);
-    group.classes.push({
+    group.paymentRecipientName = FAMILY_PAYMENT_RECIPIENT.name;
+    group.paymentRecipientPhone = familyCollectionBizumPhone();
+    group.paymentRecipientLabel = FAMILY_PAYMENT_RECIPIENT.label;
+    group.paymentRecipientRole = FAMILY_PAYMENT_RECIPIENT.role;
+    group.fundsFlow = FAMILY_PAYMENT_RECIPIENT.fundsFlow;
+    group.fundsFlowExplanation = FAMILY_PAYMENT_RECIPIENT.explanation;
+    group.bizumPhone = familyCollectionBizumPhone();
+    const dueMs = state.dueAt ? new Date(state.dueAt).getTime() : NaN;
+    const dueNow = !state.overdue && (!Number.isFinite(dueMs) || dueMs <= Number(options.nowMs ?? Date.now()));
+    const classLine = {
       id: classId,
       date: classData.fecha || classData.date || '',
       startTime: classData.hora_inicio || classData.startTime || '',
       endTime: classData.hora_fin || classData.endTime || '',
       subject: cleanPaymentText(classData.materia || classData.subject || '', 160),
       amount,
-    });
+      paymentDueAt: state.dueAt || '',
+      paymentPeriodStart,
+      paymentPeriodEnd,
+      paymentBucket: state.overdue ? 'overdue' : dueNow ? 'due' : 'upcoming',
+    };
+    group.classes.push(classLine);
+    group.currentPeriodClasses.push(classLine);
     if (classData.materia || classData.subject) group.subjects.add(cleanPaymentText(classData.materia || classData.subject, 160));
     if (state.overdue) {
       group.state = 'overdue';
@@ -1005,14 +1095,23 @@ export function buildFamilyPaymentConfirmationGroups(classes = [], payments = []
     if (!group.dueAt && state.dueAt) group.dueAt = state.dueAt;
   }
 
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    classCount: group.classIds.length,
-    subjects: Array.from(group.subjects),
-    status: group.overdue ? 'vencido' : 'pendiente',
-    label: `${group.classIds.length} clase(s) de ${group.studentName} con ${group.teacherName}`,
-  })).sort((a, b) => {
+  return Array.from(groups.values()).map((group) => {
+    const dueMs = group.dueAt ? new Date(group.dueAt).getTime() : NaN;
+    const dueNow = !group.overdue && (!Number.isFinite(dueMs) || dueMs <= Number(options.nowMs ?? Date.now()));
+    const upcoming = !group.overdue && !dueNow;
+    return {
+      ...group,
+      classCount: group.classIds.length,
+      subjects: Array.from(group.subjects),
+      dueNow,
+      upcoming,
+      paymentWindow: group.overdue ? 'overdue' : dueNow ? 'due_now' : 'upcoming',
+      status: group.overdue ? 'vencido' : dueNow ? 'pendiente' : 'programado',
+      label: `${group.classIds.length} clase(s) de ${group.studentName} con ${group.teacherName}`,
+    };
+  }).sort((a, b) => {
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+    if (a.dueNow !== b.dueNow) return a.dueNow ? -1 : 1;
     return String(a.dueAt || '9999').localeCompare(String(b.dueAt || '9999'));
   });
 }

@@ -14,7 +14,7 @@ assert.equal(validatePhone('abc').valid, false);
 assert.equal(validatePostalCode('28010').valid, true);
 assert.equal(validatePostalCode('2801').valid, false);
 
-const teacher = evaluateTeacherProfileProfessional({
+const teacherProfile = {
   nombre: 'Profesor',
   apellidos: 'Completo',
   telefono: '611222333',
@@ -22,8 +22,6 @@ const teacher = evaluateTeacherProfileProfessional({
   direccion: 'Calle Profesor 10',
   ciudad: 'Madrid',
   codigo_postal: '28020',
-  zona: 'Madrid centro',
-  nivel_estudios: 'Grado universitario',
   estudio_exacto: 'Grado en Matematicas',
   colegio: 'Colegio El Prado',
   centro_estudios: 'Universidad Complutense de Madrid',
@@ -38,12 +36,16 @@ const teacher = evaluateTeacherProfileProfessional({
   idiomas: ['Espanol', 'Ingles'],
   certificaciones: ['C1'],
   acepta_bizum: true,
+  payoutFrequency: 'quincenal',
+  payoutAnchorDate: '2026-07-15',
   tiene_coche: true,
-}, [
+};
+const teacherDocs = [
   { tipo: 'dni', estado: 'validado' },
   { tipo: 'notas_universidad', estado: 'pendiente' },
   { tipo: 'certificado_idiomas', estado: 'validado' },
-]);
+];
+const teacher = evaluateTeacherProfileProfessional(teacherProfile, teacherDocs);
 
 assert.equal(teacher.complete, true);
 assert.ok(teacher.percent >= 90, `Teacher percent too low: ${teacher.percent}`);
@@ -56,6 +58,16 @@ assert.deepEqual(teacher.normalized.subjects, ['Matematicas', 'Padel']);
 assert.equal(teacher.normalized.schoolName, 'Colegio El Prado');
 assert.equal(teacher.normalized.studyCenter, 'Universidad Complutense de Madrid');
 assert.ok(teacher.indicators.some((item) => item.label === 'Idiomas certificados' && item.complete));
+assert.ok(teacher.indicators.some((item) => item.label === 'Dia de cobro definido' && item.complete));
+
+const teacherWithoutPayout = evaluateTeacherProfileProfessional({
+  ...teacherProfile,
+  payoutFrequency: '',
+  payoutAnchorDate: '',
+}, teacherDocs);
+assert.equal(teacherWithoutPayout.complete, false);
+assert.ok(teacherWithoutPayout.issues.includes('payout'));
+assert.ok(teacherWithoutPayout.indicators.some((item) => item.label === 'Dia de cobro definido' && !item.complete));
 
 const family = evaluateFamilyProfileProfessional({
   nombre: 'Familia',

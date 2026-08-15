@@ -2,7 +2,7 @@
  * ClasesDe10 — Utilidades globales
  */
 
-import { watchUnreadNotifications } from './notifications-provider.js?v=20260627-domain-auth';
+import { watchUnreadNotifications } from './notifications-provider.js?v=20260808-action-center';
 
 // ─── SANITIZACIÓN XSS ───────────────────────────────────────────
 export function sanitize(str) {
@@ -413,7 +413,19 @@ function dismissToast(toast) {
   setTimeout(() => toast.remove(), 300);
 }
 
+function normalizeToastMessage(titulo, mensaje, tipo) {
+  const raw = String(mensaje || '');
+  if (
+    tipo === 'error'
+    && /missing or insufficient permissions|permission-denied|PERMISSION_DENIED/i.test(raw)
+  ) {
+    return 'No tienes permiso para hacer esa accion con esta cuenta. Si deberias tenerlo, cierra sesion y vuelve a entrar.';
+  }
+  return mensaje;
+}
+
 export function showToast(titulo, mensaje = '', tipo = 'info', duracion = 4000) {
+  const safeMessage = normalizeToastMessage(titulo, mensaje, tipo);
   const container = getToastContainer();
   const toast = document.createElement('div');
   toast.className = `toast ${tipo}`;
@@ -423,7 +435,7 @@ export function showToast(titulo, mensaje = '', tipo = 'info', duracion = 4000) 
     <div class="toast-icon">${TOAST_ICONS[tipo] || 'ℹ'}</div>
     <div class="toast-content">
       <div class="toast-title">${sanitize(titulo)}</div>
-      ${mensaje ? `<div class="toast-msg">${sanitize(mensaje)}</div>` : ''}
+      ${safeMessage ? `<div class="toast-msg">${sanitize(safeMessage)}</div>` : ''}
     </div>
     <button type="button" class="toast-close" aria-label="Cerrar aviso">x</button>
   `;
@@ -444,6 +456,7 @@ let lastModalFocus = null;
 
 function focusModalPanel(modal) {
   const panel = modal.querySelector('.modal') || modal;
+  panel.setAttribute('role', 'dialog');
   if (!panel.hasAttribute('tabindex')) panel.setAttribute('tabindex', '-1');
   setTimeout(() => panel.focus({ preventScroll: true }), 30);
 }
@@ -469,7 +482,112 @@ export function closeModal(id) {
     }
     lastModalFocus?.focus?.({ preventScroll: true });
     lastModalFocus = null;
+    modal.dispatchEvent(new CustomEvent('modal:closed'));
   }
+}
+
+let actionDialogSequence = 0;
+
+function actionDialog({
+  mode = 'confirm',
+  title = 'Confirmar accion',
+  message = '',
+  label = 'Motivo',
+  initialValue = '',
+  placeholder = '',
+  required = false,
+  multiline = true,
+  confirmText = 'Confirmar',
+  cancelText = 'Cancelar',
+  tone = 'default',
+} = {}) {
+  return new Promise((resolve) => {
+    const id = `modal-action-${Date.now()}-${actionDialogSequence += 1}`;
+    const titleId = `${id}-title`;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay action-dialog-overlay';
+    overlay.id = id;
+    overlay.innerHTML = `
+      <div class="modal action-dialog" aria-labelledby="${titleId}">
+        <div class="modal-header">
+          <span class="modal-title" id="${titleId}"></span>
+          <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+        </div>
+        <form class="action-dialog-form">
+          <div class="modal-body">
+            <p class="action-dialog-message"></p>
+            <div class="form-group action-dialog-input-wrap"${mode === 'prompt' ? '' : ' hidden'}>
+              <label class="form-label" for="${id}-input"></label>
+              ${multiline
+                ? `<textarea class="form-control" id="${id}-input" rows="4" maxlength="300"></textarea>`
+                : `<input class="form-control" id="${id}-input" type="text" maxlength="300">`}
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost" type="button" data-action-dialog-cancel></button>
+            <button class="btn ${tone === 'danger' ? 'btn-danger' : 'btn-primary'}" type="submit" data-action-dialog-confirm></button>
+          </div>
+        </form>
+      </div>`;
+
+    overlay.querySelector('.modal-title').textContent = title;
+    overlay.querySelector('.action-dialog-message').textContent = message;
+    overlay.querySelector('[data-action-dialog-cancel]').textContent = cancelText;
+    overlay.querySelector('[data-action-dialog-confirm]').textContent = confirmText;
+
+    const input = overlay.querySelector(`#${CSS.escape(id)}-input`);
+    if (input) {
+      overlay.querySelector('label').textContent = label;
+      input.value = initialValue;
+      input.placeholder = placeholder;
+      input.required = required;
+    }
+
+    let settled = false;
+    const removeOverlay = () => setTimeout(() => overlay.remove(), 0);
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      closeModal(id);
+      removeOverlay();
+    };
+
+    overlay.addEventListener('modal:closed', () => {
+      if (settled) return;
+      settled = true;
+      resolve(null);
+      removeOverlay();
+    });
+    overlay.querySelector('[data-action-dialog-cancel]').addEventListener('click', () => finish(null));
+    overlay.querySelector('form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (mode === 'prompt') {
+        const value = input?.value?.trim() || '';
+        if (required && !value) {
+          input?.focus();
+          return;
+        }
+        finish(value);
+        return;
+      }
+      finish(true);
+    });
+
+    document.body.appendChild(overlay);
+    initModals();
+    openModal(id);
+    if (input) setTimeout(() => input.focus({ preventScroll: true }), 50);
+  });
+}
+
+export async function confirmAction(options = {}) {
+  return (await actionDialog({ ...options, mode: 'confirm' })) === true;
+}
+
+export async function promptAction(options = {}) {
+  const result = await actionDialog({ ...options, mode: 'prompt' });
+  return typeof result === 'string' ? result : null;
 }
 
 export function initModals() {
@@ -491,9 +609,30 @@ export function initModals() {
   if (!document.body.dataset.modalEscapeBound) {
     document.body.dataset.modalEscapeBound = 'true';
     document.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape') return;
       const openOverlay = document.querySelector('.modal-overlay.open');
-      if (openOverlay?.id) closeModal(openOverlay.id);
+      if (!openOverlay) return;
+      if (event.key === 'Escape') {
+        if (openOverlay.id) closeModal(openOverlay.id);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(openOverlay.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )).filter((element) => element.offsetParent !== null);
+      if (!focusable.length) {
+        event.preventDefault();
+        focusModalPanel(openOverlay);
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     });
   }
 }
@@ -586,11 +725,44 @@ export function initSidebar() {
 
   if (!sidebar || !hamburger) return;
 
+  const mobileSidebarQuery = window.matchMedia?.('(max-width: 768px)');
+  let lockedScrollY = 0;
+  const previousOverflow = { html: '', body: '' };
+
+  const lockPageScroll = () => {
+    if (!mobileSidebarQuery?.matches || document.body.dataset.sidebarScrollLocked === 'true') return;
+    lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    document.body.dataset.sidebarScrollLocked = 'true';
+    document.body.dataset.sidebarScrollY = String(lockedScrollY);
+    previousOverflow.html = document.documentElement.style.overflow || '';
+    previousOverflow.body = document.body.style.overflow || '';
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+  };
+
+  const unlockPageScroll = () => {
+    if (document.body.dataset.sidebarScrollLocked !== 'true') return;
+    const restoreY = Number(document.body.dataset.sidebarScrollY || lockedScrollY || 0);
+    delete document.body.dataset.sidebarScrollLocked;
+    delete document.body.dataset.sidebarScrollY;
+    document.documentElement.style.overflow = previousOverflow.html;
+    if (!document.querySelector('.modal-overlay.open')) {
+      document.body.style.overflow = previousOverflow.body;
+    }
+    window.scrollTo(0, restoreY);
+  };
+
   const setOpen = (open) => {
     sidebar.classList.toggle('open', open);
     overlay?.classList.toggle('open', open);
     hamburger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    document.documentElement.classList.toggle('sidebar-open', open);
     document.body.classList.toggle('sidebar-open', open);
+    if (open) {
+      lockPageScroll();
+    } else {
+      unlockPageScroll();
+    }
   };
 
   hamburger.setAttribute('aria-expanded', sidebar.classList.contains('open') ? 'true' : 'false');
@@ -613,6 +785,19 @@ export function initSidebar() {
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') setOpen(false);
   });
+
+  const preventBackgroundScroll = (event) => {
+    if (!sidebar.classList.contains('open') || !mobileSidebarQuery?.matches) return;
+    if (sidebar.contains(event.target)) return;
+    event.preventDefault();
+  };
+
+  document.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
+  document.addEventListener('wheel', preventBackgroundScroll, { passive: false });
+
+  mobileSidebarQuery?.addEventListener?.('change', (event) => {
+    if (!event.matches) setOpen(false);
+  });
 }
 
 // ─── TOPBAR: NOTIFICACIONES ──────────────────────────────────────
@@ -620,10 +805,11 @@ export function initNotificacionesBadge(usuarioId, db) {
   const badge = document.querySelector('.topbar-notification-badge');
   if (!badge) return;
 
+  const role = window.CD10CurrentUser?.role || window.CD10CurrentUser?.rol || '';
   return watchUnreadNotifications(db, usuarioId, (count) => {
     badge.style.display = count > 0 ? 'flex' : 'none';
     badge.textContent = count > 9 ? '9+' : String(count || '');
-  });
+  }, role);
 }
 
 // ─── VALIDAR EMAIL ───────────────────────────────────────────────
@@ -644,6 +830,7 @@ const LABEL_ESTADO = {
   realizada:     'Realizada',
   cancelada:     'Cancelada',
   reprogramada:  'Reprogramada',
+  programado:    'Próximo pago',
   pendiente:     'Pendiente',
   solicitado:    'Solicitado',
   procesando:    'Procesando',
@@ -688,7 +875,7 @@ const LABEL_ESTADO = {
 const BADGE_MAPA = {
   programada: 'badge-info', confirmada: 'badge-info', realizada: 'badge-success',
   cancelada: 'badge-danger', reprogramada: 'badge-warning',
-  pendiente: 'badge-warning', solicitado: 'badge-warning', procesando: 'badge-info', requiere_accion: 'badge-warning',
+  programado: 'badge-info', pendiente: 'badge-warning', solicitado: 'badge-warning', procesando: 'badge-info', requiere_accion: 'badge-warning',
   pagado: 'badge-success', validado: 'badge-success', vencido: 'badge-danger', rechazado: 'badge-danger',
   fallido: 'badge-danger', devuelto: 'badge-gray', disputado: 'badge-danger', cancelado: 'badge-gray',
   nueva: 'badge-info', asignada: 'badge-gold', completada: 'badge-success',

@@ -1,0 +1,126 @@
+name: Android TWA
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_version_name:
+        description: Version name for this Android build
+        required: false
+        default: "1.0.0"
+
+jobs:
+  build:
+    name: Build APK and AAB
+    runs-on: ubuntu-latest
+    env:
+      TWA_BUILD_DIR: android/twa-build
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          ANDROID_HOME="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "$ANDROID_HOME" ]]; then
+            echo "ANDROID_HOME/ANDROID_SDK_ROOT is not available on this runner." >&2
+            exit 1
+          fi
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;34.0.0"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit Android configuration
+        run: npm run audit:android-twa
+
+      - name: Prepare TWA project input
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$TWA_BUILD_DIR"
+          mkdir -p "$TWA_BUILD_DIR" "$HOME/.bubblewrap"
+          cp android/twa/twa-manifest.json "$TWA_BUILD_DIR/twa-manifest.json"
+          node -e "const fs=require('fs'); const p='$TWA_BUILD_DIR/twa-manifest.json'; const j=JSON.parse(fs.readFileSync(p)); j.appVersion=process.env.APP_VERSION_NAME || j.appVersion; fs.writeFileSync(p, JSON.stringify(j, null, 2));"
+          printf '{"jdkPath":"%s","androidSdkPath":"%s"}' "$JAVA_HOME" "$ANDROID_HOME" > "$HOME/.bubblewrap/config.json"
+        env:
+          APP_VERSION_NAME: ${{ inputs.app_version_name }}
+
+      - name: Prepare Android signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYSTORE="$TWA_BUILD_DIR/clasesde10-release.keystore"
+          if [[ -n "${ANDROID_KEYSTORE_BASE64:-}" && -n "${BUBBLEWRAP_KEYSTORE_PASSWORD:-}" && -n "${BUBBLEWRAP_KEY_PASSWORD:-}" ]]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE"
+            echo "SIGNING_MODE=release-secret" >> "$GITHUB_ENV"
+          else
+            echo "No Android signing secrets found. Creating a temporary key for test APK only."
+            echo "BUBBLEWRAP_KEYSTORE_PASSWORD=clasesde10-temporary" >> "$GITHUB_ENV"
+            echo "BUBBLEWRAP_KEY_PASSWORD=clasesde10-temporary" >> "$GITHUB_ENV"
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE" \
+              -alias clasesde10 \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storetype JKS \
+              -storepass clasesde10-temporary \
+              -keypass clasesde10-temporary \
+              -dname "CN=ClasesDe10, OU=App, O=ClasesDe10, L=Madrid, ST=Madrid, C=ES"
+            echo "SIGNING_MODE=temporary-test" >> "$GITHUB_ENV"
+          fi
+
+      - name: Add signing fingerprint and generate assetlinks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$TWA_BUILD_DIR"
+          FINGERPRINT="$(keytool -list -v -keystore ./clasesde10-release.keystore -alias clasesde10 -storepass "$BUBBLEWRAP_KEYSTORE_PASSWORD" 2>/dev/null | awk -F'SHA256: ' '/SHA256:/{print $2; exit}' | tr -d '\r')"
+          if [[ -z "$FINGERPRINT" ]]; then
+            echo "Could not read SHA-256 fingerprint from Android signing key." >&2
+            exit 1
+          fi
+          npx --yes @bubblewrap/cli@1.24.1 fingerprint add "$FINGERPRINT" --name "$SIGNING_MODE" --manifest ./twa-manifest.json --output ./assetlinks.json
+
+      - name: Generate and build TWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$TWA_BUILD_DIR"
+          npx --yes @bubblewrap/cli@1.24.1 update --skipVersionUpgrade
+          npx --yes @bubblewrap/cli@1.24.1 build
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clasesde10-android-${{ env.SIGNING_MODE }}
+          path: |
+            android/twa-build/app-release-signed.apk
+            android/twa-build/app-release-bundle.aab
+            android/twa-build/assetlinks.json
+            android/twa-build/twa-manifest.json
+          if-no-files-found: error

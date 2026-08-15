@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.clasesde10.panel",
+        "sha256_cert_fingerprints": ["DC:C3:CF:9E:21:8D:F0:05:A0:D6:95:9F:A7:D6:3E:3E:37:7F:29:8F:A7:9A:66:55:E7:AB:17:7A:26:10:CF:7A"]
+      }
+    }]

@@ -578,7 +578,7 @@ function defaultOptions(options = {}) {
     adminEscalationDays: Math.max(1, number(options.adminEscalationDays, 14)),
     userNotificationCooldownHours: Math.max(1, number(options.userNotificationCooldownHours, 24)),
     adminCooldownHours: Math.max(1, number(options.adminCooldownHours, 24)),
-    maxUserNotifications: Math.max(0, number(options.maxUserNotifications, 40)),
+    maxUserNotifications: Math.max(0, number(options.maxUserNotifications, 6)),
   };
 }
 
@@ -599,6 +599,14 @@ function summarize(actions = []) {
   };
 }
 
+function actionableUserRecipients(action = {}) {
+  return toArray(action.recipients).filter((recipient) => {
+    const priority = clean(recipient.priority || action.priority || 'normal', 40).toLowerCase();
+    if (priority === 'low') return false;
+    return true;
+  });
+}
+
 export function buildRelationshipFollowupPlan(dataset = {}, options = {}) {
   const config = defaultOptions(options);
   const nowMs = toDate(config.nowIso)?.getTime() || Date.now();
@@ -616,8 +624,9 @@ export function buildRelationshipFollowupPlan(dataset = {}, options = {}) {
 
   let notificationBudget = config.maxUserNotifications;
   const budgeted = sorted.map((action) => {
-    if (!action.recipients.length || notificationBudget <= 0) return { ...action, recipients: [] };
-    const recipients = action.recipients.slice(0, notificationBudget);
+    const actionableRecipients = actionableUserRecipients(action);
+    if (!actionableRecipients.length || notificationBudget <= 0) return { ...action, recipients: [] };
+    const recipients = actionableRecipients.slice(0, notificationBudget);
     notificationBudget -= recipients.length;
     return { ...action, recipients };
   });

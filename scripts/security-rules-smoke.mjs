@@ -91,6 +91,7 @@ async function runBrowserSecuritySmoke(email, password) {
       const uid = credential.user.uid;
       const results = [];
       const temporaryDocumentIds = [];
+      const temporaryPaymentScheduleIds = [];
 
       function isPermissionDenied(error) {
         return String(error?.code || '').includes('permission-denied')
@@ -126,6 +127,68 @@ async function runBrowserSecuritySmoke(email, password) {
         telefono: '600000000',
         role: 'familia',
         active: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }));
+
+      const paymentScheduleId = `security_schedule_${uid}_${Date.now()}`;
+      temporaryPaymentScheduleIds.push(paymentScheduleId);
+      const paymentScheduleRef = doc(firebaseDb, 'paymentSchedules', paymentScheduleId);
+      const paymentScheduleIso = new Date().toISOString();
+      const validPaymentSchedule = {
+        id: paymentScheduleId,
+        type: 'weekly_family_teacher_payment',
+        status: 'active',
+        active: true,
+        ownerUid: uid,
+        familyUid: uid,
+        familia_id: uid,
+        teacherUid: `teacher_${uid}`,
+        profesor_id: `teacher_${uid}`,
+        studentId: `student_${uid}`,
+        alumno_id: `student_${uid}`,
+        assignmentId: `assignment_${uid}`,
+        asignacion_id: `assignment_${uid}`,
+        frequency: 'quincenal',
+        paymentFrequency: 'quincenal',
+        frecuencia_pago: 'quincenal',
+        recurrenceDays: 14,
+        anchorDate: '2026-07-05',
+        paymentAnchorDate: '2026-07-05',
+        fecha_inicio_pago: '2026-07-05',
+        dayOfWeek: 5,
+        paymentDay: 5,
+        dia_semana_pago: 5,
+        time: '20:00',
+        paymentTime: '20:00',
+        hora_pago: '20:00',
+        graceHours: 48,
+        grace_hours: 48,
+        label: 'Cada 15 dias desde 2026-07-05 20:00',
+        notes: 'Security smoke payment schedule.',
+        source: 'family_dashboard',
+        updatedAtIso: paymentScheduleIso,
+        createdAt: serverTimestamp(),
+        created_at: paymentScheduleIso,
+        updatedAt: serverTimestamp(),
+        updated_at: paymentScheduleIso,
+      };
+
+      await expectAllowed('family can create own payment schedule', () => setDoc(paymentScheduleRef, validPaymentSchedule));
+
+      await expectAllowed('family can update own payment schedule', () => setDoc(paymentScheduleRef, {
+        notes: 'Security smoke payment schedule updated.',
+        updatedAt: serverTimestamp(),
+        updated_at: new Date().toISOString(),
+        updatedAtIso: new Date().toISOString(),
+      }, { merge: true }));
+
+      await expectDenied('family cannot spoof payment schedule owner', () => setDoc(doc(firebaseDb, 'paymentSchedules', `${paymentScheduleId}_spoof`), {
+        ...validPaymentSchedule,
+        id: `${paymentScheduleId}_spoof`,
+        ownerUid: 'another_user',
+        familyUid: 'another_user',
+        familia_id: 'another_user',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       }));
@@ -287,6 +350,7 @@ async function runBrowserSecuritySmoke(email, password) {
       return {
         uid,
         temporaryDocumentIds,
+        temporaryPaymentScheduleIds,
         results,
       };
     }, { email, password });
@@ -318,6 +382,9 @@ try {
   for (const documentId of browserResult.temporaryDocumentIds || []) {
     cleanup.push({ collection: 'documentos', id: documentId, ...(await firestoreDeleteWithCliToken('documentos', documentId)) });
   }
+  for (const scheduleId of browserResult.temporaryPaymentScheduleIds || []) {
+    cleanup.push({ collection: 'paymentSchedules', id: scheduleId, ...(await firestoreDeleteWithCliToken('paymentSchedules', scheduleId)) });
+  }
   cleanup.push({ collection: 'users', id: uid, ...(await firestoreDeleteWithCliToken('users', uid)) });
 
   console.log(JSON.stringify({
@@ -338,6 +405,13 @@ try {
     for (const documentId of browserResult.temporaryDocumentIds) {
       try {
         cleanup.push({ collection: 'documentos', id: documentId, ...(await firestoreDeleteWithCliToken('documentos', documentId)) });
+      } catch {}
+    }
+  }
+  if (browserResult?.temporaryPaymentScheduleIds?.length && !cleanup.some((item) => item.collection === 'paymentSchedules')) {
+    for (const scheduleId of browserResult.temporaryPaymentScheduleIds) {
+      try {
+        cleanup.push({ collection: 'paymentSchedules', id: scheduleId, ...(await firestoreDeleteWithCliToken('paymentSchedules', scheduleId)) });
       } catch {}
     }
   }

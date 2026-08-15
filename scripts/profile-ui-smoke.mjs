@@ -7,8 +7,8 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
+import { applicationDefault, deleteApp, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { chromium } from 'playwright';
 
 const firebaseClientSource = fs.readFileSync('js/firebase-client.js', 'utf8');
@@ -16,6 +16,8 @@ const apiKey = firebaseClientSource.match(/apiKey:\s*'([^']+)'/)?.[1];
 const projectId = firebaseClientSource.match(/projectId:\s*'([^']+)'/)?.[1] || 'clasesde10-50add';
 const database = '(default)';
 const smokeUrl = process.env.CD10_SMOKE_URL || 'https://clasesde10.com';
+const adminApp = initializeApp({ credential: applicationDefault(), projectId }, `profile-ui-smoke-${Date.now()}`);
+const adminDb = getFirestore(adminApp);
 
 if (!apiKey) {
   console.error('ERROR: Firebase apiKey not found in js/firebase-client.js.');
@@ -35,27 +37,8 @@ async function identity(method, payload) {
   return body;
 }
 
-function readFirebaseCliToken() {
-  const configPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
-  if (!fs.existsSync(configPath)) return null;
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  return config?.tokens?.access_token || null;
-}
-
-async function firestoreDeleteWithCliToken(collection, uid) {
-  const token = readFirebaseCliToken();
-  if (!token) return { ok: false, error: 'Firebase CLI OAuth token unavailable.' };
-
-  const response = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/${database}/documents/${collection}/${uid}`,
-    {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    },
-  );
-  if (response.status === 404) return { ok: true, missing: true };
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) return { ok: false, error: body?.error?.message || JSON.stringify(body) };
+async function firestoreDeleteWithAdmin(collection, uid) {
+  await adminDb.doc(`${collection}/${uid}`).delete();
   return { ok: true };
 }
 
@@ -108,15 +91,15 @@ async function runCase({ role, collection, script }) {
 
     const result = await runBrowserScript(script, email, password);
     uid = result.uid || uid;
-    cleanup.push(await firestoreDeleteWithCliToken(collection, uid));
-    cleanup.push(await firestoreDeleteWithCliToken('users', uid));
+    cleanup.push(await firestoreDeleteWithAdmin(collection, uid));
+    cleanup.push(await firestoreDeleteWithAdmin('users', uid));
 
     return { role, uid, ok: true, result, cleanup };
   } finally {
     if (uid && cleanup.length === 0) {
       try {
-        cleanup.push(await firestoreDeleteWithCliToken(collection, uid));
-        cleanup.push(await firestoreDeleteWithCliToken('users', uid));
+        cleanup.push(await firestoreDeleteWithAdmin(collection, uid));
+        cleanup.push(await firestoreDeleteWithAdmin('users', uid));
       } catch {}
     }
     if (idToken) {
@@ -147,8 +130,18 @@ const cases = [
   },
 ];
 
+const requestedCases = new Set(
+  String(process.env.CD10_PROFILE_CASES || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+const selectedCases = requestedCases.size
+  ? cases.filter((item) => requestedCases.has(item.role))
+  : cases;
+
 const results = [];
-for (const item of cases) {
+for (const item of selectedCases) {
   results.push(await runCase(item));
 }
 
@@ -158,3 +151,4 @@ console.log(JSON.stringify({
   smokeUrl,
   results,
 }, null, 2));
+await deleteApp(adminApp);

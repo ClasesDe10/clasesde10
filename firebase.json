@@ -6,10 +6,6 @@
   "storage": {
     "rules": "firebase/storage.rules"
   },
-  "functions": {
-    "source": "functions",
-    "runtime": "nodejs20"
-  },
   "hosting": {
     "public": ".",
     "ignore": [
@@ -27,8 +23,13 @@
       "**/.firebase/**",
       "**/.netlify/**",
       "**/node_modules/**",
+      "!.well-known",
+      "!.well-known/**",
+      ".tools/**",
+      "android/**",
       "**/*.md",
       "package.json",
+      "tmp/**",
       "output/**",
       "scripts/**",
       "functions/**",
@@ -39,6 +40,86 @@
     "cleanUrls": true,
     "trailingSlash": false,
     "redirects": [
+      {
+        "regex": "/clases-particulares/matematicas-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/matematicas",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/ingles-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/ingles",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/fisica-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/fisica",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/quimica-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/quimica",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/lengua-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/lengua",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/biologia-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/biologia",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/historia-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/historia",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/primaria-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/primaria",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/eso-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/eso",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/bachillerato-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/bachillerato",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/selectividad-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/selectividad",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/universidad-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/universidad",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/programacion-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/programacion",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/guitarra-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/guitarra",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/piano-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/piano",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/padel-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares/padel",
+        "type": 301
+      },
       {
         "source": "/dashboard",
         "destination": "/pages/login.html",
@@ -73,7 +154,7 @@
           },
           {
             "key": "Permissions-Policy",
-            "value": "camera=(), microphone=(), geolocation=()"
+            "value": "camera=(self), microphone=(self), geolocation=()"
           },
           {
             "key": "Content-Security-Policy",
@@ -91,6 +172,53 @@
           {
             "key": "X-Robots-Tag",
             "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/termina-tu-cuenta",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/pages/crear-contrasena.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
+          }
+        ]
+      },
+      {
+        "source": "/pages/crear-contrasena",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "noindex, nofollow"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "no-referrer"
           }
         ]
       },
@@ -227,6 +355,15 @@
         ]
       },
       {
+        "source": "/js/auth-onboarding.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/js/firebase-client.js",
         "headers": [
           {
@@ -290,6 +427,19 @@
           {
             "key": "Cache-Control",
             "value": "public, max-age=3600, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json; charset=utf-8"
           }
         ]
       },

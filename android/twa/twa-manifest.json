@@ -1,0 +1,57 @@
+{
+  "packageId": "com.clasesde10.panel",
+  "host": "clasesde10.com",
+  "name": "ClasesDe10 Panel",
+  "launcherName": "ClasesDe10",
+  "display": "standalone",
+  "themeColor": "#0f1f3d",
+  "themeColorDark": "#0f1f3d",
+  "navigationColor": "#0f1f3d",
+  "navigationColorDark": "#0f1f3d",
+  "navigationDividerColor": "#0f1f3d",
+  "navigationDividerColorDark": "#0f1f3d",
+  "backgroundColor": "#0f1f3d",
+  "enableNotifications": true,
+  "enableSiteSettingsShortcut": true,
+  "startUrl": "/pages/login.html?source=android-twa",
+  "iconUrl": "https://clasesde10.com/assets/img/logo-512.png",
+  "maskableIconUrl": "https://clasesde10.com/assets/img/logo-512.png",
+  "monochromeIconUrl": "https://clasesde10.com/assets/img/logo-192.png",
+  "splashScreenFadeOutDuration": 250,
+  "signingKey": {
+    "path": "./clasesde10-release.keystore",
+    "alias": "clasesde10"
+  },
+  "appVersionCode": 1,
+  "appVersion": "1.0.0",
+  "shortcuts": [
+    {
+      "name": "Mi panel",
+      "shortName": "Panel",
+      "url": "/pages/login.html",
+      "chosenIconUrl": "https://clasesde10.com/assets/img/logo-192.png",
+      "chosenMaskableIconUrl": "https://clasesde10.com/assets/img/logo-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://clasesde10.com/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "orientation": "portrait-primary",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 23
+}

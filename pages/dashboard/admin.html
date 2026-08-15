@@ -9,7 +9,8 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-fit">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-calendar-semantics">
+<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260809-teacher-calendar">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
@@ -62,7 +63,7 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.607 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
         Configuracion
       </button>
-      <button class="sidebar-link" data-section="clases">
+      <button class="sidebar-link" data-section="clases" data-admin-technical-nav="true">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Clases
       </button>
@@ -91,7 +92,7 @@
         Solicitudes
         <span class="sidebar-badge" id="badge-solicitudes" style="display:none">0</span>
       </button>
-      <button class="sidebar-link" data-section="pagos">
+      <button class="sidebar-link" data-section="pagos" data-admin-technical-nav="true">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
         Pagos
         <span class="sidebar-badge" id="badge-pagos" style="display:none">0</span>
@@ -102,16 +103,21 @@
       </button>
       <button class="sidebar-link" data-section="leads">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z"/></svg>
-        Leads
+        Formularios
         <span class="sidebar-badge" id="badge-leads" style="display:none">0</span>
       </button>
       <button class="sidebar-link" data-section="documentos">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Documentos
+        <span class="sidebar-badge" id="badge-documentos" style="display:none">0</span>
       </button>
       <button class="sidebar-link" data-section="chats">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
         Chats
+      </button>
+      <button class="sidebar-link" data-section="notificaciones">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-12 0v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0a3 3 0 11-6 0"/></svg>
+        Avisos
       </button>
       <button class="sidebar-link" data-section="incidencias">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
@@ -192,7 +198,7 @@
           <div class="card">
             <div class="card-header">
               <span class="card-title">Próximas clases</span>
-              <button class="btn btn-ghost btn-sm" data-section="clases">Ver todas</button>
+              <button class="btn btn-ghost btn-sm" data-section="calendario">Ver calendario</button>
             </div>
             <div class="card-body" style="padding:0" id="lista-proximas-clases">
               <div style="padding:20px"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></div>
@@ -204,7 +210,7 @@
         <div class="card">
           <div class="card-header">
             <span class="card-title">Pagos pendientes de validación</span>
-            <button class="btn btn-ghost btn-sm" data-section="pagos">Ver todos</button>
+            <button class="btn btn-ghost btn-sm" data-section="calendario">Ver calendario</button>
           </div>
           <div class="card-body" style="padding:0" id="lista-pagos-pendientes">
             <div style="padding:20px"><div class="skeleton skeleton-text"></div></div>
@@ -322,10 +328,29 @@
       </section>
 
       <section id="section-configuracion" class="dash-section" style="display:none">
+        <div class="admin-context-tools">
+          <div>
+            <span class="section-eyebrow">Sistema</span>
+            <h2>Configuracion y herramientas avanzadas</h2>
+            <p>Los ajustes se quedan aqui. Auditoria y experimentos solo se abren cuando necesitas revisar cambios o probar una mejora concreta.</p>
+          </div>
+          <div class="admin-context-actions">
+            <button class="btn btn-outline btn-sm" type="button" data-section="auditoria">Ver auditoria</button>
+            <button class="btn btn-outline btn-sm" type="button" data-section="experimentos">Experimentos</button>
+          </div>
+        </div>
         <div id="admin-platform-config" data-admin-platform-config></div>
       </section>
 
       <section id="section-clases" class="dash-section" style="display:none">
+        <div class="admin-technical-view-banner">
+          <div>
+            <span class="section-eyebrow">Detalle tecnico</span>
+            <h2>Tabla de clases</h2>
+            <p>Usala solo para buscar, editar o exportar. La vision diaria principal esta en el calendario.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button" data-section="calendario">Volver al calendario</button>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <input type="text" class="form-control" id="filtro-clases-busqueda" aria-label="Buscar clases por alumno o profesor" placeholder="Buscar por alumno o profesor…" style="width:240px">
@@ -375,14 +400,26 @@
 
       <!-- ══ SECCIÓN: CALENDARIO ══ -->
       <section id="section-calendario" class="dash-section" style="display:none">
+        <div class="admin-calendar-command-bar">
+          <div>
+            <span class="section-eyebrow">Centro operativo</span>
+            <h2>Calendario de clases, cobros y pagos</h2>
+            <p>Desde aqui revisas clases, justificantes de familias y liquidaciones de profesores. Las tablas quedan como detalle tecnico cuando necesites filtrar o exportar.</p>
+          </div>
+          <div class="admin-calendar-command-actions">
+            <button class="btn btn-primary btn-sm" type="button" data-action="nueva-clase-admin-calendario">+ Nueva clase</button>
+            <button class="btn btn-outline btn-sm" type="button" data-section="clases">Detalle clases</button>
+            <button class="btn btn-outline btn-sm" type="button" data-section="pagos">Detalle pagos</button>
+          </div>
+        </div>
         <div id="admin-calendar-month-summary" class="admin-calendar-month-summary" aria-live="polite"></div>
         <div class="admin-calendar-layout">
           <div id="calendario-wrapper"></div>
-          <div class="card">
+          <div class="card calendar-day-panel">
             <div class="card-header"><span class="card-title" id="cal-dia-titulo">Selecciona un día</span></div>
             <div class="card-body" id="cal-clases-dia">
-              <div class="empty-state">
-                <div class="empty-icon">📅</div>
+              <div class="empty-state dashboard-empty-state is-compact">
+                <div class="empty-icon" aria-hidden="true">📅</div>
                 <div class="empty-title">Sin clases</div>
                 <div class="empty-desc">Selecciona un día para ver sus clases.</div>
               </div>
@@ -422,7 +459,7 @@
 
         <div class="card">
           <div class="table-wrapper">
-            <table>
+            <table class="crm-directory-table">
               <thead>
                 <tr>
                   <th>Profesor</th>
@@ -454,7 +491,7 @@
         </div>
         <div class="card">
           <div class="table-wrapper">
-            <table>
+            <table class="crm-directory-table">
               <thead>
                 <tr>
                   <th>Familia</th>
@@ -485,7 +522,7 @@
         </div>
         <div class="card">
           <div class="table-wrapper">
-            <table>
+            <table class="crm-directory-table">
               <thead>
                 <tr>
                   <th>Alumno</th>
@@ -549,6 +586,14 @@
 
       <!-- ══ SECCIÓN: PAGOS ══ -->
       <section id="section-pagos" class="dash-section" style="display:none">
+        <div class="admin-technical-view-banner">
+          <div>
+            <span class="section-eyebrow">Detalle tecnico</span>
+            <h2>Tabla de pagos</h2>
+            <p>Usala para filtrar, validar o exportar justificantes. El control diario de vencimientos vive en el calendario.</p>
+          </div>
+          <button class="btn btn-primary btn-sm" type="button" data-section="calendario">Volver al calendario</button>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
             <input type="text" class="form-control" id="filtro-pago-busqueda" aria-label="Buscar pagos" placeholder="Buscar…" style="width:220px">
@@ -592,6 +637,17 @@
 
       <!-- ══ SECCIÓN: FINANZAS ══ -->
       <section id="section-finanzas" class="dash-section" style="display:none">
+        <div class="admin-context-tools">
+          <div>
+            <span class="section-eyebrow">Negocio</span>
+            <h2>Finanzas con analitica integrada</h2>
+            <p>Desde aqui puedes revisar importes, margen, cobros y tendencias. La analitica completa queda como apoyo si necesitas profundizar.</p>
+          </div>
+          <div class="admin-context-actions">
+            <button class="btn btn-outline btn-sm" type="button" data-section="analitica">Abrir analitica</button>
+            <button class="btn btn-primary btn-sm" type="button" data-section="calendario">Ver calendario</button>
+          </div>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px;flex-wrap:wrap">
             <input type="month" class="form-control" id="finanzas-mes" aria-label="Mes de finanzas" style="width:170px">
@@ -599,6 +655,37 @@
               <option value="devengo">Devengo clases</option>
               <option value="caja">Caja pagos</option>
               <option value="erp">ERP completo</option>
+            </select>
+            <select class="form-control" id="finanzas-profesor" aria-label="Filtrar por profesor" style="width:210px">
+              <option value="">Todos los profesores</option>
+            </select>
+            <select class="form-control" id="finanzas-familia" aria-label="Filtrar por familia" style="width:210px">
+              <option value="">Todas las familias</option>
+            </select>
+            <select class="form-control" id="finanzas-materia" aria-label="Filtrar por materia" style="width:180px">
+              <option value="">Todas las materias</option>
+            </select>
+            <select class="form-control" id="finanzas-estado" aria-label="Filtrar por estado financiero" style="width:190px">
+              <option value="">Todos los estados</option>
+              <option value="realizadas">Clases realizadas</option>
+              <option value="pendiente_cobro">Pendiente familia</option>
+              <option value="pendiente_profesor">Liquidar profesor</option>
+              <option value="margen_bajo">Margen bajo</option>
+              <option value="sin_importe">Falta importe</option>
+            </select>
+            <select class="form-control" id="finanzas-metrica" aria-label="Metrica del grafico" style="width:170px">
+              <option value="revenue">Facturacion</option>
+              <option value="profit">Margen CD10</option>
+              <option value="teacherCost">Coste profesor</option>
+              <option value="classes">Clases</option>
+              <option value="marginPct">% margen</option>
+            </select>
+            <select class="form-control" id="finanzas-agrupacion" aria-label="Agrupar grafico por" style="width:170px">
+              <option value="teacher">Por profesor</option>
+              <option value="family">Por familia</option>
+              <option value="subject">Por materia</option>
+              <option value="city">Por ciudad</option>
+              <option value="modality">Por modalidad</option>
             </select>
             <input type="search" class="form-control" id="finanzas-filtro" aria-label="Filtrar finanzas" placeholder="Profesor, familia, ciudad..." style="width:230px">
           </div>
@@ -610,6 +697,17 @@
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
           <div class="stat-card"><div class="skeleton skeleton-title"></div><div class="skeleton skeleton-text"></div></div>
+        </div>
+
+        <div class="card admin-teacher-payout-card" style="margin-bottom:20px">
+          <div class="card-header">
+            <span class="card-title">Cobros de profesores</span>
+            <button class="btn btn-outline btn-sm" type="button" data-section="calendario">Ver calendario</button>
+          </div>
+          <div class="card-body" id="finanzas-cobros-profesores">
+            <div class="skeleton skeleton-text"></div>
+            <div class="skeleton skeleton-text"></div>
+          </div>
         </div>
 
         <div class="finance-erp-grid finance-erp-grid-main" style="display:grid;grid-template-columns:1.15fr .85fr;gap:20px;margin-bottom:20px">
@@ -680,21 +778,19 @@
         </div>
       </section>
 
-      <!-- SECCION: LEADS PUBLICOS -->
+      <!-- SECCION: FORMULARIOS PUBLICOS -->
       <section id="section-leads" class="dash-section" style="display:none">
         <div class="alert alert-info">
           <div class="alert-body">
-            <div class="alert-title">Leads nuevos en Firebase</div>
+            <div class="alert-title">Formularios y altas asistidas</div>
             <div>
-              Los formularios publicos ya escriben en Firestore <code>leadsPublicos</code>.
-              El panel admin lee estos datos directamente desde Firebase.
-              <a href="https://console.firebase.google.com/u/0/project/clasesde10-50add/firestore/databases/-default-/data/~2FleadsPublicos" target="_blank" rel="noopener noreferrer">Abrir leads en Firebase</a>.
+              Aquí aparecen los formularios de familias, profesores y contacto. Las familias que piden ayuda reciben un enlace seguro para activar su cuenta; el aviso administrativo se genera automáticamente.
             </div>
           </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
           <div style="display:flex;gap:10px">
-            <select class="form-control" id="filtro-lead-tipo" aria-label="Filtrar leads por tipo" style="width:160px">
+            <select class="form-control" id="filtro-lead-tipo" aria-label="Filtrar formularios por tipo" style="width:160px">
               <option value="">Todos</option>
               <option value="contacto">Contacto</option>
               <option value="familia">Familias</option>
@@ -717,14 +813,15 @@
                   <th>Fecha</th>
                   <th>Tipo</th>
                   <th>Nombre</th>
+                  <th>Alumno / necesidad</th>
                   <th>Email</th>
-                  <th>Telefono</th>
-                  <th>Asunto</th>
+                  <th>Teléfono</th>
+                  <th>Cuenta</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-leads"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
+              <tbody id="tbody-leads"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -759,19 +856,24 @@
         <div id="chat-admin"></div>
       </section>
 
+      <section id="section-notificaciones" class="dash-section" style="display:none">
+        <div id="notification-center-admin"></div>
+      </section>
+
       <section id="section-incidencias" class="dash-section" style="display:none">
         <div class="stats-grid" id="incidents-summary-grid" style="margin-bottom:16px"></div>
         <div class="card" style="margin-bottom:16px">
           <div class="card-header">
-            <span class="card-title">Centro de incidencias</span>
+            <span class="card-title">Problemas por resolver</span>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-outline btn-sm" type="button" data-section="auditoria">Ver auditoria</button>
               <button class="btn btn-outline btn-sm" id="btn-export-incidencias">Exportar CSV</button>
               <button class="btn btn-primary btn-sm" id="btn-nueva-incidencia">Nueva incidencia</button>
             </div>
           </div>
           <div class="card-body">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">
-              <input class="form-control" id="filtro-inc-busqueda" aria-label="Buscar incidencias" placeholder="Ticket, usuario, causa o texto">
+              <input class="form-control" id="filtro-inc-busqueda" aria-label="Buscar incidencias" placeholder="Buscar problema, usuario o texto">
               <select class="form-control" id="filtro-inc-categoria" aria-label="Filtrar incidencias por categoria">
                 <option value="">Todas categorias</option>
               </select>
@@ -811,16 +913,15 @@
             <table>
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Reportado por</th>
-                  <th>Tipo</th>
-                  <th>Descripción</th>
                   <th>Prioridad</th>
+                  <th>Problema</th>
+                  <th>Motivo probable</th>
+                  <th>Accion recomendada</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
-              <tbody id="tbody-incidencias"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-incidencias"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -895,7 +996,7 @@
 
 <!-- MODAL: NUEVA CLASE -->
 <div class="modal-overlay" id="modal-clase">
-  <div class="modal">
+  <div class="modal modal-wide">
     <div class="modal-header">
       <span class="modal-title" id="modal-clase-titulo">Nueva clase</span>
       <button class="modal-close">✕</button>
@@ -1044,6 +1145,21 @@
   </div>
 </div>
 
+<!-- MODAL: DETALLE ALUMNO -->
+<div class="modal-overlay" id="modal-alumno-detalle">
+  <div class="modal" style="max-width:920px">
+    <div class="modal-header">
+      <span class="modal-title">Perfil completo del alumno</span>
+      <button class="modal-close">x</button>
+    </div>
+    <div class="modal-body" id="alumno-detalle-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-modal="modal-alumno-detalle">Cerrar</button>
+      <button class="btn btn-primary" id="btn-editar-alumno-desde-detalle">Editar alumno</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: VER DOCUMENTO -->
 <div class="modal-overlay" id="modal-documento">
   <div class="modal" style="max-width:700px">
@@ -1068,7 +1184,7 @@
 
 <!-- MODAL: GESTIONAR INCIDENCIA -->
 <div class="modal-overlay" id="modal-incidencia">
-  <div class="modal">
+  <div class="modal modal-wide incident-modal">
     <div class="modal-header">
       <span class="modal-title">Gestionar incidencia</span>
       <button class="modal-close">✕</button>
@@ -1080,6 +1196,7 @@
         <label class="form-label">Descripción</label>
         <div id="inc-desc" style="background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px;font-size:.875rem;line-height:1.6"></div>
       </div>
+      <div id="inc-ai-guide"></div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Categoria</label>
@@ -1112,15 +1229,15 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Causa raiz</label>
+        <label class="form-label">Causa probable</label>
         <input class="form-control" id="inc-causa" placeholder="Ej: pago no conciliado, documento incompleto, error tecnico...">
       </div>
       <div class="form-group">
-        <label class="form-label">Accion realizada</label>
+        <label class="form-label">Siguiente accion / accion realizada</label>
         <input class="form-control" id="inc-accion" placeholder="Ej: contactada familia, pago verificado, clase reprogramada...">
       </div>
       <div class="form-group">
-        <label class="form-label">Conversacion / nota interna</label>
+        <label class="form-label">Nota interna o mensaje cordial</label>
         <textarea class="form-control" id="inc-mensaje" rows="3" placeholder="Anade una nota trazable al ticket..."></textarea>
       </div>
       <div class="form-row">
@@ -1195,25 +1312,26 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
+import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
 import { leads } from '../../js/adapters/index.js?v=20260701-no-aggregate-counts';
-import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260630-supervision';
-import { initAdminOpsWorkbench } from '../../js/admin-ops-workbench.js?v=20260701-admin-routine';
-import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260628-rules';
+import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260710-actionable-incidents';
+import { initAdminOpsWorkbench } from '../../js/admin-ops-workbench.js?v=20260710-actionable-incidents';
+import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260717-solution-admin-ai';
 import { initAdminAnalytics } from '../../js/admin-analytics.js?v=20260628-analytics';
 import { initAdminExperimentation } from '../../js/admin-experimentation.js?v=20260628-experiments';
 import { initAdminDocuments } from '../../js/admin-documents.js?v=20260628-documents';
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260630-supervision';
-import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260628-incidents';
+import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260710-actionable-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260630-supervision';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-onboarding-gate';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
-import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260706-safe-call-request-v3';
+import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260815-chat-r6';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260808-action-center';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
-} from '../../js/notification-engine.js?v=20260705-payment-alerts';
+} from '../../js/notification-engine.js?v=20260707-low-noise';
 import { isAfterClassReset } from '../../js/class-reset.js?v=20260629-reset';
 import {
   addDoc,
@@ -1230,7 +1348,7 @@ import {
   where,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260701-mobility-v2';
+import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260706-teacher-profile-location-v1';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -1249,6 +1367,7 @@ import { calendarSyncMetadata } from '../../js/calendar-sync.js?v=20260705-perso
 import {
   PAID_PAYMENT_STATUSES,
   applyClassPaymentContext,
+  buildFamilyPaymentConfirmationGroups,
   buildPaymentAiReviewPatch,
   buildPaymentScheduleIndex,
   buildClassFamilyPaymentReopenPatch,
@@ -1265,11 +1384,13 @@ import {
   normalizePaymentStatus,
   paymentAmount,
   paymentScheduleForClass,
+  paymentScheduleLabel,
   paymentStatusForBadge,
   reviewPaymentWithAssistant,
+  samePaymentRelation,
   shouldAutoValidatePaymentReview,
   shouldReopenFamilyClassPayment,
-} from '../../js/payment-engine.js?v=20260706-calendar-names';
+} from '../../js/payment-engine.js?v=20260710-calendar-polish2';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -1281,7 +1402,7 @@ import {
   formatFechaCorta, formatHora, formatEuros, badgeEstado, nombreMes,
   getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize, initNotificacionesBadge
 } from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js?v=20260701-selected-refresh';
+import { Calendario } from '../../js/calendario.js?v=20260815-calendar-semantics';
 
 // ── PROTEGER RUTA ────────────────────────────────────────────────
 const usuario = await requireAuth(['admin']);
@@ -1323,11 +1444,11 @@ function clearActionBusy(button) {
 const pendingAdminPaymentActions = new Set();
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
-const secciones = ['dashboard','operaciones','ia','analitica','experimentos','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','incidencias','auditoria'];
+const secciones = ['dashboard','operaciones','ia','analitica','experimentos','configuracion','clases','calendario','profesores','familias','alumnos','solicitudes','pagos','finanzas','leads','documentos','chats','notificaciones','incidencias','auditoria'];
 const TITULOS = {
-  dashboard:'Dashboard', operaciones:'Operaciones', ia:'IA Admin', analitica:'Analitica', experimentos:'Experimentos', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
+  dashboard:'Inicio', operaciones:'Tareas de hoy', ia:'IA Admin', analitica:'Analitica', experimentos:'Experimentos', configuracion:'Configuracion', clases:'Clases', calendario:'Calendario',
   profesores:'Profesores', familias:'Familias', alumnos:'Alumnos',
-  solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Leads', documentos:'Documentos', chats:'Chats', incidencias:'Incidencias', auditoria:'Auditoria',
+  solicitudes:'Solicitudes', pagos:'Pagos', finanzas:'Finanzas', leads:'Formularios', documentos:'Documentos', chats:'Chats', notificaciones:'Centro de avisos', incidencias:'Incidencias', auditoria:'Auditoria',
 };
 let chatInicializado = false;
 let adminOpsInicializada = false;
@@ -1342,6 +1463,8 @@ let profesoresCache = new Map();
 let profesoresFirestoreCache = null;
 let familiasCache = new Map();
 let familiasFirestoreCache = null;
+let alumnosCache = new Map();
+let alumnoDetalleActivoId = '';
 let trustContextCache = null;
 const selectedProfesores = new Set();
 const selectedFamilias = new Set();
@@ -1473,6 +1596,145 @@ function ensureAdminCrmUi() {
 
 ensureAdminCrmUi();
 
+const ADMIN_NAV_GROUPS = [
+  {
+    title: 'Trabajo diario',
+    helper: '',
+    open: true,
+    sections: [
+      ['dashboard', 'Inicio'],
+      ['operaciones', 'Tareas de hoy'],
+      ['calendario', 'Calendario'],
+      ['solicitudes', 'Solicitudes'],
+      ['documentos', 'Documentos'],
+      ['chats', 'Chats'],
+      ['notificaciones', 'Avisos'],
+      ['incidencias', 'Incidencias'],
+    ],
+  },
+  {
+    title: 'Personas',
+    helper: 'Profesores, familias y alumnos',
+    sections: [
+      ['profesores', 'Profesores'],
+      ['familias', 'Familias'],
+      ['alumnos', 'Alumnos'],
+    ],
+  },
+  {
+    title: 'Negocio',
+    helper: 'Finanzas y leads',
+    sections: [
+      ['finanzas', 'Finanzas'],
+      ['leads', 'Formularios'],
+    ],
+  },
+  {
+    title: 'Sistema',
+    helper: 'IA y configuracion',
+    sections: [
+      ['ia', 'IA Admin'],
+      ['configuracion', 'Configuracion'],
+    ],
+  },
+];
+
+function setAdminSidebarLabel(button, label) {
+  if (!button) return;
+  const icon = button.querySelector('.icon');
+  const badge = button.querySelector('.sidebar-badge');
+  button.replaceChildren();
+  if (icon) button.appendChild(icon);
+  button.appendChild(document.createTextNode(label));
+  if (badge) button.appendChild(badge);
+}
+
+function appendAdminNavButton(target, button, label) {
+  if (!target || !button) return;
+  setAdminSidebarLabel(button, label);
+  target.appendChild(button);
+}
+
+function simplifyAdminNavigation() {
+  const nav = document.querySelector('.sidebar-nav');
+  if (!nav || nav.dataset.adminSimplifiedNav === 'true') return;
+  const buttons = new Map(
+    Array.from(nav.querySelectorAll('.sidebar-link[data-section]'))
+      .map((button) => [button.dataset.section, button]),
+  );
+  nav.replaceChildren();
+  nav.classList.add('admin-sidebar-nav');
+  nav.dataset.adminSimplifiedNav = 'true';
+
+  ADMIN_NAV_GROUPS.forEach((group) => {
+    if (group.open) {
+      const title = document.createElement('div');
+      title.className = 'sidebar-section-title';
+      title.textContent = group.title;
+      nav.appendChild(title);
+      group.sections.forEach(([section, label]) => appendAdminNavButton(nav, buttons.get(section), label));
+      return;
+    }
+
+    const details = document.createElement('details');
+    details.className = 'sidebar-nav-group';
+    details.dataset.navGroup = group.title.toLowerCase();
+    const summary = document.createElement('summary');
+    summary.innerHTML = `<span>${sanitize(group.title)}</span>${group.helper ? `<small>${sanitize(group.helper)}</small>` : ''}`;
+    details.appendChild(summary);
+    group.sections.forEach(([section, label]) => appendAdminNavButton(details, buttons.get(section), label));
+    nav.appendChild(details);
+  });
+}
+
+function syncAdminNavGroups(activeSection) {
+  document.querySelectorAll('.sidebar-nav-group').forEach((group) => {
+    const containsActive = Array.from(group.querySelectorAll('.sidebar-link[data-section]'))
+      .some((button) => button.dataset.section === activeSection);
+    if (containsActive) group.open = true;
+  });
+}
+
+function simplifyAdminDashboard() {
+  const section = document.getElementById('section-dashboard');
+  if (!section || section.querySelector('[data-admin-focus-board]')) return;
+
+  const existingNodes = Array.from(section.childNodes);
+  const focus = document.createElement('section');
+  focus.className = 'admin-focus-board';
+  focus.dataset.adminFocusBoard = 'true';
+  focus.innerHTML = `
+    <div class="admin-focus-hero">
+      <div>
+        <span class="admin-focus-kicker">Panel esencial</span>
+        <h2>Lo que hay que resolver hoy</h2>
+        <p>El calendario es el centro de mando: ahi ves clases, cobros de familias, justificantes y pagos a profesores. El resto queda como apoyo.</p>
+      </div>
+      <button class="btn btn-primary" type="button" data-section="calendario">Abrir calendario</button>
+    </div>
+    <div class="admin-focus-actions">
+      <button type="button" data-section="solicitudes"><strong>Solicitudes</strong><span>Asignar profesor y cerrar altas</span></button>
+      <button type="button" data-section="calendario"><strong>Calendario</strong><span>Clases, cobros, pagos y vencimientos</span></button>
+      <button type="button" data-section="operaciones"><strong>Tareas de hoy</strong><span>Prioridades y automatizaciones</span></button>
+      <button type="button" data-section="documentos"><strong>Documentos</strong><span>Revisar nuevos archivos subidos</span></button>
+      <button type="button" data-section="chats"><strong>Chats</strong><span>Mensajes y avisos activos</span></button>
+      <button type="button" data-section="incidencias"><strong>Incidencias</strong><span>Bloqueos que requieren decision</span></button>
+    </div>
+  `;
+
+  const advanced = document.createElement('details');
+  advanced.className = 'admin-advanced-dashboard';
+  advanced.dataset.adminAdvancedDashboard = 'true';
+  const summary = document.createElement('summary');
+  summary.innerHTML = '<span>Herramientas de apoyo</span><small>Tablas completas y vistas tecnicas solo cuando hagan falta</small>';
+  const body = document.createElement('div');
+  body.className = 'admin-advanced-dashboard-body';
+  existingNodes.forEach((node) => body.appendChild(node));
+  advanced.append(summary, body);
+
+  section.append(focus, advanced);
+}
+
 function irA(seccion, options = {}) {
   if (!secciones.includes(seccion) || !document.getElementById(`section-${seccion}`)) seccion = 'dashboard';
   secciones.forEach(s => {
@@ -1481,6 +1743,7 @@ function irA(seccion, options = {}) {
   document.querySelectorAll('.sidebar-link').forEach(l => {
     l.classList.toggle('active', l.dataset.section === seccion);
   });
+  syncAdminNavGroups(seccion);
   document.getElementById('topbar-title').textContent = TITULOS[seccion] || seccion;
   if (!options.fromHash && window.location.hash !== `#${seccion}`) history.replaceState(null, '', `#${seccion}`);
   if (seccion === 'dashboard') ejecutarCargaSeccion(seccion, cargarDashboard);
@@ -1517,33 +1780,32 @@ document.addEventListener('click', (e) => {
   e.preventDefault();
   irA(sectionTrigger.dataset.section);
 });
+simplifyAdminNavigation();
+simplifyAdminDashboard();
 initSidebar();
 initModals();
 initNotificacionesBadge(usuario.uid || usuario.id, db);
+initNotificationCenter({
+  container: document.getElementById('notification-center-admin'),
+  usuario,
+  role: 'admin',
+  showToast,
+  navigateSection: (section) => { irA(section); return true; },
+});
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (btn) closeModal(btn.dataset.closeModal);
 });
 document.getElementById('btn-logout').addEventListener('click', () => logout());
 function abrirPanelNotificaciones() {
-  irA('chats');
-  let intentos = 0;
-  const abrir = () => {
-    const tab = document.querySelector('[data-chat-tab="notificaciones"]');
-    if (tab) {
-      tab.click();
-      return;
-    }
-    if (intentos < 20) {
-      intentos += 1;
-      setTimeout(abrir, 100);
-    }
-  };
-  abrir();
+  irA('notificaciones');
 }
 document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
 void ensureAdminOverdueClassPaymentNotifications().catch((error) => {
   console.warn('No se pudo verificar avisos de pagos vencidos para admin', error);
+});
+void ensureAdminDocumentReviewNotifications().then(() => cargarBadgeDocumentos()).catch((error) => {
+  console.warn('No se pudo verificar avisos de documentos pendientes para admin', error);
 });
 
 function cleanAdminNotificationText(value, max = 180) {
@@ -1725,7 +1987,7 @@ async function writeAdminPaymentOverdueNotification(adminUser, clase, state) {
         amount: classTotal(clase),
         dueAt: state.dueAt || '',
         graceHours: state.graceHours || 24,
-        url: '/pages/dashboard/admin.html#pagos',
+        url: '/pages/dashboard/admin.html#calendario',
       },
     }),
     idempotencyKey: id,
@@ -1786,6 +2048,169 @@ async function ensureAdminOverdueClassPaymentNotifications() {
   return created;
 }
 
+const ADMIN_DOCUMENT_REVIEW_PENDING_STATUSES = new Set([
+  '',
+  'pendiente',
+  'pending',
+  'pendiente_revision',
+  'pending_review',
+  'en_revision',
+  'revision',
+  'revisar',
+  'subido',
+  'uploaded',
+  'nuevo',
+  'new',
+]);
+
+const ADMIN_DOCUMENT_REVIEW_CLOSED_STATUSES = new Set([
+  'validado',
+  'verificado',
+  'verified',
+  'aprobado',
+  'approved',
+  'rechazado',
+  'rejected',
+  'no_valido',
+  'invalid',
+  'caducado',
+  'expired',
+]);
+
+function adminDocumentStatus(documento = {}) {
+  return cleanAdminNotificationText(firstAdminValue(
+    documento.estado,
+    documento.status,
+    documento.estado_verificacion,
+    documento.verificationStatus,
+    documento.reviewStatus,
+  ), 80)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_');
+}
+
+function adminDocumentNeedsReview(documento = {}) {
+  const status = adminDocumentStatus(documento);
+  if (ADMIN_DOCUMENT_REVIEW_CLOSED_STATUSES.has(status)) return false;
+  if (ADMIN_DOCUMENT_REVIEW_PENDING_STATUSES.has(status)) return true;
+  return /pendiente|pending|revision|review|subido|uploaded|nuevo/.test(status);
+}
+
+function adminDocumentOwnerName(documento = {}) {
+  const ownerId = firstAdminValue(
+    documento.userUid,
+    documento.usuario_id,
+    documento.ownerUid,
+    documento.teacherUid,
+    documento.profesor_id,
+    documento.familyUid,
+    documento.familia_id,
+  );
+  return adminPersonName(
+    'Usuario',
+    ownerId,
+    documento.ownerName,
+    documento.userName,
+    documento.usuario_nombre,
+    documento.nombreUsuario,
+    documento.usuarios?.nombre && `${documento.usuarios.nombre} ${documento.usuarios?.apellidos || ''}`,
+  );
+}
+
+function adminDocumentDisplayName(documento = {}) {
+  return firstAdminValue(
+    documento.nombre,
+    documento.name,
+    documento.fileName,
+    documento.filename,
+    documento.tipo,
+    documento.documentType,
+    'documento',
+  );
+}
+
+async function loadAdminPendingDocumentsForReview() {
+  const documents = await safeListFirestore('documentos');
+  return (documents || [])
+    .filter(adminDocumentNeedsReview)
+    .sort((a, b) => timestampMillis(b.createdAt || b.created_at || b.updatedAt || b.updated_at) - timestampMillis(a.createdAt || a.created_at || a.updatedAt || a.updated_at))
+    .slice(0, 50);
+}
+
+async function writeAdminDocumentReviewNotification(adminUser, documento) {
+  const type = NOTIFICATION_EVENTS.DOCUMENT_REVIEW_PENDING;
+  const documentId = cleanAdminNotificationText(documento.id, 180);
+  const adminUid = cleanAdminNotificationText(adminUser.id || adminUser.uid, 180);
+  if (!documentId || !adminUid) return false;
+  const id = adminNotificationDocId(type, documentId, adminUid);
+  const ref = firestoreDoc(firebaseDb, 'notificaciones', id);
+  const existing = await getDoc(ref).catch(() => null);
+  if (existing?.exists()) return false;
+  const nowIso = new Date().toISOString();
+  const ownerName = adminDocumentOwnerName(documento);
+  const documentName = adminDocumentDisplayName(documento);
+  await setDoc(ref, {
+    ...buildNotificationDocument({
+      userUid: adminUid,
+      role: 'admin',
+      title: 'Documento nuevo por revisar',
+      body: `${ownerName} ha subido ${documentName}. Revisa el documento para validarlo o rechazarlo.`,
+      type,
+      priority: 'high',
+      category: 'verificacion',
+      source: 'system',
+      payload: {
+        type,
+        documentId,
+        documento_id: documentId,
+        ownerUid: documento.userUid || documento.usuario_id || documento.ownerUid || '',
+        status: adminDocumentStatus(documento) || 'pendiente',
+        url: '/pages/dashboard/admin.html#documentos',
+      },
+    }),
+    idempotencyKey: id,
+    notificationKey: id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    created_at: nowIso,
+    updated_at: nowIso,
+  }, { merge: false });
+  return true;
+}
+
+async function ensureAdminDocumentReviewNotifications() {
+  const [documents, admins] = await Promise.all([
+    loadAdminPendingDocumentsForReview(),
+    loadAdminNotificationRecipients(),
+  ]);
+  if (!documents.length || !admins.length) return 0;
+  let created = 0;
+  for (const documento of documents) {
+    for (const adminUser of admins) {
+      if (await writeAdminDocumentReviewNotification(adminUser, documento)) created += 1;
+    }
+  }
+  return created;
+}
+
+async function cargarBadgeDocumentos() {
+  const badge = document.getElementById('badge-documentos');
+  if (!badge) return;
+  try {
+    const pendientes = await loadAdminPendingDocumentsForReview();
+    if (pendientes.length > 0) {
+      badge.textContent = pendientes.length > 9 ? '9+' : String(pendientes.length);
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch (error) {
+    console.warn('No se pudo cargar el contador de documentos pendientes', error);
+  }
+}
+
 async function cargarBadgeLeads() {
   const { data: leadsNuevos, error } = await leads.countNew();
   if (error) {
@@ -1801,6 +2226,27 @@ async function cargarBadgeLeads() {
     b.style.display = 'none';
   }
 }
+
+let formulariosVistosEnDirecto = null;
+const detenerFormulariosEnDirecto = leads.watchNew(({ count, items }) => {
+  const badge = document.getElementById('badge-leads');
+  if (badge) {
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.style.display = count > 0 ? '' : 'none';
+  }
+
+  const ids = new Set((items || []).map((item) => item.id));
+  if (formulariosVistosEnDirecto) {
+    const nuevo = (items || []).find((item) => !formulariosVistosEnDirecto.has(item.id));
+    if (nuevo) {
+      const alumno = nuevo.metadata?.alumno ? ` para ${nuevo.metadata.alumno}` : '';
+      showToast('Nuevo formulario recibido', `${nuevo.nombre || nuevo.email || 'Nuevo contacto'}${alumno}`, 'info');
+      if (document.getElementById('section-leads')?.style.display !== 'none') cargarLeads();
+    }
+  }
+  formulariosVistosEnDirecto = ids;
+}, (error) => console.warn('No se pudo mantener el contador de formularios en directo', error));
+window.addEventListener('beforeunload', () => detenerFormulariosEnDirecto?.(), { once: true });
 
 // ── DASHBOARD ────────────────────────────────────────────────────
 async function iniciarOperaciones(options = {}) {
@@ -1872,6 +2318,7 @@ async function iniciarDocumentos() {
     getDocumentUrl,
   });
   adminDocumentsInicializada = true;
+  await cargarBadgeDocumentos();
   return api;
 }
 
@@ -1907,11 +2354,13 @@ async function iniciarIncidencias() {
 }
 
 async function cargarDashboard() {
-  await cargarBadgeLeads();
+  await Promise.all([cargarBadgeLeads(), cargarBadgeDocumentos()]);
   const controlCenter = document.getElementById('admin-control-center');
   const dashboardSection = document.getElementById('section-dashboard');
   if (controlCenter && dashboardSection) {
-    dashboardSection.querySelectorAll(':scope > :not(#admin-control-center)').forEach((node) => node.remove());
+    if (!dashboardSection.querySelector('[data-admin-focus-board]')) {
+      dashboardSection.querySelectorAll(':scope > :not(#admin-control-center)').forEach((node) => node.remove());
+    }
     await initAdminControlCenter({
       container: controlCenter,
       db,
@@ -2229,11 +2678,11 @@ function classMarginPct(clase) {
   return total > 0 ? (classPlatformFee(clase) / total) * 100 : 0;
 }
 
-let adminPaymentContextCache = { expiresAt: 0, payments: [], scheduleIndex: new Map() };
+let adminPaymentContextCache = { expiresAt: 0, payments: [], schedules: [], scheduleIndex: new Map() };
 let adminPaymentReviewContextCache = { expiresAt: 0, payments: [], classes: [] };
 
 function invalidateAdminPaymentContext() {
-  adminPaymentContextCache = { expiresAt: 0, payments: [], scheduleIndex: new Map() };
+  adminPaymentContextCache = { expiresAt: 0, payments: [], schedules: [], scheduleIndex: new Map() };
   adminPaymentReviewContextCache = { expiresAt: 0, payments: [], classes: [] };
 }
 
@@ -2250,6 +2699,7 @@ async function loadAdminPaymentContext(options = {}) {
   adminPaymentContextCache = {
     expiresAt: Date.now() + 20000,
     payments: paymentsResult.data || [],
+    schedules,
     scheduleIndex: buildPaymentScheduleIndex(schedules),
   };
   return adminPaymentContextCache;
@@ -2300,6 +2750,103 @@ function formatDateTimeHint(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
   return `${formatFechaCorta(date.toISOString().slice(0, 10))} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+const ADMIN_DAY_MS = 24 * 60 * 60 * 1000;
+
+function adminParseIsoLocalDate(value) {
+  const raw = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const [year, month, day] = raw.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+}
+
+function adminIsoDateLocal(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function adminAddLocalDays(date, days = 0) {
+  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  next.setDate(next.getDate() + Number(days || 0));
+  return next;
+}
+
+function adminDaysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function adminDateOnly(value) {
+  if (!value) return '';
+  if (typeof value?.toDate === 'function') return adminIsoDateLocal(value.toDate());
+  if (Number.isFinite(value?.seconds)) return adminIsoDateLocal(new Date(value.seconds * 1000));
+  const raw = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? '' : adminIsoDateLocal(parsed);
+}
+
+function adminClassDateIso(clase = {}) {
+  return adminDateOnly(clase.fecha || clase.date || clase.startAtIso || clase.startsAt);
+}
+
+function adminPaymentScheduleFrequency(schedule = {}) {
+  const raw = String(schedule.frequency ?? schedule.paymentFrequency ?? schedule.frecuencia_pago ?? 'semanal').toLowerCase();
+  return ['quincenal', 'biweekly', 'fortnightly', 'cada_15_dias', '15_dias', '15dias'].includes(raw) ? 'quincenal' : 'semanal';
+}
+
+function adminPaymentScheduleDay(schedule = {}) {
+  const number = Number(schedule.dayOfWeek ?? schedule.paymentDay ?? schedule.dia_semana_pago ?? 5);
+  return Number.isFinite(number) && number >= 1 && number <= 7 ? Math.round(number) : 5;
+}
+
+function adminPaymentScheduleTime(schedule = {}) {
+  const raw = String(schedule.time ?? schedule.paymentTime ?? schedule.hora_pago ?? '20:00').slice(0, 5);
+  return /^\d{2}:\d{2}$/.test(raw) ? raw : '20:00';
+}
+
+function adminPaymentScheduleAnchor(schedule = {}) {
+  return String(schedule.anchorDate ?? schedule.paymentAnchorDate ?? schedule.fecha_inicio_pago ?? schedule.startDate ?? '').slice(0, 10);
+}
+
+function adminMondayBasedDay(date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+function adminPaymentScheduleDatesForMonth(schedule = {}, year, monthIndex) {
+  if (!schedule || schedule.active === false || schedule.status === 'inactive') return [];
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex, adminDaysInMonth(year, monthIndex));
+  const dates = [];
+
+  if (adminPaymentScheduleFrequency(schedule) === 'quincenal') {
+    const anchor = adminParseIsoLocalDate(adminPaymentScheduleAnchor(schedule));
+    if (!anchor) return dates;
+    let cursor = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+    if (cursor < monthStart) {
+      const elapsedDays = Math.floor((monthStart.getTime() - cursor.getTime()) / ADMIN_DAY_MS);
+      cursor = adminAddLocalDays(cursor, Math.floor(elapsedDays / 14) * 14);
+      while (cursor < monthStart) cursor = adminAddLocalDays(cursor, 14);
+    }
+    while (cursor <= monthEnd) {
+      if (cursor >= anchor) dates.push(adminIsoDateLocal(cursor));
+      cursor = adminAddLocalDays(cursor, 14);
+    }
+    return dates;
+  }
+
+  let cursor = new Date(monthStart);
+  let diff = adminPaymentScheduleDay(schedule) - adminMondayBasedDay(cursor);
+  if (diff < 0) diff += 7;
+  cursor = adminAddLocalDays(cursor, diff);
+  while (cursor <= monthEnd) {
+    dates.push(adminIsoDateLocal(cursor));
+    cursor = adminAddLocalDays(cursor, 7);
+  }
+  return dates;
 }
 
 function classEditorDurationMinutes() {
@@ -2378,6 +2925,361 @@ function teacherHourlyRateForClass(clase = {}) {
     ['teacherHourlyRate', 'importe_hora_profesor', 'teacherRatePerHour', 'tarifa_hora_profesor'],
     ['importe_profesor', 'teacherAmount', 'teacherPrice', 'teacher_amount'],
   );
+}
+
+function adminClassId(clase = {}) {
+  return String(clase.id || clase.classId || clase.calendarUid || '').trim();
+}
+
+function adminPaymentClassIds(payment = {}) {
+  return Array.isArray(payment.classIds)
+    ? payment.classIds.map(String).filter(Boolean)
+    : [payment.classId, payment.class_id, payment.clase_id].map(String).filter(Boolean);
+}
+
+function adminPaymentHasProof(payment = {}) {
+  return Boolean(
+    payment.documentId
+    || payment.documento_id
+    || payment.storage_path
+    || payment.storagePath
+    || payment.proofUrl
+    || payment.receiptUrl
+  );
+}
+
+function adminPaymentDateMatches(payment = {}, dateIso = '') {
+  const dueDate = adminDateOnly(payment.dueAt || payment.due_at || payment.fecha_vencimiento || payment.paymentDueAt);
+  if (dueDate) return dueDate === dateIso;
+  const createdDate = adminDateOnly(payment.created_at || payment.createdAt);
+  return createdDate === dateIso;
+}
+
+function adminClassMatchesPaymentSchedule(clase = {}, schedule = {}) {
+  if (!schedule) return false;
+  if (samePaymentRelation(schedule, clase)) return true;
+  const scheduleId = String(schedule.id || '').trim();
+  return Boolean(scheduleId && paymentScheduleForAdminClass(clase)?.id === scheduleId);
+}
+
+function adminFindFamilyPaymentsForScheduleDate(schedule = {}, dateIso = '', classes = [], payments = [], group = {}) {
+  const relationClassIds = new Set(
+    (classes || [])
+      .filter((clase) => adminClassMatchesPaymentSchedule(clase, schedule))
+      .map(adminClassId)
+      .filter(Boolean),
+  );
+  (group.classIds || []).map(String).filter(Boolean).forEach((id) => relationClassIds.add(id));
+
+  return (payments || [])
+    .filter((payment) => isFamilyPayment(payment))
+    .filter((payment) => {
+      if (samePaymentRelation(schedule, payment)) return true;
+      const paymentClassIds = adminPaymentClassIds(payment);
+      return paymentClassIds.some((classId) => relationClassIds.has(String(classId)));
+    })
+    .filter((payment) => {
+      if (adminPaymentDateMatches(payment, dateIso)) return true;
+      const groupClassIds = new Set((group.classIds || []).map(String));
+      return groupClassIds.size > 0 && adminPaymentClassIds(payment).some((classId) => groupClassIds.has(String(classId)));
+    })
+    .sort((a, b) => String(b.updated_at || b.updatedAt || b.created_at || b.createdAt || '').localeCompare(String(a.updated_at || a.updatedAt || a.created_at || a.createdAt || '')));
+}
+
+function adminDueDateForPaymentGroup(group = {}) {
+  return adminDateOnly(group.dueAt || group.paymentPeriodEnd || group.fecha_vencimiento);
+}
+
+function adminGroupForScheduleDate(schedule = {}, dateIso = '', groups = [], payments = [], classes = []) {
+  const relationGroups = (groups || []).filter((group) => samePaymentRelation(schedule, group));
+  const current = relationGroups.filter((group) => adminDueDateForPaymentGroup(group) === dateIso);
+  const carryover = relationGroups.filter((group) => {
+    const dueDate = adminDueDateForPaymentGroup(group);
+    return dueDate && dueDate < dateIso && group.overdue;
+  });
+  const all = [...current, ...carryover];
+  const paymentMatches = adminFindFamilyPaymentsForScheduleDate(schedule, dateIso, classes, payments, {
+    classIds: all.flatMap((group) => group.classIds || []),
+  });
+  const latestPayment = paymentMatches[0] || null;
+  const paymentClassIds = new Set(adminPaymentClassIds(latestPayment || {}));
+  const paymentClassLines = paymentClassIds.size
+    ? (classes || [])
+      .filter((clase) => paymentClassIds.has(adminClassId(clase)))
+      .map((clase) => ({
+        id: adminClassId(clase),
+        date: adminClassDateIso(clase),
+        startTime: clase.hora_inicio || clase.startTime || '',
+        endTime: clase.hora_fin || clase.endTime || '',
+        subject: cleanAdminNotificationText(clase.materia || clase.subject || 'Clase', 160),
+        amount: classTotal(clase),
+        paymentDueAt: latestPayment?.dueAt || latestPayment?.due_at || '',
+        paymentPeriodStart: '',
+        paymentPeriodEnd: latestPayment?.dueAt || latestPayment?.due_at || '',
+        paymentBucket: 'proof',
+      }))
+    : [];
+  const pendingClassLines = all.flatMap((group) => (group.classes || []).map((item) => ({
+    ...item,
+    paymentBucket: adminDueDateForPaymentGroup(group) < dateIso ? 'overdue' : item.paymentBucket || 'current',
+  })));
+  const classLinesById = new Map();
+  [...pendingClassLines, ...paymentClassLines].forEach((line) => {
+    const key = String(line.id || `${line.date}-${line.startTime}-${line.subject}`);
+    if (!classLinesById.has(key)) classLinesById.set(key, line);
+  });
+  const classLines = Array.from(classLinesById.values());
+  const currentAmount = current.reduce((sum, group) => sum + money(group.currentPeriodAmount || group.amount), 0);
+  const overdueAmount = carryover.reduce((sum, group) => sum + money(group.overdueAmount || group.amount), 0);
+  const groupedAmount = roundMoney(currentAmount + overdueAmount);
+  const visibleAmount = groupedAmount || (latestPayment ? paymentAmount(latestPayment) : 0);
+  const firstClass = (classes || []).find((clase) => adminClassMatchesPaymentSchedule(clase, schedule)) || {};
+
+  return {
+    key: `admin-family-payment-${schedule.id || `${schedule.teacherUid || schedule.profesor_id}-${schedule.studentId || schedule.alumno_id}`}-${dateIso}`,
+    scheduleId: schedule.id || '',
+    familyUid: schedule.familyUid || schedule.familia_id || firstClass.familyUid || firstClass.familia_id || '',
+    familia_id: schedule.familia_id || schedule.familyUid || firstClass.familia_id || firstClass.familyUid || '',
+    teacherUid: schedule.teacherUid || schedule.profesor_id || firstClass.teacherUid || firstClass.profesor_id || '',
+    profesor_id: schedule.profesor_id || schedule.teacherUid || firstClass.profesor_id || firstClass.teacherUid || '',
+    studentId: schedule.studentId || schedule.alumno_id || firstClass.studentId || firstClass.alumno_id || '',
+    alumno_id: schedule.alumno_id || schedule.studentId || firstClass.alumno_id || firstClass.studentId || '',
+    familyName: adminPersonName('Familia', schedule.familyUid || schedule.familia_id, schedule.familyName, schedule.familia_nombre, firstClass.familia_nombre, latestPayment?.familia_nombre),
+    studentName: adminPersonName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre, firstClass.alumno_nombre),
+    teacherName: adminPersonName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, firstClass.profesor_nombre),
+    dueAt: `${dateIso}T${adminPaymentScheduleTime(schedule)}:00`,
+    paymentPeriodStart: current[0]?.paymentPeriodStart || '',
+    paymentPeriodEnd: `${dateIso}T${adminPaymentScheduleTime(schedule)}:00`,
+    state: latestPayment ? normalizePaymentStatus(latestPayment.estado || latestPayment.status) : (all.some((group) => group.overdue) ? 'vencido' : 'programado'),
+    overdue: all.some((group) => group.overdue),
+    hasOverdueCarryover: carryover.length > 0,
+    overdueAmount: roundMoney(overdueAmount),
+    currentPeriodAmount: roundMoney(currentAmount),
+    amount: roundMoney(visibleAmount),
+    classIds: Array.from(new Set([
+      ...all.flatMap((group) => group.classIds || []),
+      ...classLines.map((line) => line.id),
+    ].map(String).filter(Boolean))),
+    classes: classLines,
+    classCount: classLines.length,
+    latestPayment,
+    paymentMatches,
+    scheduleOnly: !classLines.length && !latestPayment,
+  };
+}
+
+function buildAdminFamilyPaymentCalendarEvents(classes = [], payments = [], schedules = [], groups = [], year, monthIndex) {
+  const scheduleEvents = (schedules || [])
+    .filter((schedule) => schedule && schedule.active !== false && schedule.status !== 'inactive')
+    .flatMap((schedule) => adminPaymentScheduleDatesForMonth(schedule, year, monthIndex).map((dateIso) => {
+      const group = adminGroupForScheduleDate(schedule, dateIso, groups, payments, classes);
+      const latestPayment = group.latestPayment || null;
+      return {
+        id: `admin-family-payment-${schedule.id || group.key}-${dateIso}`,
+        calendarEventType: 'admin_family_payment_day',
+        fecha: dateIso,
+        date: dateIso,
+        dueDate: dateIso,
+        paymentSchedule: schedule,
+        paymentGroup: group,
+        latestPayment,
+        overdue: group.overdue === true,
+        amount: group.amount,
+      };
+    }));
+
+  const orphanDueEvents = (groups || [])
+    .filter((group) => {
+      const dueDate = adminDueDateForPaymentGroup(group);
+      const coveredBySchedule = scheduleEvents.some((event) => {
+        const eventDate = event.dueDate || event.fecha || event.date || '';
+        return eventDate === dueDate
+          && event.paymentSchedule
+          && samePaymentRelation(event.paymentSchedule, group);
+      });
+      return dueDate
+        && dueDate.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`)
+        && !coveredBySchedule;
+    })
+    .map((group) => ({
+      id: `admin-family-payment-due-${group.key}`,
+      calendarEventType: 'admin_family_payment_day',
+      fecha: adminDueDateForPaymentGroup(group),
+      date: adminDueDateForPaymentGroup(group),
+      dueDate: adminDueDateForPaymentGroup(group),
+      paymentSchedule: null,
+      paymentGroup: {
+        ...group,
+        familyName: group.familyName || group.familia_nombre || '',
+        scheduleOnly: false,
+      },
+      latestPayment: adminFindFamilyPaymentsForScheduleDate({}, adminDueDateForPaymentGroup(group), classes, payments, group)[0] || null,
+      overdue: group.overdue === true,
+      amount: group.amount || 0,
+    }));
+
+  return [...scheduleEvents, ...orphanDueEvents];
+}
+
+function adminNormalizePayoutFrequency(value) {
+  const raw = String(value || '').toLowerCase();
+  if (['mensual', 'monthly', 'mes'].includes(raw)) return 'mensual';
+  if (['quincenal', 'biweekly', 'cada_15_dias', '15_dias', '15dias'].includes(raw)) return 'quincenal';
+  return '';
+}
+
+function adminTeacherPayoutPreference(profile = {}) {
+  const frequency = adminNormalizePayoutFrequency(
+    profile.payoutFrequency
+    || profile.frecuencia_cobro_profesor
+    || profile.payoutCadence
+    || profile.cobro_frecuencia,
+  );
+  const anchorDate = String(
+    profile.payoutAnchorDate
+    || profile.fecha_inicio_cobro_profesor
+    || profile.teacherPayoutAnchorDate
+    || profile.cobro_fecha_inicio
+    || '',
+  ).slice(0, 10);
+  const anchor = adminParseIsoLocalDate(anchorDate);
+  return {
+    frequency: frequency || (anchor ? 'quincenal' : ''),
+    anchorDate: anchor ? adminIsoDateLocal(anchor) : '',
+    dayOfMonth: anchor ? anchor.getDate() : null,
+    configured: Boolean(anchor && (frequency || anchor)),
+  };
+}
+
+function adminTeacherPayoutFrequencyLabel(frequency) {
+  return frequency === 'mensual' ? 'Cobro mensual' : 'Cobro cada 15 dias';
+}
+
+function adminTeacherPayoutDatesForMonth(preference = {}, year, monthIndex) {
+  if (!preference.configured) return [];
+  const anchor = adminParseIsoLocalDate(preference.anchorDate);
+  if (!anchor) return [];
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex, adminDaysInMonth(year, monthIndex));
+  if (preference.frequency === 'mensual') {
+    const day = Math.min(preference.dayOfMonth || anchor.getDate(), adminDaysInMonth(year, monthIndex));
+    const date = new Date(year, monthIndex, day);
+    return date >= anchor && date <= monthEnd ? [date] : [];
+  }
+  let cursor = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  if (cursor < monthStart) {
+    const elapsedDays = Math.floor((monthStart.getTime() - cursor.getTime()) / ADMIN_DAY_MS);
+    cursor = adminAddLocalDays(cursor, Math.floor(elapsedDays / 15) * 15);
+    while (cursor < monthStart) cursor = adminAddLocalDays(cursor, 15);
+  }
+  const dates = [];
+  while (cursor <= monthEnd) {
+    if (cursor >= anchor) dates.push(cursor);
+    cursor = adminAddLocalDays(cursor, 15);
+  }
+  return dates;
+}
+
+function adminPreviousTeacherPayoutDate(preference = {}, payoutDate) {
+  if (preference.frequency === 'mensual') {
+    const prevMonth = new Date(payoutDate.getFullYear(), payoutDate.getMonth() - 1, 1);
+    const day = Math.min(preference.dayOfMonth || payoutDate.getDate(), adminDaysInMonth(prevMonth.getFullYear(), prevMonth.getMonth()));
+    return new Date(prevMonth.getFullYear(), prevMonth.getMonth(), day);
+  }
+  return adminAddLocalDays(payoutDate, -15);
+}
+
+function adminTeacherProfileUid(profile = {}) {
+  return String(profile.userUid || profile.uid || profile.id || profile.profesor_id || '').trim();
+}
+
+function adminTeacherProfileIds(profile = {}) {
+  return new Set([
+    profile.userUid,
+    profile.uid,
+    profile.id,
+    profile.profesor_id,
+    profile.teacherUid,
+  ].map((value) => String(value || '').trim()).filter(Boolean));
+}
+
+function adminClassTeacherUid(clase = {}) {
+  return String(clase.teacherUid || clase.profesor_id || clase.teacherId || '').trim();
+}
+
+function adminClassTeacherPayoutPaid(clase = {}) {
+  const status = normalizePaymentStatus(clase.teacherPaymentStatus || clase.estado_pago_profesor || clase.teacherPayoutStatus || clase.payoutStatus);
+  return PAID_PAYMENT_STATUSES.includes(status) || status === 'pagado' || Boolean(clase.teacherPayoutPaidAt);
+}
+
+function adminAttendanceDoneValue(value) {
+  return ['realizada', 'dada', 'completed', 'done', 'confirmada_por_ambas_partes', 'confirmed_by_both']
+    .includes(String(value || '').toLowerCase());
+}
+
+function adminAttendanceBlockedValue(value) {
+  return ['no_realizada', 'incidencia', 'cancelada', 'cancelado', 'discrepancia']
+    .includes(String(value || '').toLowerCase());
+}
+
+function adminClassEarnsTeacherPayout(clase = {}) {
+  const status = String(clase.estado || clase.status || '').toLowerCase();
+  const teacherStatus = String(clase.teacherConfirmationStatus || clase.teacherAttendanceStatus || '').toLowerCase();
+  const attendanceStatus = String(clase.attendanceStatus || clase.estado_asistencia || '').toLowerCase();
+  const familyStatus = String(clase.familyConfirmationStatus || clase.familyAttendanceStatus || clase.confirmacion_familia || '').toLowerCase();
+  return classTeacherAmount(clase) > 0
+    && !adminAttendanceBlockedValue(status)
+    && !adminAttendanceBlockedValue(attendanceStatus)
+    && !adminAttendanceBlockedValue(teacherStatus)
+    && !adminAttendanceBlockedValue(familyStatus)
+    && (
+      ['realizada', 'completada', 'pagada', 'paid', 'completed'].includes(status)
+      || adminAttendanceDoneValue(attendanceStatus)
+      || adminAttendanceDoneValue(teacherStatus)
+    );
+}
+
+function buildAdminTeacherPayoutCalendarEvents(classes = [], teacherProfiles = [], year, monthIndex) {
+  return (teacherProfiles || []).flatMap((profile) => {
+    const preference = adminTeacherPayoutPreference(profile);
+    if (!preference.configured) return [];
+    const teacherUid = adminTeacherProfileUid(profile) || String(profile.id || profile.docId || profile.email || '').trim();
+    const teacherIds = adminTeacherProfileIds(profile);
+    const teacherName = nombreProfesor(profile);
+    return adminTeacherPayoutDatesForMonth(preference, year, monthIndex).map((payoutDate) => {
+      const previousDate = adminPreviousTeacherPayoutDate(preference, payoutDate);
+      const payoutDateIso = adminIsoDateLocal(payoutDate);
+      const periodStartIso = adminIsoDateLocal(adminAddLocalDays(previousDate, 1));
+      const periodClasses = (classes || [])
+        .filter((clase) => {
+          const classDate = adminParseIsoLocalDate(adminClassDateIso(clase));
+          return classDate
+            && (teacherIds.has(adminClassTeacherUid(clase)) || teacherIds.has(String(clase.teacherUid || '').trim()) || teacherIds.has(String(clase.profesor_id || '').trim()))
+            && classDate > previousDate
+            && classDate <= payoutDate
+            && adminClassEarnsTeacherPayout(clase)
+            && !adminClassTeacherPayoutPaid(clase);
+        })
+        .sort((a, b) => String(adminClassDateIso(a)).localeCompare(String(adminClassDateIso(b))) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')));
+      const payoutAmount = roundMoney(periodClasses.reduce((sum, clase) => sum + classTeacherAmount(clase), 0));
+      return {
+        id: `admin-teacher-payout-${teacherUid}-${payoutDateIso}`,
+        calendarEventType: 'admin_teacher_payout_day',
+        fecha: payoutDateIso,
+        date: payoutDateIso,
+        payoutDate: payoutDateIso,
+        periodStart: periodStartIso,
+        periodEnd: payoutDateIso,
+        teacherUid,
+        profesor_id: teacherUid,
+        teacherName,
+        payoutFrequency: preference.frequency,
+        payoutFrequencyLabel: adminTeacherPayoutFrequencyLabel(preference.frequency),
+        payoutAmount,
+        payoutClasses: periodClasses,
+      };
+    });
+  });
 }
 
 function updateClaseMoneyPreview() {
@@ -2472,6 +3374,13 @@ document.getElementById('btn-nueva-clase').addEventListener('click', async () =>
   updateClaseMoneyPreview();
   await cargarSelectoresClase();
   openModal('modal-clase');
+});
+
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-action="nueva-clase-admin-calendario"]');
+  if (!button) return;
+  event.preventDefault();
+  document.getElementById('btn-nueva-clase')?.click();
 });
 
 async function cargarSelectoresClase() {
@@ -2794,12 +3703,145 @@ function financeTextSearch(item) {
   ].filter(Boolean).join(' ').toLowerCase();
 }
 
-function filtrarFinanzas(clases, pagos) {
-  const filtro = String(document.getElementById('finanzas-filtro')?.value || '').trim().toLowerCase();
-  if (!filtro) return { clases, pagos };
+function financeFilters() {
   return {
-    clases: (clases || []).filter((item) => financeTextSearch(item).includes(filtro)),
-    pagos: (pagos || []).filter((item) => financeTextSearch(item).includes(filtro)),
+    text: String(document.getElementById('finanzas-filtro')?.value || '').trim().toLowerCase(),
+    teacher: String(document.getElementById('finanzas-profesor')?.value || '').trim(),
+    family: String(document.getElementById('finanzas-familia')?.value || '').trim(),
+    subject: String(document.getElementById('finanzas-materia')?.value || '').trim().toLowerCase(),
+    state: String(document.getElementById('finanzas-estado')?.value || '').trim(),
+    metric: String(document.getElementById('finanzas-metrica')?.value || 'revenue').trim(),
+    group: String(document.getElementById('finanzas-agrupacion')?.value || 'teacher').trim(),
+  };
+}
+
+function financeClassId(c = {}) {
+  return String(firstAdminValue(c.id, c.clase_id, c.classId) || '').trim();
+}
+
+function financeTeacherId(c = {}) {
+  return String(firstAdminValue(c.teacherUid, c.profesor_id, c.teacherId, c.profesores?.id, c.profesor?.id) || '').trim();
+}
+
+function financeFamilyId(c = {}) {
+  return String(firstAdminValue(c.familyUid, c.familia_id, c.familyId, c.familias?.id, c.familia?.id) || '').trim();
+}
+
+function financePaymentTeacherId(p = {}) {
+  return String(firstAdminValue(p.teacherUid, p.profesor_id, p.teacherId, p.profesores?.id) || '').trim();
+}
+
+function financePaymentFamilyId(p = {}) {
+  return String(firstAdminValue(p.familyUid, p.familia_id, p.familyId, p.familias?.id) || '').trim();
+}
+
+function financeSubject(c = {}) {
+  return String(firstAdminValue(c.subject, c.materia, '') || '').trim();
+}
+
+function financePaymentClassIds(p = {}) {
+  const raw = firstAdminValue(p.classIds, p.claseIds, p.clases, p.classId, p.clase_id);
+  if (Array.isArray(raw)) return raw.map((item) => String(item || '').trim()).filter(Boolean);
+  if (!raw) return [];
+  return String(raw).split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function financeClassMatchesState(c = {}, state = '') {
+  if (!state) return true;
+  const total = classTotal(c);
+  const teacher = classTeacherAmount(c);
+  const marginPct = total > 0 ? (classPlatformFee(c) / total) * 100 : 0;
+  if (state === 'realizadas') return claseRealizada(c);
+  if (state === 'pendiente_cobro') return total > 0 && !['pagado', 'paid', 'validado', 'verified'].includes(statusPagoFamilia(c));
+  if (state === 'pendiente_profesor') return teacher > 0 && !['pagado', 'paid', 'validado', 'verified'].includes(statusPagoProfesor(c));
+  if (state === 'margen_bajo') return total > 0 && teacher > 0 && marginPct < Number(getConfigValue(platformConfig, 'finance.lowMarginAlertPct', 15));
+  if (state === 'sin_importe') return total <= 0 || teacher <= 0;
+  return true;
+}
+
+function financeClassMatchesFilters(c = {}, filters = financeFilters()) {
+  if (filters.text && !financeTextSearch(c).includes(filters.text)) return false;
+  if (filters.teacher && financeTeacherId(c) !== filters.teacher) return false;
+  if (filters.family && financeFamilyId(c) !== filters.family) return false;
+  if (filters.subject && financeSubject(c).toLowerCase() !== filters.subject) return false;
+  if (!financeClassMatchesState(c, filters.state)) return false;
+  return true;
+}
+
+function financePaymentMatchesFilters(p = {}, filters = financeFilters(), visibleClassIds = new Set()) {
+  if (filters.text && !financeTextSearch(p).includes(filters.text)) return false;
+  const paymentClassIds = financePaymentClassIds(p);
+  if (filters.teacher) {
+    const paymentTeacher = financePaymentTeacherId(p);
+    if (paymentTeacher && paymentTeacher !== filters.teacher) return false;
+    if (!paymentTeacher && paymentClassIds.length && !paymentClassIds.some((id) => visibleClassIds.has(id))) return false;
+    if (!paymentTeacher && !paymentClassIds.length) return false;
+  }
+  if (filters.family) {
+    const paymentFamily = financePaymentFamilyId(p);
+    if (paymentFamily && paymentFamily !== filters.family) return false;
+    if (!paymentFamily && paymentClassIds.length && !paymentClassIds.some((id) => visibleClassIds.has(id))) return false;
+    if (!paymentFamily && !paymentClassIds.length) return false;
+  }
+  if ((filters.subject || filters.state) && paymentClassIds.length && !paymentClassIds.some((id) => visibleClassIds.has(id))) return false;
+  return true;
+}
+
+function renderFinanceOptions(options = [], selected = '', emptyLabel = 'Todos') {
+  const unique = [];
+  const seen = new Set();
+  for (const option of options) {
+    const value = String(option.value || '').trim();
+    const label = String(option.label || value).trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    unique.push({ value, label });
+  }
+  unique.sort((a, b) => a.label.localeCompare(b.label));
+  return `<option value="">${sanitize(emptyLabel)}</option>` + unique
+    .map((option) => `<option value="${sanitize(option.value)}" ${option.value === selected ? 'selected' : ''}>${sanitize(option.label)}</option>`)
+    .join('');
+}
+
+function populateFinanceFilters(clases = [], extra = {}) {
+  const current = financeFilters();
+  const teacherOptions = new Map();
+  const familyOptions = new Map();
+  const subjectOptions = new Map();
+  for (const teacher of extra.teachers || []) {
+    const id = String(firstAdminValue(teacher.id, teacher.userUid, teacher.usuario_id, teacher.profesor_id) || '').trim();
+    if (id) teacherOptions.set(id, nombreProfesor(teacher));
+  }
+  for (const family of extra.families || []) {
+    const id = String(firstAdminValue(family.id, family.userUid, family.usuario_id, family.familia_id) || '').trim();
+    if (id) familyOptions.set(id, nombreFamilia(family));
+  }
+  for (const clase of clases || []) {
+    const teacherId = financeTeacherId(clase);
+    const familyId = financeFamilyId(clase);
+    const subject = financeSubject(clase);
+    if (teacherId && !teacherOptions.has(teacherId)) teacherOptions.set(teacherId, nombreProfesorFinanzas(clase));
+    if (familyId && !familyOptions.has(familyId)) {
+      familyOptions.set(familyId, adminPersonName('Familia', familyId, clase.familia_nombre, clase.familyName));
+    }
+    if (subject) subjectOptions.set(subject.toLowerCase(), subject);
+  }
+  const teacherSelect = document.getElementById('finanzas-profesor');
+  const familySelect = document.getElementById('finanzas-familia');
+  const subjectSelect = document.getElementById('finanzas-materia');
+  if (teacherSelect) teacherSelect.innerHTML = renderFinanceOptions([...teacherOptions].map(([value, label]) => ({ value, label })), current.teacher, 'Todos los profesores');
+  if (familySelect) familySelect.innerHTML = renderFinanceOptions([...familyOptions].map(([value, label]) => ({ value, label })), current.family, 'Todas las familias');
+  if (subjectSelect) subjectSelect.innerHTML = renderFinanceOptions([...subjectOptions].map(([value, label]) => ({ value, label })), current.subject, 'Todas las materias');
+}
+
+function filtrarFinanzas(clases, pagos) {
+  const filters = financeFilters();
+  const clasesFiltradas = (clases || []).filter((item) => financeClassMatchesFilters(item, filters));
+  const visibleClassIds = new Set(clasesFiltradas.map(financeClassId).filter(Boolean));
+  return {
+    clases: clasesFiltradas,
+    pagos: (pagos || []).filter((item) => financePaymentMatchesFilters(item, filters, visibleClassIds)),
+    filters,
   };
 }
 
@@ -2871,42 +3913,165 @@ function calcularFinanzas(clases, pagos, mes, extra = {}) {
   };
 }
 
-function renderFinanceMiniBar(label, value, max, extra = '') {
-  const pct = max > 0 ? Math.max(4, Math.min(100, Math.round((money(value) / max) * 100))) : 0;
+function financeMetricConfig(metric = 'revenue') {
+  const configs = {
+    revenue: { field: 'revenue', label: 'Facturacion', format: formatEuros },
+    profit: { field: 'profit', label: 'Margen CD10', format: formatEuros },
+    teacherCost: { field: 'teacherCost', label: 'Coste profesor', format: formatEuros },
+    classes: { field: 'classes', label: 'Clases', format: (value) => `${Number(value || 0)} clases` },
+    marginPct: { field: 'marginPct', label: '% margen', format: (value) => `${roundMoney(value)}%` },
+  };
+  return configs[metric] || configs.revenue;
+}
+
+function financeGroupingRows(metrics = {}, group = 'teacher') {
+  const breakdowns = metrics.breakdowns || {};
+  const groups = {
+    teacher: { title: 'Profesores', rows: breakdowns.byTeacher || [] },
+    family: { title: 'Familias', rows: breakdowns.byFamily || [] },
+    subject: { title: 'Materias', rows: breakdowns.bySubject || [] },
+    city: { title: 'Ciudades', rows: breakdowns.byCity || [] },
+    modality: { title: 'Modalidades', rows: breakdowns.byModality || [] },
+  };
+  return groups[group] || groups.teacher;
+}
+
+function renderFinanceMiniBar(label, value, max, extra = '', formatter = formatEuros) {
+  const pct = max > 0 ? Math.max(4, Math.min(100, Math.round((Number(value || 0) / max) * 100))) : 0;
   return `<div class="finance-mini-row">
-    <div class="finance-mini-row-head"><strong>${sanitize(label)}</strong><span>${formatEuros(value)}</span></div>
+    <div class="finance-mini-row-head"><strong>${sanitize(label)}</strong><span>${sanitize(formatter(value))}</span></div>
     <div class="finance-mini-track"><span style="width:${pct}%"></span></div>
     ${extra ? `<div class="finance-mini-note">${sanitize(extra)}</div>` : ''}
   </div>`;
 }
 
 function renderFinanceBreakdown(title, rows, valueField = 'revenue') {
+  const metric = Object.values({
+    revenue: financeMetricConfig('revenue'),
+    profit: financeMetricConfig('profit'),
+    teacherCost: financeMetricConfig('teacherCost'),
+    classes: financeMetricConfig('classes'),
+    marginPct: financeMetricConfig('marginPct'),
+  }).find((item) => item.field === valueField) || financeMetricConfig('revenue');
   const top = (rows || []).slice(0, 5);
-  const max = Math.max(...top.map((item) => money(item[valueField])), 0);
+  const max = Math.max(...top.map((item) => Number(item[valueField] || 0)), 0);
   return `<div class="finance-breakdown-block">
     <h4>${sanitize(title)}</h4>
-    ${top.length ? top.map((item) => renderFinanceMiniBar(item.label || item.key, item[valueField], max, `${item.classes || item.payments || 0} mov.`)).join('') : '<p class="muted">Sin datos.</p>'}
+    ${top.length ? top.map((item) => renderFinanceMiniBar(item.label || item.key, item[valueField], max, `${item.classes || item.payments || 0} mov.`, metric.format)).join('') : '<p class="muted">Sin datos.</p>'}
   </div>`;
 }
 
-function renderFinanceTimeline(rows) {
+function renderFinanceTimeline(rows, metricName = 'revenue') {
+  const metric = financeMetricConfig(metricName);
   const top = (rows || []).slice(-8);
-  const max = Math.max(...top.map((item) => money(item.revenue)), 0);
+  const max = Math.max(...top.map((item) => Number(item[metric.field] || 0)), 0);
   if (!top.length) return '<div class="empty-state"><div class="empty-title">Sin historico financiero</div><div class="empty-text">Cuando haya clases con importes, se mostrara la tendencia mensual.</div></div>';
   return `<div class="finance-timeline">${top.map((item) => {
-    const h = max > 0 ? Math.max(10, Math.round((money(item.revenue) / max) * 100)) : 10;
+    const value = Number(item[metric.field] || 0);
+    const h = max > 0 ? Math.max(10, Math.round((value / max) * 100)) : 10;
     return `<div class="finance-timeline-item">
       <div class="finance-timeline-bar" style="height:${h}%"></div>
       <span>${sanitize(item.month)}</span>
-      <strong>${formatEuros(item.revenue)}</strong>
+      <strong>${sanitize(metric.format(value))}</strong>
     </div>`;
   }).join('')}</div>`;
 }
 
+function adminPayoutTone(event = {}) {
+  const date = String(event.payoutDate || event.date || '').slice(0, 10);
+  const today = fechaHoy();
+  if (date < today) return 'danger';
+  if (date === today) return 'warning';
+  return 'navy';
+}
+
+function renderAdminTeacherPayoutPlanner(events = []) {
+  const payable = (events || [])
+    .filter((event) => money(event.payoutAmount) > 0)
+    .sort((a, b) => String(a.payoutDate || a.date || '').localeCompare(String(b.payoutDate || b.date || ''))
+      || String(a.teacherName || '').localeCompare(String(b.teacherName || '')));
+  const total = roundMoney(payable.reduce((sum, event) => sum + money(event.payoutAmount), 0));
+  if (!payable.length) {
+    return `
+      <div class="empty-state admin-teacher-payout-empty">
+        <div class="empty-title">Sin cobros pendientes de profesores</div>
+        <div class="empty-desc">Cuando llegue el dia de cobro de un profesor, aqui veras el total y las clases exactas que lo generan.</div>
+      </div>
+    `;
+  }
+  const rows = payable.slice(0, 10).map((event) => {
+    const classes = event.payoutClasses || [];
+    const tone = adminPayoutTone(event);
+    const detailRows = classes.slice(0, 4).map((clase) => {
+      const studentName = adminPersonName('Alumno', firstAdminValue(clase.studentId, clase.alumno_id), clase.alumno_nombre, clase.studentName);
+      return `
+        <div class="admin-teacher-payout-class">
+          <span>${sanitize(formatFechaCorta(adminClassDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
+          <strong>${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
+          <em>${sanitize(formatEuros(classTeacherAmount(clase)))}</em>
+        </div>
+      `;
+    }).join('');
+    const extra = classes.length > 4
+      ? `<div class="admin-teacher-payout-more">+${classes.length - 4} clase(s) mas en este cobro</div>`
+      : '';
+    return `
+      <article class="admin-teacher-payout-row ${sanitize(tone)}">
+        <div class="admin-teacher-payout-date">
+          <span>${sanitize(formatFechaCorta(event.payoutDate || event.date))}</span>
+          ${badgeEstado(tone === 'danger' ? 'vencido' : tone === 'warning' ? 'pendiente' : 'programada')}
+        </div>
+        <div class="admin-teacher-payout-main">
+          <div class="admin-teacher-payout-head">
+            <div>
+              <strong>${sanitize(event.teacherName || 'Profesor pendiente de nombre')}</strong>
+              <small>${sanitize(event.payoutFrequencyLabel || 'Dia de cobro')} · Periodo ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</small>
+            </div>
+            <strong class="admin-teacher-payout-amount">${sanitize(formatEuros(event.payoutAmount))}</strong>
+          </div>
+          <div class="admin-teacher-payout-classes">
+            ${detailRows}
+            ${extra}
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
+  const extra = payable.length > 10
+    ? `<div class="admin-teacher-payout-more">+${payable.length - 10} cobro(s) mas en este mes</div>`
+    : '';
+  return `
+    <div class="admin-teacher-payout-summary">
+      <div>
+        <span>Importe pendiente a profesores</span>
+        <strong>${sanitize(formatEuros(total))}</strong>
+      </div>
+      <div>
+        <span>Dias de cobro con clases dadas</span>
+        <strong>${sanitize(String(payable.length))}</strong>
+      </div>
+    </div>
+    <div class="admin-teacher-payout-list">
+      ${rows}
+      ${extra}
+    </div>
+  `;
+}
+
 function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
   const filtrado = filtrarFinanzas(clases, pagos);
+  const filters = filtrado.filters || financeFilters();
   const fin = calcularFinanzas(filtrado.clases, filtrado.pagos, mes, extra);
+  const metric = financeMetricConfig(filters.metric);
+  const grouping = financeGroupingRows(fin.metrics, filters.group);
   finanzasUltimoReporte = fin.report;
+  const [payoutYear, payoutMonth] = String(mes || mesActualInput()).split('-').map(Number);
+  const teacherPayoutEvents = buildAdminTeacherPayoutCalendarEvents(
+    filtrado.clases,
+    extra.teachers || [],
+    payoutYear || new Date().getFullYear(),
+    Math.max(0, (payoutMonth || (new Date().getMonth() + 1)) - 1),
+  );
   const cobertura = fin.realizadas.length
     ? Math.round((fin.clasesConImportes.length / fin.realizadas.length) * 100)
     : 100;
@@ -2930,6 +4095,10 @@ function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
       ];
 
   document.getElementById('finanzas-stats').innerHTML = stats.join('');
+  const teacherPayoutTarget = document.getElementById('finanzas-cobros-profesores');
+  if (teacherPayoutTarget) {
+    teacherPayoutTarget.innerHTML = renderAdminTeacherPayoutPlanner(teacherPayoutEvents);
+  }
   document.getElementById('finanzas-proyeccion').innerHTML = `
     <div style="display:grid;gap:12px;font-size:.9rem;line-height:1.5">
       <div><strong>Motor ERP:</strong> ${sanitize(FINANCE_ERP_VERSION)} calculando sobre clases, pagos, tarifas de profesor y estado de conciliacion.</div>
@@ -2950,7 +4119,7 @@ function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
   if (!alertas.length) alertas.push(renderFinanceAlert('success', 'Sin alertas criticas este mes.'));
   document.getElementById('finanzas-alertas').innerHTML = alertas.join('');
 
-  document.getElementById('finanzas-evolucion').innerHTML = renderFinanceTimeline(fin.metrics.breakdowns.monthly);
+  document.getElementById('finanzas-evolucion').innerHTML = renderFinanceTimeline(fin.metrics.breakdowns.monthly, filters.metric);
   document.getElementById('finanzas-cashflow').innerHTML = `
     <div class="finance-cash-grid">
       ${renderFinanceMiniBar('Cobrado familias', fin.metrics.revenue.collected, Math.max(fin.metrics.revenue.earned, fin.metrics.revenue.collected), `${fin.metrics.operational.collectionRatePct}% del devengo`)}
@@ -2961,9 +4130,9 @@ function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
   `;
   document.getElementById('finanzas-segmentos').innerHTML = `
     <div class="finance-breakdown-grid">
-      ${renderFinanceBreakdown('Ciudades', fin.metrics.breakdowns.byCity)}
-      ${renderFinanceBreakdown('Materias', fin.metrics.breakdowns.bySubject)}
-      ${renderFinanceBreakdown('Modalidades', fin.metrics.breakdowns.byModality)}
+      ${renderFinanceBreakdown(`${grouping.title}: ${metric.label}`, grouping.rows, metric.field)}
+      ${renderFinanceBreakdown('Materias por facturacion', fin.metrics.breakdowns.bySubject)}
+      ${renderFinanceBreakdown('Modalidades por facturacion', fin.metrics.breakdowns.byModality)}
     </div>
   `;
   document.getElementById('finanzas-rankings').innerHTML = `
@@ -3017,6 +4186,10 @@ async function cargarFinanzas() {
   ]);
   if (clasesRes.error) throw clasesRes.error;
   if (pagosRes.error) throw pagosRes.error;
+  populateFinanceFilters(clasesRes.data || [], {
+    teachers: profesores || [],
+    families: familias || [],
+  });
   renderizarFinanzas(clasesRes.data || [], pagosRes.data || [], mes, vista, {
     teachers: profesores || [],
     families: familias || [],
@@ -3024,7 +4197,7 @@ async function cargarFinanzas() {
   });
 }
 
-['finanzas-mes','finanzas-vista','finanzas-filtro'].forEach((id) => {
+['finanzas-mes','finanzas-vista','finanzas-profesor','finanzas-familia','finanzas-materia','finanzas-estado','finanzas-metrica','finanzas-agrupacion','finanzas-filtro'].forEach((id) => {
   document.getElementById(id)?.addEventListener('change', cargarFinanzas);
 });
 document.getElementById('finanzas-filtro')?.addEventListener('input', debounce(cargarFinanzas, 250));
@@ -3062,8 +4235,26 @@ async function iniciarCalendario() {
   if (!cal) {
     cal = new Calendario({
       contenedor: document.getElementById('calendario-wrapper'),
-      classDotClass: (clase) => economicStateForAdminClass(clase).dotClass,
-      legendItems: economicCalendarLegend(),
+      classDotClass: (item) => {
+        if (item.calendarEventType === 'admin_family_payment_day') {
+          const status = normalizePaymentStatus(item.latestPayment?.estado || item.latestPayment?.status || item.paymentGroup?.state || '');
+          if (['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status) || item.overdue) return 'dot-red';
+          if (['pendiente', 'solicitado', 'procesando', 'requiere_accion'].includes(status) && adminPaymentHasProof(item.latestPayment || {})) return 'dot-blue';
+          if (PAID_PAYMENT_STATUSES.includes(status)) return 'dot-emerald';
+          return money(item.paymentGroup?.amount || item.amount) > 0 ? 'dot-navy' : 'dot-gray';
+        }
+        if (item.calendarEventType === 'admin_teacher_payout_day') return money(item.payoutAmount) > 0 ? 'dot-purple' : 'dot-gray';
+        return economicStateForAdminClass(item).dotClass;
+      },
+      legendItems: [
+        ...economicCalendarLegend(),
+        { className: 'dot-navy', label: 'Día de pago de familia' },
+      ],
+      daySummaryLabel: (item) => {
+        if (item.calendarEventType === 'admin_family_payment_day') return item.overdue ? 'Pago vencido' : 'Pago familia';
+        if (item.calendarEventType === 'admin_teacher_payout_day') return 'Cobro prof.';
+        return formatHora(item.hora_inicio || item.startTime || '') || 'Clase';
+      },
       onDiaClick: mostrarClasesDiaEconomico,
       onMesChange: cargarClasesCalendario,
     });
@@ -3075,14 +4266,40 @@ async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
-  const [{ data }, paymentContext] = await Promise.all([
-    db.from('v_clases_completas').select('*').gte('fecha',desde).lte('fecha',hasta),
+  const consultaDesde = adminIsoDateLocal(new Date(anio, mes - 1, 1)) || desde;
+  const [{ data }, paymentContext, profesoresResult] = await Promise.all([
+    db.from('v_clases_completas').select('*').gte('fecha', consultaDesde).lte('fecha', hasta),
     loadAdminPaymentContext(),
+    db.from('profesores').select('*').range(0, adminReadLimit('profesores') - 1),
   ]);
-  const clases = applyClassPaymentContext(data || [], paymentContext.payments);
-  adminCalendarClassById = new Map(clases.map((clase) => [String(clase.id), clase]));
-  cal.setClases(clases);
-  renderAdminCalendarMonthSummary(clases);
+  const clasesConContexto = applyClassPaymentContext(data || [], paymentContext.payments);
+  const clasesMes = clasesConContexto.filter((clase) => {
+    const dateIso = adminClassDateIso(clase);
+    return dateIso >= desde && dateIso <= hasta;
+  });
+  const familyPaymentGroups = buildFamilyPaymentConfirmationGroups(
+    clasesConContexto,
+    paymentContext.payments,
+    paymentContext.scheduleIndex,
+  );
+  const familyPaymentEvents = buildAdminFamilyPaymentCalendarEvents(
+    clasesConContexto,
+    paymentContext.payments,
+    paymentContext.schedules,
+    familyPaymentGroups,
+    anio,
+    mes,
+  );
+  const teacherPayoutEvents = buildAdminTeacherPayoutCalendarEvents(
+    clasesConContexto,
+    profesoresResult.data || [],
+    anio,
+    mes,
+  );
+  const calendarItems = [...familyPaymentEvents, ...teacherPayoutEvents, ...clasesMes];
+  adminCalendarClassById = new Map(clasesConContexto.map((clase) => [String(clase.id), clase]));
+  cal.setClases(calendarItems);
+  renderAdminCalendarMonthSummary(calendarItems);
   if (cal.diaSeleccionado) {
     mostrarClasesDiaEconomico(cal.diaSeleccionado, cal.clasesPorFecha[cal.diaSeleccionado] || []);
   }
@@ -3091,7 +4308,10 @@ async function cargarClasesCalendario(anio, mes) {
 function renderAdminCalendarMonthSummary(clases = []) {
   const cont = document.getElementById('admin-calendar-month-summary');
   if (!cont) return;
-  const enriched = (clases || []).map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }));
+  const familyPaymentEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_family_payment_day');
+  const teacherPayoutEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_teacher_payout_day');
+  const classItems = (clases || []).filter((item) => !item.calendarEventType);
+  const enriched = classItems.map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }));
   const totals = enriched.reduce((acc, item) => {
     const state = item.economic.state;
     acc.classes += 1;
@@ -3118,6 +4338,12 @@ function renderAdminCalendarMonthSummary(clases = []) {
     pendingTeacherPayout: 0,
     alerts: 0,
   });
+  const familyDueAmount = roundMoney(familyPaymentEvents.reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
+  const teacherDueAmount = roundMoney(teacherPayoutEvents.reduce((sum, event) => sum + money(event.payoutAmount), 0));
+  const familyProofsInReview = familyPaymentEvents.filter((event) => {
+    const status = normalizePaymentStatus(event.latestPayment?.estado || event.latestPayment?.status || '');
+    return ['pendiente', 'solicitado', 'procesando', 'requiere_accion'].includes(status) && adminPaymentHasProof(event.latestPayment || {});
+  }).length;
 
   const monthName = cal ? `${nombreMes(cal.mes)} ${cal.anio}` : 'este mes';
   const alertText = totals.alerts
@@ -3136,8 +4362,11 @@ function renderAdminCalendarMonthSummary(clases = []) {
         ['Clases', String(totals.classes), 'programadas este mes'],
         ['Facturacion', formatEuros(totals.family), 'importe familia'],
         ['Margen', formatEuros(totals.margin), 'ClasesDe10'],
+        ['Dias pago familia', String(familyPaymentEvents.length), `${formatEuros(familyDueAmount)} previsto`],
+        ['Justificantes', String(familyProofsInReview), 'subidos/en revision'],
+        ['Dias cobro profesor', String(teacherPayoutEvents.length), `${formatEuros(teacherDueAmount)} previsto`],
         ['Pendiente cobro', formatEuros(totals.pendingCollection), 'familias'],
-        ['Pendiente profesor', formatEuros(totals.pendingTeacherPayout), 'liquidaciones'],
+        ['Pendiente profesor', formatEuros(totals.pendingTeacherPayout || teacherDueAmount), 'liquidaciones'],
       ].map(([label, value, hint]) => `
         <div class="admin-calendar-kpi admin-calendar-month-kpi">
           <span>${sanitize(label)}</span>
@@ -3228,6 +4457,113 @@ function renderAdminAttendanceSelect(clase, state = classAttendanceState(clase))
   `;
 }
 
+function adminPaymentStatusLabel(payment = null, group = {}) {
+  if (!payment) {
+    if (group.scheduleOnly) return '<span class="badge badge-info">Programado</span>';
+    return `<span class="badge ${group.overdue ? 'badge-danger' : 'badge-warning'}">${group.overdue ? 'Vencido' : 'Pendiente'}</span>`;
+  }
+  const status = paymentStatusForBadge(payment);
+  return badgeEstado(status);
+}
+
+function adminPaymentProofAction(payment = null) {
+  if (!payment?.id) return '';
+  const hasProof = adminPaymentHasProof(payment);
+  return `<button class="btn ${hasProof ? 'btn-primary' : 'btn-outline'} btn-sm" data-action="abrir-pago-admin" data-payment-id="${sanitize(payment.id)}">${hasProof ? 'Ver justificante' : 'Abrir pago'}</button>`;
+}
+
+function renderAdminFamilyPaymentCalendarCard(event = {}) {
+  const group = event.paymentGroup || {};
+  const payment = event.latestPayment || group.latestPayment || null;
+  const classes = group.classes || [];
+  const hasAmount = money(group.amount) > 0;
+  const periodText = group.paymentPeriodStart
+    ? `Clases desde ${formatDateTimeHint(group.paymentPeriodStart)} hasta ${formatDateTimeHint(group.paymentPeriodEnd || group.dueAt)}`
+    : `Vencimiento ${formatFechaCorta(event.fecha || event.date)}`;
+  const rows = classes.slice(0, 6).map((clase) => `
+    <div class="calendar-payout-row ${clase.paymentBucket === 'overdue' ? 'is-overdue' : ''}">
+      <span>${sanitize(formatFechaCorta(clase.date))}${clase.startTime ? ` ${sanitize(formatHora(clase.startTime))}` : ''}</span>
+      <strong>${clase.paymentBucket === 'overdue' ? '<em>Impago</em> ' : ''}${sanitize(clase.subject || 'Clase')}</strong>
+      <em>${sanitize(formatEuros(clase.amount || 0))}</em>
+    </div>
+  `).join('');
+  const extra = classes.length > 6
+    ? `<div class="calendar-payout-more">+${classes.length - 6} clase(s) mas en este pago</div>`
+    : '';
+  const paymentMeta = payment
+    ? `<div class="calendar-payment-period">Justificante: ${sanitize(payment.concepto || payment.referencia || payment.reference || payment.id)} · ${sanitize(formatEuros(paymentAmount(payment)))}</div>`
+    : '<div class="calendar-payment-period">Todavia no consta justificante subido para este vencimiento.</div>';
+  return `
+    <div class="clase-item calendar-payment-due-item admin-family-payment-event ${group.overdue ? 'is-overdue' : ''}" style="padding:12px 16px">
+      <div class="clase-time calendar-payment-due-time">
+        <div class="clase-time-hora">Pago</div>
+        <div class="clase-time-fin">${sanitize(formatFechaCorta(event.fecha || event.date))}</div>
+      </div>
+      <div class="clase-info">
+        <div class="clase-nombre">${sanitize(group.familyName || 'Familia pendiente de nombre')}</div>
+        <div class="clase-materia">${sanitize(group.studentName || 'Alumno pendiente de nombre')} · ${sanitize(group.teacherName || 'Profesor pendiente de nombre')}</div>
+        <div class="calendar-payment-period">${sanitize(periodText)}</div>
+        ${paymentMeta}
+        <div class="calendar-payout-summary">
+          ${adminPaymentStatusLabel(payment, group)}
+          <strong>${hasAmount ? sanitize(formatEuros(group.amount)) : 'Sin importe pendiente'}</strong>
+        </div>
+        ${hasAmount && group.hasOverdueCarryover ? `
+          <div class="calendar-payment-split">
+            <span>Este periodo: ${sanitize(formatEuros(group.currentPeriodAmount || 0))}</span>
+            <span>Impagado anterior: ${sanitize(formatEuros(group.overdueAmount || 0))}</span>
+          </div>
+        ` : ''}
+        <div class="calendar-payout-detail">
+          ${rows || '<div class="calendar-payout-empty">Dia de pago configurado. No hay clases pendientes agrupadas en este vencimiento.</div>'}
+          ${extra}
+        </div>
+        <div class="calendar-class-actions">
+          ${adminPaymentProofAction(payment)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderAdminTeacherPayoutCalendarCard(event = {}) {
+  const classes = event.payoutClasses || [];
+  const total = money(event.payoutAmount);
+  const rows = classes.slice(0, 8).map((clase) => {
+    const studentName = adminPersonName('Alumno', firstAdminValue(clase.studentId, clase.alumno_id), clase.alumno_nombre, clase.studentName);
+    return `
+      <div class="calendar-payout-row">
+        <span>${sanitize(formatFechaCorta(adminClassDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
+        <strong>${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
+        <em>${sanitize(formatEuros(classTeacherAmount(clase)))}</em>
+      </div>
+    `;
+  }).join('');
+  const extra = classes.length > 8
+    ? `<div class="calendar-payout-more">+${classes.length - 8} clase(s) mas en este periodo</div>`
+    : '';
+  return `
+    <div class="clase-item calendar-payout-item admin-teacher-payout-event" style="padding:12px 16px">
+      <div class="clase-time calendar-payout-time">
+        <div class="clase-time-hora">Cobro</div>
+        <div class="clase-time-fin">${sanitize(formatFechaCorta(event.payoutDate))}</div>
+      </div>
+      <div class="clase-info">
+        <div class="clase-nombre">${sanitize(event.teacherName || 'Profesor pendiente de nombre')}</div>
+        <div class="clase-materia">${sanitize(event.payoutFrequencyLabel || 'Dia de cobro')} · Periodo ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</div>
+        <div class="calendar-payout-summary">
+          <span class="badge ${total > 0 ? 'badge-navy' : 'badge-gray'}">${classes.length} clase(s)</span>
+          <strong>${sanitize(formatEuros(total))}</strong>
+        </div>
+        <div class="calendar-payout-detail">
+          ${rows || '<div class="calendar-payout-empty">No hay clases dadas pendientes de liquidar para este profesor en este periodo.</div>'}
+          ${extra}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function mostrarClasesDiaEconomico(fecha, clases) {
   document.getElementById('cal-dia-titulo').textContent = formatFechaCorta(fecha) + ` (${clases.length})`;
   const cont = document.getElementById('cal-clases-dia');
@@ -3235,7 +4571,10 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     cont.innerHTML = '<div class="empty-state"><div class="empty-icon">OK</div><div class="empty-title">Sin clases</div><div class="empty-desc">No hay actividad programada ni riesgo economico este dia.</div></div>';
     return;
   }
-  const enriched = clases
+  const familyPaymentEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_family_payment_day');
+  const teacherPayoutEvents = (clases || []).filter((item) => item.calendarEventType === 'admin_teacher_payout_day');
+  const classItems = (clases || []).filter((item) => !item.calendarEventType);
+  const enriched = classItems
     .map((clase) => ({ clase, economic: economicStateForAdminClass(clase) }))
     .sort((a, b) => a.economic.sortRank - b.economic.sortRank || String(a.clase.hora_inicio || '').localeCompare(String(b.clase.hora_inicio || '')));
   const totals = enriched.reduce((acc, item) => {
@@ -3245,15 +4584,21 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     acc[item.economic.state] = (acc[item.economic.state] || 0) + 1;
     return acc;
   }, { family: 0, teacher: 0, margin: 0 });
+  const familyDueAmount = roundMoney(familyPaymentEvents.reduce((sum, event) => sum + money(event.paymentGroup?.amount || event.amount), 0));
+  const teacherDueAmount = roundMoney(teacherPayoutEvents.reduce((sum, event) => sum + money(event.payoutAmount), 0));
   const kpis = [
     ['Facturacion', formatEuros(totals.family)],
     ['Profesor', formatEuros(totals.teacher)],
     ['Margen', formatEuros(totals.margin)],
+    ['Pagos familia', formatEuros(familyDueAmount)],
+    ['Cobros profesor', formatEuros(teacherDueAmount)],
     ['Alertas', String((totals.missing_amount || 0) + (totals.missing_teacher_amount || 0) + (totals.overdue || 0) + (totals.rejected || 0) + (totals.in_review || 0))],
   ].map(([label, value]) => `<div class="admin-calendar-kpi"><span>${sanitize(label)}</span><strong>${sanitize(value)}</strong></div>`).join('');
 
   cont.innerHTML = `
     <div class="admin-calendar-day-summary">${kpis}</div>
+    ${familyPaymentEvents.map(renderAdminFamilyPaymentCalendarCard).join('')}
+    ${teacherPayoutEvents.map(renderAdminTeacherPayoutCalendarCard).join('')}
     ${enriched.map(({ clase: c, economic }) => {
       const dueText = economic.dueAt ? `Limite: ${formatDateTimeHint(economic.dueAt)}` : 'Sin limite semanal definido';
       const attendance = classAttendanceState(c);
@@ -3272,7 +4617,7 @@ function mostrarClasesDiaEconomico(fecha, clases) {
         c.teacherDisplayName,
       );
       const paymentLink = economic.linkedFamilyPaymentId
-        ? `<button class="btn btn-ghost btn-sm" data-action="abrir-pago-admin" data-payment-id="${sanitize(economic.linkedFamilyPaymentId)}">Ver pago</button>`
+        ? `<button class="btn btn-ghost btn-sm" data-action="abrir-pago-admin" data-payment-id="${sanitize(economic.linkedFamilyPaymentId)}">Ver justificante</button>`
         : '';
       return `
     <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}">
@@ -3351,7 +4696,47 @@ document.getElementById('cal-clases-dia')?.addEventListener('change', async (eve
   if (attendanceSelect) await actualizarAsistenciaAdminDesdeCalendario(attendanceSelect);
 });
 
-document.getElementById('cal-clases-dia')?.addEventListener('click', (event) => {
+async function abrirJustificantePagoAdmin(paymentId = '') {
+  const id = cleanAdminNotificationText(paymentId, 180);
+  if (!id) return;
+  try {
+    const { data: pago, error } = await db.from('pagos')
+      .select('*, documentos(id,nombre,storage_path)')
+      .eq('id', id)
+      .single();
+    if (error) throw error;
+    let doc = Array.isArray(pago?.documentos) ? pago.documentos[0] : pago?.documentos;
+    const documentId = pago?.documentId || pago?.documento_id || doc?.id || '';
+    if (!doc?.storage_path && documentId) {
+      const { data: docData } = await db.from('documentos')
+        .select('id,nombre,storage_path')
+        .eq('id', documentId)
+        .single();
+      doc = docData || doc;
+    }
+    const storagePath = doc?.storage_path || doc?.storagePath || pago?.storage_path || pago?.storagePath || pago?.proofPath || '';
+    if (storagePath) {
+      await verDocumento(doc?.id || documentId || id, doc?.nombre || pago?.concepto || 'Justificante de pago', storagePath);
+      return;
+    }
+    const directUrl = pago?.proofUrl || pago?.receiptUrl || pago?.url || '';
+    if (directUrl) {
+      window.open(directUrl, '_blank', 'noopener');
+      return;
+    }
+    document.getElementById('filtro-pago-busqueda').value = id;
+    irA('pagos');
+    await cargarPagos();
+    showToast('Pago localizado', 'Este pago no tiene archivo visible. Revisa el registro completo en Pagos.', 'warning');
+  } catch (error) {
+    document.getElementById('filtro-pago-busqueda').value = id;
+    irA('pagos');
+    await cargarPagos();
+    showToast('Revisa el pago', error.message || 'No se pudo abrir el justificante directamente.', 'warning');
+  }
+}
+
+document.getElementById('cal-clases-dia')?.addEventListener('click', async (event) => {
   const editBtn = event.target.closest('[data-action="editar-clase"]');
   if (editBtn?.dataset.id) {
     window.editarClase(editBtn.dataset.id);
@@ -3359,9 +4744,7 @@ document.getElementById('cal-clases-dia')?.addEventListener('click', (event) => 
   }
   const paymentBtn = event.target.closest('[data-action="abrir-pago-admin"]');
   if (paymentBtn) {
-    document.getElementById('filtro-pago-busqueda').value = paymentBtn.dataset.paymentId || '';
-    irA('pagos');
-    cargarPagos();
+    await abrirJustificantePagoAdmin(paymentBtn.dataset.paymentId || '');
   }
 });
 
@@ -3383,6 +4766,64 @@ function listaCampo(valor) {
   if (Array.isArray(valor)) return valor.filter(Boolean);
   if (!valor) return [];
   return String(valor).split(',').map((item) => item.trim()).filter(Boolean);
+}
+
+function adminPhotoUrl(entity = {}) {
+  return entity.foto_url
+    || entity.photoUrl
+    || entity.profilePhotoUrl
+    || entity.avatarUrl
+    || entity.photoURL
+    || entity.foto
+    || '';
+}
+
+function renderAdminDirectoryAvatar(name = '', photoUrl = '', role = '') {
+  const safePhoto = sanitize(photoUrl || '');
+  return `<div class="admin-directory-avatar ${safePhoto ? 'has-image' : ''} ${role ? `admin-directory-avatar-${sanitize(role)}` : ''}">
+    ${safePhoto ? `<img src="${safePhoto}" alt="Foto de ${sanitize(name)}" loading="lazy">` : `<span>${sanitize(getIniciales(name, ''))}</span>`}
+  </div>`;
+}
+
+function renderAdminMiniChips(items = []) {
+  return items
+    .filter((item) => item && String(item).trim())
+    .slice(0, 3)
+    .map((item) => `<span>${sanitize(item)}</span>`)
+    .join('');
+}
+
+function renderAdminDirectoryCard({
+  type = '',
+  id = '',
+  name = '',
+  photoUrl = '',
+  subtitle = '',
+  chips = [],
+  status = '',
+  trust = '',
+  actions = '',
+  checkbox = '',
+  meta = '',
+} = {}) {
+  return `
+    <article class="admin-directory-card admin-directory-card-${sanitize(type)}" data-admin-directory-card="${sanitize(type)}" data-id="${sanitize(id)}">
+      ${checkbox ? `<div class="admin-directory-select">${checkbox}</div>` : ''}
+      <div class="admin-directory-main">
+        ${renderAdminDirectoryAvatar(name, photoUrl, type)}
+        <div class="admin-directory-copy">
+          <button class="admin-directory-name" type="button" data-action="ver-${sanitize(type)}" data-id="${sanitize(id)}">${sanitize(name)}</button>
+          ${subtitle ? `<div class="admin-directory-subtitle">${sanitize(subtitle)}</div>` : ''}
+          ${chips.length ? `<div class="admin-directory-chips">${renderAdminMiniChips(chips)}</div>` : ''}
+        </div>
+      </div>
+      ${status || trust || meta ? `<div class="admin-directory-status">
+        ${status || ''}
+        ${trust || ''}
+        ${meta ? `<div class="admin-directory-meta">${sanitize(meta)}</div>` : ''}
+      </div>` : ''}
+      ${actions ? `<div class="admin-directory-actions">${actions}</div>` : ''}
+    </article>`;
 }
 
 function incidenciasPerfilProfesor(p) {
@@ -3447,15 +4888,32 @@ function timestampMillis(value) {
 
 async function safeListFirestore(collectionName) {
   try {
-    const snap = await getDocs(firestoreQuery(
-      collection(firebaseDb, collectionName),
-      firestoreLimit(adminReadLimit(collectionName)),
-    ));
+    const snap = await withTimeout(
+      getDocs(firestoreQuery(
+        collection(firebaseDb, collectionName),
+        firestoreLimit(adminReadLimit(collectionName)),
+      )),
+      9000,
+      null,
+      collectionName,
+    );
+    if (!snap) return [];
     return snap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
   } catch (error) {
     console.warn(`No se pudo cargar ${collectionName} para confianza`, error);
     return [];
   }
+}
+
+function withTimeout(promise, ms = 9000, fallback = null, label = 'operacion') {
+  let timer = null;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`Timeout cargando ${label}`);
+      resolve(fallback);
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 async function cargarTrustContextFirestore() {
@@ -3716,6 +5174,158 @@ function renderCrmList(items, empty, renderer) {
   return items.map(renderer).join('');
 }
 
+function adminCompleteValueAt(entity = {}, path = '') {
+  return String(path || '').split('.').reduce((acc, key) => {
+    if (acc === undefined || acc === null) return undefined;
+    return acc[key];
+  }, entity);
+}
+
+function adminCompleteFirstValue(entity = {}, paths = []) {
+  for (const path of paths) {
+    const value = adminCompleteValueAt(entity, path);
+    if (value !== undefined && value !== null && !(typeof value === 'string' && !value.trim())) return value;
+  }
+  return undefined;
+}
+
+function adminCompleteNormalizeValue(value, key = '') {
+  if (/password|passwd|token|secret|credential|apikey|api_key|refresh/i.test(String(key || ''))) {
+    return '[oculto por seguridad]';
+  }
+  if (value === undefined || value === null) return null;
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString();
+  if (typeof value?.seconds === 'number') return new Date(value.seconds * 1000).toISOString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map((item) => adminCompleteNormalizeValue(item));
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([itemKey, itemValue]) => [itemKey, adminCompleteNormalizeValue(itemValue, itemKey)])
+    );
+  }
+  return value;
+}
+
+function adminCompleteDisplayValue(value) {
+  const normalized = adminCompleteNormalizeValue(value);
+  if (normalized === null || normalized === undefined || normalized === '') return '-';
+  if (typeof normalized === 'boolean') return normalized ? 'Si' : 'No';
+  if (Array.isArray(normalized)) {
+    if (!normalized.length) return '-';
+    if (normalized.every((item) => typeof item !== 'object')) return normalized.join(', ');
+    return JSON.stringify(normalized, null, 2);
+  }
+  if (typeof normalized === 'object') return JSON.stringify(normalized, null, 2);
+  return String(normalized);
+}
+
+function renderAdminCompleteField(label, value) {
+  const text = adminCompleteDisplayValue(value);
+  const isLong = text.length > 90 || text.includes('\n') || text.includes('{') || text.includes('[');
+  return `<div class="admin-complete-profile-field ${isLong ? 'is-long' : ''}">
+    <span>${sanitize(label)}</span>
+    ${isLong ? `<pre>${sanitize(text)}</pre>` : `<strong>${sanitize(text)}</strong>`}
+  </div>`;
+}
+
+function renderAdminCompleteSection(title, fields = [], entity = {}) {
+  const html = fields.map(([label, paths]) => renderAdminCompleteField(label, adminCompleteFirstValue(entity, paths))).join('');
+  return `<section class="admin-complete-profile-section">
+    <h4>${sanitize(title)}</h4>
+    <div class="admin-complete-profile-grid">${html}</div>
+  </section>`;
+}
+
+function renderAdminCompleteProfile(entity = {}, type = 'profesor') {
+  if (type !== 'profesor') return '';
+  const groups = [
+    ['Identidad y contacto', [
+      ['ID interno', ['id', 'uid', 'userUid', 'usuario_id', 'profesor_id']],
+      ['Nombre', ['displayName', 'name', 'nombre', 'usuarios.nombre']],
+      ['Apellidos', ['apellidos', 'usuarios.apellidos']],
+      ['Email', ['email', 'usuarios.email']],
+      ['Telefono', ['telefono', 'phone', 'usuarios.telefono']],
+      ['Documento identidad', ['dni', 'nif', 'documentNumber', 'documento_identidad']],
+      ['Foto', ['foto_url', 'photoUrl', 'profilePhotoUrl', 'avatarUrl', 'photoURL', 'foto']],
+    ]],
+    ['Estado y verificacion', [
+      ['Estado verificacion', ['estado_verificacion', 'verificationStatus', 'status', 'estado']],
+      ['Activo', ['active', 'activo']],
+      ['Perfil completo', ['profileComplete', 'perfilCompleto']],
+      ['Completitud perfil', ['profileCompletionPercent', 'profileCompletion', 'completionPercent']],
+      ['Confianza', ['trustScore', 'trustProfile.score']],
+      ['Nivel confianza', ['trustLevel', 'trustProfile.level', 'trustProfile.trustLevel']],
+      ['Creado', ['createdAt', 'created_at']],
+      ['Actualizado', ['updatedAt', 'updated_at']],
+    ]],
+    ['Formacion y experiencia', [
+      ['Colegio', ['colegio', 'school', 'schoolName', 'colegio_estudio']],
+      ['Universidad / centro', ['universidad', 'university', 'centro_superior', 'higherEducationCenter']],
+      ['Grado / titulacion', ['grado', 'degree', 'titulacion', 'estudio_exacto', 'formacion_principal']],
+      ['Tipo formacion', ['tipo_formacion', 'mainTrainingType', 'educationType']],
+      ['Experiencia', ['experiencia', 'experience', 'teachingExperience']],
+      ['Bio / presentacion', ['bio', 'descripcion', 'presentacion', 'about', 'profileSummary']],
+    ]],
+    ['Materias, niveles y disponibilidad', [
+      ['Materias', ['materias', 'subjects', 'materias_actividades', 'teachingSubjects']],
+      ['Ambitos', ['ambitos', 'categories', 'teachingAreas']],
+      ['Niveles', ['niveles', 'levels', 'etapas', 'cursos', 'teachingLevels']],
+      ['Idiomas', ['idiomas', 'languages']],
+      ['Disponibilidad', ['disponibilidad', 'availability', 'weeklyAvailability', 'franjas', 'horarios']],
+    ]],
+    ['Ubicacion y movilidad', [
+      ['Direccion', ['direccion', 'address', 'streetAddress']],
+      ['Codigo postal', ['codigo_postal', 'cp', 'postalCode']],
+      ['Ciudad', ['ciudad', 'city']],
+      ['Provincia', ['provincia', 'province']],
+      ['Coordenadas', ['coordinates', 'location', 'geo']],
+      ['Tiene coche', ['hasCar', 'tiene_coche', 'carAvailable']],
+      ['Movilidad', ['mobility', 'movilidad', 'transportMode']],
+    ]],
+    ['Cobro y operacion', [
+      ['Tarifa profesor/h', ['teacherHourlyRate', 'tarifa_hora_profesor', 'importe_hora_profesor', 'hourlyRate']],
+      ['Comision', ['comision_porcentaje', 'commissionPct', 'commissionPercent']],
+      ['Bizum telefono', ['bizumPhone', 'telefono_bizum', 'bizumTelefono']],
+      ['Bizum titular', ['bizumName', 'titular_bizum', 'bizumTitular']],
+      ['Frecuencia cobro', ['teacherPayoutFrequency', 'frecuencia_cobro', 'payoutFrequency']],
+      ['Dia de cobro', ['teacherPayoutAnchorDate', 'dia_cobro', 'payoutAnchorDate']],
+      ['Notas admin', ['adminNotes', 'notas_admin', 'internalNotes']],
+    ]],
+  ];
+  const usedTopLevel = new Set(groups.flatMap(([, fields]) => fields.flatMap(([, paths]) => paths.map((path) => String(path).split('.')[0]))));
+  const extraKeys = Object.keys(entity || {})
+    .filter((key) => !usedTopLevel.has(key))
+    .sort((a, b) => a.localeCompare(b));
+  const extraFields = extraKeys.map((key) => renderAdminCompleteField(key, entity[key])).join('');
+  const rawJson = JSON.stringify(adminCompleteNormalizeValue(entity), null, 2);
+  return `<details class="admin-complete-profile" id="admin-profesor-ficha-completa-${sanitize(entity.id || entity.userUid || '')}">
+    <summary>
+      <span>Ficha completa / auditoria</span>
+      <small>Toda la informacion guardada del profesor para verificar identidad, perfil y operacion.</small>
+    </summary>
+    <div class="admin-complete-profile-body">
+      <div class="alert alert-info" style="margin:0">
+        <span class="alert-icon">i</span>
+        <div class="alert-body">
+          <div class="alert-title">Vista interna de auditoria</div>
+          Aqui aparece la ficha completa del profesor y el registro bruto. Solo se ocultan credenciales tecnicas si existieran.
+        </div>
+      </div>
+      ${groups.map(([title, fields]) => renderAdminCompleteSection(title, fields, entity)).join('')}
+      ${extraFields ? `<section class="admin-complete-profile-section">
+        <h4>Otros campos del registro</h4>
+        <div class="admin-complete-profile-grid">${extraFields}</div>
+      </section>` : ''}
+      <section class="admin-complete-profile-section admin-complete-profile-raw">
+        <h4>JSON completo del perfil</h4>
+        <pre>${sanitize(rawJson)}</pre>
+      </section>
+    </div>
+  </details>`;
+}
+
 function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
   const data = buildCrmDataset(entity, type, context);
   const trust = entity.trustProfile || (type === 'familia' ? buildFamilyTrustProfile(entity, context) : buildTeacherTrustProfile(entity, context));
@@ -3743,6 +5353,11 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
           ${crmBadge(entity.estado_verificacion || entity.verificationStatus || entity.status || entity.estado || 'activo')}
         </div>
       </div>
+      ${type === 'profesor' ? `<div class="admin-profile-actions">
+        <button class="btn btn-primary btn-sm" data-action="cambiar-verificacion" data-id="${entityId}" data-estado="verificado">Verificar profesor</button>
+        <button class="btn btn-outline btn-sm" data-action="cambiar-verificacion" data-id="${entityId}" data-estado="pendiente_revision">Enviar a revision</button>
+        <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${entityId}" data-estado="rechazado">Rechazar</button>
+      </div>` : ''}
       <div class="trust-public-stats" style="margin-bottom:14px">
         <div><strong>${sanitize(data.classes.length)}</strong><span>clases</span></div>
         <div><strong>${sanitize(metrics.completedClasses ?? 0)}</strong><span>realizadas</span></div>
@@ -3751,6 +5366,7 @@ function renderCrmFicha(entity = {}, type = 'profesor', context = {}) {
         <div><strong>${sanitize(openIncidents.length)}</strong><span>incidencias abiertas</span></div>
         <div><strong>${sanitize(openTasks.length)}</strong><span>tareas abiertas</span></div>
       </div>
+      ${renderAdminCompleteProfile(entity, type)}
       ${renderTrustPanel(trust)}
       ${aiSummary ? `<div style="margin-top:14px">${renderProfesorAiPanel(entity)}</div>` : ''}
       <div class="crm-profile-main-grid">
@@ -4093,10 +5709,17 @@ function mapProfesorFirestore(docSnap) {
 
 async function cargarProfesoresFirestore() {
   if (profesoresFirestoreCache) return profesoresFirestoreCache;
-  const [snap, trustContext] = await Promise.all([
+  const snap = await withTimeout(
     getDocs(firestoreQuery(collection(firebaseDb, 'profesores'), firestoreLimit(adminReadLimit('profesores')))),
-    cargarTrustContextFirestore(),
-  ]);
+    12000,
+    null,
+    'profesores',
+  );
+  if (!snap) {
+    profesoresFirestoreCache = [];
+    return profesoresFirestoreCache;
+  }
+  const trustContext = trustContextCache || {};
   profesoresFirestoreCache = snap.docs
     .map((docSnap) => {
       const profesor = mapProfesorFirestore(docSnap);
@@ -4120,7 +5743,13 @@ function mapDoc(docSnap) {
 }
 
 async function cargarColeccionMap(nombreColeccion) {
-  const snap = await getDocs(firestoreQuery(collection(firebaseDb, nombreColeccion), firestoreLimit(adminReadLimit(nombreColeccion))));
+  const snap = await withTimeout(
+    getDocs(firestoreQuery(collection(firebaseDb, nombreColeccion), firestoreLimit(adminReadLimit(nombreColeccion)))),
+    9000,
+    null,
+    nombreColeccion,
+  );
+  if (!snap) return new Map();
   return new Map(snap.docs.map((docSnap) => [docSnap.id, { id: docSnap.id, ...docSnap.data() }]));
 }
 
@@ -4390,43 +6019,30 @@ async function cargarProfesores() {
 
   const tbodyProfesores = document.getElementById('tbody-profesores');
   if (!filtradoFirestore.length) {
-    tbodyProfesores.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
+    tbodyProfesores.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>';
     return;
   }
 
   profesoresCache = new Map(filtradoFirestore.map((p) => [p.id, p]));
   const paginaFirestore = filtradoFirestore.slice(PAG_PROF.offset(), PAG_PROF.offset() + 20);
 
-  tbodyProfesores.innerHTML = paginaFirestore.map(p => `<tr>
-    <td><input type="checkbox" class="crm-prof-check" data-id="${sanitize(p.id)}" ${selectedProfesores.has(p.id) ? 'checked' : ''} aria-label="Seleccionar profesor"></td>
-    <td>
-      <div style="display:flex;align-items:center;gap:10px">
-        <div class="avatar">${getIniciales(nombreProfesor(p), '')}</div>
-        <div>
-          <div style="font-weight:600">${sanitize(nombreProfesor(p))}</div>
-          <div style="font-size:.75rem;color:var(--gray-mid)">${sanitize(p.ciudad||'Madrid')}</div>
-        </div>
-      </div>
-    </td>
-    <td>${sanitize(p.usuarios?.email || p.email || '')}</td>
-    <td>${sanitize(p.usuarios?.telefono || p.telefono || '-')}</td>
-    <td style="font-size:.78rem">${(p.materias||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'-'}</td>
-    <td>${Number.isFinite(Number(p.comision_porcentaje)) ? Number(p.comision_porcentaje) : 0}%</td>
-    <td>
-      ${badgeEstado(p.estado_verificacion || p.verificationStatus || 'pendiente')}
-      ${renderProfesorAiStatus(p)}
-    </td>
-    <td>
-      ${renderTrustBadge(p.trustScore, p.trustLevel)}
-      <div class="trust-badges trust-badges-compact">${renderTrustBadges(p.trustBadges, 2)}</div>
-    </td>
-    <td>-</td>
-    <td>
-      <button class="btn btn-ghost btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Abrir CRM</button>
-      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="verificado">Verificar</button>
-      <button class="btn btn-ghost btn-sm" data-action="cambiar-verificacion" data-id="${sanitize(p.id)}" data-estado="rechazado">Rechazar</button>
-    </td>
-  </tr>`).join('');
+  tbodyProfesores.innerHTML = paginaFirestore.map((p) => {
+    const name = nombreProfesor(p);
+    return `<tr class="admin-directory-row">
+      <td colspan="9">
+        ${renderAdminDirectoryCard({
+          type: 'profesor',
+          id: p.id,
+          name,
+          photoUrl: adminPhotoUrl(p),
+          checkbox: `<input type="checkbox" class="crm-prof-check" data-id="${sanitize(p.id)}" ${selectedProfesores.has(p.id) ? 'checked' : ''} aria-label="Seleccionar profesor">`,
+          actions: `
+            <button class="btn btn-primary btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver ficha</button>
+          `,
+        })}
+      </td>
+    </tr>`;
+  }).join('');
   updateBulkSelectionBadges();
   return;
 
@@ -4579,7 +6195,11 @@ document.getElementById('tbody-profesores')?.addEventListener('click', (e) => {
     return;
   }
   const btn = e.target.closest('[data-action="cambiar-verificacion"]');
-  if (!btn) return;
+  if (!btn) {
+    const card = e.target.closest('[data-admin-directory-card="profesor"]');
+    if (card && !e.target.closest('button,input,a,label')) window.verProfesor(card.dataset.id);
+    return;
+  }
   window.cambiarVerificacion(btn.dataset.id, btn.dataset.estado);
 });
 
@@ -4688,11 +6308,20 @@ function mapFamiliaFirestore(docSnap, user = {}) {
 
 async function cargarFamiliasFirestore() {
   if (familiasFirestoreCache) return familiasFirestoreCache;
-  const [familiasSnap, usersMap, trustContext] = await Promise.all([
-    getDocs(firestoreQuery(collection(firebaseDb, 'familias'), firestoreLimit(adminReadLimit('familias')))),
+  const [familiasSnap, usersMap] = await Promise.all([
+    withTimeout(
+      getDocs(firestoreQuery(collection(firebaseDb, 'familias'), firestoreLimit(adminReadLimit('familias')))),
+      12000,
+      null,
+      'familias',
+    ),
     cargarColeccionMap('users'),
-    cargarTrustContextFirestore(),
   ]);
+  if (!familiasSnap) {
+    familiasFirestoreCache = [];
+    return familiasFirestoreCache;
+  }
+  const trustContext = trustContextCache || {};
 
   familiasFirestoreCache = familiasSnap.docs
     .map((docSnap) => {
@@ -4747,20 +6376,21 @@ async function cargarFamilias() {
 
   const pagina = data.slice(PAG_FAM.offset(), PAG_FAM.offset() + 20);
   familiasCache = new Map(data.map((f) => [f.id, f]));
-  tbody.innerHTML = pagina.map(f => `<tr>
-    <td><input type="checkbox" class="crm-fam-check" data-id="${sanitize(f.id)}" ${selectedFamilias.has(f.id) ? 'checked' : ''} aria-label="Seleccionar familia"></td>
-    <td>
-      <div style="font-weight:600">${sanitize(nombreFamilia(f))}</div>
-      <div class="trust-badges trust-badges-compact">${renderTrustBadges(f.trustBadges, 2)}</div>
-    </td>
-    <td>${sanitize(f.usuarios?.email||'')}</td>
-    <td>${sanitize(f.usuarios?.telefono||'-')}</td>
-    <td>${sanitize([f.zona || f.zone, f.ciudad || f.city || 'Madrid', f.codigo_postal || f.postalCode].filter(Boolean).join(', '))}</td>
-    <td>${f.profileCompletionPercent !== undefined ? `${sanitize(f.profileCompletionPercent)}%` : '-'}</td>
-    <td>${renderTrustBadge(f.trustScore, f.trustLevel)}</td>
-    <td style="font-size:.78rem;color:var(--gray-mid)">${crmDateShort(f.created_at || f.createdAt)}</td>
-    <td><button class="btn btn-ghost btn-sm" data-action="ver-familia" data-id="${sanitize(f.id)}">Abrir CRM</button></td>
-  </tr>`).join('');
+  tbody.innerHTML = pagina.map((f) => {
+    const name = nombreFamilia(f);
+    return `<tr class="admin-directory-row">
+      <td colspan="9">
+        ${renderAdminDirectoryCard({
+          type: 'familia',
+          id: f.id,
+          name,
+          photoUrl: adminPhotoUrl(f),
+          checkbox: `<input type="checkbox" class="crm-fam-check" data-id="${sanitize(f.id)}" ${selectedFamilias.has(f.id) ? 'checked' : ''} aria-label="Seleccionar familia">`,
+          actions: `<button class="btn btn-primary btn-sm" data-action="ver-familia" data-id="${sanitize(f.id)}">Ver ficha</button>`,
+        })}
+      </td>
+    </tr>`;
+  }).join('');
   updateBulkSelectionBadges();
 }
 function renderFamiliaDetalle(f) {
@@ -4799,9 +6429,11 @@ document.getElementById('tbody-familias')?.addEventListener('click', (e) => {
     return;
   }
   const btn = e.target.closest('[data-action="ver-familia"]');
-  if (!btn) return;
-  const familia = familiasCache.get(btn.dataset.id);
-  crmActivo = { type: 'familia', id: btn.dataset.id, entity: familia };
+  const card = e.target.closest('[data-admin-directory-card="familia"]');
+  const id = btn?.dataset.id || (!e.target.closest('button,input,a,label') ? card?.dataset.id : '');
+  if (!id) return;
+  const familia = familiasCache.get(id);
+  crmActivo = { type: 'familia', id, entity: familia };
   cargarTrustContextFirestore().then((context) => {
     document.getElementById('familia-detalle-body').innerHTML = renderCrmFicha(familia, 'familia', context);
     openModal('modal-familia-detalle');
@@ -4812,6 +6444,11 @@ document.getElementById('tbody-familias')?.addEventListener('click', (e) => {
 });
 
 document.addEventListener('click', async (event) => {
+  const verificationBtn = event.target.closest('[data-action="cambiar-verificacion"]');
+  if (verificationBtn) {
+    await window.cambiarVerificacion?.(verificationBtn.dataset.id, verificationBtn.dataset.estado);
+    return;
+  }
   const noteBtn = event.target.closest('[data-action="crm-add-note"]');
   if (noteBtn) {
     await addCrmNote(noteBtn.dataset.crmType, noteBtn.dataset.crmId, document.getElementById('crm-note-body')?.value || '');
@@ -4867,6 +6504,53 @@ document.getElementById('btn-export-familias').addEventListener('click', async (
 // ALUMNOS
 const PAG_ALUM = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-alumnos'), onPageChange: cargarAlumnos });
 
+function nombreAlumno(a = {}) {
+  return [a.nombre, a.apellidos].filter(Boolean).join(' ').trim() || 'Alumno';
+}
+
+function renderAlumnoDetalle(a = {}) {
+  const familia = [a.familias?.usuarios?.nombre, a.familias?.usuarios?.apellidos].filter(Boolean).join(' ').trim() || '-';
+  const materias = listaCampo(a.materias_necesita || a.subjects || a.materias);
+  const fila = (label, value) => `<div><strong>${sanitize(label)}</strong><span>${sanitize(value || '-')}</span></div>`;
+  return `
+    <div class="admin-profile-sheet">
+      <div class="admin-profile-hero">
+        ${renderAdminDirectoryAvatar(nombreAlumno(a), adminPhotoUrl(a), 'alumno')}
+        <div>
+          <span class="section-eyebrow">Alumno</span>
+          <h3>${sanitize(nombreAlumno(a))}</h3>
+          <p>${sanitize([a.nivel_educativo, a.curso, a.colegio].filter(Boolean).join(' · ') || 'Sin nivel detallado')}</p>
+        </div>
+        ${badgeEstado(a.activo ? 'activo' : 'inactivo')}
+      </div>
+      <div class="admin-profile-grid">
+        ${fila('Familia', familia)}
+        ${fila('Nivel / curso', [a.nivel_educativo, a.curso].filter(Boolean).join(' '))}
+        ${fila('Colegio / centro', a.colegio)}
+        ${fila('Materias', materias.join(', '))}
+        ${fila('Fecha alta', crmDateShort(a.created_at || a.createdAt))}
+        ${fila('Identificador', a.id)}
+      </div>
+    </div>`;
+}
+
+function abrirAlumnoDetalle(id) {
+  const alumno = alumnosCache.get(id);
+  if (!alumno) return;
+  alumnoDetalleActivoId = id;
+  document.getElementById('alumno-detalle-body').innerHTML = renderAlumnoDetalle(alumno);
+  openModal('modal-alumno-detalle');
+}
+
+function cargarAlumnoEnFormulario(a = {}) {
+  document.getElementById('edit-alum-id').value = a.id || '';
+  document.getElementById('edit-alum-nombre').value = a.nombre || '';
+  document.getElementById('edit-alum-apellidos').value = a.apellidos || '';
+  document.getElementById('edit-alum-nivel').value = a.nivel_educativo || '';
+  document.getElementById('edit-alum-curso').value = a.curso || '';
+  document.getElementById('edit-alum-colegio').value = a.colegio || '';
+}
+
 async function cargarAlumnos() {
   const busq = document.getElementById('filtro-alum-busqueda').value.trim();
   let q = db.from('alumnos').select('*, familias(usuarios(nombre,apellidos))', {count:'exact'}).eq('activo',true);
@@ -4880,26 +6564,24 @@ async function cargarAlumnos() {
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin resultados.</td></tr>'; return; }
 
   const filtrado = busq ? data.filter(a => `${a.nombre} ${a.apellidos}`.toLowerCase().includes(busq.toLowerCase())) : data;
+  alumnosCache = new Map(filtrado.map((a) => [a.id, a]));
 
-  tbody.innerHTML = filtrado.map(a => `<tr>
-    <td><div style="font-weight:600">${sanitize(a.nombre)} ${sanitize(a.apellidos)}</div></td>
-    <td>${sanitize(a.familias?.usuarios?.nombre||'')} ${sanitize(a.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(a.nivel_educativo||'—')} ${sanitize(a.curso||'')}</td>
-    <td style="font-size:.78rem">${(a.materias_necesita||[]).slice(0,3).map(m=>sanitize(m)).join(', ')||'—'}</td>
-    <td>—</td>
-    <td>${badgeEstado(a.activo ? 'verificado' : 'rechazado')}</td>
-    <td>
-      <button class="btn btn-ghost btn-sm btn-icon"
-              data-action="editar-alumno"
-              data-alum-id="${sanitize(a.id)}"
-              data-alum-nombre="${sanitize(a.nombre)}"
-              data-alum-apellidos="${sanitize(a.apellidos)}"
-              data-alum-nivel="${sanitize(a.nivel_educativo||'')}"
-              data-alum-curso="${sanitize(a.curso||'')}"
-              data-alum-colegio="${sanitize(a.colegio||'')}"
-              title="Editar alumno">✏️</button>
-    </td>
-  </tr>`).join('');
+  tbody.innerHTML = filtrado.map((a) => {
+    const name = nombreAlumno(a);
+    return `<tr class="admin-directory-row">
+      <td colspan="7">
+        ${renderAdminDirectoryCard({
+          type: 'alumno',
+          id: a.id,
+          name,
+          photoUrl: adminPhotoUrl(a),
+          actions: `
+            <button class="btn btn-primary btn-sm" data-action="ver-alumno" data-id="${sanitize(a.id)}">Ver ficha</button>
+          `,
+        })}
+      </td>
+    </tr>`;
+  }).join('');
 }
 document.getElementById('filtro-alum-busqueda').addEventListener('input', debounce(cargarAlumnos, 350));
 
@@ -4935,15 +6617,26 @@ document.getElementById('btn-export-alumnos').addEventListener('click', async ()
 
 // Event delegation para editar alumnos
 document.getElementById('tbody-alumnos').addEventListener('click', (e) => {
+  const viewBtn = e.target.closest('[data-action="ver-alumno"]');
+  if (viewBtn) {
+    abrirAlumnoDetalle(viewBtn.dataset.id);
+    return;
+  }
   const btn = e.target.closest('[data-action="editar-alumno"]');
-  if (!btn) return;
-  const ds = btn.dataset;
-  document.getElementById('edit-alum-id').value        = ds.alumId;
-  document.getElementById('edit-alum-nombre').value    = ds.alumNombre;
-  document.getElementById('edit-alum-apellidos').value = ds.alumApellidos;
-  document.getElementById('edit-alum-nivel').value     = ds.alumNivel;
-  document.getElementById('edit-alum-curso').value     = ds.alumCurso;
-  document.getElementById('edit-alum-colegio').value   = ds.alumColegio;
+  if (!btn) {
+    const card = e.target.closest('[data-admin-directory-card="alumno"]');
+    if (card && !e.target.closest('button,input,a,label')) abrirAlumnoDetalle(card.dataset.id);
+    return;
+  }
+  cargarAlumnoEnFormulario(alumnosCache.get(btn.dataset.id) || {});
+  openModal('modal-editar-alumno');
+});
+
+document.getElementById('btn-editar-alumno-desde-detalle')?.addEventListener('click', () => {
+  const alumno = alumnosCache.get(alumnoDetalleActivoId);
+  if (!alumno) return;
+  closeModal('modal-alumno-detalle');
+  cargarAlumnoEnFormulario(alumno);
   openModal('modal-editar-alumno');
 });
 
@@ -5085,7 +6778,7 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     if (detalleProfesor && !completos) {
       detalleProfesor.style.display = '';
       detalleProfesor.innerHTML = profesoresElegibles.length
-        ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, zona, estudios, centro, notas, materias/actividades, niveles, Bizum, disponibilidad y presentacion antes de asignar.</div></div>`
+        ? `<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Hay ${profesoresElegibles.length} profesor(es) activos/verificados, pero ninguno tiene el perfil completo. Completa foto, contacto, direccion, codigo postal, colegio, universidad/centro, grado/titulacion, notas, materias/actividades, niveles, Bizum, disponibilidad y presentacion antes de asignar.</div></div>`
         : '<div class="alert alert-warning" style="margin:0"><span class="alert-icon">!</span><div class="alert-body"><div class="alert-title">No hay profesores asignables</div>Activa o verifica al menos un profesor con perfil completo antes de asignar esta solicitud.</div></div>';
     } else if (detalleProfesor) {
       detalleProfesor.style.display = 'none';
@@ -5551,7 +7244,7 @@ function paymentRejectedNotificationBody(payment = {}, status = 'rechazado', lin
   const familyName = nombreOrigenPago(payment);
   const classCount = linkedClassIds.length;
   const classText = classCount === 1 ? 'la clase vinculada' : `${classCount || 'las'} clases vinculadas`;
-  const statusText = normalizePaymentStatus(status) === 'cancelado' ? 'cancelado' : 'rechazado';
+  const cancelled = normalizePaymentStatus(status) === 'cancelado';
   const reason = cleanAdminNotificationText(
     payment.failureReason
     || payment.rejectionReason
@@ -5561,7 +7254,9 @@ function paymentRejectedNotificationBody(payment = {}, status = 'rechazado', lin
     || '',
     260,
   );
-  return `No hemos podido validar el justificante${amountText} de ${familyName}. El pago queda ${statusText} y vuelve a estar pendiente para ${classText}. Puedes subir un nuevo justificante desde Pagos cuando lo tengas.${reason ? ` Motivo: ${reason}` : ''}`;
+  return cancelled
+    ? `El justificante${amountText} de ${familyName} se ha cancelado y vuelve a estar pendiente para ${classText}. Por favor, envia ahora un justificante valido desde Justificantes para dejarlo al dia.${reason ? ` Motivo: ${reason}` : ''}`
+    : `El justificante${amountText} de ${familyName} no es valido. El pago vuelve a estar pendiente para ${classText}. Por favor, envia ahora un justificante valido desde Justificantes para dejarlo al dia.${reason ? ` Motivo: ${reason}` : ''}`;
 }
 
 async function notifyFamilyPaymentRejected(payment = {}, status = 'rechazado', linkedClassIds = [], nowIso = new Date().toISOString()) {
@@ -5580,7 +7275,7 @@ async function notifyFamilyPaymentRejected(payment = {}, status = 'rechazado', l
     ...buildNotificationDocument({
       userUid: familyUid,
       role: 'familia',
-      title: 'Justificante no validado',
+      title: 'Justificante no valido',
       body: paymentRejectedNotificationBody(payment, status, linkedClassIds),
       type: NOTIFICATION_EVENTS.FAMILY_PAYMENT_REJECTED,
       priority: 'high',
@@ -5593,7 +7288,9 @@ async function notifyFamilyPaymentRejected(payment = {}, status = 'rechazado', l
         classIds: linkedClassIds,
         status: normalizePaymentStatus(status),
         amount: paymentAmount(payment),
-        url: '/pages/login.html',
+        url: '/pages/dashboard/familia.html#pagos',
+        actionLabel: 'Enviar justificante valido',
+        requiresNewProof: true,
       },
     }),
     idempotencyKey: notificationId,
@@ -5671,7 +7368,7 @@ async function notifyPaymentAiReview(payment = {}, review = {}) {
         aiReviewFingerprint: review.fingerprint,
         aiConfidence: review.confidence,
         recommendation: review.recommendation,
-        url: '/pages/dashboard/admin.html#pagos',
+        url: '/pages/dashboard/admin.html#calendario',
       },
     }),
     idempotencyKey: id,
@@ -6001,28 +7698,41 @@ async function cargarLeads() {
 
   const { data, error } = await leads.listPublic({ tipo, estado, max: 100 });
   if (error) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--danger)">Error: ${sanitize(error.message)}</td></tr>`;
     return;
   }
 
   if (!data?.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin leads.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">No hay formularios con estos filtros.</td></tr>';
     return;
   }
 
-  tbody.innerHTML = data.map(l => `<tr>
+  tbody.innerHTML = data.map(l => {
+    const alumno = l.metadata?.alumno || '';
+    const necesidad = l.metadata?.materia || l.asunto || l.mensaje || '';
+    const assisted = l.metadata?.account_mode === 'assisted_parent_activation';
+    const accountLabel = !assisted
+      ? '<span class="muted">No aplica</span>'
+      : l.accountStatus === 'activated'
+        ? `${badgeEstado('activo')}<div class="muted">Cuenta activada</div>`
+        : `${badgeEstado('pendiente')}<div class="muted">Enlace enviado</div>`;
+    return `<tr>
     <td>${formatFechaCorta(l.created_at)}</td>
     <td>${badgeEstado(l.tipo)}</td>
     <td><strong>${sanitize(l.nombre)}</strong></td>
+    <td><strong>${sanitize(alumno || '-')}</strong><br><span class="muted" title="${sanitize(necesidad)}">${sanitize(necesidad.slice(0, 90) || '-')}</span></td>
     <td><a href="mailto:${sanitize(l.email)}">${sanitize(l.email)}</a></td>
     <td>${sanitize(l.telefono || '-')}</td>
-    <td title="${sanitize(l.mensaje || '')}">${sanitize(l.asunto || l.mensaje || '-')}</td>
+    <td>${accountLabel}</td>
     <td>${badgeEstado(l.estado)}</td>
     <td>
+      <a class="btn btn-ghost btn-sm" href="mailto:${sanitize(l.email)}">Email</a>
+      ${l.telefono ? `<a class="btn btn-ghost btn-sm" href="tel:${sanitize(l.telefono)}">Llamar</a>` : ''}
       ${l.estado !== 'contactado' ? `<button class="btn btn-primary btn-sm" data-action="lead-estado" data-lead-id="${l.id}" data-lead-estado="contactado">Contactado</button>` : ''}
       ${l.estado !== 'cerrado' ? `<button class="btn btn-ghost btn-sm" data-action="lead-estado" data-lead-id="${l.id}" data-lead-estado="cerrado">Cerrar</button>` : ''}
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 ['filtro-lead-tipo','filtro-lead-estado'].forEach(id => {
@@ -6131,6 +7841,7 @@ async function actualizarDoc(id, estado) {
   closeModal('modal-documento');
   showToast('Documento ' + estado, '', 'success');
   cargarDocumentos();
+  cargarBadgeDocumentos();
 }
 
 // ── INCIDENCIAS ──────────────────────────────────────────────────
@@ -6144,6 +7855,7 @@ async function cargarChats() {
     role: 'admin',
     profileId: usuario.uid || usuario.firebase_uid || usuario.id,
     showToast,
+    showNotifications: false,
   });
 }
 
@@ -6220,6 +7932,8 @@ document.getElementById('btn-guardar-inc').addEventListener('click', async () =>
 // ── INIT ─────────────────────────────────────────────────────────
 iniciarOperaciones({ background: true }).catch((error) => console.warn('No se pudo preparar la bandeja operativa', error));
 irA(sectionFromHash(), { fromHash: true });
+window.cd10AdminGoTo = (section) => irA(section);
+window.__cd10AdminReady = true;
 
 window.closeModal = (id) => {
   document.getElementById(id).classList.remove('open');

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Para familias — ClasesDe10</title>
-<meta name="description" content="Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.">
+<meta name="description" content="Encuentra el profesor particular que tu hijo necesita. Perfiles revisados, selección personalizada y solicitud sin coste.">
 <link rel="canonical" href="https://clasesde10.com/para-padres">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0f1f3d">
@@ -14,38 +14,37 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Para familias — ClasesDe10">
-<meta property="og:description" content="Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.">
+<meta property="og:description" content="Perfiles revisados, selección personalizada y solicitud sin coste para encontrar profesor.">
 <meta property="og:url" content="https://clasesde10.com/para-padres">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Para familias — ClasesDe10">
-<meta name="twitter:description" content="Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.">
-<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta name="twitter:description" content="Perfiles revisados, selección personalizada y solicitud sin coste para encontrar profesor.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta name="twitter:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20260808-audience-cta">
 <style>
 /* BENEFITS */
 .benefits-section { padding: 90px 0; background: var(--cream); }
 .benefits-grid {
-  display: grid; grid-template-columns: repeat(2,1fr); gap: 22px;
+  display: grid; grid-template-columns: repeat(2,1fr); gap: 0;
   margin-top: 56px;
 }
 .benefit-card {
-  background: var(--white); border-radius: 20px; padding: 32px 28px;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+  background: transparent; border-radius: 0; padding: 28px 28px 28px 0;
+  border: 0; border-top: 1px solid rgba(15,31,61,.2);
+  box-shadow: none;
   display: flex; gap: 20px; align-items: flex-start;
-  transition: transform .25s, box-shadow .25s, border-color .25s;
 }
-.benefit-card:hover { transform: translateY(-5px); box-shadow: 0 14px 44px rgba(0,0,0,0.1); border-color: rgba(232,160,48,0.3); }
 .benefit-ico {
-  width: 52px; height: 52px; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--navy), var(--navy-light));
-  border-radius: 14px;
-  display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
+  display: none;
 }
 .benefit-card h3 { font-weight: 700; font-size: 1rem; color: var(--navy); margin-bottom: 6px; }
 .benefit-card p { font-size: .9rem; line-height: 1.7; color: var(--gray-mid); }
@@ -53,19 +52,15 @@
 /* MATERIAS */
 .materias-section { padding: 90px 0; background: var(--white); }
 .materias-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 14px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 0;
   margin-top: 48px;
 }
 .materia-pill {
-  background: var(--gray-soft); border-radius: 12px; padding: 18px 16px;
-  text-align: center;
-  transition: background .2s, transform .2s;
+  background: transparent; border-radius: 0; padding: 14px 16px 14px 0;
+  border-top: 1px solid rgba(15,31,61,.18); text-align: left;
   cursor: default;
 }
-.materia-pill:hover { background: var(--navy); transform: translateY(-3px); }
-.materia-pill:hover .mp-ico,
-.materia-pill:hover .mp-name { color: var(--white); }
-.mp-ico { font-size: 1.6rem; margin-bottom: 6px; }
+.mp-ico { display: none; }
 .mp-name { font-size: .82rem; font-weight: 600; color: var(--navy); }
 
 /* ACCESO */
@@ -74,13 +69,7 @@
   background: var(--navy);
   position: relative; overflow: hidden;
 }
-.form-section::before {
-  content: '';
-  position: absolute; top: -150px; right: -150px;
-  width: 450px; height: 450px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(232,160,48,0.09) 0%, transparent 70%);
-  pointer-events: none;
-}
+.form-section::before { display: none; }
 .form-section .section-title { color: var(--white); }
 .form-section .section-desc { color: rgba(255,255,255,0.6); }
 .form-section .section-label { color: var(--gold); }
@@ -89,16 +78,14 @@
 .form-info { display: flex; flex-direction: column; gap: 24px; }
 .fi-item { display: flex; gap: 16px; align-items: flex-start; }
 .fi-ico {
-  width: 44px; height: 44px; flex-shrink: 0;
-  background: rgba(232,160,48,0.15); border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  display: none;
 }
-.fi-item h4 { font-weight: 700; color: var(--white); font-size: .95rem; margin-bottom: 4px; }
+.fi-item h3 { font-weight: 700; color: var(--white); font-size: .95rem; margin-bottom: 4px; }
 .fi-item p { font-size: .86rem; color: rgba(255,255,255,0.55); line-height: 1.6; }
 
 .contact-form-card {
-  background: var(--white); border-radius: 24px; padding: 44px 40px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+  background: var(--white); border-radius: 2px; padding: 44px 40px;
+  box-shadow: none;
 }
 .cf-title {
   font-family: 'Playfair Display', serif;
@@ -108,7 +95,7 @@
 .entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
 .entry-actions a {
   min-height: 44px;
-  border-radius: 10px;
+  border-radius: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -128,7 +115,8 @@
 .entry-steps li {
   background: var(--cream);
   border: 1px solid rgba(0,0,0,0.06);
-  border-radius: 12px;
+  border-radius: 0;
+  border-left: 2px solid var(--gold);
   padding: 12px 14px;
   color: var(--text-body);
   font-size: .88rem;
@@ -136,6 +124,24 @@
 }
 .entry-steps strong { color: var(--navy); }
 .cf-note { font-size: .76rem; color: var(--gray-mid); text-align: center; }
+.assisted-form { display: grid; gap: 16px; }
+.assisted-form .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.assisted-form .form-group { margin: 0; }
+.assisted-form .form-label { display: block; margin-bottom: 6px; color: var(--navy); font-size: .8rem; font-weight: 800; }
+.assisted-form .form-control {
+  width: 100%; min-height: 46px; padding: 11px 12px; border: 1px solid rgba(15,31,61,.24);
+  border-radius: 2px; background: var(--white); color: var(--navy); font: inherit;
+}
+.assisted-form textarea.form-control { min-height: 90px; resize: vertical; }
+.assisted-form .privacy-check { display: flex; align-items: flex-start; gap: 9px; color: var(--gray-mid); font-size: .76rem; line-height: 1.55; }
+.assisted-form .privacy-check input { margin-top: 3px; }
+.assisted-form .privacy-check a { color: var(--navy); font-weight: 700; }
+.assisted-form .btn-submit { width: 100%; min-height: 48px; justify-content: center; border: 0; cursor: pointer; }
+.assisted-form .cf-status { margin: 0; padding: 11px 12px; border-left: 3px solid var(--gold); background: var(--cream); color: var(--navy); font-size: .82rem; line-height: 1.5; }
+.assisted-form .cf-status[data-state="error"] { border-left-color: #b91c1c; background: #fff7f7; color: #991b1b; }
+.assisted-choice { margin: 18px 0 2px; padding: 14px 0 0; border-top: 1px solid rgba(15,31,61,.14); color: var(--gray-mid); font-size: .82rem; line-height: 1.55; }
+.assisted-choice a { color: var(--navy); font-weight: 800; }
+.hp-field { position: absolute !important; left: -9999px !important; width: 1px !important; height: 1px !important; overflow: hidden !important; }
 
 @media (max-width: 900px) {
   .benefits-grid { grid-template-columns: 1fr; }
@@ -144,42 +150,44 @@
 @media (max-width: 680px) {
   .contact-form-card { padding: 32px 24px; }
   .entry-actions { grid-template-columns: 1fr; }
+  .assisted-form .form-row { grid-template-columns: 1fr; }
 }
 </style>
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para familias","item":"https://clasesde10.com/para-padres"}]},{"@type":"WebPage","name":"Para familias — ClasesDe10","description":"Encuentra el profesor particular que tu hijo necesita. Verificados, personalizados y sin coste de búsqueda.","url":"https://clasesde10.com/para-padres","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para familias","item":"https://clasesde10.com/para-padres"}]},{"@type":"WebPage","name":"Para familias — ClasesDe10","description":"Perfiles revisados, selección personalizada y solicitud sin coste para encontrar profesor.","url":"https://clasesde10.com/para-padres","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
-  <a href="index.html" class="nav-logo">
-    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
+  <a href="/" class="nav-logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo" width="192" height="192">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
-    <li><a href="como-funciona.html">Cómo funciona</a></li>
-    <li><a href="para-padres.html" class="active">Para familias</a></li>
-    <li><a href="para-profesores.html">Para profesores</a></li>
-    <li><a href="clases-particulares/">Clases</a></li>
-    <li><a href="sobre-nosotros.html">Nosotros</a></li>
-    <li><a href="pages/login.html">Acceder</a></li>
-    <li><a href="contacto.html" class="nav-cta">Contactar</a></li>
+    <li><a href="/como-funciona">Cómo funciona</a></li>
+    <li><a href="/para-padres" class="active">Para familias</a></li>
+    <li><a href="/para-profesores">Para profesores</a></li>
+    <li><a href="/contacto">Contacto</a></li>
+    <li><a href="/pages/login" class="nav-cta">Acceder</a></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
-  <a href="para-padres.html" data-mobile-close>Para familias</a>
-  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
-  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
-  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
-  <a href="pages/login.html" data-mobile-close>Acceder</a>
-  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
+  <a href="/como-funciona" data-mobile-close>Cómo funciona</a>
+  <a href="/para-padres" data-mobile-close>Para familias</a>
+  <a href="/para-profesores" data-mobile-close>Para profesores</a>
+  <a href="/contacto" data-mobile-close>Contacto</a>
+  <a href="/pages/login" class="m-cta" data-mobile-close>Acceder</a>
 </div>
 
 <header class="page-header">
   <span class="section-label">Para familias</span>
   <h1>Encuentra el profesor que <br><em>tu hijo necesita</em></h1>
-  <p>Profesores verificados, aprendizaje personalizado y búsqueda completamente gratuita. Estamos aquí para ayudarte.</p>
+  <p>Perfiles revisados, selección personalizada y una cuenta donde seguir solicitud, chat, calendario, clases y pagos.</p>
+  <div class="page-header-actions" aria-label="Acciones para familias">
+    <a class="btn-primary" href="/pages/login?rol=familia">Entrar o crear cuenta</a>
+    <a class="btn-ghost" href="#formulario">Pedir un profesor</a>
+  </div>
+  <p class="page-header-note">Puedes abrir tu cuenta por tu cuenta o dejarnos cinco datos y te ayudamos a empezar.</p>
 </header>
 
 <!-- BENEFITS -->
@@ -191,8 +199,8 @@
       <div class="benefit-card reveal">
         <div class="benefit-ico">✅</div>
         <div>
-          <h3>Profesores verificados</h3>
-          <p>Cada docente pasa por un proceso de validación. Solo trabajamos con profesores con formación y experiencia contrastada en su materia.</p>
+          <h3>Perfiles revisados antes de asignar</h3>
+          <p>Valoramos formación, materias, niveles, zona, disponibilidad y documentación del profesor antes de utilizar su perfil en una asignación.</p>
         </div>
       </div>
       <div class="benefit-card reveal">
@@ -206,7 +214,7 @@
         <div class="benefit-ico">💬</div>
         <div>
           <h3>Atención directa y humana</h3>
-          <p>Puedes escribirnos por email y, cuando tengas cuenta, continuar desde el chat interno. Sin bots ni esperas interminables. Una persona real te responde y te acompaña.</p>
+          <p>Puedes escribirnos por email y, cuando tengas cuenta, continuar desde el chat interno. Los avisos automáticos ayudan a no perder pasos y el equipo interviene cuando necesitas criterio o soporte.</p>
         </div>
       </div>
       <div class="benefit-card reveal">
@@ -219,15 +227,15 @@
       <div class="benefit-card reveal">
         <div class="benefit-ico">⚡</div>
         <div>
-          <h3>Respuesta en menos de 48h</h3>
-          <p>Sabemos que cuando un alumno necesita refuerzo, el tiempo importa. Garantizamos respuesta rápida a todas las solicitudes.</p>
+          <h3>Solicitud revisada con contexto</h3>
+          <p>Materia, nivel, zona, modalidad y disponibilidad nos ayudan a buscar un profesor compatible sin hacerte repetir la información.</p>
         </div>
       </div>
       <div class="benefit-card reveal">
         <div class="benefit-ico">🆓</div>
         <div>
-          <h3>Búsqueda completamente gratuita</h3>
-          <p>El servicio de conexión no te cuesta nada. ClasesDe10 te orienta con el precio antes de confirmar la asignación.</p>
+          <h3>Cuenta y solicitud sin coste</h3>
+          <p>Puedes crear la cuenta y contarnos el caso sin pagar. Antes de confirmar una asignación, te explicamos las condiciones económicas de las clases.</p>
         </div>
       </div>
     </div>
@@ -260,41 +268,68 @@
   </div>
 </section>
 
-<!-- ACCESO -->
+<!-- ACCESO ASISTIDO -->
 <section class="form-section" id="formulario">
   <div class="section-inner">
     <div class="form-grid">
       <div class="form-info">
-        <span class="section-label">Acceso familias</span>
-        <h2 class="section-title">Crea tu cuenta y<br>solicita profesor</h2>
-        <p class="section-desc">El proceso empieza en tu cuenta para que alumnos, solicitudes, mensajes y asignaciones queden siempre asociados a la familia correcta.</p>
+        <span class="section-label">Dos formas de empezar</span>
+        <h2 class="section-title">Tú eliges cómo<br>pedir profesor</h2>
+        <p class="section-desc">Si te manejas bien online, entra y crea tu cuenta. Si prefieres ayuda, rellena el formulario: prepararemos tu acceso y te contactaremos para completar la solicitud.</p>
         <div class="fi-item">
-          <div class="fi-ico">🔐</div>
-          <div><h4>Datos protegidos</h4><p>Tu información es privada. Solo se usa para encontrarte el profesor adecuado.</p></div>
+          <div class="fi-ico"></div>
+          <div><h3>Cuenta propia y segura</h3><p>Recibirás un enlace de un solo uso para verificar el correo y elegir tu propia contraseña.</p></div>
         </div>
         <div class="fi-item">
-          <div class="fi-ico">💬</div>
-          <div><h4>Seguimiento desde el panel</h4><p>Podrás añadir alumnos, enviar solicitudes y consultar el estado sin repetir datos.</p></div>
+          <div class="fi-ico"></div>
+          <div><h3>Ayuda humana</h3><p>El equipo recibe el formulario en su panel y revisa materia, alumno y datos de contacto antes de buscar el mejor encaje.</p></div>
         </div>
         <div class="fi-item">
-          <div class="fi-ico">🆓</div>
-          <div><h4>Sin coste ni compromiso</h4><p>La búsqueda es gratuita. Si la propuesta no te convence, no estás obligado a nada.</p></div>
+          <div class="fi-ico"></div>
+          <div><h3>Todo queda ordenado</h3><p>Después tendrás solicitudes, profesor, chat, calendario, clases, avisos y justificantes en el mismo lugar.</p></div>
         </div>
       </div>
 
       <div class="contact-form-card reveal">
-        <div class="cf-title">Empieza desde tu cuenta</div>
-        <p class="cf-subtitle">Para buscar profesor con seguimiento real, crea una cuenta de familia. Desde tu panel podrás añadir hijos, enviar solicitudes y ver el estado de cada asignación.</p>
-        <div class="entry-actions">
-          <a class="primary" href="pages/registro.html?rol=familia">Crear cuenta de familia</a>
-          <a class="secondary" href="pages/login.html">Iniciar sesion</a>
-        </div>
-        <ul class="entry-steps">
-          <li><strong>1. Crea tu cuenta.</strong> Guardamos tus datos de acceso y contacto de forma ordenada.</li>
-          <li><strong>2. Añade al alumno.</strong> Dentro del panel registras hijo, curso, materia y disponibilidad.</li>
-          <li><strong>3. Solicita profesor.</strong> El admin ve la solicitud completa y puede hacer el matching sin datos duplicados.</li>
-        </ul>
-        <p class="cf-note">Si ya tienes cuenta, entra directamente y usa el botón "Solicitar profesor" del panel.</p>
+        <div class="cf-title">Te ayudamos a pedir profesor</div>
+        <p class="cf-subtitle">Déjanos solo estos datos. Prepararemos el acceso familiar, te enviaremos un enlace seguro y el equipo revisará tu caso.</p>
+        <form class="assisted-form" id="form-familia-asistida" method="post" novalidate>
+          <div class="hp-field" aria-hidden="true">
+            <label for="website_url">No rellenar</label>
+            <input type="text" id="website_url" name="website_url" tabindex="-1" autocomplete="off">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="nombre-padre">Nombre del padre, madre o tutor</label>
+              <input class="form-control" type="text" id="nombre-padre" name="nombre" autocomplete="name" maxlength="160" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="nombre-alumno">Nombre del alumno</label>
+              <input class="form-control" type="text" id="nombre-alumno" name="alumno" autocomplete="off" maxlength="160" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="necesidad-profesor">¿Qué profesor necesitáis?</label>
+            <textarea class="form-control" id="necesidad-profesor" name="necesidad" rows="3" maxlength="1000" placeholder="Por ejemplo: Matemáticas de 3º ESO, presencial en Madrid, dos tardes por semana" required></textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="telefono-familia">Teléfono</label>
+              <input class="form-control" type="tel" id="telefono-familia" name="telefono" autocomplete="tel" maxlength="40" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="email-familia">Correo electrónico</label>
+              <input class="form-control" type="email" id="email-familia" name="email" autocomplete="email" maxlength="254" required>
+            </div>
+          </div>
+          <label class="privacy-check" for="privacidad-familia">
+            <input type="checkbox" id="privacidad-familia" required>
+            <span>Acepto la <a href="/privacidad" target="_blank" rel="noopener noreferrer">Política de privacidad</a> y que ClasesDe10 prepare mi cuenta familiar y me contacte para atender esta solicitud.</span>
+          </label>
+          <p class="cf-status" data-form-status hidden role="status" aria-live="polite"></p>
+          <button class="btn-primary btn-submit" id="btn-familia-asistida" type="submit">Enviar y preparar mi cuenta</button>
+        </form>
+        <p class="assisted-choice">¿Prefieres hacerlo ahora por tu cuenta? <a href="/pages/login?rol=familia">Entrar o crear una cuenta de familia</a>.</p>
       </div>
     </div>
   </div>
@@ -303,28 +338,29 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10" width="192" height="192">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
     <div class="footer-col">
-      <h4>Clases</h4>
+      <h3>Clases</h3>
       <ul>
-        <li><a href="clases-particulares/matematicas-madrid.html">Matemáticas</a></li>
-        <li><a href="clases-particulares/ingles-madrid.html">Inglés</a></li>
-        <li><a href="clases-particulares/bachillerato-madrid.html">Bachillerato</a></li>
-        <li><a href="clases-particulares/selectividad-madrid.html">Selectividad (EBAU)</a></li>
+        <li><a href="/clases-particulares/matematicas">Matemáticas</a></li>
+        <li><a href="/clases-particulares/ingles">Inglés</a></li>
+        <li><a href="/clases-particulares/bachillerato">Bachillerato</a></li>
+        <li><a href="/clases-particulares/selectividad">Selectividad (EBAU)</a></li>
         <li><a href="clases-particulares/">Ver todas →</a></li>
       </ul>
     </div>
     <div class="footer-col">
-      <h4>Contacto</h4>
+      <h3>Contacto</h3>
       <ul>
         <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
-        <li><a href="contacto.html">Formulario de contacto</a></li>
-        <li><a href="terminos.html">Términos de uso</a></li>
-        <li><a href="privacidad.html">Privacidad</a></li>
-        <li><a href="cookies.html">Cookies</a></li>
+        <li><a href="/sobre-nosotros">Sobre nosotros</a></li>
+        <li><a href="/contacto">Formulario de contacto</a></li>
+        <li><a href="/terminos">Términos de uso</a></li>
+        <li><a href="/privacidad">Privacidad</a></li>
+        <li><a href="/cookies">Cookies</a></li>
       </ul>
     </div>
   </div>
@@ -335,6 +371,10 @@
 </footer>
 
 <script type="module">
+import { requestAssistedFamilyActivation } from './js/auth-provider.js?v=20260815-assisted-family';
+import { setButtonState, submitLead } from './js/public-leads.js?v=20260815-assisted-family';
+import { focusFirstInvalidField, validarEmail } from './js/utils.js';
+
 window.addEventListener('scroll',()=>{ document.getElementById('mainNav').classList.toggle('scrolled',window.scrollY>10); });
 document.getElementById('hamburger').addEventListener('click',()=>{ const m=document.getElementById('mobileMenu'); m.style.display=m.style.display==='flex'?'none':'flex'; });
 function closeMobile(){ document.getElementById('mobileMenu').style.display='none'; }
@@ -342,6 +382,70 @@ document.getElementById('mobileMenu').addEventListener('click',(e)=>{ if(e.targe
 const obs=new IntersectionObserver((e)=>{ e.forEach(x=>{ if(x.isIntersecting) x.target.classList.add('visible'); }); },{threshold:0});
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 document.querySelectorAll('.reveal').forEach(el=>{ if(el.getBoundingClientRect().top<window.innerHeight) el.classList.add('visible'); });
+
+const assistedForm = document.getElementById('form-familia-asistida');
+const assistedButton = document.getElementById('btn-familia-asistida');
+const assistedStatus = assistedForm?.querySelector('[data-form-status]');
+
+assistedForm?.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!assistedForm.checkValidity()) {
+    focusFirstInvalidField(assistedForm);
+    return;
+  }
+
+  const emailInput = document.getElementById('email-familia');
+  const email = emailInput.value.trim().toLowerCase();
+  if (!validarEmail(email)) {
+    emailInput.setCustomValidity('Introduce un correo válido.');
+    focusFirstInvalidField(assistedForm);
+    return;
+  }
+  emailInput.setCustomValidity('');
+
+  const nombre = document.getElementById('nombre-padre').value.trim();
+  const alumno = document.getElementById('nombre-alumno').value.trim();
+  const necesidad = document.getElementById('necesidad-profesor').value.trim();
+  const telefono = document.getElementById('telefono-familia').value.trim();
+  setButtonState(assistedButton, 'loading', 'Enviando solicitud…');
+  if (assistedStatus) assistedStatus.hidden = true;
+
+  const { data, error } = await submitLead({
+    tipo: 'familia',
+    nombre,
+    email,
+    telefono,
+    asunto: `Profesor para ${necesidad.slice(0, 140)}`,
+    mensaje: necesidad,
+    website_url: document.getElementById('website_url').value,
+    accountStatus: 'pending_activation',
+    metadata: {
+      alumno,
+      materia: necesidad,
+      account_mode: 'assisted_parent_activation',
+      canal: 'formulario_para_padres',
+      consent_privacy: true,
+    },
+  });
+
+  if (error) {
+    if (assistedStatus) assistedStatus.hidden = false;
+    setButtonState(assistedButton, 'error', error.message || 'No se pudo enviar. Inténtalo de nuevo.');
+    return;
+  }
+
+  const activation = await requestAssistedFamilyActivation(email, data.id);
+  assistedForm.reset();
+  if (assistedStatus) assistedStatus.hidden = false;
+  if (activation.error) {
+    setButtonState(assistedButton, 'success', 'Solicitud recibida');
+    if (assistedStatus) assistedStatus.textContent = 'Hemos recibido tus datos. El equipo te contactará para ayudarte a activar la cuenta.';
+    return;
+  }
+
+  setButtonState(assistedButton, 'success', 'Solicitud enviada');
+  if (assistedStatus) assistedStatus.textContent = 'Revisa tu correo: tienes un enlace de un solo uso para elegir tu contraseña. También hemos avisado al equipo para que revise tu solicitud.';
+});
 </script>
 <script src="/js/pwa.js" defer></script>
 </body>

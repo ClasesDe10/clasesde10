@@ -32,6 +32,26 @@ service firebase.storage {
         || (request.resource.contentType is string && request.resource.contentType.matches('^image/(jpeg|jpg|png|webp|gif)$'));
     }
 
+    function validChatContentType() {
+      return request.resource == null
+        || (request.resource.contentType is string && request.resource.contentType.matches(
+          '^(image/(jpeg|jpg|png|webp|gif)|audio/(webm|ogg|mpeg|mp4|x-m4a|wav)|application/pdf|application/msword|application/vnd\\.ms-(excel|powerpoint)|application/vnd\\.openxmlformats-officedocument\\.(wordprocessingml\\.document|spreadsheetml\\.sheet|presentationml\\.presentation)|text/plain)$'
+        ));
+    }
+
+    function isChatParticipant(chatId) {
+      return signedIn()
+        && firestore.exists(/databases/(default)/documents/chats/$(chatId))
+        && (
+          isAdmin()
+          || firestore.get(/databases/(default)/documents/chats/$(chatId)).data.participantUids[request.auth.uid] == true
+          || firestore.get(/databases/(default)/documents/chats/$(chatId)).data.familyUid == request.auth.uid
+          || firestore.get(/databases/(default)/documents/chats/$(chatId)).data.familia_id == request.auth.uid
+          || firestore.get(/databases/(default)/documents/chats/$(chatId)).data.teacherUid == request.auth.uid
+          || firestore.get(/databases/(default)/documents/chats/$(chatId)).data.profesor_id == request.auth.uid
+        );
+    }
+
     match /users/{uid}/{filePath=**} {
       allow read, write: if (isAdmin() || isOwner(uid)) && validFileSize(10) && validPrivateContentType();
     }
@@ -51,6 +71,11 @@ service firebase.storage {
     match /public/{filePath=**} {
       allow read: if true;
       allow write: if isAdmin() && validFileSize(5) && validPublicContentType();
+    }
+
+    match /chats/{chatId}/{filePath=**} {
+      allow read: if isChatParticipant(chatId);
+      allow write: if request.resource != null && isChatParticipant(chatId) && validFileSize(10) && validChatContentType();
     }
 
     match /{filePath=**} {

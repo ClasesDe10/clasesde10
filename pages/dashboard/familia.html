@@ -9,8 +9,8 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-fit">
-<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260706-calendar-indicators">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-calendar-semantics">
+<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
@@ -65,6 +65,10 @@
       <button class="sidebar-link" data-section="chat">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
         Chat
+      </button>
+      <button class="sidebar-link" data-section="notificaciones">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-12 0v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0a3 3 0 11-6 0"/></svg>
+        Avisos
       </button>
       <div class="sidebar-section-title">Mi cuenta</div>
       <button class="sidebar-link" data-section="perfil">
@@ -236,7 +240,7 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Hijo/a</th><th>Materia</th><th>Nivel</th><th>Horario pref.</th><th>Matching</th><th>Estado</th><th>Profesor asignado</th></tr>
+                <tr><th>Fecha</th><th>Hijo/a</th><th>Materia</th><th>Nivel</th><th>Horario pref.</th><th>Búsqueda</th><th>Estado</th><th>Profesor asignado</th></tr>
               </thead>
               <tbody id="tbody-solicitudes"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
             </table>
@@ -251,7 +255,7 @@
             <h2 style="margin:0;color:var(--navy);font-size:1.15rem">Pagos y justificantes</h2>
             <p style="margin:4px 0 0;color:var(--gray-mid);font-size:.88rem">Confirma solo los pagos que ya hayas realizado. El equipo los revisara y actualizara las clases.</p>
           </div>
-          <button class="btn btn-outline" id="btn-nuevo-pago">Registrar otro pago</button>
+          <button class="btn btn-outline" id="btn-nuevo-pago">Elegir clases a pagar</button>
         </div>
         <div id="family-payment-workbench" class="family-payment-workbench">
           <div class="card"><div class="card-body"><div class="skeleton skeleton-text"></div><div class="skeleton skeleton-text"></div></div></div>
@@ -261,9 +265,9 @@
           <div class="table-wrapper">
             <table class="responsive-card-table">
               <thead>
-                <tr><th>Fecha</th><th>Concepto</th><th>Método</th><th>Referencia</th><th>Estado</th><th>Justificante</th></tr>
+                <tr><th>Fecha</th><th>Concepto</th><th>Clases incluidas</th><th>Método</th><th>Referencia</th><th>Estado</th><th>Justificante</th></tr>
               </thead>
-              <tbody id="tbody-pagos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-pagos"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -274,19 +278,69 @@
         <div id="chat-familia"></div>
       </section>
 
+      <section id="section-notificaciones" class="dash-section" style="display:none">
+        <div id="notification-center-familia"></div>
+      </section>
+
       <section id="section-perfil" class="dash-section" style="display:none">
+        <div class="alert alert-info" id="assisted-profile-onboarding" style="display:none;margin-bottom:18px">
+          <span class="alert-icon">1</span>
+          <div class="alert-body">
+            <div class="alert-title">Termina de preparar tu cuenta</div>
+            Revisa tus datos de contacto y ubicación. Son necesarios para proponerte un profesor compatible y coordinar las clases con seguridad.
+          </div>
+        </div>
+        <div class="profile-page-shell">
+          <header class="profile-page-header">
+            <div class="profile-page-identity">
+              <div class="profile-page-avatar" id="family-profile-avatar" aria-hidden="true"></div>
+              <div>
+                <span class="profile-page-eyebrow">Perfil familiar</span>
+                <h2 id="family-profile-name">Tu perfil de familia</h2>
+                <p id="family-profile-caption">Datos de contacto y preferencias que ayudan a coordinar las clases.</p>
+              </div>
+            </div>
+            <div class="profile-page-actions">
+              <button class="btn btn-ghost" type="button" id="btn-documentos-familia">Documentos</button>
+              <button class="btn btn-primary" type="button" id="btn-editar-perfil-familia">Editar perfil</button>
+            </div>
+          </header>
+          <div class="profile-page-grid">
+            <div class="profile-overview" id="family-profile-overview" aria-live="polite">
+              <div class="profile-overview-loading">Cargando tus datos...</div>
+            </div>
+            <aside class="profile-quality-card">
+              <div class="profile-quality-heading">Estado del perfil</div>
+              <div id="familia-calidad-resumen">
+                <div class="profile-overview-loading">Calculando estado...</div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:20px">
-          <div class="card" style="grid-column:1/-1">
+          <div class="modal-overlay profile-editor-overlay" id="modal-perfil-familia">
+            <div class="modal profile-editor-modal" aria-labelledby="modal-perfil-familia-title">
+              <div class="modal-header">
+                <div>
+                  <span class="modal-title" id="modal-perfil-familia-title">Editar perfil familiar</span>
+                  <p class="modal-subtitle">Revisa tus datos de contacto, ubicacion y preferencias.</p>
+                </div>
+                <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+              </div>
+              <div class="modal-body profile-editor-content">
+          <div class="card profile-editor-quality-duplicate" style="grid-column:1/-1">
             <div class="card-header"><span class="card-title">Calidad del perfil familiar</span></div>
             <div class="card-body" id="familia-calidad-panel">
               <div style="color:var(--gray-mid);font-size:.875rem">Calculando estado del perfil...</div>
             </div>
           </div>
 
-          <div class="card">
+          <div class="card profile-editor-form-card">
             <div class="card-header"><span class="card-title">Mis datos</span></div>
             <div class="card-body">
       <form id="form-perfil" method="post" novalidate>
+                <h3 class="profile-form-section-title">Datos de contacto</h3>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Nombre</label>
@@ -311,6 +365,7 @@
                     </select>
                   </div>
                 </div>
+                <h3 class="profile-form-section-title">Ubicacion</h3>
                 <div class="form-group">
                   <label class="form-label">Dirección</label>
                   <input class="form-control" type="text" id="p-direccion" placeholder="Calle, numero, piso">
@@ -329,6 +384,7 @@
                   <label class="form-label">Zona/barrio principal</label>
                   <input class="form-control" type="text" id="p-zona" placeholder="Chamberi, Retiro, online...">
                 </div>
+                <h3 class="profile-form-section-title">Coordinacion familiar</h3>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Contacto alternativo</label>
@@ -339,6 +395,7 @@
                     <input class="form-control" type="tel" id="p-emergencia-telefono" placeholder="+34 600 000 000">
                   </div>
                 </div>
+                <h3 class="profile-form-section-title">Preferencias</h3>
                 <div class="form-group">
                   <label class="form-label">Idiomas de comunicación</label>
                   <input class="form-control" type="text" id="p-idiomas" placeholder="Español, ingles...">
@@ -351,7 +408,20 @@
               </form>
             </div>
           </div>
+              </div>
+            </div>
+          </div>
 
+          <div class="modal-overlay profile-editor-overlay" id="modal-documentos-familia">
+            <div class="modal profile-editor-modal profile-documents-modal" aria-labelledby="modal-documentos-familia-title">
+              <div class="modal-header">
+                <div>
+                  <span class="modal-title" id="modal-documentos-familia-title">Documentos familiares</span>
+                  <p class="modal-subtitle">Solo debes subirlos cuando el equipo te los solicite.</p>
+                </div>
+                <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+              </div>
+              <div class="modal-body profile-editor-content">
           <div class="card">
             <div class="card-header"><span class="card-title">Documentos opcionales</span></div>
             <div class="card-body">
@@ -359,7 +429,7 @@
                 <span class="alert-icon">i</span>
                 <div class="alert-body">
                   <div class="alert-title">No es obligatorio para usar ClasesDe10</div>
-                  Sube DNI, autorizacion o documento de tutor solo si el equipo lo solicita para verificar una situacion concreta, resolver una incidencia o proteger al alumno. No afecta al matching si no tienes nada que subir.
+                  Sube DNI, autorizacion o documento de tutor solo si el equipo lo solicita para verificar una situacion concreta, resolver una incidencia o proteger al alumno. No es necesario si no tienes nada que subir.
                 </div>
               </div>
               <div class="form-group">
@@ -388,10 +458,62 @@
               </div>
             </div>
           </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
     </div>
+  </div>
+</div>
+
+<!-- MODAL: CLASE PUNTUAL -->
+<div class="modal-overlay" id="modal-clase-puntual">
+  <div class="modal one-off-class-modal">
+    <div class="modal-header">
+      <span class="modal-title">Pedir clase puntual</span>
+      <button class="modal-close">x</button>
+    </div>
+    <form id="form-clase-puntual">
+      <div class="modal-body">
+        <div class="one-off-class-note">
+          <strong>Clase extra o recuperacion</strong>
+          <span>Elige con quien, fecha y hora. La otra parte podra aceptarla para que aparezca en el calendario.</span>
+        </div>
+        <label class="form-label" for="puntual-relacion">Alumno y profesor</label>
+        <select class="form-control" id="puntual-relacion" required>
+          <option value="">Cargando relaciones...</option>
+        </select>
+        <div class="one-off-class-grid">
+          <label>
+            <span class="form-label">Fecha</span>
+            <input class="form-control" type="date" id="puntual-fecha" required>
+          </label>
+          <label>
+            <span class="form-label">Inicio</span>
+            <input class="form-control" type="time" id="puntual-inicio" step="60" required>
+          </label>
+          <label>
+            <span class="form-label">Fin</span>
+            <input class="form-control" type="time" id="puntual-fin" step="60" required>
+          </label>
+        </div>
+        <label class="form-label" for="puntual-modalidad">Modalidad</label>
+        <select class="form-control" id="puntual-modalidad">
+          <option value="por_acordar">Modalidad por acordar</option>
+          <option value="online">Online</option>
+          <option value="presencial">Presencial</option>
+        </select>
+        <label class="form-label" for="puntual-notas">Nota opcional</label>
+        <textarea class="form-control" id="puntual-notas" rows="2" maxlength="300" placeholder="Ej: recuperacion del lunes, tema concreto o lugar."></textarea>
+        <div class="one-off-class-summary" id="puntual-resumen">Selecciona una relacion y revisa fecha y hora.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" type="button" data-close-modal="modal-clase-puntual">Cancelar</button>
+        <button class="btn btn-primary" type="submit" id="btn-guardar-clase-puntual">Enviar propuesta</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -406,7 +528,7 @@
       <div class="alert alert-info" style="margin-bottom:16px">
         <span class="alert-icon">ℹ</span>
         <div class="alert-body">
-          Envia la solicitud una sola vez. Despues revisaremos el matching, asignaremos profesor y abriremos chat para cerrar horario y calendario.
+          Envía la solicitud una sola vez. Después buscaremos un profesor compatible y te avisaremos para cerrar el horario.
         </div>
       </div>
       <div class="form-group">
@@ -414,7 +536,7 @@
         <select class="form-control" id="sol-alumno" required>
           <option value="">Seleccionar…</option>
         </select>
-        <div class="form-hint" id="sol-disponibilidad-hint">Marca disponibilidad por hijo para mejorar el matching.</div>
+        <div class="form-hint" id="sol-disponibilidad-hint">Marca la disponibilidad para encontrar profesores con horarios compatibles.</div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -623,6 +745,11 @@
       <input type="hidden" id="pago-class-ids">
       <input type="hidden" id="pago-due-at">
       <div class="payment-confirm-summary" id="pago-resumen-grupo" style="display:none"></div>
+      <div class="payment-class-selection" id="pago-clases-seleccionadas" style="display:none"></div>
+      <div class="payment-confirm-summary" id="pago-destinatario-clasesde10">
+        <strong>Bizum a Miguel G. G. - 613016665</strong>
+        <span>ClasesDe10 recibe el pago de las clases y despues liquida al profesor correspondiente.</span>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Importe (€) <span class="required">*</span></label>
@@ -648,8 +775,8 @@
       <label class="upload-zone" id="pago-upload-zone" style="margin-top:8px">
         <input type="file" id="pago-file" accept=".pdf,.jpg,.jpeg,.png,.webp">
         <div class="upload-zone-icon">📎</div>
-        <div class="upload-zone-title">Adjuntar captura o comprobante si lo tienes</div>
-        <div class="upload-zone-sub">Opcional · PDF, JPG, PNG · Max. 10 MB</div>
+        <div class="upload-zone-title">Adjuntar justificante del pago</div>
+        <div class="upload-zone-sub">Obligatorio · PDF, JPG, PNG · Max. 10 MB</div>
       </label>
     </div>
     <div class="modal-footer">
@@ -660,23 +787,25 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
-import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-onboarding-gate';
+import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260815-document-open';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
 import {
   evaluateFamilyProfileProfessional,
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260629-school-profile';
+} from '../../js/profile-engine.js?v=20260808-copy-cleanup';
 import {
   buildFamilyConfirmationPayload,
+  buildParticipantClassIncidentCreatePayload,
+  classAttendanceCalendarVisual,
   classAttendanceState,
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260704-prorated-duration';
+} from '../../js/calendar-engine.js?v=20260815-calendar-semantics';
 import {
   applyClassPaymentContext,
   buildFamilyClassPaymentConfirmationPayload,
@@ -685,18 +814,21 @@ import {
   buildPaymentScheduleIndex,
   buildWeeklyPaymentSchedulePayload,
   classFamilyPaymentState,
+  familyPaymentRecipient,
   normalizePaymentStatus,
   paymentAmount,
   paymentScheduleDocumentId,
   paymentScheduleLabel,
   paymentStatusForBadge,
-} from '../../js/payment-engine.js?v=20260706-calendar-names';
+  samePaymentRelation,
+} from '../../js/payment-engine.js?v=20260710-calendar-polish2';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260706-safe-call-request-v3';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260815-chat-r6';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260808-action-center';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
-import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260701-journey-clarity';
+import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260808-copy-cleanup';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
-import { availabilitySlotLabel, summarizeAvailabilitySlots } from '../../js/availability-engine.js?v=20260629-busy-slots';
+import { availabilitySlotLabel, summarizeAvailabilitySlots, validateScheduleAvailability } from '../../js/availability-engine.js?v=20260808-copy-cleanup';
 import {
   cancelClassFromCalendar,
   canCancelClassFromCalendar,
@@ -705,19 +837,39 @@ import {
 import { buildIcsCalendar } from '../../js/calendar-sync.js?v=20260705-person-names';
 import {
   ensureRecurringClassOccurrencesForRange,
+  loadAcceptedRecurringScheduleSeeds,
   loadParticipantClasses,
-} from '../../js/recurring-class-sync.js?v=20260706-recurring-calendar-sync';
-import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+  missingRecurringOccurrences,
+} from '../../js/recurring-class-sync.js?v=20260706-recurring-chat-seeds';
+import {
+  buildOneOffScheduleProposal,
+  oneOffAddLocalDays,
+  oneOffDateBounds,
+  oneOffDefaultDraft,
+  oneOffIsoDateLocal,
+  oneOffProposalMessage,
+  validateOneOffClassDraft,
+} from '../../js/one-off-class-planner.js?v=20260707-classes-panel-v1';
+import {
+  buildAcceptedOneOffClassPayload,
+  buildBusySlotPayloadsForOneOffClass,
+  isPendingOneOffScheduleProposal,
+  oneOffClassId,
+  oneOffProposalToClassRow,
+} from '../../js/one-off-proposal-actions.js?v=20260707-visible-one-off-v1';
+import { addDoc, collection as firestoreCollection, deleteDoc, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
-  showToast, initModals, initSidebar, formatFechaCorta, formatHora,
-  badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
-} from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js?v=20260706-calendar-indicators';
+  showToast, initModals, initSidebar, openModal, closeModal, confirmAction, promptAction,
+  formatFechaCorta, formatHora, badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
+} from '../../js/utils.js?v=20260809-profile-dialogs-2';
+import { Calendario } from '../../js/calendario.js?v=20260815-calendar-semantics';
 
 const usuario = await requireAuth(['familia']);
 if (!usuario) throw new Error('No autorizado');
 window.CD10CurrentUser = usuario;
+let profileCompletionRequired = usuario.profileCompletionRequired === true;
+let assistedProfileModalOpened = false;
 
 document.getElementById('user-nombre').textContent = `${usuario.nombre} ${usuario.apellidos}`;
 document.getElementById('user-avatar').textContent = getIniciales(usuario.nombre, usuario.apellidos);
@@ -768,13 +920,21 @@ function clearActionBusy(button) {
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
-                  alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Justificantes', chat:'Chat', perfil:'Mi perfil' };
+                  alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Justificantes', chat:'Chat', notificaciones:'Centro de avisos', perfil:'Mi perfil' };
 let chatInicializado = false;
 let documentosFamiliaPerfilCache = [];
 let alumnosFamiliaPerfilCache = [];
 let disponibilidadHijosCache = new Map();
 let paymentSchedulesCache = new Map();
 let familyPaymentGroupsCache = new Map();
+let activePaymentGroup = null;
+let oneOffPlannerChatsCache = [];
+let oneOffProposalRowsById = new Map();
+const FAMILY_ONE_OFF_OVERRIDABLE_AVAILABILITY_REASONS = new Set([
+  'counterparty_availability_missing',
+  'outside_counterparty_availability',
+  'outside_own_availability',
+]);
 
 function ownerUid() {
   return usuario.uid || usuario.firebase_uid || usuario.id;
@@ -827,6 +987,11 @@ function classDateIso(clase = {}) {
 function isOpenFamilyPayment(pago = {}) {
   const status = normalizePaymentStatus(pago.estado || pago.status);
   return ['pendiente', 'procesando', 'solicitado', 'requiere_accion', 'vencido'].includes(status);
+}
+
+function isRejectedFamilyPayment(pago = {}) {
+  const status = normalizePaymentStatus(pago.estado || pago.status);
+  return ['rechazado', 'fallido', 'devuelto', 'cancelado'].includes(status);
 }
 
 function normalizeDisplayName(value) {
@@ -1202,6 +1367,7 @@ function labelConfirmacionFamilia(clase) {
   const badgeClass = state.tone === 'success' ? 'badge-success'
     : state.tone === 'warning' ? 'badge-warning'
     : state.tone === 'danger' ? 'badge-danger'
+    : state.tone === 'neutral' ? 'badge-gray'
     : 'badge-info';
   const hint = state.key === 'confirmed_by_both'
     ? 'Asistencia confirmada'
@@ -1248,18 +1414,14 @@ function renderFamilyAttendanceSelect(clase, attendance) {
   const realizedDisabled = attendance.canFamilyConfirm ? '' : 'disabled';
   const notDoneDisabled = attendance.canFamilyReportIssue ? '' : 'disabled';
   const disabled = canChange ? '' : 'disabled';
-  const hint = attendance.hasFamilyConfirmation
-    ? ''
-    : attendance.familyNextStep;
   return `
     <label class="calendar-attendance-select">
-      <span>Asistencia familia</span>
+      <span>¿Se ha dado?</span>
       <select class="form-control" data-action="actualizar-asistencia-familia" data-id="${sanitize(clase.id)}" data-previous-value="${sanitize(value)}" ${disabled}>
         <option value="en_espera" ${value === 'en_espera' ? 'selected' : ''}>En espera</option>
         <option value="realizada" ${value === 'realizada' ? 'selected' : ''} ${realizedDisabled}>Se ha dado</option>
         <option value="no_realizada" ${value === 'no_realizada' ? 'selected' : ''} ${notDoneDisabled}>No se ha dado</option>
       </select>
-      ${hint ? `<small>${sanitize(hint)}</small>` : ''}
     </label>
   `;
 }
@@ -1271,6 +1433,7 @@ function renderFamilyCalendarActions(clase, attendance) {
 }
 
 function irA(sec, options = {}) {
+  if (profileCompletionRequired && sec !== 'perfil') sec = 'perfil';
   if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
   document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
   document.getElementById(`section-${sec}`).style.display = '';
@@ -1293,33 +1456,32 @@ document.addEventListener('click', (e) => {
   const sectionTrigger = e.target.closest('[data-section]');
   if (!sectionTrigger) return;
   e.preventDefault();
+  const openOverlay = sectionTrigger.closest('.modal-overlay.open');
+  if (openOverlay?.id) closeModal(openOverlay.id);
   irA(sectionTrigger.dataset.section);
 });
 initSidebar();
+['modal-perfil-familia', 'modal-documentos-familia'].forEach((id) => {
+  const overlay = document.getElementById(id);
+  if (overlay?.parentElement !== document.body) document.body.appendChild(overlay);
+});
 initModals();
 initNotificacionesBadge(usuario.uid || usuario.id, db);
+initNotificationCenter({
+  container: document.getElementById('notification-center-familia'),
+  usuario,
+  role: 'familia',
+  showToast,
+  navigateSection: (section) => { irA(section); return true; },
+});
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (!btn) return;
-  document.getElementById(btn.dataset.closeModal)?.classList.remove('open');
-  document.body.style.overflow = '';
+  closeModal(btn.dataset.closeModal);
 });
 document.getElementById('btn-logout').addEventListener('click', logout);
 function abrirPanelNotificaciones() {
-  irA('chat');
-  let intentos = 0;
-  const abrir = () => {
-    const tab = document.querySelector('[data-chat-tab="notificaciones"]');
-    if (tab) {
-      tab.click();
-      return;
-    }
-    if (intentos < 20) {
-      intentos += 1;
-      setTimeout(abrir, 100);
-    }
-  };
-  abrir();
+  irA('notificaciones');
 }
 document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
 
@@ -1327,11 +1489,20 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action="abrir-planificador-puntual"]');
   if (!btn) return;
   e.preventDefault();
-  irA('chat');
-  setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('cd10:open-chat-planner', { detail: { kind: 'one_off' } }));
-  }, 220);
+  abrirModalClasePuntualFamilia();
 });
+
+['puntual-relacion', 'puntual-fecha', 'puntual-inicio', 'puntual-fin', 'puntual-modalidad'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('input', () => {
+    resetFamilyOneOffAvailabilityOverride();
+    updateFamilyOneOffSummary();
+  });
+  document.getElementById(id)?.addEventListener('change', () => {
+    resetFamilyOneOffAvailabilityOverride();
+    updateFamilyOneOffSummary();
+  });
+});
+document.getElementById('form-clase-puntual')?.addEventListener('submit', guardarClasePuntualFamilia);
 
 function abrirModalNuevoHijo() {
   irA('alumnos');
@@ -1390,6 +1561,526 @@ async function cargarChatsUsuarioActual() {
   }
 }
 
+function familyOneOffStudentName(chat = {}) {
+  return personDisplayName(
+    'Alumno',
+    chat.studentId || chat.alumno_id,
+    chat.studentDisplayName,
+    chat.alumno_nombre,
+    chat.studentName,
+  );
+}
+
+function familyOneOffTeacherName(chat = {}) {
+  return personDisplayName(
+    'Profesor',
+    chat.teacherUid || chat.profesor_id,
+    chat.teacherName,
+    chat.profesor_nombre,
+    chat.teacherDisplayName,
+    chat.teacherEmail,
+  );
+}
+
+function familyOneOffRelationLabel(chat = {}) {
+  const student = familyOneOffStudentName(chat);
+  const teacher = familyOneOffTeacherName(chat);
+  const subject = String(chat.materia || chat.subject || '').trim();
+  return `${student} con ${teacher}${subject ? ` - ${subject}` : ''}`;
+}
+
+function normalizeOneOffChatRows(chats = []) {
+  const seen = new Set();
+  return (chats || [])
+    .filter((chat) => chat && chat.id && chat.status !== 'archivado' && chat.relationshipStatus !== 'archived')
+    .filter((chat) => (chat.studentId || chat.alumno_id) && (chat.teacherUid || chat.profesor_id))
+    .filter((chat) => {
+      const key = String(chat.id || chat.assignmentId || chat.asignacion_id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => familyOneOffRelationLabel(a).localeCompare(familyOneOffRelationLabel(b), 'es'));
+}
+
+function syncOneOffDateBounds() {
+  const bounds = oneOffDateBounds(new Date(), 548);
+  const dateInput = document.getElementById('puntual-fecha');
+  if (!dateInput) return;
+  dateInput.min = bounds.min;
+  dateInput.max = bounds.max;
+}
+
+function selectedFamilyOneOffChat() {
+  const id = document.getElementById('puntual-relacion')?.value || '';
+  return oneOffPlannerChatsCache.find((chat) => String(chat.id) === String(id)) || null;
+}
+
+function familyOneOffDraftKey(chat = {}, validation = {}) {
+  return [
+    chat.id || chat.assignmentId || chat.asignacion_id || '',
+    validation.date || '',
+    validation.start || '',
+    validation.end || '',
+  ].join('|');
+}
+
+function resetFamilyOneOffAvailabilityOverride() {
+  const form = document.getElementById('form-clase-puntual');
+  if (form) delete form.dataset.availabilityOverrideKey;
+  const button = document.getElementById('btn-guardar-clase-puntual');
+  if (button) {
+    if (button.dataset.busy === 'true') {
+      button.dataset.originalText = 'Enviar propuesta';
+    } else {
+      button.textContent = 'Enviar propuesta';
+    }
+  }
+}
+
+function renderFamilyOneOffAvailabilityWarning(result = {}, overrideKey = '') {
+  const summary = document.getElementById('puntual-resumen');
+  const form = document.getElementById('form-clase-puntual');
+  if (form) form.dataset.availabilityOverrideKey = overrideKey;
+  const button = document.getElementById('btn-guardar-clase-puntual');
+  if (button) {
+    if (button.dataset.busy === 'true') {
+      button.dataset.originalText = 'Enviar igualmente';
+    } else {
+      button.textContent = 'Enviar igualmente';
+    }
+  }
+  if (!summary) return;
+  summary.innerHTML = `
+    <strong>Fuera de disponibilidad</strong>
+    <span>${sanitize(result.message || 'El horario no encaja con las franjas disponibles del profesor.')}</span>
+    <em>Si aun asi quieres pedirla, pulsa "Enviar igualmente". El profesor podra aceptarla o proponer otra hora.</em>
+  `;
+  summary.classList.add('is-warning');
+}
+
+async function loadFamilyOneOffAvailability(chat = {}) {
+  const teacherUid = String(chat.teacherUid || chat.profesor_id || '').trim();
+  const studentId = String(chat.studentId || chat.alumno_id || '').trim();
+  const [teacherByUid, teacherByLegacy] = await Promise.all([
+    cargarFirestoreWhere('disponibilidad', 'teacherUid', '==', teacherUid),
+    cargarFirestoreWhere('disponibilidad', 'profesor_id', '==', teacherUid),
+    cargarDisponibilidadHijos().catch(() => new Map()),
+  ]);
+  return {
+    teacherSlots: mergeById([...(teacherByUid || []), ...(teacherByLegacy || [])]),
+    studentSlots: disponibilidadForStudent(studentId),
+  };
+}
+
+async function validateFamilyOneOffAvailability(chat = {}, validation = {}) {
+  const availability = await loadFamilyOneOffAvailability(chat);
+  return validateScheduleAvailability({
+    role: 'familia',
+    fecha: validation.date,
+    horaInicio: validation.start,
+    horaFin: validation.end,
+    teacherSlots: availability.teacherSlots || [],
+    studentSlots: availability.studentSlots || [],
+    busySlots: [],
+    teacherUid: chat.teacherUid || chat.profesor_id || '',
+    studentId: chat.studentId || chat.alumno_id || '',
+  });
+}
+
+function updateFamilyOneOffSummary() {
+  const summary = document.getElementById('puntual-resumen');
+  if (!summary) return;
+  summary.classList.remove('is-warning');
+  const chat = selectedFamilyOneOffChat();
+  const validation = validateOneOffClassDraft({
+    date: document.getElementById('puntual-fecha')?.value,
+    start: document.getElementById('puntual-inicio')?.value,
+    end: document.getElementById('puntual-fin')?.value,
+  });
+  if (!chat) {
+    summary.textContent = 'Selecciona una relacion activa para pedir la clase puntual.';
+    return;
+  }
+  if (!validation.valid) {
+    summary.textContent = validation.message;
+    return;
+  }
+  summary.textContent = `${familyOneOffRelationLabel(chat)}. Duracion: ${validation.durationMinutes} min.`;
+}
+
+async function abrirModalClasePuntualFamilia() {
+  const modal = document.getElementById('modal-clase-puntual');
+  const select = document.getElementById('puntual-relacion');
+  if (!modal || !select) return;
+  syncOneOffDateBounds();
+  const draft = oneOffDefaultDraft(oneOffAddLocalDays(new Date(), 0));
+  document.getElementById('puntual-fecha').value = draft.date;
+  document.getElementById('puntual-inicio').value = draft.start;
+  document.getElementById('puntual-fin').value = draft.end;
+  document.getElementById('puntual-modalidad').value = draft.modality;
+  document.getElementById('puntual-notas').value = '';
+  resetFamilyOneOffAvailabilityOverride();
+  select.innerHTML = '<option value="">Cargando relaciones...</option>';
+  modal.classList.add('open');
+  try {
+    oneOffPlannerChatsCache = normalizeOneOffChatRows(await cargarChatsUsuarioActual());
+    if (!oneOffPlannerChatsCache.length) {
+      select.innerHTML = '<option value="">No hay profesor asignado todavia</option>';
+      updateFamilyOneOffSummary();
+      showToast('Sin profesor asignado', 'Cuando tengas una relacion activa podras pedir clases puntuales desde aqui.', 'info');
+      return;
+    }
+    select.innerHTML = oneOffPlannerChatsCache
+      .map((chat) => `<option value="${sanitize(chat.id)}">${sanitize(familyOneOffRelationLabel(chat))}</option>`)
+      .join('');
+    updateFamilyOneOffSummary();
+    setTimeout(() => document.getElementById('puntual-fecha')?.focus(), 50);
+  } catch (error) {
+    select.innerHTML = '<option value="">No se pudieron cargar relaciones</option>';
+    updateFamilyOneOffSummary();
+    showToast('No se pudo cargar', error.message || 'Revisa permisos de relaciones.', 'error');
+  }
+}
+
+async function addFamilyOneOffSystemMessage(chat = {}, proposal = {}) {
+  const body = oneOffProposalMessage(proposal, personDisplayName('Familia', familiaId, usuario.nombre, familiaData.nombre));
+  const chatRef = firestoreDoc(firebaseDb, 'chats', chat.id);
+  await addDoc(firestoreCollection(chatRef, 'mensajes'), {
+    senderUid: ownerUid(),
+    senderRole: 'familia',
+    senderName: personDisplayName('Familia', familiaId, usuario.nombre, familiaData.nombre),
+    body,
+    createdAt: serverTimestamp(),
+    readBy: { [ownerUid()]: true },
+  });
+  await updateDoc(chatRef, {
+    lastMessage: body.slice(0, 180),
+    lastMessageAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function guardarClasePuntualFamilia(event) {
+  event.preventDefault();
+  const button = document.getElementById('btn-guardar-clase-puntual');
+  if (!setActionBusy(button, 'Enviando...')) return;
+  const chat = selectedFamilyOneOffChat();
+  try {
+    if (!chat) {
+      showToast('Falta relacion', 'Elige alumno y profesor para la clase puntual.', 'warning');
+      return;
+    }
+    const { validation, proposal } = buildOneOffScheduleProposal(chat, {
+      date: document.getElementById('puntual-fecha').value,
+      start: document.getElementById('puntual-inicio').value,
+      end: document.getElementById('puntual-fin').value,
+      modality: document.getElementById('puntual-modalidad').value,
+      notes: document.getElementById('puntual-notas').value,
+    }, {
+      currentUid: ownerUid(),
+      role: 'familia',
+      serverTimestamp,
+    });
+    if (!validation.valid) {
+      showToast('Revisa la clase', validation.message, 'warning');
+      return;
+    }
+    const availabilityResult = await validateFamilyOneOffAvailability(chat, validation);
+    const overrideKey = familyOneOffDraftKey(chat, validation);
+    const form = document.getElementById('form-clase-puntual');
+    const overrideConfirmed = form?.dataset.availabilityOverrideKey === overrideKey;
+    if (!availabilityResult.valid) {
+      if (!FAMILY_ONE_OFF_OVERRIDABLE_AVAILABILITY_REASONS.has(availabilityResult.reason)) {
+        showToast(
+          availabilityResult.reason === 'time_conflict' ? 'Horario ocupado' : 'Horario no valido',
+          availabilityResult.message || 'Ese horario no se puede proponer.',
+          'warning',
+        );
+        return;
+      }
+      if (!overrideConfirmed) {
+        renderFamilyOneOffAvailabilityWarning(availabilityResult, overrideKey);
+        showToast('Fuera de disponibilidad', `${availabilityResult.message || 'El horario no encaja con las franjas disponibles del profesor.'} Pulsa "Enviar igualmente" si quieres pedirla de todas formas.`, 'warning');
+        return;
+      }
+    }
+    proposal.availabilityStatus = availabilityResult.reason || (availabilityResult.valid ? 'matched' : 'pending_review');
+    proposal.availabilityValidation = {
+      checkedByRole: 'familia',
+      checkedAt: new Date().toISOString(),
+      requiredScope: availabilityResult.requiredScope || '',
+      message: availabilityResult.message || '',
+      teacherSlotId: availabilityResult.teacherSlot?.id || '',
+      teacherSlotLabel: availabilityResult.teacherSlot ? availabilitySlotLabel(availabilityResult.teacherSlot) : '',
+      studentSlotId: availabilityResult.studentSlot?.id || '',
+      studentSlotLabel: availabilityResult.studentSlot ? availabilitySlotLabel(availabilityResult.studentSlot) : '',
+      overrideConfirmed: !availabilityResult.valid && overrideConfirmed,
+      overrideReason: !availabilityResult.valid && overrideConfirmed ? availabilityResult.reason : '',
+    };
+    if (!availabilityResult.valid && overrideConfirmed) {
+      proposal.availabilityOverrideRequested = true;
+      proposal.availabilityOverrideConfirmed = true;
+      proposal.availabilityOverrideReason = availabilityResult.reason;
+      proposal.availabilityOverrideMessage = availabilityResult.message || 'Fuera de disponibilidad';
+    }
+    const chatRef = firestoreDoc(firebaseDb, 'chats', chat.id);
+    await addDoc(firestoreCollection(chatRef, 'programaciones'), proposal);
+    await updateDoc(chatRef, {
+      schedulingStatus: 'horario_propuesto',
+      relationshipStage: 'horario_propuesto',
+      relationshipStatus: 'active',
+      lastRelationshipEvent: 'one_off_class_proposed_from_classes',
+      relationshipUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addFamilyOneOffSystemMessage(chat, proposal).catch((error) => {
+      console.warn('No se pudo anadir aviso de clase puntual al chat', error);
+    });
+    document.getElementById('modal-clase-puntual').classList.remove('open');
+    resetFamilyOneOffAvailabilityOverride();
+    await Promise.allSettled([cargarClases(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
+    showToast('Clase puntual propuesta', 'La otra parte podra aceptarla y entonces aparecera en el calendario.', 'success');
+  } catch (error) {
+    showToast('No se pudo enviar', error.message || 'Revisa permisos del chat.', 'error');
+  } finally {
+    clearActionBusy(button);
+  }
+}
+
+function isOneOffProposalRow(row = {}) {
+  return row.isOneOffProposal === true || row.calendarEventType === 'one_off_proposal';
+}
+
+function rememberOneOffProposalRows(rows = []) {
+  rows.filter(isOneOffProposalRow).forEach((row) => oneOffProposalRowsById.set(String(row.id), row));
+}
+
+async function cargarPropuestasPuntualesFamilia(chats = []) {
+  const relationChats = normalizeOneOffChatRows(chats);
+  const nestedRows = await Promise.all(relationChats.map(async (chat) => {
+    try {
+      const snap = await getDocs(firestoreCollection(firebaseDb, 'chats', chat.id, 'programaciones'));
+      return snap.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter(isPendingOneOffScheduleProposal)
+        .map((proposal) => oneOffProposalToClassRow(chat, proposal, {
+          familyName: personDisplayName('Familia', familiaId, usuario.nombre, usuario.apellidos, familiaData?.nombre),
+          teacherName: familyOneOffTeacherName(chat),
+          studentName: familyOneOffStudentName(chat),
+        }));
+    } catch (error) {
+      if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron cargar propuestas puntuales de familia', error);
+      return [];
+    }
+  }));
+  const rows = nestedRows.flat();
+  rememberOneOffProposalRows(rows);
+  return rows;
+}
+
+function currentFamilyCanRespondOneOff(row = {}) {
+  return isOneOffProposalRow(row)
+    && row.proposedByRole !== 'familia'
+    && row.proposedByUid !== ownerUid();
+}
+
+function oneOffProposalStatusText(row = {}) {
+  if (currentFamilyCanRespondOneOff(row)) return 'Pendiente de tu respuesta';
+  return 'Esperando respuesta del profesor';
+}
+
+function oneOffProposalBadge() {
+  return '<span class="badge badge-warning">Propuesta pendiente</span>';
+}
+
+function renderFamilyOneOffProposalActions(row = {}) {
+  if (!currentFamilyCanRespondOneOff(row)) return '<span class="muted">Esperando respuesta</span>';
+  return `
+    <div class="class-action-stack">
+      <button class="btn btn-success btn-sm" type="button" data-action="aceptar-propuesta-puntual-familia" data-id="${sanitize(row.id)}">Aceptar</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="rechazar-propuesta-puntual-familia" data-id="${sanitize(row.id)}">Rechazar</button>
+    </div>
+  `;
+}
+
+function renderFamilyOneOffProposalStatus(row = {}) {
+  return `
+    <div class="calendar-status-line">
+      ${oneOffProposalBadge()}
+      <span>${sanitize(oneOffProposalStatusText(row))}</span>
+    </div>
+  `;
+}
+
+function renderFamilyOneOffCalendarCard(row = {}) {
+  const alumnoNombre = personDisplayName('Alumno', row.studentId || row.alumno_id, row.alumno_nombre, row.studentDisplayName, row.studentName);
+  const profesorNombre = teacherDisplayName(row);
+  return `
+    <div class="clase-item calendar-class-item calendar-simple-class payment-pending" style="padding:10px 16px">
+      <div class="clase-time">
+        <div class="clase-time-hora">${formatHora(row.hora_inicio || '')}</div>
+        <div class="clase-time-fin">${formatHora(row.hora_fin || '')}</div>
+      </div>
+      <div class="clase-info">
+        <div class="calendar-simple-title">
+          <strong>${sanitize(alumnoNombre)}</strong>
+          <span>${sanitize(profesorNombre)}</span>
+        </div>
+        <div class="calendar-class-meta calendar-simple-meta">
+          <span>Clase puntual propuesta</span>
+          <span>${sanitize(row.duracion_minutos || row.durationMinutes || 60)} min</span>
+        </div>
+        ${renderFamilyOneOffProposalStatus(row)}
+        ${renderFamilyOneOffProposalActions(row)}
+      </div>
+    </div>`;
+}
+
+async function loadOneOffTeacherProfile(row = {}) {
+  const teacherUid = row.teacherUid || row.profesor_id || row.sourceChat?.teacherUid || row.sourceChat?.profesor_id || '';
+  if (!teacherUid) return {};
+  const snap = await getDoc(firestoreDoc(firebaseDb, 'profesores', teacherUid)).catch(() => null);
+  return snap?.exists?.() ? { id: snap.id, ...snap.data() } : {};
+}
+
+async function addFamilyOneOffResponseSystemMessage(row = {}, accepted = false, reason = '') {
+  const chatRef = firestoreDoc(firebaseDb, 'chats', row.assignmentId);
+  const body = accepted
+    ? `Clase puntual aceptada: ${formatFechaCorta(row.fecha)} de ${formatHora(row.hora_inicio)} a ${formatHora(row.hora_fin)}.`
+    : `Clase puntual rechazada: ${formatFechaCorta(row.fecha)} de ${formatHora(row.hora_inicio)} a ${formatHora(row.hora_fin)}.${reason ? ` Motivo: ${reason}` : ''}`;
+  await addDoc(firestoreCollection(chatRef, 'mensajes'), {
+    senderUid: ownerUid(),
+    senderRole: 'familia',
+    senderName: personDisplayName('Familia', familiaId, usuario.nombre, usuario.apellidos, familiaData?.nombre),
+    body,
+    createdAt: serverTimestamp(),
+    readBy: { [ownerUid()]: true },
+  });
+  await updateDoc(chatRef, {
+    lastMessage: body.slice(0, 180),
+    lastMessageAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function responderPropuestaPuntualFamilia(button, accepted) {
+  const id = button.dataset.id;
+  const row = oneOffProposalRowsById.get(String(id)) || calendarClassById.get(String(id));
+  if (!row || !row.assignmentId || !row.proposalId) {
+    showToast('Propuesta no disponible', 'Recarga la pagina y vuelve a intentarlo.', 'warning');
+    return;
+  }
+  if (!currentFamilyCanRespondOneOff(row)) {
+    showToast('Esperando al profesor', 'Esta propuesta la has enviado tu. Debe aceptarla el profesor.', 'info');
+    return;
+  }
+  let reason = '';
+  if (!accepted) {
+    const typed = await promptAction({
+      title: 'Rechazar propuesta puntual',
+      message: 'Puedes explicar brevemente el motivo para que el profesor sepa como ajustar la propuesta.',
+      label: 'Motivo (opcional)',
+      confirmText: 'Rechazar propuesta',
+      tone: 'danger',
+    });
+    if (typed === null) return;
+    reason = typed.trim().slice(0, 300);
+  }
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = accepted ? 'Aceptando...' : 'Rechazando...';
+  try {
+    const chatRef = firestoreDoc(firebaseDb, 'chats', row.assignmentId);
+    const proposalRef = firestoreDoc(firebaseDb, 'chats', row.assignmentId, 'programaciones', row.proposalId);
+    const [chatSnap, proposalSnap, teacherProfile] = await Promise.all([
+      getDoc(chatRef),
+      getDoc(proposalRef),
+      accepted ? loadOneOffTeacherProfile(row) : Promise.resolve({}),
+    ]);
+    if (!chatSnap.exists() || !proposalSnap.exists()) throw new Error('La propuesta ya no existe.');
+    const chat = { id: chatSnap.id, ...chatSnap.data() };
+    const proposal = { id: proposalSnap.id, ...proposalSnap.data() };
+    if (!isPendingOneOffScheduleProposal(proposal)) {
+      showToast('Propuesta ya respondida', 'Actualizamos la vista para que veas el estado real.', 'info');
+      await Promise.allSettled([cargarClases(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
+      return;
+    }
+    const batch = writeBatch(firebaseDb);
+    let classId = '';
+    if (accepted) {
+      classId = oneOffClassId(chat.id, proposal.id);
+      const payload = buildAcceptedOneOffClassPayload(chat, proposal, {
+        classId,
+        currentUid: ownerUid(),
+        currentRole: 'familia',
+        serverTimestamp,
+        teacherProfile,
+        familyName: personDisplayName('Familia', familiaId, usuario.nombre, usuario.apellidos, familiaData?.nombre),
+        teacherName: familyOneOffTeacherName(chat),
+        studentName: familyOneOffStudentName(chat),
+      });
+      batch.set(firestoreDoc(firebaseDb, 'clases', classId), payload);
+      batch.update(proposalRef, {
+        status: 'aceptada',
+        classId,
+        classIds: [classId],
+        classCount: 1,
+        respondedByUid: ownerUid(),
+        respondedByRole: 'familia',
+        respondedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(chatRef, {
+        schedulingStatus: 'clase_programada',
+        relationshipStage: 'clase_programada',
+        relationshipStatus: 'active',
+        activeClassId: classId,
+        lastRelationshipEvent: 'one_off_class_accepted_from_classes',
+        relationshipUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      const busySlots = buildBusySlotPayloadsForOneOffClass(classId, payload, {
+        currentUid: ownerUid(),
+        currentRole: 'familia',
+        serverTimestamp,
+      });
+      await Promise.allSettled(busySlots.map((slot) => setDoc(firestoreDoc(firebaseDb, 'busySlots', slot.id), slot.payload)));
+      await addFamilyOneOffResponseSystemMessage(row, true).catch((error) => {
+        console.warn('No se pudo anadir mensaje de aceptacion puntual', error);
+      });
+      showToast('Clase creada', 'Ya aparece en el calendario de familia y profesor.', 'success');
+    } else {
+      batch.update(proposalRef, {
+        status: 'rechazada',
+        rejectionReason: reason,
+        respondedByUid: ownerUid(),
+        respondedByRole: 'familia',
+        respondedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(chatRef, {
+        schedulingStatus: 'horario_rechazado',
+        lastRelationshipEvent: 'one_off_class_rejected_from_classes',
+        relationshipUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      await addFamilyOneOffResponseSystemMessage(row, false, reason).catch((error) => {
+        console.warn('No se pudo anadir mensaje de rechazo puntual', error);
+      });
+      showToast('Propuesta rechazada', 'El profesor lo vera en el chat.', 'success');
+    }
+    await Promise.allSettled([cargarInicio(), cargarClases(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
+  } catch (error) {
+    showToast('No se pudo responder', error.message || 'Revisa permisos o conexion.', 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
   if (valor === undefined || valor === null || valor === '') return [];
   try {
@@ -1444,10 +2135,17 @@ async function asegurarClasesRecurrentesFamilia(rows = [], options = {}) {
       rangeEnd: options.hasta,
       currentUid: ownerUid(),
       currentRole: 'familia',
+      recurrenceSeeds: options.recurrenceSeeds || [],
     });
   } catch (error) {
     if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron actualizar las clases recurrentes de familia', error);
-    return [];
+    return missingRecurringOccurrences(rows, options.desde, options.hasta, {
+      currentUid: ownerUid(),
+      currentRole: 'familia',
+      bufferDays: 35,
+      maxWrites: 80,
+      recurrenceSeeds: options.recurrenceSeeds || [],
+    });
   }
 }
 
@@ -1625,11 +2323,12 @@ async function cargarClasesFamilia(options = {}) {
   ]));
   const studentIds = [...new Set((options.ids || hijos.map((hijo) => hijo.id)).filter(Boolean))];
   const familyIds = familyPaymentQueryIds();
-  const [byParticipant, byStudent, byFamilyUid, byFamiliaId] = await Promise.all([
+  const [byParticipant, byStudent, byFamilyUid, byFamiliaId, chatsRelacion] = await Promise.all([
     cargarClasesParticipanteFamilia(),
     studentIds.length ? cargarClasesPorAlumnos(studentIds, { ...options, hijosPorId }) : Promise.resolve([]),
     cargarFirestoreIn('clases', 'familyUid', familyIds),
     cargarFirestoreIn('clases', 'familia_id', familyIds),
+    cargarChatsUsuarioActual(),
   ]);
   let rows = mergeById([
     ...byParticipant,
@@ -1637,9 +2336,25 @@ async function cargarClasesFamilia(options = {}) {
     ...byFamilyUid,
     ...byFamiliaId,
   ]).map((clase) => normalizeClassRow(clase, hijosPorId));
-  const extendedRows = await asegurarClasesRecurrentesFamilia(rows, options);
+  const recurrenceSeeds = await loadAcceptedRecurringScheduleSeeds({
+    firebaseDb,
+    firestoreCollection,
+    getDocs,
+    chats: chatsRelacion || [],
+    classes: rows,
+  });
+  const extendedRows = await asegurarClasesRecurrentesFamilia(rows, {
+    ...options,
+    recurrenceSeeds,
+  });
   if (extendedRows.length) {
     rows = mergeById([...rows, ...extendedRows]).map((clase) => normalizeClassRow(clase, hijosPorId));
+  }
+  const pendingOneOffRows = await cargarPropuestasPuntualesFamilia(chatsRelacion || []);
+  if (pendingOneOffRows.length) {
+    rows = mergeById([...rows, ...pendingOneOffRows]).map((clase) => (
+      isOneOffProposalRow(clase) ? clase : normalizeClassRow(clase, hijosPorId)
+    ));
   }
 
   if (options.strictStudentFilter && studentIds.length) {
@@ -1776,6 +2491,9 @@ async function cargarInicio() {
   if (!familiaId) return;
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
+  const now = new Date(`${hoy}T00:00:00`);
+  const rangoInicio = isoDateLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+  const rangoFin = isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 6, 0));
 
   // Cargar hijos primero para poder filtrar clases correctamente
   const [{ data: hijos }, pagosResumenInicio] = await Promise.all([
@@ -1794,7 +2512,7 @@ async function cargarInicio() {
       personDisplayName('Alumno', hijo.id, fullPersonName(hijo.nombre, hijo.apellidos)),
     ]));
     const [clasesFamilia, { data: asig }, pagosRelacion, { data: solicitudesRelacion }, { data: documentosRelacion }, chatsRelacion] = await Promise.all([
-      cargarClasesFamilia({ hijos, ids, hijosPorId, desde: mesInicio, limit: 160 }),
+      cargarClasesFamilia({ hijos, ids, hijosPorId, desde: rangoInicio, hasta: rangoFin, limit: 260 }),
       db.from('asignaciones').select('*').in('alumno_id', ids).eq('activa', true),
       Promise.resolve(pagosResumenInicio),
       cargarFirestoreWhere('solicitudes', 'familyUid', '==', familiaId),
@@ -1871,7 +2589,7 @@ async function cargarInicio() {
       document.getElementById('lista-profesores-inicio').innerHTML = renderEmptyState({
         icon: '+',
         title: 'Sin profesor asignado',
-        description: 'Envia una solicitud y revisaremos el matching.',
+        description: 'Envía una solicitud y te avisaremos cuando haya novedades.',
         actions: [emptyAction('Solicitar profesor', { 'data-action': 'abrir-modal-solicitud' }, 'gold')],
       });
     }
@@ -1922,7 +2640,38 @@ const FULL_CALENDAR_EXPORT_FUTURE_MONTHS = 12;
 
 function familyCalendarDayLabel(item = {}, items = []) {
   if (isFamilyPaymentCalendarEvent(item)) return item.overdue ? 'Pago vencido' : 'Dia de pago';
-  return formatHora(item.hora_inicio || item.startTime || '') || `${items.length || 1} evento`;
+  if (isOneOffProposalRow(item)) return 'Propuesta';
+  const visual = familyCalendarClassVisual(item);
+  if (visual.key === 'scheduled') {
+    return formatHora(item.hora_inicio || item.startTime || '') || 'Clase';
+  }
+  return visual.calendarLabel || `${items.length || 1} evento`;
+}
+
+function familyCalendarClassVisual(clase = {}) {
+  const attendance = classAttendanceCalendarVisual(clase);
+  if (['incident', 'pending_teacher', 'cancelled'].includes(attendance.key)) return attendance;
+
+  const payment = familyPaymentStateForClass(clase);
+  const paymentPriority = payment.state === 'overdue' || payment.state === 'rejected' || payment.overdue
+    ? 105
+    : payment.state === 'review' ? 65
+    : payment.state === 'pending' ? (attendance.ended ? 70 : 20)
+    : payment.state === 'paid' ? 30
+    : 20;
+  if (paymentPriority <= attendance.priority) return attendance;
+  return {
+    ...attendance,
+    dotClass: payment.dotClass,
+    cardClass: `payment-${payment.state}`,
+    calendarLabel: payment.state === 'overdue' ? 'Pago vencido'
+      : payment.state === 'rejected' ? 'Pago rechazado'
+      : payment.state === 'review' ? 'Pago en revisión'
+      : payment.state === 'pending' ? 'Pago pendiente'
+      : payment.state === 'paid' ? 'Pagada'
+      : 'Clase',
+    priority: paymentPriority,
+  };
 }
 
 function downloadCalendarItems(items = [], filename = 'clasesde10.ics', calendarName = 'ClasesDe10', emptyMessage = 'No hay eventos para exportar.') {
@@ -2006,12 +2755,14 @@ async function buildFullFamilyCalendarExportItems() {
   ]);
   const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijosFamilia, clases: data, chats });
   hydratePaymentSchedulesForCalendar(identityResolver);
-  const clasesConPago = applyClassPaymentContext(data, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const propuestasPuntuales = data.filter(isOneOffProposalRow).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const clasesReales = data.filter((clase) => !isOneOffProposalRow(clase));
+  const clasesConPago = applyClassPaymentContext(clasesReales, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const groups = buildFamilyPaymentConfirmationGroups(clasesConPago, pagos, paymentScheduleIndexFamilia())
     .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
   const paymentEvents = calendarMonthsBetween(range.start, range.end)
     .flatMap(({ anio, mes }) => buildFamilyPaymentCalendarEvents(groups, anio, mes));
-  return uniqueCalendarItems([...paymentEvents, ...clasesConPago]);
+  return uniqueCalendarItems([...paymentEvents, ...clasesConPago, ...propuestasPuntuales]);
 }
 
 async function downloadFullFamilyCalendar(button) {
@@ -2046,13 +2797,22 @@ async function iniciarCalendario() {
       dayIndicatorMode: 'summary',
       daySummaryLabel: familyCalendarDayLabel,
       classDotClass: (clase) => isFamilyPaymentCalendarEvent(clase)
-        ? (clase.overdue ? 'dot-red' : 'dot-gold')
-        : familyPaymentStateForClass(clase).dotClass,
+        ? (clase.overdue ? 'dot-red' : 'dot-purple')
+        : isOneOffProposalRow(clase)
+        ? 'dot-purple'
+        : familyCalendarClassVisual(clase).dotClass,
+      classIndicatorPriority: (clase) => isFamilyPaymentCalendarEvent(clase)
+        ? (clase.overdue ? 105 : 45)
+        : isOneOffProposalRow(clase)
+        ? 45
+        : familyCalendarClassVisual(clase).priority,
       legendItems: [
-        { className: 'dot-gold', label: 'Pendiente' },
-        { className: 'dot-blue', label: 'En revision' },
-        { className: 'dot-teal', label: 'Validada' },
-        { className: 'dot-red', label: 'Vencida +48h' },
+        { className: 'dot-red', label: 'Revisar ahora' },
+        { className: 'dot-amber', label: 'Acción pendiente' },
+        { className: 'dot-blue', label: 'Programada o en curso' },
+        { className: 'dot-emerald', label: 'Finalizada o pagada' },
+        { className: 'dot-gray', label: 'Cancelada' },
+        { className: 'dot-purple', label: 'Pago o propuesta' },
       ],
       onDiaClick: (fecha, clases) => {
         const paymentEvents = clases.filter(isFamilyPaymentCalendarEvent);
@@ -2071,27 +2831,28 @@ async function iniciarCalendario() {
         }
         const paymentHtml = paymentEvents.map(renderFamilyPaymentDueCalendarCard).join('');
         const classHtml = classItems.map(c => {
-          const payment = familyPaymentStateForClass(c);
+          if (isOneOffProposalRow(c)) return renderFamilyOneOffCalendarCard(c);
           const attendance = classAttendanceState(c);
-          const actions = renderFamilyCalendarActions(c, attendance);
+          const visual = familyCalendarClassVisual(c);
+          const alumnoNombre = personDisplayName('Alumno', c.studentId || c.alumno_id, c.alumno_nombre, c.studentDisplayName, c.studentName);
+          const profesorNombre = teacherDisplayName(c);
           return `
-          <div class="clase-item calendar-class-item payment-${payment.state}" style="padding:10px 16px">
+          <div class="clase-item calendar-class-item calendar-simple-class ${sanitize(visual.cardClass)}" style="padding:10px 16px">
             <div class="clase-time">
               <div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div>
               <div class="clase-time-fin">${formatHora(c.hora_fin||'')}</div>
             </div>
             <div class="clase-info">
-              <div class="clase-nombre">${sanitize(personDisplayName('Alumno', c.studentId || c.alumno_id, c.alumno_nombre, c.studentDisplayName, c.studentName))}</div>
-              <div class="clase-materia">${sanitize(c.materia||'')}</div>
-              <div class="calendar-class-meta">
-                <span>Hora: ${formatHora(c.hora_inicio||'')} - ${formatHora(c.hora_fin||'')}</span>
-                <span>Profesor: ${sanitize(teacherDisplayName(c))}</span>
+              <div class="calendar-simple-title">
+                <strong>${sanitize(alumnoNombre)}</strong>
+                <span>${sanitize(profesorNombre)}</span>
               </div>
-              <div class="calendar-status-stack">
-                ${labelConfirmacionFamilia(c)}
-                ${renderPaymentStateBadgeCompact(c)}
+              <div class="calendar-class-meta calendar-simple-meta">
+                <span>Hora ${formatHora(c.hora_inicio||'')} - ${formatHora(c.hora_fin||'')}</span>
               </div>
-              ${actions}
+              ${labelConfirmacionFamilia(c)}
+              ${renderFamilyCalendarProofMinimal(c)}
+              ${renderFamilyAttendanceSelect(c, attendance)}
             </div>
           </div>`;
         }).join('');
@@ -2115,7 +2876,7 @@ async function cargarClasesCalendario(anio, mes) {
   ]));
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = isoDateLocal(new Date(anio, mes + 1, 0));
-  const desdeCalculo = isoDateLocal(new Date(anio, mes - 1, 1));
+  const desdeCalculo = isoDateLocal(new Date(anio, mes - 6, 1));
   const [data, pagos, chats] = await Promise.all([
     cargarClasesFamilia({ hijos: hijosFamilia, ids, hijosPorId, desde: desdeCalculo, hasta, limit: 500 }),
     cargarPagosFamiliaFirestore(),
@@ -2123,15 +2884,23 @@ async function cargarClasesCalendario(anio, mes) {
   ]);
   const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijosFamilia, clases: data, chats });
   hydratePaymentSchedulesForCalendar(identityResolver);
-  const clasesConPago = applyClassPaymentContext(data, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const propuestasPuntuales = data.filter(isOneOffProposalRow).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
+  const clasesReales = data.filter((clase) => !isOneOffProposalRow(clase));
+  const clasesConPago = applyClassPaymentContext(clasesReales, pagos).map((clase) => hydrateCalendarClassIdentity(clase, identityResolver));
   const clasesMes = clasesConPago.filter((clase) => {
     const dateIso = classDateIso(clase);
     return dateIso >= desde && dateIso <= hasta;
-  });
+  }).concat(propuestasPuntuales.filter((clase) => {
+    const dateIso = classDateIso(clase);
+    return dateIso >= desde && dateIso <= hasta;
+  }));
   const groups = buildFamilyPaymentConfirmationGroups(clasesConPago, pagos, paymentScheduleIndexFamilia())
     .map((group) => hydrateFamilyPaymentGroupIdentity(group, identityResolver));
   const paymentEvents = buildFamilyPaymentCalendarEvents(groups, anio, mes);
-  familyPaymentGroupsCache = new Map(groups.map((group) => [group.key, group]));
+  familyPaymentGroupsCache = new Map([
+    ...groups.map((group) => [group.key, group]),
+    ...paymentEvents.map((event) => [event.paymentGroupKey, event.paymentGroup]).filter(([key, group]) => key && group),
+  ]);
   calendarClassById = new Map(clasesMes.map((clase) => [String(clase.id), clase]));
   calendarExportItems = [...paymentEvents, ...clasesMes];
   cal.setClases(calendarExportItems);
@@ -2152,6 +2921,11 @@ async function cargarClases() {
   const estado  = document.getElementById('filtro-cl-estado').value;
   const mes     = document.getElementById('filtro-cl-mes').value;
   const ids     = hijoSel ? [hijoSel] : hijosFamilia.map(h => h.id);
+  const now = new Date();
+  const desdeFiltro = mes ? `${mes}-01` : isoDateLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const hastaFiltro = mes
+    ? isoDateLocal(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0))
+    : isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 12, 0));
   const hijosPorId = new Map(hijosFamilia.map((hijo) => [
     hijo.id,
     personDisplayName('Alumno', hijo.id, fullPersonName(hijo.nombre, hijo.apellidos)),
@@ -2161,6 +2935,8 @@ async function cargarClases() {
     hijos: hijosFamilia,
     ids,
     hijosPorId,
+    desde: desdeFiltro,
+    hasta: hastaFiltro,
     limit: 220,
     strictStudentFilter: Boolean(hijoSel),
   });
@@ -2174,12 +2950,11 @@ async function cargarClases() {
     return;
   }
   if (estado && estado !== 'confirmada') {
-    filtered = filtered.filter((clase) => classStatusForBadge(clase) === estado || clase.estado === estado || clase.status === estado);
-  }
-  if (mes) {
-    const desdeMes = `${mes}-01`;
-    const hastaMes = `${mes}-31`;
-    filtered = filtered.filter((clase) => String(clase.fecha || clase.date || '') >= desdeMes && String(clase.fecha || clase.date || '') <= hastaMes);
+    filtered = filtered.filter((clase) => (
+      isOneOffProposalRow(clase)
+        ? estado === 'pendiente'
+        : classStatusForBadge(clase) === estado || clase.estado === estado || clase.status === estado
+    ));
   }
   filtered.sort((a, b) => String(b.fecha || b.date || '').localeCompare(String(a.fecha || a.date || '')) || String(b.hora_inicio || b.startTime || '').localeCompare(String(a.hora_inicio || a.startTime || '')));
   const clases = estado === 'confirmada'
@@ -2201,7 +2976,9 @@ async function cargarClases() {
   tbody.innerHTML = clases.map(c => {
     const alumnoNombre = personDisplayName('Alumno', c.studentId || c.alumno_id, c.studentDisplayName, c.alumno_nombre, c.studentName, hijosPorId.get(c.studentId || c.alumno_id));
     const profesorNombre = teacherDisplayName(c);
-    const acciones = renderFamilyClassActions(c);
+    const acciones = isOneOffProposalRow(c) ? renderFamilyOneOffProposalActions(c) : renderFamilyClassActions(c);
+    const estadoHtml = isOneOffProposalRow(c) ? oneOffProposalBadge() : badgeEstado(classStatusForBadge(c));
+    const seguimientoHtml = isOneOffProposalRow(c) ? renderFamilyOneOffProposalStatus(c) : labelConfirmacionFamilia(c);
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
@@ -2209,8 +2986,8 @@ async function cargarClases() {
     <td>${sanitize(profesorNombre)}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
-    <td>${badgeEstado(classStatusForBadge(c))}</td>
-    <td>${labelConfirmacionFamilia(c)}</td>
+    <td>${estadoHtml}</td>
+    <td>${seguimientoHtml}</td>
     <td>${acciones}</td>
   </tr>`;
   }).join('');
@@ -2220,9 +2997,18 @@ async function cargarClases() {
 });
 
 document.getElementById('tbody-clases')?.addEventListener('click', async (event) => {
+  const acceptOneOff = event.target.closest('[data-action="aceptar-propuesta-puntual-familia"]');
+  if (acceptOneOff) {
+    await responderPropuestaPuntualFamilia(acceptOneOff, true);
+    return;
+  }
+  const rejectOneOff = event.target.closest('[data-action="rechazar-propuesta-puntual-familia"]');
+  if (rejectOneOff) {
+    await responderPropuestaPuntualFamilia(rejectOneOff, false);
+    return;
+  }
   const btn = event.target.closest('[data-action="confirmar-clase-familia"]');
-  if (!btn) return;
-  await confirmarClaseFamiliaDesdeBoton(btn);
+  if (btn) await confirmarClaseFamiliaDesdeBoton(btn);
 });
 
 document.querySelector('[data-action="exportar-calendario-mes"]')?.addEventListener('click', () => {
@@ -2234,9 +3020,31 @@ document.querySelector('[data-action="exportar-calendario-completo"]')?.addEvent
 });
 
 document.getElementById('cal-clases-dia')?.addEventListener('click', async (event) => {
+  const acceptOneOff = event.target.closest('[data-action="aceptar-propuesta-puntual-familia"]');
+  if (acceptOneOff) {
+    await responderPropuestaPuntualFamilia(acceptOneOff, true);
+    return;
+  }
+  const rejectOneOff = event.target.closest('[data-action="rechazar-propuesta-puntual-familia"]');
+  if (rejectOneOff) {
+    await responderPropuestaPuntualFamilia(rejectOneOff, false);
+    return;
+  }
   const payBizumBtn = event.target.closest('[data-action="pagar-bizum-calendario"]');
   if (payBizumBtn) {
     await pagarBizumDesdeCalendario(payBizumBtn.dataset.key);
+    return;
+  }
+  const sendProofBtn = event.target.closest('[data-action="enviar-justificante-calendario"]');
+  if (sendProofBtn) {
+    const group = familyPaymentGroupsCache.get(sendProofBtn.dataset.key);
+    if (group) abrirModalPagoGrupo(group);
+    else showToast('Pago no disponible', 'Recarga el calendario y vuelve a intentarlo.', 'warning');
+    return;
+  }
+  const openProofsBtn = event.target.closest('[data-action="abrir-justificantes"]');
+  if (openProofsBtn) {
+    irA('pagos');
     return;
   }
   const copyBizumBtn = event.target.closest('[data-action="copiar-bizum-calendario"]');
@@ -2277,7 +3085,7 @@ async function pagarBizumDesdeCalendario(groupKey) {
     window.location.href = url;
     showToast('Bizum preparado', 'Si tu banco no se abre automaticamente, usa los datos copiados y registra el justificante en el modal.', 'info');
   } else {
-    showToast('Falta telefono Bizum', 'No tenemos un telefono Bizum del profesor. Registra el pago con referencia o justificante.', 'warning');
+    showToast('Bizum no abierto', 'Usa los datos copiados de ClasesDe10 y registra el justificante en el modal.', 'warning');
   }
   abrirModalPagoGrupo(group);
 }
@@ -2289,9 +3097,16 @@ async function cancelarClaseDesdeCalendario(btn) {
     showToast('Clase no disponible', 'Recarga el calendario e intentalo otra vez.', 'warning');
     return;
   }
-  const confirmada = window.confirm(`¿Cancelar esta clase? Se avisara al profesor y se registraran ${CLASS_CANCELLATION_PENALTY_POINTS} puntos de responsabilidad en tu historial.`);
-  if (!confirmada) return;
-  const motivo = window.prompt('Motivo breve de la cancelacion', 'Cancelada por la familia desde el calendario') || 'Cancelada por la familia desde el calendario';
+  const motivo = await promptAction({
+    title: 'Cancelar clase',
+    message: `Se avisara al profesor y se registraran ${CLASS_CANCELLATION_PENALTY_POINTS} puntos de responsabilidad en tu historial.`,
+    label: 'Motivo de la cancelacion',
+    initialValue: 'Cancelada por la familia desde el calendario',
+    required: true,
+    confirmText: 'Cancelar clase',
+    tone: 'danger',
+  });
+  if (motivo === null) return;
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Cancelando...';
@@ -2350,7 +3165,13 @@ async function guardarConfirmacionClaseFamilia(control, status) {
   if (!isSelect) control.textContent = 'Guardando...';
 
   const notas = ['incidencia', 'no_realizada'].includes(status)
-    ? window.prompt(status === 'no_realizada' ? 'Cuentanos por que no se dio la clase para avisar al administrador:' : 'Cuentanos brevemente que paso con la clase:') || ''
+    ? await promptAction({
+      title: status === 'no_realizada' ? 'Clase no realizada' : 'Informar de una incidencia',
+      message: 'Explica brevemente que ocurrio para que el profesor y el equipo puedan resolverlo.',
+      label: 'Motivo',
+      required: true,
+      confirmText: 'Guardar y avisar',
+    }) || ''
     : '';
   if (['incidencia', 'no_realizada'].includes(status) && !notas.trim()) {
     restoreControl();
@@ -2372,34 +3193,18 @@ async function guardarConfirmacionClaseFamilia(control, status) {
   }
 
   if (['incidencia', 'no_realizada'].includes(status)) {
-    const title = 'Clase marcada como no dada';
-    const description = notas || 'Clase marcada como no dada por la familia.';
     const incidentPayload = {
-      classId,
-      clase_id: classId,
-      familyUid: claseActual?.familyUid || claseActual?.familia_id || familiaFirestoreId,
-      familia_id: claseActual?.familia_id || claseActual?.familyUid || familiaFirestoreId,
-      teacherUid: claseActual?.teacherUid || claseActual?.profesor_id || '',
-      profesor_id: claseActual?.profesor_id || claseActual?.teacherUid || '',
-      studentId: claseActual?.studentId || claseActual?.alumno_id || '',
-      alumno_id: claseActual?.alumno_id || claseActual?.studentId || '',
-      tipo: 'family_confirmation',
-      titulo: title,
-      title,
-      descripcion: description,
-      description,
-      estado: 'abierta',
-      status: 'abierta',
-      prioridad: 'alta',
-      priority: 'high',
-      categoria: 'clase',
-      category: 'clase',
-      reportado_por: ownerUid(),
-      userUid: ownerUid(),
-      createdByUid: ownerUid(),
-      createdByEmail: usuario.email || '',
-      source: 'family_confirmation',
-      automatic: false,
+      ...buildParticipantClassIncidentCreatePayload(
+        classId,
+        {
+          ...claseActual,
+          familyUid: claseActual?.familyUid || claseActual?.familia_id || familiaFirestoreId,
+          familia_id: claseActual?.familia_id || claseActual?.familyUid || familiaFirestoreId,
+        },
+        'family_confirmation',
+        notas || 'Clase marcada como no dada por la familia.',
+        { uid: ownerUid(), email: usuario.email || '' },
+      ),
       createdAt: serverTimestamp(),
       created_at: new Date().toISOString(),
     };
@@ -2542,6 +3347,37 @@ function formatPaymentDueAt(value) {
   return `${date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+function familyPaymentGroupForClass(clase = {}) {
+  const classId = String(clase.id || clase.classId || clase.calendarUid || '').trim();
+  if (!classId) return null;
+  for (const group of familyPaymentGroupsCache.values()) {
+    if ((group.classIds || []).map(String).includes(classId)) return group;
+  }
+  return null;
+}
+
+function renderFamilyCalendarProofMinimal(clase = {}) {
+  const state = familyPaymentStateForClass(clase);
+  const group = familyPaymentGroupForClass(clase);
+  const dueText = state.dueAt ? formatPaymentDueAt(state.dueAt) : 'pendiente de configurar';
+  const linkedText = group?.key
+    ? `Incluida en el pago agrupado de ${formatPaymentDueAt(group.dueAt || state.dueAt) || 'su dia de pago'}`
+    : 'Se justificara desde el dia de pago agrupado';
+  const stateText = paymentStateCompactText(state);
+  const showAction = ['pending', 'overdue', 'rejected'].includes(state.state);
+  const actionButton = showAction
+    ? (group?.key
+      ? `<button class="btn btn-outline btn-sm" type="button" data-action="enviar-justificante-calendario" data-key="${sanitize(group.key)}">Subir justificante</button>`
+      : '<button class="btn btn-outline btn-sm" type="button" data-action="abrir-justificantes">Subir justificante</button>')
+    : '';
+  return `
+    <div class="calendar-proof-minimal proof-${sanitize(state.state)}">
+      <span>${sanitize(stateText)} · Limite ${sanitize(dueText)}</span>
+      <small>${sanitize(linkedText)}</small>
+      ${actionButton}
+    </div>`;
+}
+
 function renderPaymentStateBadge(clase = {}) {
   const state = familyPaymentStateForClass(clase);
   const dueText = state.dueAt
@@ -2670,6 +3506,133 @@ function paymentScheduleGroupKey(schedule = {}, dateIso = '') {
   return [assignmentId || `${teacherUid}:${studentId}`, dateIso].join('|');
 }
 
+function familyPaymentRelationKey(source = {}) {
+  const assignmentId = String(source.assignmentId || source.asignacion_id || '').trim();
+  const teacherUid = String(source.teacherUid || source.profesor_id || '').trim();
+  const studentId = String(source.studentId || source.alumno_id || '').trim();
+  return assignmentId || `${teacherUid || 'teacher'}:${studentId || 'student'}`;
+}
+
+function hasFamilyPaymentRelationIdentity(source = {}) {
+  const assignmentId = String(source.assignmentId || source.asignacion_id || '').trim();
+  const teacherUid = String(source.teacherUid || source.profesor_id || '').trim();
+  const studentId = String(source.studentId || source.alumno_id || '').trim();
+  return Boolean(assignmentId || (teacherUid && studentId));
+}
+
+function familyPaymentSameRelation(left = {}, right = {}) {
+  return samePaymentRelation(left, right)
+    || (
+      hasFamilyPaymentRelationIdentity(left)
+      && hasFamilyPaymentRelationIdentity(right)
+      && familyPaymentRelationKey(left) === familyPaymentRelationKey(right)
+    );
+}
+
+function paymentScheduleTimeValue(schedule = {}) {
+  const raw = String(schedule.time || schedule.paymentTime || schedule.hora_pago || '20:00').slice(0, 5);
+  return /^\d{2}:\d{2}$/.test(raw) ? raw : '20:00';
+}
+
+function paymentScheduleDueAtForDate(schedule = {}, dateIso = '') {
+  const date = localDateFromIso(dateIso);
+  if (!date) return '';
+  const [hours, minutes] = paymentScheduleTimeValue(schedule).split(':').map(Number);
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+function previousPaymentScheduleDueAtForDate(schedule = {}, dateIso = '') {
+  const dueAt = paymentScheduleDueAtForDate(schedule, dateIso);
+  if (!dueAt) return '';
+  const date = new Date(dueAt);
+  date.setDate(date.getDate() - (paymentScheduleFrequencyValue(schedule) === 'quincenal' ? 14 : 7));
+  return date.toISOString();
+}
+
+function paymentGroupDateIso(group = {}) {
+  return paymentGroupDueDateIso(group) || String(group.dueDate || group.date || group.fecha || '').slice(0, 10);
+}
+
+function groupClassLinesWithBucket(group = {}, bucket = 'current') {
+  return (group.classes || []).map((clase) => ({
+    ...clase,
+    paymentBucket: bucket,
+    paymentDueAt: clase.paymentDueAt || group.dueAt || '',
+    originalDueAt: clase.originalDueAt || group.dueAt || '',
+  }));
+}
+
+function mergeFamilyPaymentClasses(groups = [], bucket = 'current') {
+  const byId = new Map();
+  (groups || []).flatMap((group) => groupClassLinesWithBucket(group, bucket)).forEach((clase) => {
+    const id = String(clase.id || '').trim();
+    if (!id || byId.has(id)) return;
+    byId.set(id, clase);
+  });
+  return Array.from(byId.values()).sort((a, b) => (
+    String(a.date || '').localeCompare(String(b.date || ''))
+      || String(a.startTime || '').localeCompare(String(b.startTime || ''))
+  ));
+}
+
+function sumPaymentGroupAmounts(groups = []) {
+  return Math.round((groups || []).reduce((sum, group) => sum + Number(group.amount || 0), 0) * 100) / 100;
+}
+
+function mergedPaymentGroupForScheduleDate(schedule = {}, dateIso = '', groups = []) {
+  const sameRelation = (groups || []).filter((group) => familyPaymentSameRelation(schedule, group));
+  const currentGroups = sameRelation.filter((group) => paymentGroupDateIso(group) === dateIso);
+  const carryoverGroups = sameRelation.filter((group) => {
+    const dueDate = paymentGroupDateIso(group);
+    return dueDate && dueDate < dateIso;
+  });
+  const sourceGroups = [...carryoverGroups, ...currentGroups];
+  const currentPeriodClasses = mergeFamilyPaymentClasses(currentGroups, 'current');
+  const overdueClasses = mergeFamilyPaymentClasses(carryoverGroups, 'overdue');
+  const classes = [...overdueClasses, ...currentPeriodClasses];
+  const key = paymentScheduleGroupKey(schedule, dateIso);
+  const dueAt = paymentScheduleDueAtForDate(schedule, dateIso) || dateIso;
+  const previousDueAt = previousPaymentScheduleDueAtForDate(schedule, dateIso);
+  const currentAmount = sumPaymentGroupAmounts(currentGroups);
+  const overdueAmount = sumPaymentGroupAmounts(carryoverGroups);
+  const amount = Math.round((currentAmount + overdueAmount) * 100) / 100;
+  return {
+    key,
+    familyUid: schedule.familyUid || schedule.familia_id || sourceGroups[0]?.familyUid || sourceGroups[0]?.familia_id || '',
+    familia_id: schedule.familia_id || schedule.familyUid || sourceGroups[0]?.familia_id || sourceGroups[0]?.familyUid || '',
+    teacherUid: schedule.teacherUid || schedule.profesor_id || sourceGroups[0]?.teacherUid || sourceGroups[0]?.profesor_id || '',
+    profesor_id: schedule.profesor_id || schedule.teacherUid || sourceGroups[0]?.profesor_id || sourceGroups[0]?.teacherUid || '',
+    studentId: schedule.studentId || schedule.alumno_id || sourceGroups[0]?.studentId || sourceGroups[0]?.alumno_id || '',
+    alumno_id: schedule.alumno_id || schedule.studentId || sourceGroups[0]?.alumno_id || sourceGroups[0]?.studentId || '',
+    assignmentId: schedule.assignmentId || schedule.asignacion_id || sourceGroups[0]?.assignmentId || sourceGroups[0]?.asignacion_id || '',
+    asignacion_id: schedule.asignacion_id || schedule.assignmentId || sourceGroups[0]?.asignacion_id || sourceGroups[0]?.assignmentId || '',
+    dueAt,
+    paymentPeriodStart: previousDueAt,
+    paymentPeriodEnd: dueAt,
+    amount,
+    currentPeriodAmount: currentAmount,
+    overdueAmount,
+    classIds: classes.map((clase) => String(clase.id)).filter(Boolean),
+    classes,
+    currentPeriodClasses,
+    overdueClasses,
+    classCount: classes.length,
+    currentPeriodClassCount: currentPeriodClasses.length,
+    overdueClassCount: overdueClasses.length,
+    overdue: overdueClasses.length > 0 || sourceGroups.some((group) => group.overdue === true),
+    hasOverdueCarryover: overdueClasses.length > 0,
+    status: overdueClasses.length ? 'vencido' : amount > 0 ? 'pendiente' : 'programado',
+    scheduleOnly: amount <= 0,
+    label: paymentScheduleLabel(schedule),
+    subjects: Array.from(new Set(sourceGroups.flatMap((group) => group.subjects || []))).filter(Boolean),
+    studentName: personDisplayName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre, sourceGroups[0]?.studentName, sourceGroups[0]?.alumno_nombre),
+    alumno_nombre: personDisplayName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre, sourceGroups[0]?.studentName, sourceGroups[0]?.alumno_nombre),
+    teacherName: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, sourceGroups[0]?.teacherName, sourceGroups[0]?.profesor_nombre),
+    profesor_nombre: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, sourceGroups[0]?.teacherName, sourceGroups[0]?.profesor_nombre),
+  };
+}
+
 function paymentScheduleDatesForMonth(schedule = {}, anio, mes) {
   const monthStart = new Date(anio, mes, 1);
   const monthEnd = new Date(anio, mes + 1, 0);
@@ -2702,49 +3665,30 @@ function paymentScheduleDatesForMonth(schedule = {}, anio, mes) {
 }
 
 function buildFamilyPaymentScheduleCalendarEvents(groups = [], anio, mes) {
-  const groupKeys = new Set((groups || []).map((group) => group.key).filter(Boolean));
   return uniqueFamilyPaymentSchedules().flatMap((schedule) => (
     paymentScheduleDatesForMonth(schedule, anio, mes)
       .map((dateIso) => {
-        const key = paymentScheduleGroupKey(schedule, dateIso);
-        if (groupKeys.has(key)) return null;
+        const paymentGroup = mergedPaymentGroupForScheduleDate(schedule, dateIso, groups);
         return {
           id: `family-payment-schedule-${schedule.id}-${dateIso}`,
           calendarEventType: 'family_payment_due',
-          calendarTitle: 'ClasesDe10 - Dia de pago',
+          calendarTitle: paymentGroup.overdue ? 'ClasesDe10 - Pago con impagos' : 'ClasesDe10 - Dia de pago',
           calendarDescription: [
             paymentScheduleLabel(schedule),
-            'No hay clases pendientes agrupadas en este vencimiento.',
+            paymentGroup.classCount
+              ? `${paymentGroup.classCount} clase(s) incluidas. Importe: ${formatEuros(paymentGroup.amount || 0)}.`
+              : 'No hay clases pendientes agrupadas en este vencimiento.',
+            paymentGroup.hasOverdueCarryover
+              ? `Incluye ${paymentGroup.overdueClassCount} impago(s) anterior(es) por ${formatEuros(paymentGroup.overdueAmount || 0)}.`
+              : '',
+            'Bizum a Miguel G. G. (613016665). ClasesDe10 liquidara despues al profesor.',
           ].join('\n'),
           fecha: dateIso,
           date: dateIso,
           dueDate: dateIso,
-          paymentGroupKey: key,
-          paymentGroup: {
-            key,
-            scheduleOnly: true,
-            familyUid: schedule.familyUid || schedule.familia_id || '',
-            familia_id: schedule.familia_id || schedule.familyUid || '',
-            teacherUid: schedule.teacherUid || schedule.profesor_id || '',
-            profesor_id: schedule.profesor_id || schedule.teacherUid || '',
-            studentId: schedule.studentId || schedule.alumno_id || '',
-            alumno_id: schedule.alumno_id || schedule.studentId || '',
-            assignmentId: schedule.assignmentId || schedule.asignacion_id || '',
-            asignacion_id: schedule.asignacion_id || schedule.assignmentId || '',
-            dueAt: dateIso,
-            amount: 0,
-            classIds: [],
-            classes: [],
-            classCount: 0,
-            overdue: false,
-            status: 'programado',
-            label: paymentScheduleLabel(schedule),
-            studentName: personDisplayName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre),
-            alumno_nombre: personDisplayName('Alumno', schedule.studentId || schedule.alumno_id, schedule.studentName, schedule.alumno_nombre),
-            teacherName: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre),
-            profesor_nombre: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre),
-          },
-          overdue: false,
+          paymentGroupKey: paymentGroup.key,
+          paymentGroup,
+          overdue: paymentGroup.overdue === true,
         };
       })
       .filter(Boolean)
@@ -2754,10 +3698,14 @@ function buildFamilyPaymentScheduleCalendarEvents(groups = [], anio, mes) {
 function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
   const monthStart = `${anio}-${String(mes + 1).padStart(2, '0')}-01`;
   const monthEnd = isoDateLocal(new Date(anio, mes + 1, 0));
+  const scheduleEvents = buildFamilyPaymentScheduleCalendarEvents(groups, anio, mes);
+  const scheduleKeys = new Set(scheduleEvents.map((event) => event.paymentGroupKey).filter(Boolean));
+  const scheduleRelations = uniqueFamilyPaymentSchedules();
   const dueEvents = (groups || [])
     .filter((group) => {
       const dueDate = paymentGroupDueDateIso(group);
-      return dueDate && dueDate >= monthStart && dueDate <= monthEnd;
+      const isScheduledRelation = scheduleRelations.some((schedule) => familyPaymentSameRelation(schedule, group));
+      return dueDate && dueDate >= monthStart && dueDate <= monthEnd && !scheduleKeys.has(group.key) && !isScheduledRelation;
     })
     .map((group) => ({
       id: `family-payment-due-${group.key}`,
@@ -2767,6 +3715,7 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
         familyPaymentGroupTitle(group),
         `Importe: ${formatEuros(group.amount || 0)}`,
         `${group.classCount || group.classIds?.length || 1} clase(s) incluidas`,
+        'Bizum a Miguel G. G. (613016665). ClasesDe10 recibe el pago y despues liquida al profesor correspondiente.',
       ].join('\n'),
       fecha: paymentGroupDueDateIso(group),
       date: paymentGroupDueDateIso(group),
@@ -2774,7 +3723,6 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
       paymentGroup: group,
       overdue: group.overdue === true,
     }));
-  const scheduleEvents = buildFamilyPaymentScheduleCalendarEvents(groups, anio, mes);
   return [...dueEvents, ...scheduleEvents].sort((a, b) => (
     String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || ''))
       || Number(b.overdue === true) - Number(a.overdue === true)
@@ -2782,8 +3730,12 @@ function buildFamilyPaymentCalendarEvents(groups = [], anio, mes) {
   ));
 }
 
+function platformPaymentRecipient() {
+  return familyPaymentRecipient();
+}
+
 function bizumPhoneForGroup(group = {}) {
-  return String(group.bizumPhone || group.teacherPhone || '').replace(/\s+/g, '');
+  return String(platformPaymentRecipient().phone || group.paymentRecipientPhone || '').replace(/\s+/g, '');
 }
 
 function bizumConceptForGroup(group = {}) {
@@ -2799,15 +3751,18 @@ function bizumUrlForGroup(group = {}) {
 }
 
 async function copyBizumPaymentDetails(group = {}) {
-  const phone = bizumPhoneForGroup(group) || 'telefono del profesor';
+  const recipient = platformPaymentRecipient();
+  const phone = bizumPhoneForGroup(group);
   const text = [
-    `Bizum: ${phone}`,
+    `Bizum ClasesDe10: ${phone}`,
+    `Destinatario: ${recipient.name}`,
     `Importe: ${formatEuros(group.amount || 0)}`,
     `Concepto: ${bizumConceptForGroup(group)}`,
+    'ClasesDe10 recibe el pago y despues liquida al profesor correspondiente.',
   ].join('\n');
   try {
     await navigator.clipboard.writeText(text);
-    showToast('Datos de Bizum copiados', 'Telefono, importe y concepto quedan en el portapapeles.', 'success');
+    showToast('Datos de Bizum copiados', 'Telefono de ClasesDe10, destinatario, importe y concepto quedan copiados.', 'success');
   } catch (_) {
     showToast('Datos de Bizum', text, 'info');
   }
@@ -2817,15 +3772,28 @@ function renderFamilyPaymentDueCalendarCard(event = {}) {
   const group = event.paymentGroup || {};
   const schedule = paymentScheduleFor(group);
   const hasPayableClasses = Number(group.amount || 0) > 0 && Number(group.classCount || group.classIds?.length || 0) > 0;
+  const periodText = group.paymentPeriodStart && group.paymentPeriodEnd
+    ? `Clases desde ${formatPaymentDueAt(group.paymentPeriodStart)} hasta ${formatPaymentDueAt(group.paymentPeriodEnd)}`
+    : 'Periodo de pago configurado';
+  const overdueDates = (group.overdueClasses || [])
+    .map((clase) => formatFechaCorta(clase.date))
+    .filter(Boolean)
+    .filter((date, index, list) => list.indexOf(date) === index)
+    .slice(0, 6)
+    .join(', ');
+  const overdueExplanation = group.hasOverdueCarryover
+    ? `Además hay ${group.overdueClassCount || group.overdueClasses?.length || 0} clase(s) impagada(s) de ${overdueDates || 'días anteriores'} por ${formatEuros(group.overdueAmount || 0)}.`
+    : '';
   const rows = (group.classes || []).slice(0, 6).map((clase) => `
-    <div class="calendar-payout-row">
+    <div class="calendar-payout-row ${clase.paymentBucket === 'overdue' ? 'is-overdue' : ''}">
       <span>${sanitize(formatFechaCorta(clase.date))}${clase.startTime ? ` ${sanitize(formatHora(clase.startTime))}` : ''}</span>
-      <strong>${sanitize(clase.subject || 'Clase')}</strong>
+      <strong>${clase.paymentBucket === 'overdue' ? '<em>Impago</em> ' : ''}${sanitize(clase.subject || 'Clase')}</strong>
       <em>${sanitize(formatEuros(clase.amount))}</em>
     </div>`).join('');
   const extra = group.classCount > 6
     ? `<div class="calendar-payout-more">+${group.classCount - 6} clase(s) mas en este pago</div>`
     : '';
+  const recipient = platformPaymentRecipient();
   const phone = bizumPhoneForGroup(group);
   return `
     <div class="clase-item calendar-payment-due-item ${group.overdue ? 'is-overdue' : ''}" style="padding:12px 16px">
@@ -2836,10 +3804,18 @@ function renderFamilyPaymentDueCalendarCard(event = {}) {
       <div class="clase-info">
         <div class="clase-nombre">${sanitize(familyPaymentGroupTitle(group))}</div>
         <div class="clase-materia">${sanitize(schedule ? paymentScheduleLabel(schedule) : 'Día de pago')}</div>
+        <div class="calendar-payment-period">${sanitize(periodText)}</div>
+        ${overdueExplanation ? `<div class="calendar-payment-overdue-note">${sanitize(overdueExplanation)}</div>` : ''}
         <div class="calendar-payout-summary">
-          <span class="badge ${group.overdue ? 'badge-danger' : group.scheduleOnly ? 'badge-info' : 'badge-warning'}">${group.overdue ? 'Vencido' : group.scheduleOnly ? 'Programado' : 'Pendiente'}</span>
+          <span class="badge ${group.overdue ? 'badge-danger' : group.scheduleOnly ? 'badge-info' : 'badge-warning'}">${group.hasOverdueCarryover ? 'Impagos' : group.overdue ? 'Vencido' : group.scheduleOnly ? 'Programado' : 'Pendiente'}</span>
           <strong>${hasPayableClasses ? sanitize(formatEuros(group.amount || 0)) : 'Sin importe pendiente'}</strong>
         </div>
+        ${hasPayableClasses && group.hasOverdueCarryover ? `
+          <div class="calendar-payment-split">
+            <span>Este periodo: ${sanitize(formatEuros(group.currentPeriodAmount || 0))}</span>
+            <span>Impagado anterior: ${sanitize(formatEuros(group.overdueAmount || 0))}</span>
+          </div>
+        ` : ''}
         <div class="calendar-payout-detail">
           ${rows || '<div class="calendar-payout-empty">Dia de pago configurado. Ahora mismo no hay clases pendientes en este vencimiento.</div>'}
           ${extra}
@@ -2847,9 +3823,10 @@ function renderFamilyPaymentDueCalendarCard(event = {}) {
         ${hasPayableClasses ? `
           <div class="calendar-bizum-actions">
             <button class="btn btn-primary btn-sm" type="button" data-action="pagar-bizum-calendario" data-key="${sanitize(group.key)}">Pagar con Bizum ahora</button>
+            <button class="btn btn-outline btn-sm" type="button" data-action="enviar-justificante-calendario" data-key="${sanitize(group.key)}">Enviar justificante</button>
             <button class="btn btn-ghost btn-sm" type="button" data-action="copiar-bizum-calendario" data-key="${sanitize(group.key)}">Copiar datos</button>
           </div>
-          <div class="calendar-bizum-hint">${phone ? `Telefono Bizum: ${sanitize(phone)}` : 'Telefono Bizum no disponible: confirma el pago desde el modal con referencia o justificante.'}</div>
+          <div class="calendar-bizum-hint">Bizum a ${sanitize(recipient.name)} (${sanitize(phone)}). ClasesDe10 recibe el pago y despues liquida al profesor.</div>
         ` : ''}
       </div>
     </div>`;
@@ -3206,7 +4183,7 @@ document.addEventListener('click', (e) => {
     document.getElementById('modal-solicitud').classList.add('open');
   }
   if (e.target.closest('[data-action="abrir-modal-pago"]')) {
-    document.getElementById('modal-pago').classList.add('open');
+    abrirPagoConClasesPendientes();
   }
 });
 
@@ -3468,7 +4445,7 @@ async function cargarSolicitudes() {
       icon: '📝',
       title: 'Todavía no has enviado solicitudes',
       description: hijosLista.length
-        ? 'Elige un alumno, indica materia y horario preferido. Nosotros revisamos el matching y te avisamos.'
+        ? 'Elige un alumno, indica materia y horario preferido. Buscaremos un profesor compatible y te avisaremos.'
         : 'Primero añade un alumno. Después te guiaremos directamente para solicitar profesor.',
       actions: hijosLista.length
         ? [emptyAction('Crear solicitud', { 'data-action': 'abrir-modal-solicitud' }, 'gold')]
@@ -3519,7 +4496,7 @@ document.getElementById('btn-enviar-solicitud').addEventListener('click', async 
   document.getElementById('sol-materia').value = '';
   document.getElementById('sol-horario').value = '';
   document.getElementById('sol-observaciones').value = '';
-  showToast('Solicitud enviada', 'Siguiente paso: revisaremos el matching y te avisaremos cuando haya profesor, chat y horario.', 'success');
+  showToast('Solicitud enviada', 'Te avisaremos cuando encontremos un profesor compatible y puedas cerrar el horario.', 'success');
   await cargarSolicitudes();
   irA('inicio');
   } catch (error) {
@@ -3572,26 +4549,64 @@ async function cargarPagosFamiliaFirestore() {
 
 function renderPaymentClassLine(clase = {}) {
   const time = [clase.startTime, clase.endTime].filter(Boolean).join('-');
+  const paymentWindow = clase.paymentBucket === 'overdue'
+    ? { label: 'Impagada', className: 'is-overdue' }
+    : clase.paymentBucket === 'upcoming'
+      ? { label: 'Próximo pago', className: 'is-upcoming' }
+      : { label: 'Pago actual', className: 'is-due-now' };
   return `<li>
-    <span>${sanitize(formatFechaCorta(clase.date))}${time ? ` · ${sanitize(time)}` : ''}</span>
+    <span>
+      <strong>${sanitize(clase.subject || 'Clase')}</strong>
+      <small>${sanitize(formatFechaCorta(clase.date))}${time ? ` · ${sanitize(time)}` : ''}</small>
+    </span>
+    <em class="payment-class-window ${paymentWindow.className}">${paymentWindow.label}</em>
     <strong>${sanitize(formatEuros(clase.amount))}</strong>
   </li>`;
 }
 
+function familyPaymentWindowCopy(group = {}) {
+  if (group.paymentWindow === 'overdue' || group.overdue) {
+    return {
+      badge: 'vencido',
+      cardClass: 'is-overdue',
+      explanation: 'Estas clases ya debían haberse pagado. Puedes marcarlas junto con las del pago actual.',
+    };
+  }
+  if (group.paymentWindow === 'upcoming' || group.upcoming) {
+    return {
+      badge: 'programado',
+      cardClass: 'is-upcoming',
+      explanation: 'Este pago todavía no vence. Te lo mostramos para que puedas planificarlo.',
+    };
+  }
+  return {
+    badge: 'pendiente',
+    cardClass: 'is-due-now',
+    explanation: 'Este es el pago que corresponde realizar ahora según la fecha acordada.',
+  };
+}
+
 function renderPaymentGroupCard(group = {}) {
+  const paymentWindow = familyPaymentWindowCopy(group);
   const due = group.dueAt ? formatPaymentDueAt(group.dueAt) : 'Sin día de pago definido';
   const subjectText = group.subjects?.length ? group.subjects.join(', ') : 'Clases particulares';
+  const periodText = group.paymentPeriodStart && group.paymentPeriodEnd
+    ? `Periodo: ${formatPaymentDueAt(group.paymentPeriodStart)} - ${formatPaymentDueAt(group.paymentPeriodEnd)}`
+    : '';
   const rows = (group.classes || []).slice(0, 4).map(renderPaymentClassLine).join('');
   const extra = group.classCount > 4 ? `<li><span>Y ${group.classCount - 4} clase(s) mas</span><strong></strong></li>` : '';
   return `
-    <article class="payment-confirm-card ${group.overdue ? 'is-overdue' : ''}">
+    <article class="payment-confirm-card ${paymentWindow.cardClass}">
       <div class="payment-confirm-card-head">
         <div>
           <strong>${sanitize(group.studentName)} · ${sanitize(group.teacherName)}</strong>
           <span>${sanitize(subjectText)} · ${sanitize(group.classCount)} clase(s)</span>
+          ${periodText ? `<span>${sanitize(periodText)}</span>` : ''}
+          ${group.hasOverdueCarryover ? `<span>Incluye impagos anteriores: ${sanitize(formatEuros(group.overdueAmount || 0))}</span>` : ''}
         </div>
-        ${badgeEstado(group.overdue ? 'vencido' : 'pendiente')}
+        ${badgeEstado(paymentWindow.badge)}
       </div>
+      <p class="payment-confirm-card-explanation">${sanitize(paymentWindow.explanation)}</p>
       <ul class="payment-class-lines">${rows}${extra}</ul>
       <div class="payment-confirm-card-footer">
         <div>
@@ -3599,9 +4614,24 @@ function renderPaymentGroupCard(group = {}) {
           <strong>${sanitize(formatEuros(group.amount))}</strong>
           <em>Limite: ${sanitize(due)}</em>
         </div>
-        <button class="btn btn-primary btn-sm" data-action="confirmar-pago-grupo" data-key="${sanitize(group.key)}">Confirmar pago</button>
+        <button class="btn btn-primary btn-sm" data-action="confirmar-pago-grupo" data-key="${sanitize(group.key)}">Elegir clases y registrar</button>
       </div>
     </article>`;
+}
+
+function renderPaymentWindowSection(title, description, groups = [], tone = 'due-now') {
+  if (!groups.length) return '';
+  return `
+    <section class="payment-window-section is-${sanitize(tone)}">
+      <div class="payment-window-head">
+        <div>
+          <strong>${sanitize(title)}</strong>
+          <span>${sanitize(description)}</span>
+        </div>
+        <b>${sanitize(groups.length)}</b>
+      </div>
+      <div class="payment-window-list">${groups.map(renderPaymentGroupCard).join('')}</div>
+    </section>`;
 }
 
 function renderPaymentReviewCard(pago = {}) {
@@ -3620,12 +4650,79 @@ function renderPaymentReviewCard(pago = {}) {
     </div>`;
 }
 
+function paymentClassIds(pago = {}) {
+  return Array.isArray(pago.classIds) ? pago.classIds.map(String).filter(Boolean) : [];
+}
+
+function paymentGroupKeyForRejectedPayment(pago = {}, groups = []) {
+  const ids = new Set(paymentClassIds(pago));
+  if (!ids.size) return '';
+  const match = (groups || []).find((group) => (group.classIds || []).some((id) => ids.has(String(id))));
+  return match?.key || '';
+}
+
+function paymentFailureReason(pago = {}) {
+  return String(
+    pago.failureReason
+    || pago.rejectionReason
+    || pago.rejectedReason
+    || pago.reviewNotes
+    || pago.notas
+    || '',
+  ).trim();
+}
+
+function renderRejectedPaymentRequestCard(pago = {}, groups = []) {
+  const amount = paymentAmount(pago);
+  const classCount = paymentClassIds(pago).length || Number(pago.classCount || 0);
+  const reason = paymentFailureReason(pago);
+  const groupKey = paymentGroupKeyForRejectedPayment(pago, groups);
+  const actionAttrs = groupKey
+    ? `data-action="confirmar-pago-grupo" data-key="${sanitize(groupKey)}"`
+    : 'data-action="abrir-modal-pago"';
+  return `
+    <div class="payment-review-row payment-review-row-danger">
+      <div>
+        <strong>Justificante no valido</strong>
+        <span>${sanitize(classCount ? `${classCount} clase(s) vuelven a estar pendientes` : 'El pago vuelve a estar pendiente')} - ${sanitize(formatEuros(amount))}</span>
+        <em>Por favor, envia ahora otro justificante valido desde Justificantes.${reason ? ` Motivo: ${sanitize(reason)}` : ''}</em>
+      </div>
+      <div>
+        ${badgeEstado('rechazado')}
+        <button class="btn btn-primary btn-sm" type="button" ${actionAttrs}>Enviar justificante valido</button>
+      </div>
+    </div>`;
+}
+
 function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = false) {
   const container = document.getElementById('family-payment-workbench');
   if (!container) return;
   const openPayments = pagos.filter(isOpenFamilyPayment);
+  const rejectedPayments = pagos.filter(isRejectedFamilyPayment);
+  const overdueGroups = groups.filter((group) => group.paymentWindow === 'overdue' || group.overdue);
+  const dueNowGroups = groups.filter((group) => group.paymentWindow === 'due_now' || (!group.overdue && group.dueNow));
+  const upcomingGroups = groups.filter((group) => group.paymentWindow === 'upcoming' || group.upcoming);
   const pendingHtml = groups.length
-    ? groups.map(renderPaymentGroupCard).join('')
+    ? [
+        renderPaymentWindowSection(
+          'Clases impagadas',
+          'Pagos anteriores que siguen pendientes y conviene regularizar primero.',
+          overdueGroups,
+          'overdue',
+        ),
+        renderPaymentWindowSection(
+          'Pago que toca ahora',
+          'Clases cuyo día de pago ya ha llegado.',
+          dueNowGroups,
+          'due-now',
+        ),
+        renderPaymentWindowSection(
+          'Próximos pagos',
+          'Clases preparadas para el siguiente día de pago.',
+          upcomingGroups,
+          'upcoming',
+        ),
+      ].join('')
     : renderEmptyState({
         icon: 'OK',
         title: hasStudents ? 'No hay clases pendientes de confirmar' : 'Primero anade un alumno',
@@ -3636,8 +4733,12 @@ function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = fal
           ? [emptyAction('Ver clases', { 'data-section': 'clases' }, 'ghost')]
           : [emptyAction('Anadir hijo/a', { 'data-family-journey-action': 'add_student' }, 'primary')],
       });
-  const reviewHtml = openPayments.length
-    ? openPayments.slice(0, 5).map(renderPaymentReviewCard).join('')
+  const reviewRows = [
+    ...rejectedPayments.slice(0, 3).map((pago) => renderRejectedPaymentRequestCard(pago, groups)),
+    ...openPayments.slice(0, 5).map(renderPaymentReviewCard),
+  ];
+  const reviewHtml = reviewRows.length
+    ? reviewRows.join('')
     : `<div class="payment-review-empty">No tienes justificantes en revision.</div>`;
 
   container.innerHTML = `
@@ -3645,8 +4746,8 @@ function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = fal
       <section class="payment-workbench-panel">
         <div class="payment-workbench-head">
           <div>
-            <span>Accion recomendada</span>
-            <strong>Clases listas para confirmar</strong>
+            <span>Registro de pagos</span>
+            <strong>Qué clases tienes que pagar</strong>
           </div>
         </div>
         <div class="payment-confirm-list">${pendingHtml}</div>
@@ -3665,6 +4766,9 @@ function renderFamilyPaymentWorkbench(groups = [], pagos = [], hasStudents = fal
 
 async function cargarPagos() {
   if (!familiaId) return;
+  const now = new Date();
+  const desdePagos = isoDateLocal(new Date(now.getFullYear(), now.getMonth() - 2, 1));
+  const hastaPagos = isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 12, 0));
   const [pagos, { data: hijos }, chats] = await Promise.all([
     cargarPagosFamiliaFirestore(),
     db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId),
@@ -3679,6 +4783,8 @@ async function cargarPagos() {
     hijos: hijos || [],
     ids: (hijos || []).map((hijo) => hijo.id),
     hijosPorId,
+    desde: desdePagos,
+    hasta: hastaPagos,
     limit: 320,
   });
   const identityResolver = buildFamilyCalendarIdentityResolver({ hijos: hijos || [], clases, chats });
@@ -3690,8 +4796,9 @@ async function cargarPagos() {
   renderFamilyPaymentWorkbench(groups, pagos, Boolean((hijos || []).length || clases.length));
 
   const tbody = document.getElementById('tbody-pagos');
+  const clasesPagoPorId = new Map(clasesConIdentidad.map((clase) => [String(clase.id || ''), clase]));
   if (!pagos.length) {
-    tbody.innerHTML = renderTableEmptyState(6, {
+    tbody.innerHTML = renderTableEmptyState(7, {
       icon: 'OK',
       title: 'Aún no hay justificantes registrados',
       description: 'Cuando confirmes un pago, aparecera aqui con su estado de revision.',
@@ -3705,9 +4812,18 @@ async function cargarPagos() {
   tbody.innerHTML = pagos.map(p => {
     const doc = Array.isArray(p.documentos) ? p.documentos[0] : p.documentos;
     const docPath = doc?.storage_path || doc?.storagePath;
+    const linkedClasses = paymentClassIds(p).map((id) => clasesPagoPorId.get(String(id))).filter(Boolean);
+    const linkedClassesHtml = linkedClasses.length
+      ? `<div class="family-payment-history-classes">
+          <strong>${sanitize(linkedClasses.length)} clase(s)</strong>
+          ${linkedClasses.slice(0, 3).map((clase) => `<span>${sanitize(formatFechaCorta(clase.date))} · ${sanitize(clase.subject || 'Clase')}</span>`).join('')}
+          ${linkedClasses.length > 3 ? `<em>+${sanitize(linkedClasses.length - 3)} más</em>` : ''}
+        </div>`
+      : `<span class="family-payment-history-unlinked">${paymentClassIds(p).length ? `${sanitize(paymentClassIds(p).length)} clase(s) vinculada(s)` : 'Sin clases vinculadas'}</span>`;
     return `<tr>
     <td data-label="Fecha">${formatFechaCorta(p.created_at)}</td>
     <td data-label="Concepto">${sanitize(p.concepto || p.notas_familia || 'Pago familiar')}</td>
+    <td data-label="Clases">${linkedClassesHtml}</td>
     <td data-label="Metodo">${sanitize(p.metodo || p.method || 'bizum')}</td>
     <td data-label="Referencia" style="font-family:monospace;font-size:.8rem">${sanitize(p.referencia || p.reference || '—')}</td>
     <td data-label="Estado">${badgeEstado(paymentStatusForBadge(p))}</td>
@@ -3739,11 +4855,124 @@ document.getElementById('family-payment-workbench')?.addEventListener('click', (
 
 function resetPagoFileInput() {
   pagoFile.value = '';
-  pagoZone.querySelector('.upload-zone-title').textContent = 'Adjuntar captura o comprobante si lo tienes';
+  pagoZone.querySelector('.upload-zone-title').textContent = 'Adjuntar justificante del pago';
+}
+
+function paymentSelectableClasses(group = {}) {
+  return (group.classes || []).filter((clase) => String(clase.id || '').trim());
+}
+
+function paymentClassBucketCopy(bucket = 'due') {
+  if (bucket === 'overdue') {
+    return {
+      title: 'Impagadas de pagos anteriores',
+      description: 'Estas clases siguen pendientes.',
+      rowClass: 'is-overdue',
+    };
+  }
+  if (bucket === 'upcoming') {
+    return {
+      title: 'Próximas clases',
+      description: 'Todavía no toca pagarlas.',
+      rowClass: 'is-upcoming',
+    };
+  }
+  return {
+    title: 'Clases de este pago',
+    description: 'Son las que corresponde pagar ahora.',
+    rowClass: 'is-due-now',
+  };
+}
+
+function renderPaymentClassSelection(group = {}) {
+  const classes = paymentSelectableClasses(group);
+  if (!classes.length) {
+    return '<div class="payment-class-selection-empty">No hay clases concretas para marcar en este pago.</div>';
+  }
+  const groupOrder = ['overdue', 'due', 'upcoming'];
+  const groupedRows = groupOrder.map((bucket) => {
+    const bucketClasses = classes.filter((clase) => (clase.paymentBucket || 'due') === bucket);
+    if (!bucketClasses.length) return '';
+    const copy = paymentClassBucketCopy(bucket);
+    const rows = bucketClasses.map((clase) => {
+      const amount = Number(clase.amount || 0);
+      const date = [formatFechaCorta(clase.date), clase.startTime ? formatHora(clase.startTime) : ''].filter(Boolean).join(' ');
+      return `
+        <label class="payment-class-selection-row ${copy.rowClass}">
+          <input type="checkbox"
+                 checked
+                 data-payment-bucket="${sanitize(bucket)}"
+                 data-payment-class-id="${sanitize(clase.id)}"
+                 data-payment-class-amount="${sanitize(amount)}">
+          <span>
+            <strong>${sanitize(clase.subject || 'Clase')}</strong>
+            <em>${sanitize(date || 'Sin fecha')}</em>
+          </span>
+          <b>${sanitize(formatEuros(amount))}</b>
+        </label>`;
+    }).join('');
+    return `
+      <section class="payment-class-selection-group ${copy.rowClass}">
+        <div class="payment-class-selection-group-head">
+          <div>
+            <strong>${sanitize(copy.title)}</strong>
+            <span>${sanitize(copy.description)}</span>
+          </div>
+          <button type="button" data-payment-select-bucket="${sanitize(bucket)}">Desmarcar</button>
+        </div>
+        <div class="payment-class-selection-list">${rows}</div>
+      </section>`;
+  }).join('');
+  return `
+    <div class="payment-class-selection-head">
+      <strong>Clases incluidas en este justificante</strong>
+      <span id="pago-clases-seleccionadas-count"></span>
+    </div>
+    <div class="payment-class-selection-groups">${groupedRows}</div>
+    <p>Marca solo las clases que has pagado con este Bizum. El equipo revisará el justificante junto a las clases seleccionadas.</p>`;
+}
+
+function selectedPaymentClassesFromModal() {
+  const inputs = Array.from(document.querySelectorAll('#pago-clases-seleccionadas input[data-payment-class-id]:checked'));
+  const classIds = inputs.map((input) => String(input.dataset.paymentClassId || '').trim()).filter(Boolean);
+  const amount = Math.round(inputs.reduce((sum, input) => sum + Number(input.dataset.paymentClassAmount || 0), 0) * 100) / 100;
+  return { classIds, amount, count: classIds.length };
+}
+
+function updatePaymentClassSelection() {
+  if (!activePaymentGroup) return;
+  const selected = selectedPaymentClassesFromModal();
+  document.getElementById('pago-class-ids').value = selected.classIds.join(',');
+  document.getElementById('pago-monto').value = selected.amount ? selected.amount.toFixed(2) : '';
+  const count = document.getElementById('pago-clases-seleccionadas-count');
+  const selectionText = `${selected.count} de ${paymentSelectableClasses(activePaymentGroup).length} marcadas · ${formatEuros(selected.amount)}`;
+  if (count) count.textContent = selectionText;
+  const modalSummary = document.querySelector('[data-payment-modal-selection-summary]');
+  if (modalSummary) modalSummary.textContent = `Total seleccionado: ${selectionText}`;
+  document.querySelectorAll('[data-payment-select-bucket]').forEach((button) => {
+    const bucketInputs = Array.from(document.querySelectorAll(`#pago-clases-seleccionadas input[data-payment-bucket="${button.dataset.paymentSelectBucket}"]`));
+    const allChecked = bucketInputs.length > 0 && bucketInputs.every((input) => input.checked);
+    button.textContent = allChecked ? 'Desmarcar' : 'Marcar todas';
+  });
+  const periodText = activePaymentGroup.paymentPeriodStart && activePaymentGroup.paymentPeriodEnd
+    ? `Periodo: ${formatPaymentDueAt(activePaymentGroup.paymentPeriodStart)} - ${formatPaymentDueAt(activePaymentGroup.paymentPeriodEnd)}.`
+    : '';
+  const overdueText = activePaymentGroup.hasOverdueCarryover
+    ? ` Incluye impagos anteriores: ${formatEuros(activePaymentGroup.overdueAmount || 0)}.`
+    : '';
+  document.getElementById('pago-notas').value = `Pago confirmado para ${selected.count} clase(s) de ${activePaymentGroup.studentName}. ${periodText}${overdueText}`.trim();
 }
 
 function abrirModalPagoGrupo(group = {}) {
-  document.getElementById('modal-pago-titulo').textContent = 'Confirmar pago de clases';
+  activePaymentGroup = group;
+  const recipient = platformPaymentRecipient();
+  const periodText = group.paymentPeriodStart && group.paymentPeriodEnd
+    ? `Periodo: ${formatPaymentDueAt(group.paymentPeriodStart)} - ${formatPaymentDueAt(group.paymentPeriodEnd)}.`
+    : '';
+  const overdueText = group.hasOverdueCarryover
+    ? ` Incluye impagos anteriores: ${formatEuros(group.overdueAmount || 0)}.`
+    : '';
+  document.getElementById('modal-pago-titulo').textContent = 'Confirmar pago a ClasesDe10';
   document.getElementById('pago-group-key').value = group.key || '';
   document.getElementById('pago-class-ids').value = (group.classIds || []).join(',');
   document.getElementById('pago-due-at').value = group.dueAt || '';
@@ -3752,20 +4981,28 @@ function abrirModalPagoGrupo(group = {}) {
   amountInput.readOnly = true;
   document.getElementById('pago-metodo').value = 'bizum';
   document.getElementById('pago-referencia').value = '';
-  document.getElementById('pago-notas').value = `Pago confirmado para ${group.classCount} clase(s) de ${group.studentName}.`;
+  document.getElementById('pago-notas').value = `Pago confirmado para ${group.classCount} clase(s) de ${group.studentName}. ${periodText}${overdueText}`.trim();
   const summary = document.getElementById('pago-resumen-grupo');
   const bizumPhone = bizumPhoneForGroup(group);
   summary.style.display = '';
   summary.innerHTML = `
     <strong>${sanitize(group.studentName)} con ${sanitize(group.teacherName)}</strong>
     <span>${sanitize(group.classCount)} clase(s) · ${sanitize(formatEuros(group.amount))}</span>
-    <span>${bizumPhone ? `Bizum ${sanitize(bizumPhone)} - ${sanitize(bizumConceptForGroup(group))}` : sanitize(bizumConceptForGroup(group))}</span>
-    <em>Se vinculara automaticamente con estas clases para que el admin pueda validarlo.</em>`;
+    ${periodText ? `<span>${sanitize(periodText)}</span>` : ''}
+    ${group.hasOverdueCarryover ? `<span>Incluye impagos anteriores: ${sanitize(formatEuros(group.overdueAmount || 0))}</span>` : ''}
+    <span>Bizum a ${sanitize(recipient.name)} (${sanitize(bizumPhone)}) - ${sanitize(bizumConceptForGroup(group))}</span>
+    <strong data-payment-modal-selection-summary></strong>
+    <em>ClasesDe10 recibe el pago y despues liquida al profesor correspondiente. El justificante se vinculara automaticamente con estas clases.</em>`;
+  const selection = document.getElementById('pago-clases-seleccionadas');
+  selection.style.display = '';
+  selection.innerHTML = renderPaymentClassSelection(group);
+  updatePaymentClassSelection();
   resetPagoFileInput();
   document.getElementById('modal-pago').classList.add('open');
 }
 
 function abrirModalPagoManual() {
+  activePaymentGroup = null;
   document.getElementById('modal-pago-titulo').textContent = 'Registrar otro pago';
   document.getElementById('pago-group-key').value = '';
   document.getElementById('pago-class-ids').value = '';
@@ -3778,12 +5015,23 @@ function abrirModalPagoManual() {
   document.getElementById('pago-notas').value = '';
   document.getElementById('pago-resumen-grupo').style.display = 'none';
   document.getElementById('pago-resumen-grupo').innerHTML = '';
+  document.getElementById('pago-clases-seleccionadas').style.display = 'none';
+  document.getElementById('pago-clases-seleccionadas').innerHTML = '';
   resetPagoFileInput();
   document.getElementById('modal-pago').classList.add('open');
 }
 
-document.getElementById('btn-nuevo-pago').addEventListener('click', () => {
+function abrirPagoConClasesPendientes() {
+  const firstPaymentGroup = familyPaymentGroupsCache.values().next().value;
+  if (firstPaymentGroup) {
+    abrirModalPagoGrupo(firstPaymentGroup);
+    return;
+  }
   abrirModalPagoManual();
+}
+
+document.getElementById('btn-nuevo-pago').addEventListener('click', () => {
+  abrirPagoConClasesPendientes();
 });
 
 const pagoZone = document.getElementById('pago-upload-zone');
@@ -3791,7 +5039,21 @@ const pagoFile = document.getElementById('pago-file');
 const UPLOAD_EXT_PERMITIDAS = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
 const UPLOAD_MIME_PERMITIDOS = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 pagoFile.addEventListener('change', () => {
-  pagoZone.querySelector('.upload-zone-title').textContent = pagoFile.files[0]?.name || 'Adjuntar captura o comprobante si lo tienes';
+  pagoZone.querySelector('.upload-zone-title').textContent = pagoFile.files[0]?.name || 'Adjuntar justificante del pago';
+});
+
+document.getElementById('pago-clases-seleccionadas')?.addEventListener('change', (event) => {
+  if (!event.target.closest('input[data-payment-class-id]')) return;
+  updatePaymentClassSelection();
+});
+
+document.getElementById('pago-clases-seleccionadas')?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-payment-select-bucket]');
+  if (!button) return;
+  const inputs = Array.from(document.querySelectorAll(`#pago-clases-seleccionadas input[data-payment-bucket="${button.dataset.paymentSelectBucket}"]`));
+  const shouldCheck = inputs.some((input) => !input.checked);
+  inputs.forEach((input) => { input.checked = shouldCheck; });
+  updatePaymentClassSelection();
 });
 
 document.getElementById('btn-confirmar-pago').addEventListener('click', async () => {
@@ -3800,16 +5062,26 @@ document.getElementById('btn-confirmar-pago').addEventListener('click', async ()
   const monto = parseFloat(document.getElementById('pago-monto').value);
   if (!monto || monto <= 0) { showToast('Atención','Indica el importe.','warning'); return; }
   const classIds = document.getElementById('pago-class-ids').value.split(',').map((item) => item.trim()).filter(Boolean);
-  const group = familyPaymentGroupsCache.get(document.getElementById('pago-group-key').value) || {};
+  const groupKey = document.getElementById('pago-group-key').value;
+  const group = familyPaymentGroupsCache.get(groupKey) || {};
+  const isGroupedPayment = Boolean(groupKey);
   const referencia = document.getElementById('pago-referencia').value.trim();
   const notas = document.getElementById('pago-notas').value.trim();
-  if (!classIds.length && !referencia && !notas) {
+  if (isGroupedPayment && !classIds.length) {
+    showToast('Marca al menos una clase', 'El justificante debe quedar vinculado a las clases que estas pagando.', 'warning');
+    return;
+  }
+  if (!isGroupedPayment && !classIds.length && !referencia && !notas) {
     showToast('Falta detalle', 'Indica una referencia o una nota breve para poder revisar el pago.', 'warning');
     return;
   }
 
   let documentoId = null;
   const file = pagoFile.files[0];
+  if (!file) {
+    showToast('Falta justificante', 'Adjunta la captura o comprobante del pago para que podamos validarlo.', 'warning');
+    return;
+  }
   if (file && file.size > 10 * 1024 * 1024) { showToast('Error', 'El archivo no puede superar 10 MB.', 'error'); return; }
   btn.disabled = true;
   btn.textContent = 'Enviando...';
@@ -3900,7 +5172,65 @@ async function cargarChat() {
     role: 'familia',
     profileId: familiaId,
     showToast,
+    showNotifications: false,
   });
+}
+
+function familyOverviewValue(value, fallback = 'Sin completar') {
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || fallback;
+  return String(value || '').trim() || fallback;
+}
+
+function renderFamilyProfileOverview() {
+  const overview = document.getElementById('family-profile-overview');
+  const avatar = document.getElementById('family-profile-avatar');
+  const name = `${usuario.nombre || familiaData.nombre || ''} ${usuario.apellidos || familiaData.apellidos || ''}`.trim() || 'Tu perfil de familia';
+  const cityLine = [
+    familiaData.direccion || familiaData.address,
+    familiaData.codigo_postal || familiaData.postalCode,
+    familiaData.ciudad || familiaData.city,
+  ].filter(Boolean).join(' · ');
+  const preferredContact = familiaData.contacto_preferido || familiaData.preferredContact;
+  const alternativeContact = [
+    familiaData.contacto_emergencia_nombre || familiaData.emergencyContactName,
+    familiaData.contacto_emergencia_telefono || familiaData.emergencyContactPhone,
+  ].filter(Boolean).join(' · ');
+
+  document.getElementById('family-profile-name').textContent = name;
+  document.getElementById('family-profile-caption').textContent = familiaData.notas_perfil || familiaData.profileNotes
+    ? String(familiaData.notas_perfil || familiaData.profileNotes).slice(0, 150)
+    : 'Datos de contacto y preferencias que ayudan a coordinar las clases.';
+  if (avatar) avatar.textContent = getIniciales(usuario.nombre || familiaData.nombre, usuario.apellidos || familiaData.apellidos);
+  if (!overview) return;
+
+  const row = (label, value) => `<div class="profile-summary-row"><dt>${sanitize(label)}</dt><dd>${sanitize(familyOverviewValue(value))}</dd></div>`;
+  overview.innerHTML = `
+    <section class="profile-summary-section">
+      <h3>Contacto</h3>
+      <dl>
+        ${row('Correo', usuario.email || familiaData.email)}
+        ${row('Telefono', usuario.telefono || familiaData.telefono)}
+        ${row('Canal preferido', preferredContact === 'email' ? 'Correo electronico' : (preferredContact === 'chat' ? 'Chat interno' : ''))}
+      </dl>
+    </section>
+    <section class="profile-summary-section">
+      <h3>Ubicacion</h3>
+      <dl>
+        ${row('Direccion', cityLine)}
+        ${row('Zona principal', familiaData.zona || familiaData.zone)}
+      </dl>
+    </section>
+    <section class="profile-summary-section">
+      <h3>Coordinacion familiar</h3>
+      <dl>
+        ${row('Contacto alternativo', alternativeContact)}
+        ${row('Idiomas', familiaData.idiomas || familiaData.languages)}
+      </dl>
+    </section>
+    <section class="profile-summary-section profile-summary-section-wide">
+      <h3>Preferencias educativas y observaciones</h3>
+      <p>${sanitize(familyOverviewValue(familiaData.notas_perfil || familiaData.profileNotes))}</p>
+    </section>`;
 }
 
 async function cargarPerfil() {
@@ -3913,7 +5243,9 @@ async function cargarPerfil() {
       form.dataset.loaded = 'true';
     }
     renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
+    renderQualityPanel('familia-calidad-resumen', evaluarPerfilFamiliaActual());
     renderDocumentosFamilia();
+    renderFamilyProfileOverview();
     return;
   }
   document.getElementById('p-nombre').value    = usuario.nombre || familiaData.nombre || '';
@@ -3936,8 +5268,28 @@ async function cargarPerfil() {
     form.dataset.dirty = 'false';
   }
   renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
+  renderQualityPanel('familia-calidad-resumen', evaluarPerfilFamiliaActual());
   renderDocumentosFamilia();
+  renderFamilyProfileOverview();
+  const onboardingBanner = document.getElementById('assisted-profile-onboarding');
+  if (onboardingBanner) onboardingBanner.style.display = profileCompletionRequired ? '' : 'none';
+  if (profileCompletionRequired && !assistedProfileModalOpened) {
+    assistedProfileModalOpened = true;
+    openModal('modal-perfil-familia');
+    window.setTimeout(() => document.getElementById('p-apellidos')?.focus(), 80);
+  }
 }
+
+document.getElementById('btn-editar-perfil-familia')?.addEventListener('click', () => {
+  openModal('modal-perfil-familia');
+});
+
+document.getElementById('btn-documentos-familia')?.addEventListener('click', () => {
+  openModal('modal-documentos-familia');
+});
+document.getElementById('familia-calidad-resumen')?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-section="perfil"]')) openModal('modal-perfil-familia');
+});
 
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -4025,6 +5377,10 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       nombre,
       apellidos,
       telefono,
+      ...(profileCompletionRequired && evaluation.complete ? {
+        profileCompletionRequired: false,
+        profileCompletedAt: serverTimestamp(),
+      } : {}),
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
@@ -4048,7 +5404,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     if (familiaPerfilForm) familiaPerfilForm.dataset.dirty = 'false';
     renderQualityPanel('familia-calidad-panel', evaluation);
   } catch (error) {
-    showToast('Error', error.message || 'No se pudo guardar el perfil en Firebase.', 'error');
+    showToast('Error', error.message || 'No se pudo guardar el perfil.', 'error');
     return;
   }
 
@@ -4085,7 +5441,18 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   }
 
   familiaData = { ...familiaData, ...familiaPayload };
+  if (profileCompletionRequired && evaluation.complete) {
+    profileCompletionRequired = false;
+    usuario.profileCompletionRequired = false;
+    const onboardingBanner = document.getElementById('assisted-profile-onboarding');
+    if (onboardingBanner) onboardingBanner.style.display = 'none';
+  }
+  document.getElementById('user-nombre').textContent = `${nombre} ${apellidos}`.trim();
+  document.getElementById('user-avatar').textContent = getIniciales(nombre, apellidos);
   renderQualityPanel('familia-calidad-panel', evaluation);
+  renderQualityPanel('familia-calidad-resumen', evaluation);
+  renderFamilyProfileOverview();
+  closeModal('modal-perfil-familia');
   showToast('Guardado', 'Perfil actualizado.', 'success');
 });
 
@@ -4164,11 +5531,14 @@ document.getElementById('btn-subir-doc-familia')?.addEventListener('click', asyn
   await cargarDocumentosFamiliaPerfilCache();
   renderDocumentosFamilia();
   renderQualityPanel('familia-calidad-panel', evaluarPerfilFamiliaActual());
+  renderQualityPanel('familia-calidad-resumen', evaluarPerfilFamiliaActual());
+  renderFamilyProfileOverview();
 });
 
 // ── INIT ─────────────────────────────────────────────────────────
+cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
 irA(sectionFromHash(), { fromHash: true });
 </script>
-<script src="/js/pwa.js?v=20260705-panel-pwa-mobile" defer></script>
+<script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
 </body>
 </html>

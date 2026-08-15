@@ -4,23 +4,25 @@
  */
 
 import { nombreMes, nombreDia, formatHora } from './utils.js';
-import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js';
+import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js?v=20260815-calendar-semantics';
 
 export class Calendario {
-  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, legendItems, dayIndicatorMode, daySummaryLabel }) {
+  constructor({ contenedor, onDiaClick, onMesChange, classDotClass, classIndicatorPriority, legendItems, dayIndicatorMode, daySummaryLabel }) {
     this.contenedor  = contenedor;
     this.onDiaClick  = onDiaClick || (() => {});
     this.onMesChange = onMesChange || (() => {});
     this.classDotClass = classDotClass || ((classData) => this.coloresPorEstado(classStatusForBadge(classData)));
+    this.classIndicatorPriority = classIndicatorPriority || null;
     this.dayIndicatorMode = dayIndicatorMode || 'dots';
     this.daySummaryLabel = daySummaryLabel || ((classData, items) => this.defaultDaySummaryLabel(classData, items));
     this.legendItems = Array.isArray(legendItems) && legendItems.length
       ? legendItems
       : [
-          { className: 'dot-gold', label: 'Pendiente/Reprogramada' },
-          { className: 'dot-navy', label: 'Confirmada' },
-          { className: 'dot-teal', label: 'Realizada' },
-          { className: 'dot-red', label: 'Cancelada' },
+          { className: 'dot-red', label: 'Revisar ahora' },
+          { className: 'dot-amber', label: 'Acción pendiente' },
+          { className: 'dot-blue', label: 'Programada o en curso' },
+          { className: 'dot-emerald', label: 'Finalizada' },
+          { className: 'dot-gray', label: 'Cancelada' },
         ];
 
     const hoy = new Date();
@@ -40,24 +42,55 @@ export class Calendario {
   }
 
   defaultDaySummaryLabel(classData = {}, items = []) {
-    if (classData.calendarEventType === 'family_payment_due') return classData.overdue ? 'Pago vencido' : 'Dia de pago';
+    if (classData.calendarEventType === 'family_payment_due') return classData.overdue ? 'Vencido' : 'Pago';
     if (classData.calendarEventType === 'teacher_payout_day') return 'Cobro';
     return formatHora(classData.hora_inicio || classData.startTime || '') || `${items.length || 1} evento`;
   }
 
+  indicatorPriority(classData = {}) {
+    const customPriority = Number(this.classIndicatorPriority?.(classData));
+    if (Number.isFinite(customPriority)) return customPriority;
+    const tone = this.classDotClass(classData);
+    return {
+      'dot-red': 100,
+      'dot-rose': 100,
+      'dot-amber': 80,
+      'dot-gold': 80,
+      'dot-blue': 60,
+      'dot-navy': 60,
+      'dot-cyan': 60,
+      'dot-purple': 90,
+      'dot-indigo': 50,
+      'dot-emerald': 30,
+      'dot-teal': 30,
+      'dot-gray': 10,
+    }[tone] || 20;
+  }
+
   renderDayIndicators(clases = []) {
     if (!clases.length) return '';
+    const ordered = [...clases].sort((a, b) => this.indicatorPriority(b) - this.indicatorPriority(a));
     if (this.dayIndicatorMode === 'summary') {
-      const first = clases[0];
+      const first = ordered[0];
       const tone = this.classDotClass(first);
-      const label = this.daySummaryLabel(first, clases);
-      const extra = clases.length > 1 ? `<span class="day-count">+${clases.length - 1}</span>` : '';
+      const label = this.daySummaryLabel(first, ordered);
+      const extra = ordered.length > 1 ? `<span class="day-count">+${ordered.length - 1}</span>` : '';
       return `<div class="day-event-summary"><span class="day-chip ${this.escapeHtml(tone)}">${this.escapeHtml(label)}</span>${extra}</div>`;
     }
-    const dots = clases.slice(0,4).map(c =>
+    const dots = ordered.slice(0,4).map(c =>
       `<div class="day-dot ${this.escapeHtml(this.classDotClass(c))}"></div>`
     ).join('');
     return `<div class="day-dots">${dots}</div>`;
+  }
+
+  dayStatusSummary(clases = []) {
+    if (!clases.length) return 'Sin eventos';
+    const ordered = [...clases].sort((a, b) => this.indicatorPriority(b) - this.indicatorPriority(a));
+    const labels = ordered
+      .map((item) => this.daySummaryLabel(item, ordered))
+      .map((label) => String(label || '').trim())
+      .filter((label, index, list) => label && list.indexOf(label) === index);
+    return `${clases.length} evento(s): ${labels.slice(0, 4).join(', ')}`;
   }
 
   setClases(clases) {
@@ -108,13 +141,13 @@ export class Calendario {
 
   coloresPorEstado(estado) {
     return {
-      pendiente: 'dot-gold',
-      programada: 'dot-navy',
-      confirmada: 'dot-navy',
-      realizada: 'dot-teal',
-      cancelada: 'dot-red',
-      reprogramada: 'dot-gold',
-      pagada: 'dot-teal',
+      pendiente: 'dot-amber',
+      programada: 'dot-blue',
+      confirmada: 'dot-blue',
+      realizada: 'dot-emerald',
+      cancelada: 'dot-gray',
+      reprogramada: 'dot-blue',
+      pagada: 'dot-emerald',
     }[normalizeClassStatus(estado)] || 'dot-navy';
   }
 
@@ -139,10 +172,13 @@ export class Calendario {
       const esSel = fecha === this.diaSeleccionado;
 
       const indicators = this.renderDayIndicators(clases);
+      const statusSummary = this.dayStatusSummary(clases);
 
       diasHTML += `
         <div class="calendar-day ${clases.length ? 'has-events' : ''} ${esHoy ? 'today' : ''} ${esSel ? 'selected' : ''}"
-             data-fecha="${fecha}" title="${clases.length} evento(s)">
+             data-fecha="${fecha}" role="button" tabindex="0"
+             aria-label="${this.escapeHtml(`${fecha}. ${statusSummary}`)}"
+             title="${this.escapeHtml(statusSummary)}">
           <span class="day-num">${d}</span>
           ${indicators}
         </div>`;
@@ -157,24 +193,30 @@ export class Calendario {
             <button id="cal-next" aria-label="Mes siguiente">›</button>
           </div>
         </div>
+        <div class="calendar-legend">
+          ${this.legendItems.map((item) => `<span class="calendar-legend-item"><span class="calendar-legend-dot ${this.escapeHtml(item.className)}"></span>${this.escapeHtml(item.label)}</span>`).join('')}
+        </div>
         <div class="calendar-grid">
           <div class="calendar-days-header">
             ${diasNombres.map(n => `<div class="calendar-day-name">${n}</div>`).join('')}
           </div>
           <div class="calendar-days">${diasHTML}</div>
         </div>
-        <div class="calendar-legend" style="padding:0 16px 14px;display:flex;gap:14px;font-size:.72rem;color:#8a8478">
-          ${this.legendItems.map((item) => `<span><span class="day-dot ${item.className}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:middle"></span>${item.label}</span>`).join('')}
-        </div>
       </div>`;
 
     this.contenedor.querySelector('#cal-prev').addEventListener('click', () => this.anterior());
     this.contenedor.querySelector('#cal-next').addEventListener('click', () => this.siguiente());
     this.contenedor.querySelectorAll('.calendar-day[data-fecha]').forEach(el => {
-      el.addEventListener('click', () => {
+      const selectDay = () => {
         this.diaSeleccionado = el.dataset.fecha;
         this.render();
         this.onDiaClick(el.dataset.fecha, this.clasesPorFecha[el.dataset.fecha] || []);
+      };
+      el.addEventListener('click', selectDay);
+      el.addEventListener('keydown', (event) => {
+        if (!['Enter', ' '].includes(event.key)) return;
+        event.preventDefault();
+        selectDay();
       });
     });
   }

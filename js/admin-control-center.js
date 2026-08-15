@@ -99,6 +99,30 @@ function isoDate(value) {
   return date ? date.toISOString().slice(0, 10) : '';
 }
 
+function dateOnly(value) {
+  return isoDate(value) || clean(value).slice(0, 10);
+}
+
+function parseDateOnly(value) {
+  const text = dateOnly(value);
+  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
+function isoDateLocal(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function addDaysLocal(date, days) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+}
+
+function daysInLocalMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
 function formatShortDate(value) {
   const date = normalizeDate(value);
   if (!date) return '';
@@ -107,6 +131,16 @@ function formatShortDate(value) {
     month: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
+  });
+}
+
+function formatDateOnly(value) {
+  const date = parseDateOnly(value);
+  if (!date) return '';
+  return date.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
   });
 }
 
@@ -217,10 +251,34 @@ function teacherAmount(item = {}) {
   return asNumber(first(item.importe_profesor, item.teacherAmount, item.teacher_amount));
 }
 
+function classDurationMinutes(item = {}) {
+  const explicit = asNumber(first(item.durationMinutes, item.duracion_minutos, item.duration));
+  if (explicit > 0) return explicit;
+  const start = clean(first(item.hora_inicio, item.startTime));
+  const end = clean(first(item.hora_fin, item.endTime));
+  const matchStart = start.match(/^(\d{1,2}):(\d{2})/);
+  const matchEnd = end.match(/^(\d{1,2}):(\d{2})/);
+  if (!matchStart || !matchEnd) return 60;
+  const startMinutes = Number(matchStart[1]) * 60 + Number(matchStart[2]);
+  const endMinutes = Number(matchEnd[1]) * 60 + Number(matchEnd[2]);
+  return endMinutes > startMinutes ? endMinutes - startMinutes : 60;
+}
+
+function teacherPayoutAmount(item = {}) {
+  const hourly = asNumber(first(
+    item.teacherHourlyRate,
+    item.importe_hora_profesor,
+    item.teacherRatePerHour,
+    item.tarifa_hora_profesor,
+  ));
+  if (hourly > 0) return round((hourly * classDurationMinutes(item)) / 60, 2);
+  return teacherAmount(item);
+}
+
 function platformFee(item = {}) {
   const explicit = first(item.comision_clasesde10, item.platformFee);
   if (explicit !== undefined) return asNumber(explicit);
-  return classTotal(item) - teacherAmount(item);
+  return classTotal(item) - teacherPayoutAmount(item);
 }
 
 function displayName(item = {}, fallback = 'Sin nombre') {
@@ -260,6 +318,140 @@ function trendFromPrevious(current, previous) {
 
 function teacherId(item = {}) {
   return clean(first(item.teacherUid, item.profesor_id, item.userUid, item.usuario_id, item.id), 180);
+}
+
+function teacherProfileIds(item = {}) {
+  return new Set([
+    item.userUid,
+    item.uid,
+    item.id,
+    item.profesor_id,
+    item.teacherUid,
+    item.usuario_id,
+  ].map((value) => clean(value, 180)).filter(Boolean));
+}
+
+function normalizeTeacherPayoutFrequency(value) {
+  const raw = clean(value).toLowerCase();
+  if (['mensual', 'monthly', 'mes'].includes(raw)) return 'mensual';
+  if (['quincenal', 'biweekly', 'cada_15_dias', '15_dias', '15dias'].includes(raw)) return 'quincenal';
+  return '';
+}
+
+function teacherPayoutPreference(profile = {}) {
+  const frequency = normalizeTeacherPayoutFrequency(first(
+    profile.payoutFrequency,
+    profile.frecuencia_cobro_profesor,
+    profile.payoutCadence,
+    profile.cobro_frecuencia,
+  ));
+  const anchorDate = dateOnly(first(
+    profile.payoutAnchorDate,
+    profile.fecha_inicio_cobro_profesor,
+    profile.teacherPayoutAnchorDate,
+    profile.cobro_fecha_inicio,
+  ));
+  const anchor = parseDateOnly(anchorDate);
+  return {
+    frequency: frequency || (anchor ? 'quincenal' : ''),
+    anchorDate: anchor ? isoDateLocal(anchor) : '',
+    dayOfMonth: anchor ? anchor.getDate() : null,
+    configured: Boolean(anchor),
+  };
+}
+
+function teacherPayoutFrequencyLabel(frequency) {
+  return frequency === 'mensual' ? 'Cobro mensual' : 'Cobro cada 15 dias';
+}
+
+function teacherPayoutDatesBetween(preference = {}, startDate, endDate) {
+  if (!preference.configured || !startDate || !endDate) return [];
+  const anchor = parseDateOnly(preference.anchorDate);
+  if (!anchor) return [];
+  if (preference.frequency === 'mensual') {
+    const dates = [];
+    for (let month = -1; month <= 2; month += 1) {
+      const base = new Date(startDate.getFullYear(), startDate.getMonth() + month, 1);
+      const day = Math.min(preference.dayOfMonth || anchor.getDate(), daysInLocalMonth(base.getFullYear(), base.getMonth()));
+      const date = new Date(base.getFullYear(), base.getMonth(), day);
+      if (date >= anchor && date >= startDate && date <= endDate) dates.push(date);
+    }
+    return dates;
+  }
+  let cursor = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+  if (cursor < startDate) {
+    const elapsed = Math.floor((startDate.getTime() - cursor.getTime()) / (24 * 60 * 60 * 1000));
+    cursor = addDaysLocal(cursor, Math.floor(elapsed / 15) * 15);
+    while (cursor < startDate) cursor = addDaysLocal(cursor, 15);
+  }
+  const dates = [];
+  while (cursor <= endDate) {
+    if (cursor >= anchor) dates.push(cursor);
+    cursor = addDaysLocal(cursor, 15);
+  }
+  return dates;
+}
+
+function previousTeacherPayoutDate(preference = {}, payoutDate) {
+  if (preference.frequency === 'mensual') {
+    const previousMonth = new Date(payoutDate.getFullYear(), payoutDate.getMonth() - 1, 1);
+    const day = Math.min(preference.dayOfMonth || payoutDate.getDate(), daysInLocalMonth(previousMonth.getFullYear(), previousMonth.getMonth()));
+    return new Date(previousMonth.getFullYear(), previousMonth.getMonth(), day);
+  }
+  return addDaysLocal(payoutDate, -15);
+}
+
+function classEarnsTeacherPayout(item = {}) {
+  if (teacherPayoutAmount(item) <= 0) return false;
+  if (!isCompletedClass(item)) return false;
+  return !isPaymentDone(teacherPaymentStatus(item)) && !item.teacherPayoutPaidAt;
+}
+
+function computeTeacherPayouts(data = {}, options = {}) {
+  const today = parseDateOnly(options.today || new Date().toISOString()) || new Date();
+  const windowStart = addDaysLocal(today, -45);
+  const windowEnd = addDaysLocal(today, 31);
+  const completedClasses = (data.classes || []).filter(classEarnsTeacherPayout);
+  const payouts = [];
+  for (const teacher of data.teachers || []) {
+    const preference = teacherPayoutPreference(teacher);
+    if (!preference.configured) continue;
+    const ids = teacherProfileIds(teacher);
+    const teacherName = displayName(teacher, 'Profesor');
+    for (const payoutDate of teacherPayoutDatesBetween(preference, windowStart, windowEnd)) {
+      const previousDate = previousTeacherPayoutDate(preference, payoutDate);
+      const payoutClasses = completedClasses
+        .filter((item) => {
+          const date = parseDateOnly(classDate(item));
+          return date
+            && ids.has(teacherId(item))
+            && date > previousDate
+            && date <= payoutDate;
+        })
+        .sort((a, b) => dateOnly(classDate(a)).localeCompare(dateOnly(classDate(b))) || clean(first(a.hora_inicio, a.startTime)).localeCompare(clean(first(b.hora_inicio, b.startTime))));
+      const amount = round(payoutClasses.reduce((sum, item) => sum + teacherPayoutAmount(item), 0), 2);
+      if (amount <= 0) continue;
+      payouts.push({
+        teacherId: clean(first(teacher.userUid, teacher.uid, teacher.id, teacher.profesor_id), 180),
+        teacherName,
+        date: isoDateLocal(payoutDate),
+        periodStart: isoDateLocal(addDaysLocal(previousDate, 1)),
+        periodEnd: isoDateLocal(payoutDate),
+        frequency: preference.frequency,
+        frequencyLabel: teacherPayoutFrequencyLabel(preference.frequency),
+        amount,
+        classes: payoutClasses.map((item) => ({
+          id: clean(first(item.id, item.classId), 180),
+          date: dateOnly(classDate(item)),
+          startTime: clean(first(item.hora_inicio, item.startTime), 20),
+          studentName: clean(first(item.alumno_nombre, item.studentName, item.alumnoName), 180) || 'Alumno',
+          subject: clean(first(item.materia, item.subject, 'Clase'), 180),
+          amount: teacherPayoutAmount(item),
+        })),
+      });
+    }
+  }
+  return payouts.sort((a, b) => a.date.localeCompare(b.date) || a.teacherName.localeCompare(b.teacherName));
 }
 
 function familyId(item = {}) {
@@ -943,7 +1135,7 @@ function computeMissionControl(data, metrics) {
           impact: 'La vision historica y las alertas programadas pierden precision.',
           affectedUsers: 0,
           cause: latestMetricSnapshot ? `Ultimo snapshot hace ${formatHours(hoursAgo(createdDate(latestMetricSnapshot)))}` : 'No hay documentos metricSnapshots.',
-          fix: 'Ejecutar el worker programado o activar Functions cuando Blaze este disponible.',
+          fix: 'Ejecutar el worker programado y revisar el workflow de GitHub Actions.',
           startedAt: createdDate(latestMetricSnapshot),
           signals: ['metricSnapshots'],
           section: 'auditoria',
@@ -972,9 +1164,9 @@ function computeMissionControl(data, metrics) {
       okSignals: [`${authSuccesses.length} accesos correctos 24h`, 'Email/Password activo', 'Google Auth preparado en cliente'],
     }),
     subsystem({
-      id: 'functions',
-      name: 'Cloud Functions',
-      description: 'Triggers, scheduler, webhooks y cola de jobs.',
+      id: 'automation-worker',
+      name: 'Worker de automatizacion',
+      description: 'GitHub Actions, jobs, backfills, push y tareas programadas.',
       section: 'auditoria',
       issues: [
         ...((failedJobs.length || deadLetters.length) ? [issue({
@@ -1005,7 +1197,7 @@ function computeMissionControl(data, metrics) {
           impact: 'Recordatorios, snapshots y tareas programadas podrian no estar corriendo.',
           affectedUsers: 0,
           cause: latestAutomation ? 'Ultimo automationEvent demasiado antiguo.' : 'No hay automationEvents registrados.',
-          fix: 'Verificar GitHub Actions worker y desplegar Functions cuando Blaze este disponible.',
+          fix: 'Verificar GitHub Actions worker, credenciales y ultima ejecucion programada.',
           startedAt: createdDate(latestAutomation),
           signals: ['automationEvents', 'scheduled worker'],
           section: 'auditoria',
@@ -1445,7 +1637,7 @@ function computeControlCenter(data) {
   const completedMonth = classesMonth.filter(isCompletedClass);
   const scheduledFuture = data.classes.filter((item) => isScheduledClass(item) && String(isoDate(classDate(item))) >= String(new Date().toISOString().slice(0, 10)));
   const revenueMonth = completedMonth.reduce((sum, item) => sum + classTotal(item), 0);
-  const teacherCostMonth = completedMonth.reduce((sum, item) => sum + teacherAmount(item), 0);
+  const teacherCostMonth = completedMonth.reduce((sum, item) => sum + teacherPayoutAmount(item), 0);
   const marginMonth = completedMonth.reduce((sum, item) => sum + platformFee(item), 0);
   const marginPct = percentage(marginMonth, revenueMonth);
   const pendingPayments = data.payments.filter((item) => ['pendiente', 'solicitado', 'procesando'].includes(paymentStatus(item)));
@@ -1482,10 +1674,13 @@ function computeControlCenter(data) {
     students: data.students,
   }, { nowMs: Date.now() });
   const relationshipSummary = summarizeRelationships(relationships);
+  const teacherPayoutsDue = computeTeacherPayouts(data).slice(0, 12);
+  const teacherPayoutDueAmount = teacherPayoutsDue.reduce((sum, item) => sum + item.amount, 0);
+  const teacherPayoutsToday = teacherPayoutsDue.filter((item) => item.date <= new Date().toISOString().slice(0, 10));
 
   const riskyClasses = data.classes.filter((item) => {
     if (!isCompletedClass(item)) return false;
-    if (classTotal(item) <= 0 || teacherAmount(item) <= 0) return true;
+    if (classTotal(item) <= 0 || teacherPayoutAmount(item) <= 0) return true;
     return classTotal(item) > 0 && percentage(platformFee(item), classTotal(item)) < 15;
   });
 
@@ -1594,6 +1789,9 @@ function computeControlCenter(data) {
     teacherLeaderboard,
     relationships,
     relationshipSummary,
+    teacherPayoutsDue,
+    teacherPayoutsToday,
+    teacherPayoutDueAmount,
   };
   const anomalies = detectBusinessAnomalies(baseMetrics);
   const missionControl = computeMissionControl(data, {
@@ -1650,6 +1848,12 @@ function computeControlCenter(data) {
       title: 'Pago vencido',
       body: `${formatEuros(first(item.monto, item.amount))} pendiente desde ${formatShortDate(first(item.dueAt, item.due_at, item.createdAt, item.created_at))}`,
       section: 'pagos',
+    })),
+    ...teacherPayoutsToday.slice(0, 5).map((item) => ({
+      tone: item.date < new Date().toISOString().slice(0, 10) ? 'danger' : 'warning',
+      title: `Pagar a ${item.teacherName}`,
+      body: `${formatEuros(item.amount)} por ${item.classes.length} clase(s). Dia de cobro: ${formatDateOnly(item.date)}.`,
+      section: 'finanzas',
     })),
     ...openIncidents.filter((item) => ['alta', 'urgente', 'critical'].includes(clean(first(item.prioridad, item.priority)).toLowerCase())).map((item) => ({
       tone: 'danger',
@@ -1902,6 +2106,9 @@ function computeControlCenter(data) {
     teacherLeaderboard,
     relationships,
     relationshipSummary,
+    teacherPayoutsDue,
+    teacherPayoutsToday,
+    teacherPayoutDueAmount,
     alerts,
     activity,
     moderation,
@@ -1933,7 +2140,8 @@ function renderProgress(label, value, maxValue, tone = 'navy') {
 }
 
 function renderActionButton(section, label = 'Abrir') {
-  return `<button class="btn btn-ghost btn-sm" type="button" data-control-nav="${escapeHtml(section)}">${escapeHtml(label)}</button>`;
+  const actionLabel = section === 'incidencias' && label === 'Abrir' ? 'Arreglar' : label;
+  return `<button class="btn btn-ghost btn-sm" type="button" data-control-nav="${escapeHtml(section)}">${escapeHtml(actionLabel)}</button>`;
 }
 
 function renderAlert(item) {
@@ -2306,6 +2514,18 @@ function buildAdminDecisionCenter(metrics = {}) {
     automation: 'Priorizar recordatorio, revision de justificante y aviso al admin.',
   });
 
+  pushDecision(metrics.teacherPayoutsToday?.length, {
+    score: 94,
+    title: 'Pagar profesores en dia de cobro',
+    body: `${metrics.teacherPayoutsToday.length} cobro(s) de profesor suman ${formatEuros(metrics.teacherPayoutDueAmount || 0)}. Revisa el desglose por clase antes de hacer el Bizum.`,
+    section: 'finanzas',
+    action: 'Ver cobros',
+    impact: 'Confianza',
+    effort: 'Bajo',
+    metric: formatEuros(metrics.teacherPayoutDueAmount || 0),
+    automation: 'El panel agrupa clases dadas desde el cobro anterior y excluye las ya pagadas al profesor.',
+  });
+
   pushDecision(metrics.staleUnassigned?.length, {
     score: 96,
     title: 'Asignar profesor a solicitudes antiguas',
@@ -2459,6 +2679,13 @@ function buildAdminDecisionCenter(metrics = {}) {
       tone: metrics.overduePaymentAmount ? 'danger' : metrics.pendingPaymentAmount ? 'warning' : 'success',
     },
     {
+      label: 'Cobros profes',
+      value: formatEuros(metrics.teacherPayoutDueAmount || 0),
+      hint: `${metrics.teacherPayoutsToday?.length || 0} vencidos/hoy`,
+      section: 'finanzas',
+      tone: metrics.teacherPayoutsToday?.length ? 'warning' : metrics.teacherPayoutDueAmount ? 'warning' : 'success',
+    },
+    {
       label: 'Calidad',
       value: (metrics.pendingDocs?.length || 0) + (metrics.pendingTeachers?.length || 0),
       hint: 'docs + profes',
@@ -2601,6 +2828,42 @@ function renderDecisionCenter(decisionCenter) {
   </section>`;
 }
 
+function renderTeacherPayoutInbox(items = []) {
+  if (!items.length) return '';
+  const total = items.reduce((sum, item) => sum + asNumber(item.amount), 0);
+  const today = new Date().toISOString().slice(0, 10);
+  return `<section class="card control-card teacher-payout-inbox">
+    <div class="card-header">
+      <span class="card-title">Cobros de profesores</span>
+      ${renderBadge(`${formatEuros(total)} pendiente`, items.some((item) => item.date <= today) ? 'warning' : 'navy')}
+    </div>
+    <div class="card-body teacher-payout-inbox-body">
+      ${items.slice(0, 6).map((item) => {
+        const classes = item.classes || [];
+        return `<article class="teacher-payout-inbox-row ${escapeHtml(item.date < today ? 'overdue' : item.date === today ? 'today' : 'upcoming')}">
+          <div class="teacher-payout-inbox-top">
+            <div>
+              <strong>${escapeHtml(item.teacherName)}</strong>
+              <span>${escapeHtml(formatDateOnly(item.date))} · ${escapeHtml(item.frequencyLabel)} · ${escapeHtml(formatDateOnly(item.periodStart))}-${escapeHtml(formatDateOnly(item.periodEnd))}</span>
+            </div>
+            <strong>${escapeHtml(formatEuros(item.amount))}</strong>
+          </div>
+          <div class="teacher-payout-inbox-classes">
+            ${classes.slice(0, 3).map((clase) => `<div>
+              <span>${escapeHtml(formatDateOnly(clase.date))} ${escapeHtml(clase.startTime || '')}</span>
+              <strong>${escapeHtml(clase.studentName)} · ${escapeHtml(clase.subject)}</strong>
+              <em>${escapeHtml(formatEuros(clase.amount))}</em>
+            </div>`).join('')}
+            ${classes.length > 3 ? `<small>+${classes.length - 3} clase(s) mas</small>` : ''}
+          </div>
+        </article>`;
+      }).join('')}
+      ${items.length > 6 ? `<div class="teacher-payout-inbox-more">+${items.length - 6} cobro(s) mas en Finanzas</div>` : ''}
+      ${renderActionButton('finanzas', 'Abrir Finanzas')}
+    </div>
+  </section>`;
+}
+
 function renderControlCenter(container, metrics, state) {
   const previousMonth = metrics.monthly.at(-2) || {};
   const currentMonth = metrics.monthly.at(-1) || {};
@@ -2611,6 +2874,7 @@ function renderControlCenter(container, metrics, state) {
 
   container.innerHTML = `<div class="control-center">
     ${renderDecisionCenter(decisionCenter)}
+    ${renderTeacherPayoutInbox(metrics.teacherPayoutsDue || [])}
 
     ${renderMissionControl(metrics.missionControl)}
 

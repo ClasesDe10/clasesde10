@@ -3,8 +3,8 @@
 }
 
 .calendar-day.has-events {
-  background: rgba(12, 31, 63, .035);
-  border-color: rgba(12, 31, 63, .08);
+  background: #fff;
+  border-color: rgba(12, 31, 63, .18);
 }
 
 .day-event-summary {
@@ -21,8 +21,9 @@
   min-width: 0;
   max-width: 100%;
   min-height: 19px;
-  padding: 4px 7px;
-  border-radius: 999px;
+  padding: 4px 6px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
   color: white;
   font-size: .62rem;
   font-weight: 800;
@@ -30,14 +31,28 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  box-shadow: 0 5px 12px rgba(12,31,63,.12);
+  box-shadow: none;
 }
 
-.day-chip.dot-gold {
-  color: #352607;
+.day-chip.dot-gold,
+.day-chip.dot-amber {
+  color: #241600;
 }
 
 .day-chip.dot-gray {
+  color: white;
+}
+
+.day-chip.dot-cyan {
+  color: #ecfeff;
+}
+
+.day-chip.dot-rose,
+.day-chip.dot-indigo,
+.day-chip.dot-emerald,
+.day-chip.dot-purple,
+.day-chip.dot-blue,
+.day-chip.dot-red {
   color: white;
 }
 
@@ -46,7 +61,7 @@
   height: 19px;
   min-width: 19px;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -55,6 +70,20 @@
   font-size: .58rem;
   font-weight: 800;
 }
+
+/* One semantic palette in every role: act now, pending, active, done, inactive, special. */
+.dot-red,
+.dot-rose { background: #b42318 !important; }
+.dot-amber,
+.dot-gold { background: #b06d08 !important; }
+.dot-blue,
+.dot-cyan,
+.dot-navy { background: #245a82 !important; }
+.dot-indigo { background: #66508d !important; }
+.dot-purple { background: #6d28d9 !important; }
+.dot-emerald,
+.dot-teal { background: #24755f !important; }
+.dot-gray { background: #6d7278 !important; }
 
 .calendar-day.selected .day-count {
   background: rgba(255,255,255,.2);

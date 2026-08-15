@@ -14,7 +14,6 @@ const admin = read('pages/dashboard/admin.html');
 const aiAssistant = read('js/admin-ai-assistant.js');
 const rules = read('firebase/firestore.rules');
 const indexes = read('firebase/firestore.indexes.json');
-const functionsIndex = read('functions/index.js');
 const worker = read('scripts/firebase-automation-worker.mjs');
 const pkg = read('package.json');
 
@@ -52,8 +51,8 @@ assert(indexes.includes('"fieldPath": "actorUid"'), 'Audit logs must be indexed 
 assert(indexes.includes('"fieldPath": "module"'), 'Audit logs must be indexed by module.');
 assert(indexes.includes('"fieldPath": "entityType"'), 'Audit logs must be indexed by entity.');
 
-assert(functionsIndex.includes("schemaVersion: item.schemaVersion || 'audit_log_v1'"), 'Functions materializer must write normalized audit schema.');
 assert(worker.includes("schemaVersion: audit.schemaVersion || 'audit_log_v1'"), 'Worker materializer must write normalized audit schema.');
+assert(worker.includes('processEntityAutomationBackfill'), 'Worker must materialize audit events without deployed Functions.');
 
 assert(pkg.includes('test:audit-system'), 'package.json must expose audit system test.');
 assert(pkg.includes('js/audit-client.js'), 'Syntax check must include audit client.');

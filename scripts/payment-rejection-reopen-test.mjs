@@ -44,16 +44,23 @@ assert.equal(cancelledPatch.paymentEscalationType, 'payment_cancelled');
 const rejectedNotification = buildNotificationDocument({
   userUid: 'family_1',
   role: 'familia',
-  title: 'Justificante no validado',
-  body: 'Vuelve a subir el justificante desde Pagos.',
+  title: 'Justificante no valido',
+  body: 'El justificante no es valido. Por favor, envia ahora otro justificante valido desde Justificantes.',
   type: NOTIFICATION_EVENTS.FAMILY_PAYMENT_REJECTED,
   priority: 'high',
   category: 'pagos',
-  payload: { paymentId: 'pay_rejected_1', url: '/pages/login.html' },
+  payload: {
+    paymentId: 'pay_rejected_1',
+    url: '/pages/dashboard/familia.html#pagos',
+    actionLabel: 'Enviar justificante valido',
+    requiresNewProof: true,
+  },
 });
 
 assert.equal(rejectedNotification.type, NOTIFICATION_EVENTS.FAMILY_PAYMENT_REJECTED);
 assert.equal(rejectedNotification.category, 'pagos');
+assert.equal(rejectedNotification.actionUrl, '/pages/dashboard/familia.html#pagos');
+assert.equal(rejectedNotification.payload.requiresNewProof, true);
 assert.equal(notificationPriorityClass(rejectedNotification), 'alta');
 assert.equal(notificationPriorityClass({ type: NOTIFICATION_EVENTS.ADMIN_MANUAL, priority: 'medium' }), 'media');
 assert.equal(notificationPriorityClass({ type: NOTIFICATION_EVENTS.CLASS_INCIDENT, priority: 'critical' }), 'critica');
@@ -64,11 +71,22 @@ assert.match(adminHtml, /buildClassFamilyPaymentReopenPatch/);
 assert.match(adminHtml, /shouldReopenFamilyClassPayment\(normalizedEstado\)/);
 assert.match(adminHtml, /notifyFamilyPaymentRejected/);
 assert.match(adminHtml, /FAMILY_PAYMENT_REJECTED/);
-assert.match(adminHtml, /20260705-payment-alerts/);
+assert.match(adminHtml, /Justificante no valido/);
+assert.match(adminHtml, /no es valido/);
+assert.match(adminHtml, /envia ahora un justificante valido desde Justificantes/);
+assert.match(adminHtml, /\/pages\/dashboard\/familia\.html#pagos/);
+assert.match(adminHtml, /notification-engine\.js\?v=20260707-low-noise/);
+
+const familyHtml = await readFile(new URL('../pages/dashboard/familia.html', import.meta.url), 'utf8');
+assert.match(familyHtml, /isRejectedFamilyPayment/);
+assert.match(familyHtml, /renderRejectedPaymentRequestCard/);
+assert.match(familyHtml, /Justificante no valido/);
+assert.match(familyHtml, /Enviar justificante valido/);
+assert.match(familyHtml, /payment-review-row-danger/);
 
 const chatWidget = await readFile(new URL('../js/chat-widget.js', import.meta.url), 'utf8');
 assert.match(chatWidget, /cd10-notification-priority-styles/);
 assert.match(chatWidget, /priority-normal/);
-assert.match(chatWidget, /notification-engine\.js\?v=20260705-payment-alerts/);
+assert.match(chatWidget, /notification-engine\.js\?v=20260707-low-noise/);
 
 console.log('Payment rejection reopen test passed.');

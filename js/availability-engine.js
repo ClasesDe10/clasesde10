@@ -313,7 +313,7 @@ export function validateScheduleAvailability({
       teacherSlot,
       studentSlot,
       requiredScope: 'admin',
-      message: 'Admin puede coordinar horario revisando ambas agendas.',
+      message: 'El equipo puede coordinar el horario revisando ambas agendas.',
     };
   }
 

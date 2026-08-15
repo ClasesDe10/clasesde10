@@ -1,9 +1,9 @@
 {
-  "name": "ClasesDe10",
-  "short_name": "ClasesDe10",
-  "description": "Encuentra profesores particulares verificados o gestiona tus clases desde el movil.",
-  "id": "/",
-  "start_url": "/",
+  "name": "ClasesDe10 Panel",
+  "short_name": "CD10 Panel",
+  "description": "Accede a tu panel de clases, chat, calendario y pagos.",
+  "id": "/pages/login.html",
+  "start_url": "/pages/login.html?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],
@@ -30,24 +30,10 @@
   "categories": ["education", "productivity"],
   "shortcuts": [
     {
-      "name": "Solicitar profesor",
-      "short_name": "Profesor",
-      "url": "/para-padres.html#formulario",
-      "description": "Pedir ayuda para encontrar profesor",
-      "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
-    },
-    {
       "name": "Mi panel",
       "short_name": "Panel",
       "url": "/pages/login.html",
-      "description": "Acceder a mi cuenta",
-      "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
-    },
-    {
-      "name": "Contactar",
-      "short_name": "Contacto",
-      "url": "/contacto.html",
-      "description": "Hablar con ClasesDe10",
+      "description": "Entrar al panel de ClasesDe10",
       "icons": [{ "src": "/assets/img/logo-192.png", "sizes": "192x192" }]
     }
   ]

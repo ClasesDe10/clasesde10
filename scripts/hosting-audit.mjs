@@ -28,7 +28,7 @@ const REQUIRED_SECURITY_HEADERS = [
   ['x-frame-options', /^DENY$/i],
   ['x-content-type-options', /^nosniff$/i],
   ['referrer-policy', /strict-origin-when-cross-origin/i],
-  ['permissions-policy', /camera=\(\), microphone=\(\), geolocation=\(\)/i],
+  ['permissions-policy', /camera=\(self\), microphone=\(self\), geolocation=\(\)/i],
   ['content-security-policy', /frame-ancestors 'none'/i],
   ['content-security-policy', /object-src 'none'/i],
 ];

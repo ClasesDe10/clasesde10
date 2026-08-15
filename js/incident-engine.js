@@ -454,6 +454,330 @@ export function buildAutomaticIncidentPayload(kind, source = {}, options = {}) {
   }, { uid: 'automation', email: '', role: 'system' }, options);
 }
 
+const INCIDENT_RESOLUTION_PLAYBOOKS = Object.freeze({
+  pago: {
+    problem: 'Pago o justificante pendiente de aclarar.',
+    causes: [
+      'La familia ha pagado pero el justificante no coincide con las clases.',
+      'Falta justificante valido o el pago esta fuera del periodo esperado.',
+      'El importe no cubre todas las clases pendientes.',
+    ],
+    checks: [
+      'Revisar el pago y las clases asociadas antes de responder.',
+      'Comprobar importe, fecha, concepto y estado del justificante.',
+      'Si falta informacion, pedir un justificante valido desde el panel de la familia.',
+    ],
+    actions: [
+      'Validar o rechazar el justificante segun corresponda.',
+      'Reabrir la subida de justificante si no es valido.',
+      'Dejar nota interna con importe, periodo y clases afectadas.',
+    ],
+    resolution: 'Pago revisado. Queda conciliado o se ha pedido a la familia un justificante valido para completar el proceso.',
+    userMessage: 'Hemos revisado el justificante. Si falta algo, por favor sube uno valido desde Justificantes para dejarlo al dia.',
+  },
+  finanzas: {
+    problem: 'Incoherencia economica o margen fuera de lo esperado.',
+    causes: [
+      'La clase no tiene importes por hora completos.',
+      'La duracion cambio pero no se recalculo el total.',
+      'Hay cobro familiar o pago al profesor sin conciliar.',
+    ],
+    checks: [
+      'Comprobar precio/hora familia, importe/hora profesor y duracion real.',
+      'Revisar si el margen queda negativo o por debajo del minimo.',
+      'Confirmar que pagos y clases usan el mismo periodo.',
+    ],
+    actions: [
+      'Corregir importes manteniendo siempre el precio por hora.',
+      'Actualizar clase, pago o liquidacion afectada.',
+      'Dejar trazado que se reviso margen y conciliacion.',
+    ],
+    resolution: 'Importes revisados y conciliados. La clase queda con precio proporcional a su duracion y margen correcto.',
+    userMessage: 'Hemos revisado el apunte economico y ya queda actualizado correctamente.',
+  },
+  clase: {
+    problem: 'Clase pendiente de confirmar, no realizada o con conflicto de calendario.',
+    causes: [
+      'Profesor o familia no marcaron si la clase se dio.',
+      'La clase se cancelo o cambio de hora sin quedar reflejada.',
+      'Hay discrepancia entre asistencia de profesor y familia.',
+    ],
+    checks: [
+      'Abrir la clase y revisar fecha, hora, alumno, profesor y asistencia.',
+      'Comprobar mensajes recientes del chat.',
+      'Si hay duda, pedir confirmacion breve a ambas partes.',
+    ],
+    actions: [
+      'Marcar si la clase se dio, no se dio o queda en espera.',
+      'Reprogramar si corresponde.',
+      'Actualizar pago asociado solo cuando la asistencia quede clara.',
+    ],
+    resolution: 'Asistencia revisada y estado de clase actualizado. Calendario y pagos quedan alineados.',
+    userMessage: 'Hemos revisado la clase y actualizado su estado para que calendario y pagos queden correctos.',
+  },
+  documentacion: {
+    problem: 'Documento pendiente, rechazado o caducado.',
+    causes: [
+      'El documento subido no es valido o no se lee bien.',
+      'Falta informacion obligatoria para verificar el perfil.',
+      'El documento esta caducado o no corresponde con la persona.',
+    ],
+    checks: [
+      'Abrir el documento y revisar legibilidad, titular y tipo.',
+      'Comprobar notas de revision anteriores.',
+      'Confirmar si hay que pedir nueva subida.',
+    ],
+    actions: [
+      'Validar si cumple requisitos.',
+      'Rechazar con motivo claro si no es valido.',
+      'Pedir nueva subida desde Documentos.',
+    ],
+    resolution: 'Documento revisado. Se ha validado o se ha pedido una version correcta con motivo claro.',
+    userMessage: 'Hemos revisado el documento. Si no es valido, sube una version correcta desde Documentos.',
+  },
+  tecnica: {
+    problem: 'Error tecnico en web, login, permisos o carga de datos.',
+    causes: [
+      'Permisos insuficientes para leer o escribir el dato.',
+      'Datos antiguos no tienen el formato esperado.',
+      'El navegador conserva una version anterior o hay un fallo de red.',
+    ],
+    checks: [
+      'Reproducir el flujo con el mismo rol de usuario.',
+      'Revisar consola, permisos y documento afectado.',
+      'Comprobar si el error ocurre solo en movil o tambien en escritorio.',
+    ],
+    actions: [
+      'Corregir permisos o normalizar datos si procede.',
+      'Desplegar cambios y verificar en produccion.',
+      'Dejar nota con flujo exacto probado.',
+    ],
+    resolution: 'Error reproducido y corregido o documentado con pasos exactos para repararlo.',
+    userMessage: 'Estamos revisando el problema tecnico. Si puedes, envia una captura y el paso exacto donde ocurre.',
+  },
+  ia: {
+    problem: 'Automatizacion o decision de IA necesita revision.',
+    causes: [
+      'La IA detecto una incoherencia pero falta validacion humana.',
+      'El dato de entrada es ambiguo o incompleto.',
+      'La recomendacion automatica no coincide con la realidad operativa.',
+    ],
+    checks: [
+      'Revisar la decision automatica y los datos usados.',
+      'Comparar con clase, pago, chat o perfil relacionado.',
+      'Confirmar si es falso positivo o incidencia real.',
+    ],
+    actions: [
+      'Aceptar, corregir o descartar la recomendacion.',
+      'Actualizar el dato origen si estaba incompleto.',
+      'Registrar el motivo para mejorar futuras decisiones.',
+    ],
+    resolution: 'Decision automatica revisada y documentada. Se corrige el dato origen o se descarta el aviso.',
+    userMessage: 'Hemos revisado el aviso automatico y actualizado lo necesario.',
+  },
+  sincronizacion: {
+    problem: 'Calendario, pagos o datos relacionados no estan sincronizados.',
+    causes: [
+      'La clase recurrente no se genero o no se enlazo bien.',
+      'El pago no esta asociado al periodo correcto.',
+      'Un cambio se guardo en un documento pero no en su espejo legacy.',
+    ],
+    checks: [
+      'Comparar clase, calendario, chat y pago relacionado.',
+      'Revisar identificadores de serie, clase y asignacion.',
+      'Comprobar si afecta a familia, profesor o admin.',
+    ],
+    actions: [
+      'Regenerar o corregir el enlace afectado.',
+      'Actualizar los campos espejo necesarios.',
+      'Verificar en calendario de familia y profesor.',
+    ],
+    resolution: 'Datos sincronizados y verificados en los paneles afectados.',
+    userMessage: 'Hemos actualizado la informacion para que aparezca correctamente en el calendario y el panel.',
+  },
+  conflicto: {
+    problem: 'Desacuerdo o queja entre familia, profesor o alumno.',
+    causes: [
+      'Expectativas de clase, horario o metodologia no estaban claras.',
+      'Una parte no respondio o cambio condiciones.',
+      'Hay una discrepancia sobre asistencia, pago o calidad.',
+    ],
+    checks: [
+      'Leer ultimos mensajes y hechos objetivos antes de responder.',
+      'Separar hechos comprobables de opiniones.',
+      'Evitar culpar a ninguna parte en la primera respuesta.',
+    ],
+    actions: [
+      'Enviar respuesta cordial y concreta.',
+      'Proponer solucion: reprogramar, aclarar pago o revisar profesor.',
+      'Escalar si se repite o afecta a confianza.',
+    ],
+    resolution: 'Conflicto encauzado con respuesta cordial y siguiente paso claro para ambas partes.',
+    userMessage: 'Gracias por avisarnos. Lo revisamos con cuidado y os proponemos una solucion clara y tranquila.',
+  },
+  seguridad: {
+    problem: 'Riesgo de seguridad o confianza.',
+    causes: [
+      'Mensaje o comportamiento inapropiado.',
+      'Dato sensible compartido por canal no adecuado.',
+      'Situacion que puede afectar a un menor o a la confianza de la plataforma.',
+    ],
+    checks: [
+      'Revisar manualmente antes de responder.',
+      'Preservar evidencias y limitar exposicion de datos.',
+      'Escalar al administrador principal.',
+    ],
+    actions: [
+      'Pausar la relacion si hay riesgo real.',
+      'Contactar por canal seguro.',
+      'Documentar decision y motivo.',
+    ],
+    resolution: 'Caso revisado con prioridad de seguridad. Se ha protegido a las partes y queda documentado.',
+    userMessage: 'Hemos recibido el aviso y lo revisaremos con prioridad y maxima discrecion.',
+  },
+  perfil: {
+    problem: 'Perfil incompleto o dato de confianza incorrecto.',
+    causes: [
+      'Faltan datos obligatorios o verificables.',
+      'La foto, estudios o datos de contacto no estan completos.',
+      'La informacion no permite asignar con confianza.',
+    ],
+    checks: [
+      'Revisar campos obligatorios del perfil.',
+      'Comprobar documentos y coherencia de datos.',
+      'Confirmar si se puede activar o debe quedar pendiente.',
+    ],
+    actions: [
+      'Pedir completar el campo concreto.',
+      'Bloquear verificacion hasta que este correcto.',
+      'Dejar nota de lo que falta.',
+    ],
+    resolution: 'Perfil revisado y queda claro que dato falta o se ha corregido.',
+    userMessage: 'Necesitamos completar un dato concreto del perfil para poder avanzar con seguridad.',
+  },
+  matching: {
+    problem: 'Asignacion o matching bloqueado.',
+    causes: [
+      'No hay profesor con materia, nivel, zona u horario compatible.',
+      'La solicitud no tiene datos suficientes.',
+      'El profesor propuesto no ha respondido o no encaja.',
+    ],
+    checks: [
+      'Revisar materia, nivel, ubicacion y disponibilidad.',
+      'Comprobar profesores candidatos y motivos de descarte.',
+      'Ver si conviene ampliar criterios o buscar manualmente.',
+    ],
+    actions: [
+      'Ajustar criterios de busqueda.',
+      'Contactar profesor alternativo.',
+      'Informar a la familia si se necesita mas tiempo.',
+    ],
+    resolution: 'Matching revisado. Se ajustan criterios o se activa busqueda manual con siguiente paso claro.',
+    userMessage: 'Estamos revisando el profesor mas adecuado. Si necesitamos ajustar algun dato te avisaremos.',
+  },
+  comunicacion: {
+    problem: 'Falta de respuesta o comunicacion confusa.',
+    causes: [
+      'Una parte no ha visto el chat o no ha respondido.',
+      'El mensaje no dejaba claro el siguiente paso.',
+      'La llamada o coordinacion quedo sin cerrar.',
+    ],
+    checks: [
+      'Revisar ultimo mensaje y tiempo sin respuesta.',
+      'Comprobar si hay propuesta de horario pendiente.',
+      'Confirmar si basta un recordatorio o hace falta intervenir.',
+    ],
+    actions: [
+      'Enviar mensaje breve con una accion concreta.',
+      'Poner estado esperando usuario si dependemos de respuesta.',
+      'Escalar si supera el plazo definido.',
+    ],
+    resolution: 'Comunicacion reencauzada con siguiente accion clara y responsable definido.',
+    userMessage: 'Te dejamos el siguiente paso claro en el chat para poder avanzar sin lios.',
+  },
+  operativa: {
+    problem: 'Incidencia operativa pendiente de clasificar.',
+    causes: [
+      'Falta informacion para decidir.',
+      'El problema afecta a varios modulos o no esta bien etiquetado.',
+      'Hace falta asignar responsable y siguiente accion.',
+    ],
+    checks: [
+      'Completar categoria, prioridad y responsable.',
+      'Revisar entidad relacionada: clase, pago, documento o chat.',
+      'Definir el siguiente paso antes de guardar.',
+    ],
+    actions: [
+      'Asignar responsable.',
+      'Escribir causa probable.',
+      'Guardar una accion concreta y fecha de seguimiento.',
+    ],
+    resolution: 'Incidencia clasificada, responsable asignado y siguiente paso registrado.',
+    userMessage: 'Hemos recibido el aviso y lo estamos revisando para darte una respuesta clara.',
+  },
+});
+
+function uniqueCleanList(...groups) {
+  const seen = new Set();
+  const rows = [];
+  groups.flat().forEach((item) => {
+    const value = clean(item, 260);
+    const key = lower(value);
+    if (!value || seen.has(key)) return;
+    seen.add(key);
+    rows.push(value);
+  });
+  return rows;
+}
+
+export function buildIncidentResolutionGuide(raw = {}, options = {}) {
+  const item = normalizeIncident(raw, options);
+  const playbook = INCIDENT_RESOLUTION_PLAYBOOKS[item.categoria] || INCIDENT_RESOLUTION_PLAYBOOKS.operativa;
+  const ai = raw.aiClassification || {};
+  const possibleCauses = uniqueCleanList(ai.possibleCauses, raw.possibleCauses, item.rootCause, playbook.causes).slice(0, 5);
+  const checks = uniqueCleanList(ai.checks, raw.checks, playbook.checks).slice(0, 5);
+  const suggestedActions = uniqueCleanList(item.suggestedActions, ai.suggestedActions, raw.recommendedActions, playbook.actions).slice(0, 6);
+  const firstCause = possibleCauses[0] || 'Causa pendiente de confirmar.';
+  const firstAction = suggestedActions[0] || 'Revisar manualmente y dejar siguiente paso.';
+  const problem = clean(firstPresent(ai.problem, raw.problem, playbook.problem, item.titulo), 240);
+  const nextStatus = ['abierta'].includes(item.estado)
+    ? 'en_proceso'
+    : item.estado === 'en_proceso'
+      ? 'esperando_usuario'
+      : item.estado;
+  const suggestedResolution = clean(firstPresent(raw.suggestedResolution, ai.resolution, playbook.resolution), 900);
+  const internalNote = [
+    `Problema: ${problem}`,
+    `Causa probable: ${firstCause}`,
+    `Accion recomendada: ${firstAction}`,
+  ].join('\n');
+  const confidence = Number(ai.confidence ?? (raw.suggestedActions?.length ? 0.74 : 0.62));
+
+  return {
+    version: INCIDENT_ENGINE_VERSION,
+    title: problem,
+    category: item.categoria,
+    priority: item.prioridad,
+    status: item.estado,
+    confidence: Math.max(0, Math.min(1, Number.isFinite(confidence) ? confidence : 0.62)),
+    possibleCauses,
+    checks,
+    suggestedActions,
+    nextStatus,
+    suggestedCause: firstCause,
+    suggestedAction: firstAction,
+    suggestedResolution,
+    internalNote,
+    userMessage: clean(firstPresent(raw.suggestedUserMessage, ai.userMessage, playbook.userMessage), 700),
+    quickWins: [
+      nextStatus !== item.estado ? `Cambiar estado a ${nextStatus.replaceAll('_', ' ')}` : '',
+      item.assignedAdminEmail ? '' : 'Asignarte como responsable',
+      item.rootCause ? '' : 'Guardar causa probable',
+      item.resolution ? '' : 'Preparar resolucion sugerida',
+    ].filter(Boolean),
+  };
+}
+
 const PREVENTIVE_SEVERITY_META = Object.freeze({
   critical: { priorityRank: 1, prioridad: 'urgente', label: 'Critico' },
   high: { priorityRank: 2, prioridad: 'alta', label: 'Alto' },
@@ -745,7 +1069,7 @@ export function buildPreventiveIncidentPlan(dataset = {}, options = {}) {
     staleRequestHours: preventiveNumber(options.staleRequestHours, 24, 1, 1440),
     unscheduledAssignmentHours: preventiveNumber(options.unscheduledAssignmentHours, 48, 1, 1440),
     chatStalledHours: preventiveNumber(options.chatStalledHours, 48, 1, 1440),
-    paymentGraceHours: preventiveNumber(options.paymentGraceHours, 24, 0, 720),
+    paymentGraceHours: preventiveNumber(options.paymentGraceHours, 48, 48, 720),
     repeatedCancellationWindowDays: preventiveNumber(options.repeatedCancellationWindowDays, 30, 1, 365),
     repeatedCancellationThreshold: preventiveNumber(options.repeatedCancellationThreshold, 3, 2, 50),
     recurrentIncidentWindowDays: preventiveNumber(options.recurrentIncidentWindowDays, 30, 1, 365),

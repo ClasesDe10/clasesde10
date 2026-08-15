@@ -113,6 +113,38 @@ export function classEnded(classData = {}, marginMinutes = 0, nowMs = Date.now()
   return end.getTime() + marginMinutes * 60 * 1000 <= nowMs;
 }
 
+function teacherAttendanceStatusOf(classData = {}) {
+  const explicit = cleanCalendarText(
+    classData.teacherConfirmationStatus
+    || classData.teacherAttendanceStatus
+    || classData.confirmacion_profesor
+    || classData.teacherResult,
+    40,
+  ).toLowerCase();
+  if (explicit) return explicit;
+  const operationalStatus = normalizeClassStatus(classData.estado || classData.status);
+  return ['realizada', 'pagada'].includes(operationalStatus) ? 'realizada' : '';
+}
+
+export function classAttendanceReminderState(classData = {}, options = {}) {
+  const nowMs = options.nowMs ?? Date.now();
+  const graceHours = Number(options.graceHours ?? 24);
+  const end = classEndAt(classData);
+  const operationalStatus = normalizeClassStatus(classData.estado || classData.status);
+  const teacherStatus = teacherAttendanceStatusOf(classData);
+  const teacherMarked = ['realizada', 'cancelada', 'reprogramada', 'no_realizada', 'incidencia'].includes(teacherStatus);
+  const statusCanNeedTeacherResult = isScheduledClassStatus(operationalStatus) || operationalStatus === 'realizada';
+  const dueAtMs = end && Number.isFinite(graceHours) ? end.getTime() + Math.max(0, graceHours) * 60 * 60 * 1000 : null;
+  const needsTeacherResult = Boolean(end && statusCanNeedTeacherResult && !teacherMarked);
+  return {
+    needsTeacherResult,
+    isOverdue: Boolean(needsTeacherResult && dueAtMs !== null && nowMs >= dueAtMs),
+    dueAtIso: dueAtMs === null ? '' : new Date(dueAtMs).toISOString(),
+    hoursSinceEnd: end ? Math.max(0, Math.floor((nowMs - end.getTime()) / 3600000)) : null,
+    hoursUntilDue: dueAtMs === null ? null : Math.ceil((dueAtMs - nowMs) / 3600000),
+  };
+}
+
 export function minutesUntilClass(classData = {}, nowMs = Date.now()) {
   const start = classStartAt(classData);
   if (!start) return null;
@@ -181,7 +213,7 @@ export function scheduleChanged(previous = {}, next = {}) {
 }
 
 export function getClassAttendanceSummary(classData = {}) {
-  const teacher = cleanCalendarText(classData.teacherConfirmationStatus || classData.teacherAttendanceStatus || '', 40).toLowerCase();
+  const teacher = teacherAttendanceStatusOf(classData);
   const family = cleanCalendarText(classData.familyConfirmationStatus || classData.confirmacion_familia || '', 40).toLowerCase();
   const incident = cleanCalendarText(classData.incidentStatus || classData.estado_incidencia || '', 40).toLowerCase();
 
@@ -195,7 +227,7 @@ export function getClassAttendanceSummary(classData = {}) {
 
 export function classAttendanceState(classData = {}, options = {}) {
   const operationalStatus = normalizeClassStatus(classData.estado || classData.status);
-  const teacherStatus = cleanCalendarText(classData.teacherConfirmationStatus || classData.teacherAttendanceStatus || '', 40).toLowerCase();
+  const teacherStatus = teacherAttendanceStatusOf(classData);
   const familyStatus = cleanCalendarText(classData.familyConfirmationStatus || classData.confirmacion_familia || classData.familyAttendanceStatus || '', 40).toLowerCase();
   const incidentStatus = cleanCalendarText(classData.incidentStatus || classData.estado_incidencia || '', 40).toLowerCase();
   const attendanceStatus = getClassAttendanceSummary(classData);
@@ -223,38 +255,38 @@ export function classAttendanceState(classData = {}, options = {}) {
     familyNextStep: ended ? 'El profesor debe registrar primero el resultado.' : 'Cuando termine, el profesor registrara el resultado.',
   };
 
+  if (incidentStatus === 'abierta' || attendanceStatus === 'incidencia' || attendanceStatus === 'discrepancia') {
+    return {
+      ...base,
+      key: 'incident',
+      label: 'Revisar incidencia',
+      tone: 'danger',
+      teacherNextStep: 'Hay una incidencia abierta que debe revisarse.',
+      familyNextStep: 'La clase tiene una incidencia abierta en revisión.',
+    };
+  }
+
   if (operationalStatus === 'cancelada') {
     return {
       ...base,
       key: 'cancelled',
       label: 'Cancelada',
-      tone: 'danger',
-      teacherNextStep: 'La clase figura como cancelada.',
-      familyNextStep: 'La clase figura como cancelada.',
+      tone: 'neutral',
+      teacherNextStep: 'La clase está cancelada y no requiere ninguna acción.',
+      familyNextStep: 'La clase está cancelada y no requiere ninguna acción.',
     };
   }
 
-  if (operationalStatus === 'reprogramada') {
+  if (operationalStatus === 'reprogramada' && (!ended || teacherMarked)) {
     return {
       ...base,
       key: 'rescheduled',
       label: 'Reprogramada',
-      tone: 'warning',
-      canTeacherRegister: ended,
-      canFamilyReportIssue: ended && !hasFamilyConfirmation,
-      teacherNextStep: ended ? 'Confirma el resultado si finalmente se dio.' : 'Revisa el nuevo horario acordado.',
-      familyNextStep: ended ? 'Puedes avisar si el cambio no fue correcto.' : 'Revisa el nuevo horario acordado.',
-    };
-  }
-
-  if (incidentStatus === 'abierta' || attendanceStatus === 'incidencia' || attendanceStatus === 'discrepancia') {
-    return {
-      ...base,
-      key: 'incident',
-      label: 'Incidencia abierta',
-      tone: 'danger',
-      teacherNextStep: 'Hay una incidencia abierta para revisar.',
-      familyNextStep: 'Hemos avisado al administrador para revisar la clase.',
+      tone: 'info',
+      canTeacherRegister: false,
+      canFamilyReportIssue: false,
+      teacherNextStep: 'Revisa el nuevo horario acordado.',
+      familyNextStep: 'Revisa el nuevo horario acordado.',
     };
   }
 
@@ -286,28 +318,84 @@ export function classAttendanceState(classData = {}, options = {}) {
     return {
       ...base,
       key: 'pending_teacher',
-      label: 'Falta registrar profesor',
-      tone: 'warning',
+      label: 'Revisar: falta marcar',
+      tone: 'danger',
       canTeacherRegister: ended,
-      teacherNextStep: 'La familia ya confirmo; registra tu resultado para cerrar la asistencia.',
-      familyNextStep: 'Esperando a que el profesor confirme su registro.',
+      teacherNextStep: 'La familia ya confirmó. Marca ahora si la clase se dio o no.',
+      familyNextStep: 'El profesor todavía no ha marcado si la clase se dio o no.',
     };
   }
 
-  if (ended && (scheduled || operationalStatus === 'realizada')) {
+  if (ended && !teacherMarked && (scheduled || operationalStatus === 'realizada')) {
     return {
       ...base,
       key: 'pending_teacher',
-      label: 'Falta registrar profesor',
-      tone: 'warning',
+      label: 'Revisar: falta marcar',
+      tone: 'danger',
       canTeacherRegister: true,
       canFamilyReportIssue: !hasFamilyConfirmation,
-      teacherNextStep: 'Registra si la clase se dio, se cancelo o se debe reprogramar.',
-      familyNextStep: 'Esperando a que el profesor registre el resultado. Puedes avisar si no se dio.',
+      teacherNextStep: 'La clase ya terminó. Marca ahora si se dio o no.',
+      familyNextStep: 'El profesor todavía no ha marcado si se dio o no. Puedes avisar si no se dio.',
     };
   }
 
   return base;
+}
+
+/**
+ * Calendar-only visual semantics. Text remains mandatory so colour is never
+ * the only way to understand a class state.
+ */
+export function classAttendanceCalendarVisual(classData = {}, options = {}) {
+  const state = classAttendanceState(classData, options);
+  const visualByState = {
+    incident: {
+      dotClass: 'dot-red',
+      cardClass: 'attendance-incident',
+      calendarLabel: 'Revisar incidencia',
+      priority: 120,
+    },
+    pending_teacher: {
+      dotClass: 'dot-red',
+      cardClass: 'attendance-review',
+      calendarLabel: 'Revisar',
+      priority: 110,
+    },
+    pending_family: {
+      dotClass: 'dot-amber',
+      cardClass: 'attendance-pending',
+      calendarLabel: 'Confirmar',
+      priority: 80,
+    },
+    rescheduled: {
+      dotClass: 'dot-blue',
+      cardClass: 'attendance-rescheduled',
+      calendarLabel: 'Reprogramada',
+      priority: 55,
+    },
+    scheduled: {
+      dotClass: 'dot-blue',
+      cardClass: 'attendance-scheduled',
+      calendarLabel: 'Clase',
+      priority: 50,
+    },
+    confirmed_by_both: {
+      dotClass: 'dot-emerald',
+      cardClass: 'attendance-complete',
+      calendarLabel: 'Confirmada',
+      priority: 30,
+    },
+    cancelled: {
+      dotClass: 'dot-gray',
+      cardClass: 'attendance-cancelled',
+      calendarLabel: 'Cancelada',
+      priority: 10,
+    },
+  };
+  return {
+    ...state,
+    ...(visualByState[state.key] || visualByState.scheduled),
+  };
 }
 
 export function buildClassLifecycleFields(classData = {}, nowIso = new Date().toISOString()) {
@@ -348,10 +436,16 @@ export function buildAdminClassPayload(input = {}, previous = {}, options = {}) 
     ?? previous.importe_hora_profesor,
   );
   const explicitPrice = numberOrNull(input.precio_total ?? input.amount ?? input.familyAmount);
-  const price = familyHourlyRate !== null ? amountFromHourly(familyHourlyRate, durationMinutes) : explicitPrice;
+  const useLegacyHourlyAmount = validation.valid && durationMinutes !== 60;
+  const inferredFamilyHourlyRate = familyHourlyRate ?? (useLegacyHourlyAmount ? explicitPrice : null);
+  const price = inferredFamilyHourlyRate !== null ? amountFromHourly(inferredFamilyHourlyRate, durationMinutes) : explicitPrice;
+  const explicitTeacherAmount = numberOrNull(input.importe_profesor ?? input.teacherAmount ?? input.teacher_amount);
+  const inferredTeacherHourlyRate = teacherHourlyRate ?? (useLegacyHourlyAmount ? explicitTeacherAmount : null);
   let teacherAmount = teacherHourlyRate !== null
     ? amountFromHourly(teacherHourlyRate, durationMinutes)
-    : numberOrNull(input.importe_profesor ?? input.teacherAmount ?? input.teacher_amount);
+    : inferredTeacherHourlyRate !== null
+    ? amountFromHourly(inferredTeacherHourlyRate, durationMinutes)
+    : explicitTeacherAmount;
   const numericPrice = price === null ? null : Number(price);
   if ((teacherAmount === null || teacherAmount === '' || teacherAmount === undefined) && Number.isFinite(numericPrice)) {
     const commissionPercent = Number(configValue(options.config, 'business.defaultCommissionPercent', 25));
@@ -362,8 +456,8 @@ export function buildAdminClassPayload(input = {}, previous = {}, options = {}) 
   const platformFee = price !== null && teacherAmount !== null
     ? roundMoney(Number(price || 0) - Number(teacherAmount || 0))
     : null;
-  const normalizedFamilyHourlyRate = familyHourlyRate ?? hourlyFromAmount(price, durationMinutes);
-  const normalizedTeacherHourlyRate = teacherHourlyRate ?? hourlyFromAmount(teacherAmount, durationMinutes);
+  const normalizedFamilyHourlyRate = inferredFamilyHourlyRate ?? hourlyFromAmount(price, durationMinutes);
+  const normalizedTeacherHourlyRate = inferredTeacherHourlyRate ?? hourlyFromAmount(teacherAmount, durationMinutes);
 
   return {
     profesor_id: input.profesor_id || input.teacherUid,
@@ -431,19 +525,25 @@ export function buildTeacherAttendancePayload(status, notes = '', reason = '', u
   const normalized = cleanCalendarText(status, 40).toLowerCase();
   const nextStatus = normalized === 'realizada' ? 'realizada'
     : normalized === 'cancelada' ? 'cancelada'
+    : normalized === 'no_realizada' ? 'cancelada'
+    : normalized === 'incidencia' ? 'cancelada'
     : normalized === 'reprogramada' ? 'reprogramada'
     : 'realizada';
+  const teacherStatus = normalized === 'realizada' ? 'realizada'
+    : normalized === 'no_realizada' ? 'no_realizada'
+    : normalized === 'incidencia' ? 'incidencia'
+    : normalized;
   return {
     estado: nextStatus,
     status: nextStatus,
     lifecycleStatus: lifecycleStatusForClassStatus(nextStatus),
-    teacherConfirmationStatus: normalized === 'realizada' ? 'realizada' : normalized,
-    teacherAttendanceStatus: normalized === 'realizada' ? 'realizada' : normalized,
+    teacherConfirmationStatus: teacherStatus,
+    teacherAttendanceStatus: teacherStatus,
     attendanceStatus: normalized === 'realizada' ? 'pendiente_familia' : 'incidencia',
     incidentStatus: ['cancelada', 'reprogramada'].includes(nextStatus) ? 'abierta' : null,
     notas_profesor: cleanCalendarText(notes, 2000),
     notasProfesor: cleanCalendarText(notes, 2000),
-    cancelacion_motivo: cleanCalendarText(reason, 800) || null,
+    cancelacion_motivo: nextStatus === 'cancelada' ? cleanCalendarText(reason, 800) || null : null,
     reprogramacion_motivo: nextStatus === 'reprogramada' ? cleanCalendarText(reason, 800) || null : null,
     teacherMarkedAt: nowIso,
     teacherMarkedByUid: userUid,
@@ -480,6 +580,8 @@ export function buildClassIncidentPayload(classId, classData = {}, source = 'aut
     ? 'Incidencia comunicada por familia'
     : source === 'teacher_update'
       ? 'Incidencia comunicada por profesor'
+      : source === 'attendance_mismatch'
+        ? 'Discrepancia de asistencia'
       : 'Incidencia detectada automaticamente';
   return buildIncidentCreatePayload({
     classId,
@@ -499,6 +601,49 @@ export function buildClassIncidentPayload(classId, classData = {}, source = 'aut
     reportado_por: reporterUid || null,
     source,
   }, { uid: reporterUid || 'automation', role: reporterUid ? 'user' : 'system' });
+}
+
+export function buildParticipantClassIncidentCreatePayload(classId, classData = {}, source = 'family_confirmation', notes = '', reporter = {}) {
+  const reporterUid = typeof reporter === 'string'
+    ? reporter
+    : cleanCalendarText(reporter.uid || reporter.id || reporter.userUid, 120);
+  const reporterEmail = typeof reporter === 'string'
+    ? ''
+    : cleanCalendarText(reporter.email || reporter.createdByEmail, 180);
+  const title = source === 'teacher_update'
+    ? 'Clase marcada como no dada por profesor'
+    : source === 'attendance_mismatch'
+      ? 'Discrepancia de asistencia'
+      : 'Clase marcada como no dada por familia';
+  const description = cleanCalendarText(notes || title, 2000);
+
+  return {
+    classId,
+    clase_id: classId,
+    familyUid: classData.familyUid || classData.familia_id || '',
+    familia_id: classData.familia_id || classData.familyUid || '',
+    teacherUid: classData.teacherUid || classData.profesor_id || '',
+    profesor_id: classData.profesor_id || classData.teacherUid || '',
+    studentId: classData.studentId || classData.alumno_id || '',
+    alumno_id: classData.alumno_id || classData.studentId || '',
+    tipo: source,
+    titulo: title,
+    title,
+    descripcion: description,
+    description,
+    estado: 'abierta',
+    status: 'abierta',
+    prioridad: 'alta',
+    priority: 'high',
+    categoria: 'clase',
+    category: 'clase',
+    reportado_por: reporterUid,
+    userUid: reporterUid,
+    createdByUid: reporterUid,
+    createdByEmail: reporterEmail,
+    source,
+    automatic: false,
+  };
 }
 
 export function classReminderWindows(classData = {}, nowMs = Date.now()) {

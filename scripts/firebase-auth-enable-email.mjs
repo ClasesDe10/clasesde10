@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Initialize Firebase Auth / Identity Platform and enable Email/Password.
+ * Initialize Firebase Auth / Identity Platform and enable Email/Password plus
+ * one-time email links for secure provider linking.
  *
  * This uses the local Firebase CLI OAuth session. It is intentionally small and
  * idempotent: if config already exists, it only patches the email provider.
@@ -61,7 +62,7 @@ async function enableEmailPassword() {
       signIn: {
         email: {
           enabled: true,
-          passwordRequired: true,
+          passwordRequired: false,
         },
       },
     }),
@@ -87,12 +88,12 @@ async function main() {
 
   if (!finalConfig.ok) process.exit(1);
   const email = finalConfig.body?.signIn?.email;
-  if (!email?.enabled || !email?.passwordRequired) {
-    console.error('Email/Password is not enabled in final config.');
+  if (!email?.enabled || email?.passwordRequired === true) {
+    console.error('Email/Password and email-link sign-in are not enabled in final config.');
     process.exit(1);
   }
 
-  console.log('\nEmail/Password enabled.');
+  console.log('\nEmail/Password and email-link sign-in enabled.');
 }
 
 main().catch((error) => {

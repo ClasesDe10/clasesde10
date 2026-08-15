@@ -1119,7 +1119,7 @@
       profesor: [
         { id: 'profesor:next', label: 'Hacer mi siguiente paso', hint: 'La guia decide que toca ahora', category: 'Recomendado', section: 'inicio', selector: '.teacher-journey-card [data-teacher-journey-action]', priority: 1, recommended: true, keywords: 'siguiente paso profesor perfil documentos chat clase cobro' },
         { id: 'profesor:profile', label: 'Completar perfil profesional', hint: 'Foto, estudios, materias y confianza', category: 'Confianza', section: 'perfil', priority: 3, recommended: true, keywords: 'perfil foto estudios colegio notas materias idiomas' },
-        { id: 'profesor:availability', label: 'Actualizar disponibilidad', hint: 'Franjas reales para matching', category: 'Matching', section: 'disponibilidad', selector: '#btn-add-disponibilidad', priority: 5, keywords: 'horario disponibilidad calendario' },
+        { id: 'profesor:availability', label: 'Actualizar disponibilidad', hint: 'Franjas reales para recibir propuestas', category: 'Alumnos', section: 'disponibilidad', selector: '#btn-add-disponibilidad', priority: 5, keywords: 'horario disponibilidad calendario' },
         { id: 'profesor:documents', label: 'Subir documentos', hint: 'DNI, notas, certificados y curriculum opcional', category: 'Confianza', section: 'documentos', selector: '#btn-subir-doc', priority: 7, keywords: 'dni notas expediente curriculum certificado idiomas documentos verificacion' },
         { id: 'profesor:classes', label: 'Ver mis clases', hint: 'Registrar asistencia e incidencias', category: 'Clases', section: 'clases', priority: 9, keywords: 'clases asistencia realizada cancelar' },
         { id: 'profesor:chat', label: 'Abrir chat y notificaciones', hint: 'Familias, horarios y avisos', category: 'Comunicacion', section: 'chat', priority: 10, keywords: 'mensaje familia alumno horario' },
@@ -1568,8 +1568,8 @@
     const context = fieldContext(field);
     const rules = [
       [/email|correo/, 'Este correo se usara para acceso y avisos importantes.'],
-      [/telefono|movil|phone/, 'Anade un telefono operativo para resolver incidencias rapido.'],
-      [/direccion|calle|zona|codigo postal|postal|cp\b/, 'Ayuda a calcular cercania y clases presenciales.'],
+      [/telefono|movil|phone/, 'Añade un teléfono de contacto para recibir avisos importantes.'],
+      [/direccion|calle|zona|codigo postal|postal|cp\b/, 'Indica dónde puedes dar o recibir clases presenciales.'],
       [/materia|asignatura|especialidad|subject/, 'Incluye materias escolares y extraescolares: padel, piano, guitarra o programacion.'],
       [/preferencias educativas|observaciones|notas|seguimiento/, 'Cuenta lo que debe saber el profesor: objetivos, dificultades, ritmo y preferencias de clase.'],
       [/disponibilidad|horario|franja|availability/, 'Usa franjas reales; el matching las tendra en cuenta.'],

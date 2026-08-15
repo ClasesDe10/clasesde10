@@ -4,15 +4,19 @@ import { buildTeacherJourneyState } from '../js/teacher-journey-engine.js';
 import { renderTeacherJourneyPanel } from '../js/teacher-journey-ui.js';
 
 function state(input) {
+  const { teacher: teacherOverride = {}, ...rest } = input || {};
   return buildTeacherJourneyState({
     teacher: {
       verificationStatus: 'verificado',
       profileCompletionPercent: 92,
       disponibilidad_resumen: 'Tardes de lunes a jueves',
+      payoutFrequency: 'quincenal',
+      payoutAnchorDate: '2026-07-15',
+      ...teacherOverride,
     },
     documents: [{ id: 'doc_1', estado: 'validado' }],
     availabilitySlots: [{ id: 'slot_1' }],
-    ...input,
+    ...rest,
   });
 }
 
@@ -29,6 +33,14 @@ const docsNeeded = state({
 });
 assert.equal(docsNeeded.stage, 'documents_needed');
 assert.equal(docsNeeded.primaryAction.id, 'upload_documents');
+
+const payoutNeeded = state({
+  teacher: { payoutFrequency: '', payoutAnchorDate: '' },
+  profileEvaluation: { percent: 92, issues: ['payout'] },
+});
+assert.equal(payoutNeeded.stage, 'payout_needed');
+assert.equal(payoutNeeded.primaryAction.id, 'open_income');
+assert.match(payoutNeeded.body, /Ingresos/);
 
 const availabilityNeeded = state({
   teacher: { verificationStatus: 'verificado', profileCompletionPercent: 92, disponibilidad_resumen: '' },

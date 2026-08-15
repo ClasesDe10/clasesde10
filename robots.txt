@@ -1,11 +1,5 @@
 User-agent: *
 Allow: /
-Disallow: /pages/dashboard/
-Disallow: /pages/login
-Disallow: /pages/registro
-Disallow: /pages/reset-password
-Disallow: /offline
-Disallow: /offline.html
 Disallow: /supabase/
 Disallow: /firebase/
 Disallow: /functions/

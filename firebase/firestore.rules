@@ -39,6 +39,8 @@ service cloud.firestore {
           'mensaje',
           'metadata',
           'estado',
+          'accountStatus',
+          'activationRequestedAt',
           'createdAt',
           'updatedAt'
         ])
@@ -55,6 +57,13 @@ service cloud.firestore {
         && request.resource.data.estado == 'nuevo'
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
+        && (!request.resource.data.keys().hasAny(['accountStatus'])
+          || (
+            request.resource.data.tipo == 'familia'
+            && request.resource.data.accountStatus == 'pending_activation'
+            && request.resource.data.activationRequestedAt == request.time
+            && request.resource.data.metadata.account_mode == 'assisted_parent_activation'
+          ))
         && request.resource.data.nombre is string
         && request.resource.data.nombre.size() >= 2
         && request.resource.data.nombre.size() <= 160
@@ -74,6 +83,75 @@ service cloud.firestore {
           || request.resource.data.mensaje == null
           || (request.resource.data.mensaje is string && request.resource.data.mensaje.size() <= 3000))
         && validPublicLeadMetadata();
+    }
+
+    function canReadOwnAssistedFamilyLead() {
+      return signedIn()
+        && resource.data.tipo == 'familia'
+        && resource.data.email == request.auth.token.email
+        && resource.data.metadata.account_mode == 'assisted_parent_activation';
+    }
+
+    function validOwnAssistedFamilyLeadClaim() {
+      return canReadOwnAssistedFamilyLead()
+        && resource.data.accountStatus == 'pending_activation'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'accountStatus',
+          'accountUid',
+          'accountActivatedAt',
+          'studentId',
+          'solicitudId',
+          'updatedAt'
+        ])
+        && request.resource.data.accountStatus == 'activated'
+        && request.resource.data.accountUid == request.auth.uid
+        && request.resource.data.accountActivatedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.studentId is string
+        && request.resource.data.studentId.size() <= 180
+        && request.resource.data.solicitudId is string
+        && request.resource.data.solicitudId.size() <= 180;
+    }
+
+    function canReadOwnAssistedFamilyRequest() {
+      return signedIn()
+        && resource.data.keys().hasAll(['source', 'publicLeadId'])
+        && resource.data.source == 'publicLead'
+        && resource.data.publicLeadId is string
+        && exists(/databases/$(database)/documents/leadsPublicos/$(resource.data.publicLeadId))
+        && get(/databases/$(database)/documents/leadsPublicos/$(resource.data.publicLeadId)).data.accountStatus == 'activated'
+        && get(/databases/$(database)/documents/leadsPublicos/$(resource.data.publicLeadId)).data.accountUid == request.auth.uid
+        && get(/databases/$(database)/documents/leadsPublicos/$(resource.data.publicLeadId)).data.email == request.auth.token.email;
+    }
+
+    function validOwnAssistedFamilyRequestClaim() {
+      return canReadOwnAssistedFamilyRequest()
+        && (!resource.data.keys().hasAny(['familyUid'])
+          || resource.data.familyUid == null
+          || resource.data.familyUid == request.auth.uid)
+        && (!resource.data.keys().hasAny(['familia_id'])
+          || resource.data.familia_id == null
+          || resource.data.familia_id == request.auth.uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'familyUid',
+          'familia_id',
+          'studentId',
+          'alumno_id',
+          'familySnapshot',
+          'studentSnapshot',
+          'updatedAt'
+        ])
+        && request.resource.data.familyUid == request.auth.uid
+        && request.resource.data.familia_id == request.auth.uid
+        && request.resource.data.familySnapshot is map
+        && request.resource.data.familySnapshot.email == request.auth.token.email
+        && (!request.resource.data.keys().hasAny(['studentId'])
+          || request.resource.data.studentId == null
+          || (request.resource.data.studentId is string && request.resource.data.studentId.size() <= 180))
+        && (!request.resource.data.keys().hasAny(['alumno_id'])
+          || request.resource.data.alumno_id == null
+          || (request.resource.data.alumno_id is string && request.resource.data.alumno_id.size() <= 180))
+        && request.resource.data.updatedAt == request.time;
     }
 
     function optionalMetadataString(field, maxSize) {
@@ -319,6 +397,7 @@ service cloud.firestore {
       return request.resource.data.metadata is map
           && request.resource.data.metadata.keys().hasOnly([
             'alumno',
+            'account_mode',
             'anios',
             'canal',
             'consent_privacy',
@@ -347,6 +426,7 @@ service cloud.firestore {
           ])
           && request.resource.data.metadata.keys().hasAll(['consent_privacy'])
           && optionalMetadataString('alumno', 160)
+          && optionalMetadataString('account_mode', 80)
           && optionalMetadataString('anios', 80)
           && optionalMetadataString('canal', 80)
           && optionalMetadataString('disponibilidad', 300)
@@ -383,6 +463,10 @@ service cloud.firestore {
           'telefono',
           'role',
           'active',
+          'onboardingSource',
+          'assistedLeadId',
+          'passwordSetupRequired',
+          'profileCompletionRequired',
           'createdAt',
           'updatedAt'
         ])
@@ -390,6 +474,25 @@ service cloud.firestore {
         && request.resource.data.role in ['familia', 'profesor', 'alumno']
         && request.resource.data.active == true
         && request.resource.data.email == request.auth.token.email
+        && (!request.resource.data.keys().hasAny([
+            'onboardingSource',
+            'assistedLeadId',
+            'passwordSetupRequired',
+            'profileCompletionRequired'
+          ])
+          || (
+            request.resource.data.keys().hasAll([
+              'onboardingSource',
+              'assistedLeadId',
+              'passwordSetupRequired',
+              'profileCompletionRequired'
+            ])
+            && request.resource.data.role == 'familia'
+            && request.resource.data.onboardingSource == 'assisted_parent_form'
+            && requiredString('assistedLeadId', 8, 180)
+            && request.resource.data.passwordSetupRequired == true
+            && request.resource.data.profileCompletionRequired == true
+          ))
         && requiredString('email', 3, 254)
         && requiredString('nombre', 1, 80)
         && optionalString('apellidos', 120)
@@ -398,10 +501,15 @@ service cloud.firestore {
     }
 
     function validUserSelfUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return changed.hasOnly([
           'nombre',
           'apellidos',
           'telefono',
+          'passwordSetupRequired',
+          'passwordSetupCompletedAt',
+          'profileCompletionRequired',
+          'profileCompletedAt',
           'updatedAt'
         ])
         && requiredString('nombre', 1, 80)
@@ -410,7 +518,23 @@ service cloud.firestore {
         && validClientUpdatedAt()
         && request.resource.data.email == resource.data.email
         && request.resource.data.role == resource.data.role
-        && request.resource.data.active == resource.data.active;
+        && request.resource.data.active == resource.data.active
+        && (
+          !changed.hasAny(['passwordSetupRequired', 'passwordSetupCompletedAt'])
+          || (
+            resource.data.passwordSetupRequired == true
+            && request.resource.data.passwordSetupRequired == false
+            && request.resource.data.passwordSetupCompletedAt == request.time
+          )
+        )
+        && (
+          !changed.hasAny(['profileCompletionRequired', 'profileCompletedAt'])
+          || (
+            resource.data.profileCompletionRequired == true
+            && request.resource.data.profileCompletionRequired == false
+            && request.resource.data.profileCompletedAt == request.time
+          )
+        );
     }
 
     function validRoleProfileCreate(uid, role) {
@@ -427,6 +551,8 @@ service cloud.firestore {
           'profileComplete',
           'estado_verificacion',
           'verificationStatus',
+          'onboardingSource',
+          'assistedLeadId',
           'createdAt',
           'updatedAt'
         ])
@@ -458,6 +584,13 @@ service cloud.firestore {
           || request.resource.data.estado_verificacion in ['pendiente', 'pendiente_perfil'])
         && (!request.resource.data.keys().hasAny(['verificationStatus'])
           || request.resource.data.verificationStatus in ['pendiente', 'pendiente_perfil'])
+        && (!request.resource.data.keys().hasAny(['onboardingSource', 'assistedLeadId'])
+          || (
+            request.resource.data.keys().hasAll(['onboardingSource', 'assistedLeadId'])
+            && role == 'familia'
+            && request.resource.data.onboardingSource == 'assisted_parent_form'
+            && requiredString('assistedLeadId', 8, 180)
+          ))
         && validClientTimestampsOnCreate();
     }
 
@@ -612,6 +745,8 @@ service cloud.firestore {
           'subjects',
           'niveles_educativos',
           'levels',
+          'ambitos_ensenanza',
+          'teachingScopes',
           'especialidades',
           'specialties',
           'idiomas',
@@ -787,15 +922,17 @@ service cloud.firestore {
 
     function isTeacherAvailability(data) {
       return data.keys().hasAny(['teacherUid', 'profesor_id'])
-        && (
-          !data.keys().hasAll(['teacherUid', 'profesor_id'])
-          || data.teacherUid == data.profesor_id
-        )
+        && (!data.keys().hasAny(['teacherUid']) || data.teacherUid is string)
+        && (!data.keys().hasAny(['profesor_id']) || data.profesor_id is string)
         && !data.keys().hasAny(['familyUid', 'familia_id', 'studentId', 'alumno_id']);
     }
 
     function availabilityTeacherUid(data) {
-      return data.keys().hasAny(['teacherUid']) ? data.teacherUid : data.profesor_id;
+      return data.keys().hasAny(['teacherUid'])
+        && data.teacherUid is string
+        && data.teacherUid.size() > 0
+        ? data.teacherUid
+        : data.profesor_id;
     }
 
     function availabilityFamilyUid(data) {
@@ -893,7 +1030,16 @@ service cloud.firestore {
     function validTeacherAvailabilityPayload(data) {
       return validAvailabilityFields(data)
         && isTeacherAvailability(data)
-        && availabilityTeacherBelongsToAuth(availabilityTeacherUid(data));
+        && availabilityTeacherBelongsToAuth(availabilityTeacherUid(data))
+        && (
+          !data.keys().hasAny(['teacherUid'])
+          || availabilityTeacherBelongsToAuth(data.teacherUid)
+        )
+        && (
+          !data.keys().hasAny(['profesor_id'])
+          || data.profesor_id == data.teacherUid
+          || availabilityTeacherBelongsToAuth(data.profesor_id)
+        );
     }
 
     function validStudentAvailabilityPayload(data) {
@@ -1143,6 +1289,14 @@ service cloud.firestore {
         && request.resource.data.method == request.resource.data.metodo
         && request.resource.data.gateway in ['manual', 'stripe', 'redsys', 'bank_import']
         && request.resource.data.provider == request.resource.data.gateway
+        && request.resource.data.paymentRecipientName == 'Miguel G. G.'
+        && request.resource.data.paymentRecipientPhone == '613016665'
+        && request.resource.data.paymentRecipientLabel == 'ClasesDe10 - Miguel G. G.'
+        && request.resource.data.paymentRecipientRole == 'platform_admin'
+        && request.resource.data.platformCollectsPayment == true
+        && request.resource.data.fundsFlow == 'platform_collects_then_teacher_payout'
+        && request.resource.data.fundsFlowExplanation is string
+        && request.resource.data.fundsFlowExplanation.size() <= 500
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && (!request.resource.data.keys().hasAny(['canonicalCollection']) || request.resource.data.canonicalCollection == 'pagos')
@@ -1166,6 +1320,13 @@ service cloud.firestore {
           'concepto',
           'notas_familia',
           'familyNotes',
+          'paymentRecipientName',
+          'paymentRecipientPhone',
+          'paymentRecipientLabel',
+          'paymentRecipientRole',
+          'platformCollectsPayment',
+          'fundsFlow',
+          'fundsFlowExplanation',
           'classIds',
           'classCount',
           'reconciliationStatus',
@@ -1304,15 +1465,27 @@ service cloud.firestore {
     }
 
     function chatFamilyUid(data) {
-      return data.keys().hasAny(['familyUid']) ? data.familyUid : data.familia_id;
+      return data.keys().hasAny(['familyUid'])
+        && data.familyUid is string
+        && data.familyUid.size() > 0
+        ? data.familyUid
+        : data.familia_id;
     }
 
     function chatTeacherUid(data) {
-      return data.keys().hasAny(['teacherUid']) ? data.teacherUid : data.profesor_id;
+      return data.keys().hasAny(['teacherUid'])
+        && data.teacherUid is string
+        && data.teacherUid.size() > 0
+        ? data.teacherUid
+        : data.profesor_id;
     }
 
     function chatStudentId(data) {
-      return data.keys().hasAny(['studentId']) ? data.studentId : data.alumno_id;
+      return data.keys().hasAny(['studentId'])
+        && data.studentId is string
+        && data.studentId.size() > 0
+        ? data.studentId
+        : data.alumno_id;
     }
 
     function isChatParticipantUid(data, uid) {
@@ -1581,10 +1754,18 @@ service cloud.firestore {
       return canReadChatPreference(chatId, userUid)
         && request.resource.data.keys().hasOnly([
           'displayNameOverride',
+          'starredMessageIds',
           'createdAt',
           'updatedAt'
         ])
         && optionalString('displayNameOverride', 120)
+        && (
+          !request.resource.data.keys().hasAny(['starredMessageIds'])
+          || (
+            request.resource.data.starredMessageIds is list
+            && request.resource.data.starredMessageIds.size() <= 100
+          )
+        )
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
     }
@@ -1593,14 +1774,23 @@ service cloud.firestore {
       return canReadChatPreference(chatId, userUid)
         && request.resource.data.keys().hasOnly([
           'displayNameOverride',
+          'starredMessageIds',
           'createdAt',
           'updatedAt'
         ])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayNameOverride',
+          'starredMessageIds',
           'updatedAt'
         ])
         && optionalString('displayNameOverride', 120)
+        && (
+          !request.resource.data.keys().hasAny(['starredMessageIds'])
+          || (
+            request.resource.data.starredMessageIds is list
+            && request.resource.data.starredMessageIds.size() <= 100
+          )
+        )
         && (
           !resource.data.keys().hasAny(['createdAt'])
           || request.resource.data.createdAt == resource.data.createdAt
@@ -1645,10 +1835,15 @@ service cloud.firestore {
         && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
         && request.resource.data.keys().hasOnly([
           'assignmentId',
+          'asignacion_id',
           'familyUid',
+          'familia_id',
           'teacherUid',
+          'profesor_id',
           'studentId',
+          'alumno_id',
           'materia',
+          'subject',
           'kind',
           'scheduleKind',
           'firstClassDate',
@@ -1656,6 +1851,7 @@ service cloud.firestore {
           'hora_inicio',
           'hora_fin',
           'durationMinutes',
+          'duracion_minutos',
           'modalidad',
           'notas',
           'recurrence',
@@ -1663,6 +1859,11 @@ service cloud.firestore {
           'status',
           'availabilityStatus',
           'availabilityValidation',
+          'availabilityOverrideRequested',
+          'availabilityOverrideConfirmed',
+          'availabilityOverrideReason',
+          'availabilityOverrideMessage',
+          'source',
           'proposedByUid',
           'proposedByRole',
           'proposedAt',
@@ -1670,13 +1871,19 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.assignmentId == chatId
-        && request.resource.data.familyUid == get(/databases/$(database)/documents/chats/$(chatId)).data.familyUid
-        && request.resource.data.teacherUid == get(/databases/$(database)/documents/chats/$(chatId)).data.teacherUid
-        && request.resource.data.studentId == get(/databases/$(database)/documents/chats/$(chatId)).data.studentId
+        && (!request.resource.data.keys().hasAny(['asignacion_id']) || request.resource.data.asignacion_id == chatId)
+        && request.resource.data.familyUid == chatFamilyUid(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && (!request.resource.data.keys().hasAny(['familia_id']) || request.resource.data.familia_id == chatFamilyUid(get(/databases/$(database)/documents/chats/$(chatId)).data))
+        && request.resource.data.teacherUid == chatTeacherUid(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && (!request.resource.data.keys().hasAny(['profesor_id']) || request.resource.data.profesor_id == chatTeacherUid(get(/databases/$(database)/documents/chats/$(chatId)).data))
+        && (!request.resource.data.keys().hasAny(['studentId']) || request.resource.data.studentId == chatStudentId(get(/databases/$(database)/documents/chats/$(chatId)).data))
+        && (!request.resource.data.keys().hasAny(['alumno_id']) || request.resource.data.alumno_id == chatStudentId(get(/databases/$(database)/documents/chats/$(chatId)).data))
         && request.resource.data.status == 'propuesta'
         && (!request.resource.data.keys().hasAny(['kind']) || request.resource.data.kind in ['weekly_recurring', 'one_off'])
         && (!request.resource.data.keys().hasAny(['scheduleKind']) || request.resource.data.scheduleKind == request.resource.data.kind)
         && (!request.resource.data.keys().hasAny(['firstClassDate']) || request.resource.data.firstClassDate == request.resource.data.fecha)
+        && (!request.resource.data.keys().hasAny(['duracion_minutos']) || request.resource.data.duracion_minutos == request.resource.data.durationMinutes)
+        && (!request.resource.data.keys().hasAny(['source']) || request.resource.data.source in ['classes_panel_one_off', 'chat_schedule_form'])
         && validScheduleRecurrence(request.resource.data)
         && request.resource.data.proposedByUid == request.auth.uid
         && request.resource.data.proposedByRole in ['familia', 'profesor', 'admin']
@@ -1690,10 +1897,34 @@ service cloud.firestore {
         && request.resource.data.durationMinutes > 0
         && request.resource.data.durationMinutes <= 480
         && optionalString('materia', 180)
+        && optionalString('subject', 180)
         && optionalString('modalidad', 40)
         && optionalString('notas', 300)
         && (!request.resource.data.keys().hasAny(['availabilityStatus']) || request.resource.data.availabilityStatus is string)
         && (!request.resource.data.keys().hasAny(['availabilityValidation']) || request.resource.data.availabilityValidation is map)
+        && (
+          !request.resource.data.keys().hasAny(['availabilityOverrideRequested'])
+          || (
+            request.resource.data.kind == 'one_off'
+            && request.resource.data.availabilityOverrideRequested is bool
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(['availabilityOverrideConfirmed'])
+          || (
+            request.resource.data.kind == 'one_off'
+            && request.resource.data.availabilityOverrideConfirmed is bool
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(['availabilityOverrideReason'])
+          || request.resource.data.availabilityOverrideReason in [
+            'counterparty_availability_missing',
+            'outside_counterparty_availability',
+            'outside_own_availability'
+          ]
+        )
+        && optionalString('availabilityOverrideMessage', 300)
         && request.resource.data.proposedAt == request.time
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -1965,9 +2196,12 @@ service cloud.firestore {
           'senderName',
           'body',
           'messageType',
+          'callId',
           'attachment',
+          'replyTo',
           'createdAt',
-          'readBy'
+          'readBy',
+          'callKind'
         ])
         && request.resource.data.senderUid == request.auth.uid
         && request.resource.data.senderRole in ['familia', 'profesor', 'admin']
@@ -1980,8 +2214,118 @@ service cloud.firestore {
           !request.resource.data.keys().hasAny(['messageType'])
           || request.resource.data.messageType in ['text', 'file', 'image', 'audio', 'call']
         )
+        && (
+          !request.resource.data.keys().hasAny(['callId'])
+          || (
+            request.resource.data.messageType == 'call'
+            && request.resource.data.callId is string
+            && request.resource.data.callId.size() >= 6
+            && request.resource.data.callId.size() <= 180
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(['callKind'])
+          || (
+            request.resource.data.messageType == 'call'
+            && request.resource.data.callKind in ['voice', 'video']
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(['replyTo'])
+          || (
+            request.resource.data.replyTo is map
+            && request.resource.data.replyTo.keys().hasOnly([
+              'messageId',
+              'senderUid',
+              'senderName',
+              'bodyPreview',
+              'messageType'
+            ])
+            && request.resource.data.replyTo.messageId is string
+            && request.resource.data.replyTo.messageId.size() >= 1
+            && request.resource.data.replyTo.messageId.size() <= 180
+            && request.resource.data.replyTo.senderUid is string
+            && request.resource.data.replyTo.senderUid.size() <= 180
+            && request.resource.data.replyTo.senderName is string
+            && request.resource.data.replyTo.senderName.size() >= 1
+            && request.resource.data.replyTo.senderName.size() <= 160
+            && request.resource.data.replyTo.bodyPreview is string
+            && request.resource.data.replyTo.bodyPreview.size() >= 1
+            && request.resource.data.replyTo.bodyPreview.size() <= 240
+            && request.resource.data.replyTo.messageType in ['text', 'file', 'image', 'audio', 'call']
+          )
+        )
         && validChatAttachment()
         && request.resource.data.createdAt == request.time;
+    }
+
+    function validChatMessageParticipantUpdate(chatId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && resource.data.senderUid == request.auth.uid
+        && !resource.data.keys().hasAny(['deletedAt'])
+        && (
+          (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'editedAt'])
+            && (
+              !resource.data.keys().hasAny(['messageType'])
+              || resource.data.messageType == 'text'
+            )
+            && request.resource.data.body is string
+            && request.resource.data.body.size() >= 1
+            && request.resource.data.body.size() <= 2000
+            && request.resource.data.editedAt == request.time
+          )
+          || (
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'body',
+              'deletedAt',
+              'deletedByUid',
+              'attachment'
+            ])
+            && request.resource.data.body == 'Mensaje eliminado'
+            && request.resource.data.deletedByUid == request.auth.uid
+            && request.resource.data.deletedAt == request.time
+            && (
+              !resource.data.keys().hasAny(['attachment'])
+              || request.resource.data.attachment == null
+            )
+          )
+        );
+    }
+
+    function validChatReactionCreate(chatId, reactionId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'messageId',
+          'emoji',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.messageId is string
+        && request.resource.data.messageId.size() >= 1
+        && request.resource.data.messageId.size() <= 180
+        && reactionId == request.resource.data.messageId + '_' + request.auth.uid
+        && exists(/databases/$(database)/documents/chats/$(chatId)/mensajes/$(request.resource.data.messageId))
+        && request.resource.data.emoji in ['👍', '❤️', '😂', '😮', '😢', '🙏']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function validChatReactionUpdate(chatId, reactionId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && resource.data.uid == request.auth.uid
+        && reactionId == resource.data.messageId + '_' + request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['emoji', 'updatedAt'])
+        && request.resource.data.emoji in ['👍', '❤️', '😂', '😮', '😢', '🙏']
+        && request.resource.data.updatedAt == request.time;
     }
 
     function validNotificationTokenWrite() {
@@ -2188,6 +2532,106 @@ service cloud.firestore {
         || value is float;
     }
 
+    function validDocumentBlobCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid',
+          'storagePath',
+          'name',
+          'contentType',
+          'sizeBytes',
+          'dataBase64',
+          'chunkCount',
+          'chunkBase64Size',
+          'totalBase64Size',
+          'createdAt',
+          'source'
+        ])
+        && request.resource.data.keys().hasAll([
+          'ownerUid',
+          'storagePath',
+          'name',
+          'contentType',
+          'sizeBytes',
+          'createdAt',
+          'source'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.matches('^users/' + request.auth.uid + '/documentos/.+')
+        && request.resource.data.storagePath.size() <= 600
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 240
+        && validOwnerDocumentMime(request.resource.data.contentType)
+        && request.resource.data.sizeBytes is int
+        && request.resource.data.sizeBytes > 0
+        && request.resource.data.sizeBytes <= 5 * 1024 * 1024
+        && request.resource.data.createdAt is string
+        && request.resource.data.createdAt.size() <= 80
+        && (
+          (
+            request.resource.data.source == 'firestore_fallback_no_storage_bucket'
+            && request.resource.data.keys().hasAll(['dataBase64'])
+            && !request.resource.data.keys().hasAny(['chunkCount', 'chunkBase64Size', 'totalBase64Size'])
+            && request.resource.data.dataBase64 is string
+            && request.resource.data.dataBase64.size() > 0
+            && request.resource.data.dataBase64.size() <= 960 * 1024
+          )
+          || (
+            request.resource.data.source == 'firestore_chunked_no_storage_bucket'
+            && request.resource.data.keys().hasAll(['chunkCount', 'chunkBase64Size', 'totalBase64Size'])
+            && !request.resource.data.keys().hasAny(['dataBase64'])
+            && request.resource.data.chunkCount is int
+            && request.resource.data.chunkCount > 1
+            && request.resource.data.chunkCount <= 16
+            && request.resource.data.chunkBase64Size is int
+            && request.resource.data.chunkBase64Size > 0
+            && request.resource.data.chunkBase64Size <= 780 * 1024
+            && request.resource.data.totalBase64Size is int
+            && request.resource.data.totalBase64Size > 960 * 1024
+            && request.resource.data.totalBase64Size <= 8 * 1024 * 1024
+          )
+        );
+    }
+
+    function validDocumentBlobChunkCreate() {
+      return signedIn()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid',
+          'storagePath',
+          'blobId',
+          'index',
+          'dataBase64',
+          'createdAt',
+          'source'
+        ])
+        && request.resource.data.keys().hasAll([
+          'ownerUid',
+          'storagePath',
+          'blobId',
+          'index',
+          'dataBase64',
+          'createdAt',
+          'source'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.storagePath is string
+        && request.resource.data.storagePath.matches('^users/' + request.auth.uid + '/documentos/.+')
+        && request.resource.data.storagePath.size() <= 600
+        && request.resource.data.blobId is string
+        && request.resource.data.blobId.matches('^firestore-document-fallback_[a-f0-9]{64}$')
+        && request.resource.data.index is int
+        && request.resource.data.index >= 0
+        && request.resource.data.index < 16
+        && request.resource.data.dataBase64 is string
+        && request.resource.data.dataBase64.size() > 0
+        && request.resource.data.dataBase64.size() <= 780 * 1024
+        && request.resource.data.createdAt is string
+        && request.resource.data.createdAt.size() <= 80
+        && request.resource.data.source == 'firestore_chunked_no_storage_bucket';
+    }
+
     function validOwnerDocumentBase(data) {
       return data.keys().hasOnly([
           'id',
@@ -2322,7 +2766,9 @@ service cloud.firestore {
 
     match /leadsPublicos/{leadId} {
       allow create: if validPublicLead();
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || canReadOwnAssistedFamilyLead();
+      allow update: if isAdmin() || validOwnAssistedFamilyLeadClaim();
+      allow delete: if isAdmin();
     }
 
     match /users/{uid} {
@@ -2415,6 +2861,7 @@ service cloud.firestore {
         || (hasRole('familia') && request.resource.data.familyUid == request.auth.uid);
       allow read: if isAdmin()
         || isFamilyParticipant(resource.data)
+        || canReadOwnAssistedFamilyRequest()
         || (
           signedIn()
           && (
@@ -2422,7 +2869,8 @@ service cloud.firestore {
             || resource.data.profesor_asignado_id == request.auth.uid
           )
         );
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || validOwnAssistedFamilyRequestClaim();
+      allow delete: if isAdmin();
     }
 
     match /chats/{chatId} {
@@ -2432,9 +2880,15 @@ service cloud.firestore {
         || (
           isChatParticipant(resource.data)
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'lastMessage',
-            'lastMessageAt',
-            'schedulingStatus',
+             'lastMessage',
+             'lastMessageAt',
+             'lastMessageByUid',
+             'lastMessageId',
+             'lastMessageType',
+             'unreadBy',
+             'deliveredAtBy',
+             'readAtBy',
+             'schedulingStatus',
           'relationshipStage',
           'relationshipStatus',
           'activeClassId',
@@ -2444,10 +2898,59 @@ service cloud.firestore {
           'lastRelationshipEvent',
           'relationshipUpdatedAt',
           'updatedAt'
-          ])
+           ])
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessage'])
+            || (
+              request.resource.data.lastMessage is string
+              && request.resource.data.lastMessage.size() <= 180
+            )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageAt'])
+            || request.resource.data.lastMessageAt == request.time
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageByUid'])
+            || request.resource.data.lastMessageByUid == request.auth.uid
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageId'])
+            || (
+              request.resource.data.lastMessageId is string
+              && request.resource.data.lastMessageId.size() <= 180
+            )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastMessageType'])
+            || request.resource.data.lastMessageType in ['text', 'file', 'image', 'audio', 'call']
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['unreadBy'])
+            || (
+              request.resource.data.unreadBy is map
+              && request.resource.data.unreadBy.size() <= 20
+            )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['deliveredAtBy'])
+            || (
+              request.resource.data.deliveredAtBy is map
+              && request.resource.data.deliveredAtBy.size() <= 20
+              && request.resource.data.deliveredAtBy[request.auth.uid] == request.time
+            )
+          )
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['readAtBy'])
+            || (
+              request.resource.data.readAtBy is map
+              && request.resource.data.readAtBy.size() <= 20
+              && request.resource.data.readAtBy[request.auth.uid] == request.time
+            )
+          )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['schedulingStatus'])
-            || request.resource.data.schedulingStatus in ['pendiente_horario', 'horario_propuesto', 'clase_programada', 'confirmed']
+            || request.resource.data.schedulingStatus in ['pendiente_horario', 'horario_propuesto', 'horario_rechazado', 'clase_programada', 'confirmed']
           )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipStage'])
@@ -2479,7 +2982,14 @@ service cloud.firestore {
           )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lastRelationshipEvent'])
-            || request.resource.data.lastRelationshipEvent in ['schedule_proposed', 'schedule_rejected', 'class_scheduled_from_chat']
+            || request.resource.data.lastRelationshipEvent in [
+              'schedule_proposed',
+              'schedule_rejected',
+              'class_scheduled_from_chat',
+              'one_off_class_proposed_from_classes',
+              'one_off_class_accepted_from_classes',
+              'one_off_class_rejected_from_classes'
+            ]
           )
           && (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['relationshipUpdatedAt'])
@@ -2506,7 +3016,112 @@ service cloud.firestore {
             || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
           )
           && validChatMessageCreate();
-        allow update, delete: if isAdmin();
+        allow update: if isAdmin() || validChatMessageParticipantUpdate(chatId);
+        allow delete: if isAdmin();
+      }
+
+      match /reacciones/{reactionId} {
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+        allow create: if isAdmin() || validChatReactionCreate(chatId, reactionId);
+        allow update: if isAdmin() || validChatReactionUpdate(chatId, reactionId);
+        allow delete: if isAdmin()
+          || (
+            signedIn()
+            && resource.data.uid == request.auth.uid
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+      }
+
+      match /typing/{typingUid} {
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+        allow create, update: if signedIn()
+          && request.auth.uid == typingUid
+          && exists(/databases/$(database)/documents/chats/$(chatId))
+          && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          && request.resource.data.keys().hasOnly(['uid', 'name', 'isTyping', 'updatedAt'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 160
+          && request.resource.data.isTyping is bool
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if isAdmin() || (signedIn() && request.auth.uid == typingUid);
+      }
+
+      match /calls/{callId} {
+        allow read: if isAdmin()
+          || (
+            signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+        allow create, update: if signedIn()
+          && exists(/databases/$(database)/documents/chats/$(chatId))
+          && (
+            isAdmin()
+            || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+          );
+        allow delete: if isAdmin();
+
+        match /offerCandidates/{candidateId} {
+          allow read, create: if signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && (
+              isAdmin()
+              || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+            );
+          allow update, delete: if isAdmin();
+        }
+
+        match /answerCandidates/{candidateId} {
+          allow read, create: if signedIn()
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && (
+              isAdmin()
+              || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+            );
+          allow update, delete: if isAdmin();
+        }
+
+        match /audioStreams/{senderUid}/chunks/{chunkId} {
+          allow read: if isAdmin()
+            || (
+              signedIn()
+              && exists(/databases/$(database)/documents/chats/$(chatId))
+              && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+            );
+          allow create, update: if signedIn()
+            && request.auth.uid == senderUid
+            && exists(/databases/$(database)/documents/chats/$(chatId))
+            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+            && request.resource.data.keys().hasOnly([
+              'senderUid',
+              'seq',
+              'sampleRate',
+              'codec',
+              'audio',
+              'createdAt'
+            ])
+            && request.resource.data.senderUid == request.auth.uid
+            && request.resource.data.seq is int
+            && request.resource.data.seq >= 0
+            && request.resource.data.sampleRate == 8000
+            && request.resource.data.codec == 'mulaw'
+            && request.resource.data.audio is string
+            && request.resource.data.audio.size() <= 6000
+            && request.resource.data.createdAt == request.time;
+          allow delete: if isAdmin() || (signedIn() && request.auth.uid == senderUid);
+        }
       }
 
       match /preferencias/{userUid} {
@@ -2581,6 +3196,20 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if isAdmin() || canOwnerDeleteDocument();
+    }
+
+    match /documentBlobs/{blobId} {
+      allow create: if validDocumentBlobCreate();
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+    }
+
+    match /documentBlobChunks/{chunkId} {
+      allow create: if validDocumentBlobChunkCreate();
+      allow read: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
+      allow update: if false;
+      allow delete: if isAdmin() || (signedIn() && resource.data.ownerUid == request.auth.uid);
     }
 
     match /notificaciones/{notificationId} {

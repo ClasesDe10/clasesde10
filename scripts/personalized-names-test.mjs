@@ -24,7 +24,6 @@ const files = Object.fromEntries(await Promise.all([
   'js/ai-engine.js',
   'js/calendar-sync.js',
   'js/relationship-engine.js',
-  'functions/index.js',
   'scripts/firebase-automation-worker.mjs',
 ].map(async (file) => [file, await read(file)])));
 
@@ -40,7 +39,6 @@ const requiredHelpers = [
   ['js/ai-engine.js', 'teacherNameOrFallback'],
   ['js/calendar-sync.js', 'calendarPersonName'],
   ['js/relationship-engine.js', 'GENERIC_RELATIONSHIP_PERSON_LABELS'],
-  ['functions/index.js', 'personName'],
   ['scripts/firebase-automation-worker.mjs', 'workerPersonName'],
 ];
 
@@ -55,9 +53,6 @@ const forbiddenFragments = [
   ['pages/dashboard/admin.html', "|| f?.id || 'Familia'"],
   ['pages/dashboard/admin.html', "|| p?.id || 'Profesor'"],
   ['pages/dashboard/admin.html', "m.teacherName || m.nombreProfesor || m.teacherEmail || teacherId || 'Profesor'"],
-  ['functions/index.js', "data.familyName || data.familia_nombre || data.parentName || data.familyDisplayName || 'familia sin nombre'"],
-  ['functions/index.js', "data.teacherName || data.profesor_nombre || data.teacherDisplayName || data.profesor_id || 'profesor sin nombre'"],
-  ['functions/index.js', "teacherProfile.data.email || teacherUser.data.email || 'Contacto'"],
   ['scripts/firebase-automation-worker.mjs', "data.familyName || data.familia_nombre || data.parentName || data.familyUid || data.familia_id || 'familia sin nombre'"],
   ['scripts/firebase-automation-worker.mjs', "data.teacherName || data.profesor_nombre || data.teacherName || data.teacherUid || data.profesor_id || 'profesor sin nombre'"],
   ['scripts/firebase-automation-worker.mjs', "teacherProfile.data.email || teacherUser.data.email || 'Contacto'"],

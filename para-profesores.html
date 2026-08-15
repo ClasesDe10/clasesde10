@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Para profesores — ClasesDe10</title>
-<meta name="description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
+<meta name="description" content="Únete a ClasesDe10 como profesor: perfil revisado, solicitudes por encaje, chat, calendario, clases, avisos y cobros organizados.">
 <link rel="canonical" href="https://clasesde10.com/para-profesores">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0f1f3d">
@@ -14,40 +14,35 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Para profesores — ClasesDe10">
-<meta property="og:description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
+<meta property="og:description" content="Perfil revisado, solicitudes por encaje, chat, calendario, clases, avisos y cobros organizados.">
 <meta property="og:url" content="https://clasesde10.com/para-profesores">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Para profesores — ClasesDe10">
-<meta name="twitter:description" content="Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.">
-<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta name="twitter:description" content="Perfil revisado, solicitudes por encaje, chat, calendario, clases, avisos y cobros organizados.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta name="twitter:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20260808-audience-cta">
 <style>
 /* WHY JOIN */
 .why-section { padding: 90px 0; background: var(--cream); }
 .why-grid {
-  display: grid; grid-template-columns: repeat(2,1fr); gap: 22px;
+  display: grid; grid-template-columns: repeat(2,1fr); gap: 0;
   margin-top: 56px;
 }
 .why-card {
-  background: var(--white); border-radius: 20px; padding: 36px 30px;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 2px 14px rgba(0,0,0,0.05);
-  transition: transform .25s, box-shadow .25s, border-color .25s;
+  background: transparent; border-radius: 0; padding: 30px 30px 30px 0;
+  border: 0; border-top: 1px solid rgba(15,31,61,.2);
+  box-shadow: none;
 }
-.why-card:hover { transform: translateY(-6px); box-shadow: 0 16px 48px rgba(0,0,0,0.1); border-color: rgba(232,160,48,0.35); }
-.why-ico {
-  width: 56px; height: 56px; border-radius: 16px;
-  background: var(--gray-soft);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1.5rem; margin-bottom: 18px;
-  transition: background .2s;
-}
-.why-card:hover .why-ico { background: var(--navy); }
+.why-ico { display: none; }
 .why-card h3 { font-family: 'Playfair Display', serif; font-size: 1.15rem; font-weight: 700; color: var(--navy); margin-bottom: 10px; }
 .why-card p { font-size: .92rem; line-height: 1.75; color: var(--gray-mid); }
 
@@ -60,8 +55,8 @@
 }
 .compare-table {
   width: 100%; min-width: 520px; border-collapse: collapse;
-  border-radius: 16px; overflow: hidden;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  border-radius: 0; overflow: hidden;
+  box-shadow: none;
 }
 .compare-table thead { background: var(--navy); }
 .compare-table thead th {
@@ -84,17 +79,11 @@
 
 /* PROFILE BANNER */
 .profile-banner {
-  background: linear-gradient(135deg, var(--teal) 0%, #0f4a3f 100%);
+  background: var(--teal);
   padding: 80px 5vw; text-align: center;
   position: relative; overflow: hidden;
 }
-.profile-banner::before {
-  content: '';
-  position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
-  width: 500px; height: 500px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%);
-  pointer-events: none;
-}
+.profile-banner::before { display: none; }
 .profile-banner h2 {
   font-family: 'Playfair Display', serif;
   font-size: clamp(1.7rem,3.5vw,2.6rem);
@@ -115,13 +104,7 @@
   background: var(--navy);
   position: relative; overflow: hidden;
 }
-.form-section::before {
-  content: '';
-  position: absolute; bottom: -150px; left: -150px;
-  width: 450px; height: 450px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(29,122,107,0.12) 0%, transparent 70%);
-  pointer-events: none;
-}
+.form-section::before { display: none; }
 .form-section .section-title { color: var(--white); }
 .form-section .section-desc  { color: rgba(255,255,255,0.6); }
 .form-section .section-label { color: var(--gold); }
@@ -129,21 +112,19 @@
 .form-info { display: flex; flex-direction: column; gap: 24px; }
 .fi-item { display: flex; gap: 16px; align-items: flex-start; }
 .fi-ico {
-  width: 44px; height: 44px; flex-shrink: 0;
-  background: rgba(232,160,48,0.15); border-radius: 10px;
-  display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  display: none;
 }
-.fi-item h4 { font-weight: 700; color: var(--white); font-size: .95rem; margin-bottom: 4px; }
+.fi-item h3 { font-weight: 700; color: var(--white); font-size: .95rem; margin-bottom: 4px; }
 .fi-item p { font-size: .86rem; color: rgba(255,255,255,0.55); line-height: 1.6; }
 .contact-form-card {
-  background: var(--white); border-radius: 24px; padding: 44px 40px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+  background: var(--white); border-radius: 2px; padding: 44px 40px;
+  box-shadow: none;
 }
 .cf-title { font-family: 'Playfair Display', serif; font-size: 1.3rem; color: var(--navy); font-weight: 700; margin-bottom: 28px; }
 .entry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
 .entry-actions a {
   min-height: 44px;
-  border-radius: 10px;
+  border-radius: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -164,7 +145,8 @@
 .entry-steps li {
   background: var(--cream);
   border: 1px solid rgba(0,0,0,0.06);
-  border-radius: 12px;
+  border-radius: 0;
+  border-left: 2px solid var(--gold);
   padding: 12px 14px;
   color: var(--text-body);
   font-size: .88rem;
@@ -184,40 +166,41 @@
   .entry-actions { grid-template-columns: 1fr; }
 }
 </style>
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para profesores","item":"https://clasesde10.com/para-profesores"}]},{"@type":"WebPage","name":"Para profesores — ClasesDe10","description":"Únete a ClasesDe10 como profesor particular y conecta con familias reales que te buscan. Gratuito, sin comisiones.","url":"https://clasesde10.com/para-profesores","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Para profesores","item":"https://clasesde10.com/para-profesores"}]},{"@type":"WebPage","name":"Para profesores — ClasesDe10","description":"Perfil revisado, solicitudes por encaje, chat, calendario, clases, avisos y cobros organizados.","url":"https://clasesde10.com/para-profesores","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
-  <a href="index.html" class="nav-logo">
-    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
+  <a href="/" class="nav-logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo" width="192" height="192">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
-    <li><a href="como-funciona.html">Cómo funciona</a></li>
-    <li><a href="para-padres.html">Para familias</a></li>
-    <li><a href="para-profesores.html" class="active">Para profesores</a></li>
-    <li><a href="clases-particulares/">Clases</a></li>
-    <li><a href="sobre-nosotros.html">Nosotros</a></li>
-    <li><a href="pages/login.html">Acceder</a></li>
-    <li><a href="contacto.html" class="nav-cta">Contactar</a></li>
+    <li><a href="/como-funciona">Cómo funciona</a></li>
+    <li><a href="/para-padres">Para familias</a></li>
+    <li><a href="/para-profesores" class="active">Para profesores</a></li>
+    <li><a href="/contacto">Contacto</a></li>
+    <li><a href="/pages/login" class="nav-cta">Acceder</a></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
-  <a href="para-padres.html" data-mobile-close>Para familias</a>
-  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
-  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
-  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
-  <a href="pages/login.html" data-mobile-close>Acceder</a>
-  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
+  <a href="/como-funciona" data-mobile-close>Cómo funciona</a>
+  <a href="/para-padres" data-mobile-close>Para familias</a>
+  <a href="/para-profesores" data-mobile-close>Para profesores</a>
+  <a href="/contacto" data-mobile-close>Contacto</a>
+  <a href="/pages/login" class="m-cta" data-mobile-close>Acceder</a>
 </div>
 
 <header class="page-header">
   <span class="section-label">Para profesores</span>
   <h1>Comparte tu vocación. <br><em>Encuentra tus alumnos.</em></h1>
   <p>Si tienes formación y pasión por la enseñanza, ClasesDe10 te da visibilidad real y te conecta con familias que ya te están buscando.</p>
+  <div class="page-header-actions" aria-label="Acciones para profesores">
+    <a class="btn-primary" href="/pages/login?rol=profesor">Entrar o crear cuenta</a>
+    <a class="btn-ghost" href="#formulario">Ver cómo empezar</a>
+  </div>
+  <p class="page-header-note">Crearás tu cuenta de profesor y después completarás el perfil que utilizamos para proponerte a familias.</p>
 </header>
 
 <!-- WHY JOIN -->
@@ -229,7 +212,7 @@
       <div class="why-card reveal">
         <div class="why-ico">📣</div>
         <h3>Visibilidad real ante familias</h3>
-        <p>Las familias de tu zona nos buscan cada semana. Tu perfil llega a quienes realmente necesitan a alguien con tu experiencia y especialidad.</p>
+        <p>Tu perfil se tiene en cuenta cuando una solicitud encaja con tus materias, niveles, zona, modalidad y disponibilidad.</p>
       </div>
       <div class="why-card reveal">
         <div class="why-ico">🗓️</div>
@@ -238,8 +221,8 @@
       </div>
       <div class="why-card reveal">
         <div class="why-ico">🤝</div>
-        <h3>Contacto directo, sin intermediarios</h3>
-        <p>Te ponemos en contacto directo con la familia. Las clases son entre vosotros. Sin comisiones por clase ni plataformas que se queden con tu dinero.</p>
+        <h3>Relación ordenada con la familia</h3>
+        <p>Cuando aceptamos una asignación, trabajáis desde un chat común con propuestas de horario, llamadas, videollamadas, calendario y seguimiento de clases.</p>
       </div>
       <div class="why-card reveal">
         <div class="why-ico">🚀</div>
@@ -254,7 +237,7 @@
       <div class="why-card reveal">
         <div class="why-ico">🌱</div>
         <h3>Comunidad en crecimiento</h3>
-        <p>Somos una plataforma en expansión con cada vez más familias activas. Cuanto antes te unas, antes empiezan a llegar los alumnos.</p>
+        <p>La plataforma está creciendo por materias y zonas. Las propuestas dependen siempre de la demanda real y del encaje de cada perfil.</p>
       </div>
     </div>
   </div>
@@ -263,55 +246,55 @@
 <!-- COMPARE -->
 <section class="compare-section">
   <div class="section-inner">
-    <span class="section-label">Comparativa</span>
-    <h2 class="section-title">ClasesDe10 frente a otras opciones</h2>
-    <p class="section-desc">No todas las plataformas son iguales. Aquí te mostramos por qué ClasesDe10 es diferente.</p>
+    <span class="section-label">Cómo trabajamos</span>
+    <h2 class="section-title">Tú enseñas; la plataforma mantiene el contexto</h2>
+    <p class="section-desc">El objetivo es reducir mensajes dispersos y dejar claro qué se ha acordado, qué clase toca y qué cobro está pendiente.</p>
     <div class="compare-scroll reveal">
     <table class="compare-table">
       <thead>
         <tr>
-          <th>Característica</th>
-          <th class="highlight">ClasesDe10</th>
-          <th>Otras plataformas</th>
-          <th>Buscar solo</th>
+          <th>Momento</th>
+          <th class="highlight">Tú aportas</th>
+          <th>ClasesDe10 organiza</th>
+          <th>Resultado</th>
         </tr>
       </thead>
       <tbody>
         <tr>
-          <td>Registro gratuito</td>
-          <td class="yes highlight">✓ Sí</td>
-          <td class="no">✗ Muchas cobran</td>
-          <td class="yes">✓ Sí</td>
+          <td>Perfil</td>
+          <td class="yes highlight">Formación, materias, zona y disponibilidad</td>
+          <td>Completitud y revisión</td>
+          <td>Mejor encaje</td>
         </tr>
         <tr>
-          <td>Sin comisión por clase</td>
-          <td class="yes highlight">✓ Sin comisión</td>
-          <td class="no">✗ 15–30% por clase</td>
-          <td class="yes">✓ Sin comisión</td>
+          <td>Solicitud</td>
+          <td class="yes highlight">Decides si te encaja</td>
+          <td>Contexto de familia y alumno</td>
+          <td>Menos conversaciones inútiles</td>
         </tr>
         <tr>
-          <td>Familias verificadas</td>
-          <td class="yes highlight">✓ Contacto real</td>
-          <td>Variable</td>
-          <td class="no">✗ Sin garantía</td>
+          <td>Horario</td>
+          <td class="yes highlight">Propones o aceptas</td>
+          <td>Chat y calendario compartido</td>
+          <td>Acuerdo trazable</td>
         </tr>
         <tr>
-          <td>Atención personalizada</td>
-          <td class="yes highlight">✓ Humana y directa</td>
-          <td class="no">✗ Solo bots</td>
-          <td class="no">✗ Sin soporte</td>
+          <td>Clase</td>
+          <td class="yes highlight">Indicas si se ha dado</td>
+          <td>Confirmación de ambas partes</td>
+          <td>Incidencias visibles</td>
         </tr>
         <tr>
-          <td>Precio claro para todos</td>
-          <td class="yes highlight">✓ Lo define ClasesDe10</td>
-          <td>Variable</td>
-          <td class="no">✗ Sin orientación</td>
+          <td>Cobro</td>
+          <td class="yes highlight">Revisas tus importes</td>
+          <td>Fechas y clases incluidas</td>
+          <td>Menos dudas económicas</td>
         </tr>
         <tr>
-          <td>Visibilidad sin pagar</td>
-          <td class="yes highlight">✓ Siempre visible</td>
-          <td class="no">✗ Paga por aparecer</td>
-          <td class="no">✗ Difícil sin red</td>
+          <td>Seguimiento</td>
+          <td class="yes highlight">Mantienes disponibilidad al día</td>
+          <td>Avisos accionables</td>
+          <td>Relación más profesional</td>
         </tr>
       </tbody>
     </table>
@@ -321,14 +304,14 @@
 
 <!-- PROFILE BANNER -->
 <div class="profile-banner">
-  <h2>Una red de docentes que <span>crece cada semana</span></h2>
-  <p>Más familias, más solicitudes, más oportunidades para profesores como tú.</p>
+  <h2>Un perfil completo abre <span>mejores oportunidades</span></h2>
+  <p>Priorizamos la calidad del encaje: no prometemos un volumen fijo de alumnos, sino solicitudes compatibles cuando exista demanda real.</p>
   <div class="profile-stats">
-    <div style="text-align:center"><div class="ps-num">0€</div><div class="ps-label">Coste de registro</div></div>
-    <div style="text-align:center"><div class="ps-num">0%</div><div class="ps-label">Comisión por clase</div></div>
-    <div style="text-align:center"><div class="ps-num">48h</div><div class="ps-label">Primera propuesta</div></div>
+    <div style="text-align:center"><div class="ps-num">Gratis</div><div class="ps-label">Crear el perfil</div></div>
+    <div style="text-align:center"><div class="ps-num">Claro</div><div class="ps-label">Importes y cobros</div></div>
+    <div style="text-align:center"><div class="ps-num">Real</div><div class="ps-label">Demanda por encaje</div></div>
   </div>
-  <a href="pages/registro.html?rol=profesor" class="btn-primary">Crear cuenta gratis</a>
+  <a href="/pages/registro?rol=profesor" class="btn-primary">Crear cuenta gratis</a>
 </div>
 
 <!-- ACCESO -->
@@ -338,32 +321,32 @@
       <div class="form-info">
         <span class="section-label">Acceso profesor</span>
         <h2 class="section-title">Crea tu cuenta y<br>completa tu perfil</h2>
-        <p class="section-desc">El alta empieza con una cuenta real. Después, dentro del panel, completas la ficha que usamos para verificarte y proponerte a familias.</p>
+        <p class="section-desc">Crea tu cuenta y completa el perfil que utilizaremos para proponerte a familias.</p>
         <div class="fi-item">
           <div class="fi-ico">🔐</div>
-          <div><h4>Datos protegidos</h4><p>Tu información solo se usa para conectarte con familias. Nunca se publica sin tu consentimiento.</p></div>
+          <div><h3>Datos protegidos</h3><p>Tu información solo se usa para conectarte con familias. Nunca se publica sin tu consentimiento.</p></div>
         </div>
         <div class="fi-item">
           <div class="fi-ico">💬</div>
-          <div><h4>Datos bien asociados</h4><p>Todo queda vinculado a tu usuario: perfil, materias o actividades, documentos, disponibilidad y futuras asignaciones.</p></div>
+          <div><h3>Todo en un mismo lugar</h3><p>Gestiona tu perfil, materias, documentos, disponibilidad y propuestas desde el panel.</p></div>
         </div>
         <div class="fi-item">
           <div class="fi-ico">🆓</div>
-          <div><h4>Sin coste ni compromiso</h4><p>El registro es gratuito y puedes rechazar cualquier propuesta que no te encaje.</p></div>
+          <div><h3>Sin coste ni compromiso</h3><p>El registro es gratuito y puedes rechazar cualquier propuesta que no te encaje.</p></div>
         </div>
       </div>
 
       <div class="contact-form-card reveal">
         <div class="cf-title">Empieza desde tu cuenta</div>
-        <p class="cf-subtitle">Para evitar datos sueltos y perfiles duplicados, el alta de profesor empieza creando una cuenta. La ficha completa se rellena dentro del panel privado.</p>
+        <p class="cf-subtitle">Crea una cuenta de profesor y completa tu ficha desde el panel privado.</p>
         <div class="entry-actions">
-          <a class="primary" href="pages/registro.html?rol=profesor">Crear cuenta de profesor</a>
-          <a class="secondary" href="pages/login.html">Iniciar sesion</a>
+          <a class="primary" href="/pages/registro?rol=profesor">Crear cuenta de profesor</a>
+          <a class="secondary" href="/pages/login">Iniciar sesion</a>
         </div>
         <ul class="entry-steps">
-          <li><strong>1. Crea tu cuenta.</strong> Guardamos tu identidad y acceso en Firebase.</li>
+          <li><strong>1. Crea tu cuenta.</strong> Elige tus datos de acceso.</li>
           <li><strong>2. Completa tu perfil.</strong> Foto, teléfono, dirección, zona, formación, notas, materias o actividades, niveles, Bizum, disponibilidad y presentación.</li>
-          <li><strong>3. Revisión admin.</strong> Solo los perfiles completos y verificados pueden recibir asignaciones.</li>
+          <li><strong>3. Verificamos tu perfil.</strong> Cuando esté completo y revisado, podrás recibir propuestas.</li>
         </ul>
         <p class="cf-note">No publicamos tu perfil ni te asignamos alumnos hasta que esté completo y revisado.</p>
       </div>
@@ -374,28 +357,29 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10" width="192" height="192">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
     <div class="footer-col">
-      <h4>Clases</h4>
+      <h3>Clases</h3>
       <ul>
-        <li><a href="clases-particulares/matematicas-madrid.html">Matemáticas</a></li>
-        <li><a href="clases-particulares/ingles-madrid.html">Inglés</a></li>
-        <li><a href="clases-particulares/bachillerato-madrid.html">Bachillerato</a></li>
-        <li><a href="clases-particulares/selectividad-madrid.html">Selectividad (EBAU)</a></li>
+        <li><a href="/clases-particulares/matematicas">Matemáticas</a></li>
+        <li><a href="/clases-particulares/ingles">Inglés</a></li>
+        <li><a href="/clases-particulares/bachillerato">Bachillerato</a></li>
+        <li><a href="/clases-particulares/selectividad">Selectividad (EBAU)</a></li>
         <li><a href="clases-particulares/">Ver todas →</a></li>
       </ul>
     </div>
     <div class="footer-col">
-      <h4>Contacto</h4>
+      <h3>Contacto</h3>
       <ul>
         <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
-        <li><a href="contacto.html">Formulario de contacto</a></li>
-        <li><a href="terminos.html">Términos de uso</a></li>
-        <li><a href="privacidad.html">Privacidad</a></li>
-        <li><a href="cookies.html">Cookies</a></li>
+        <li><a href="/sobre-nosotros">Sobre nosotros</a></li>
+        <li><a href="/contacto">Formulario de contacto</a></li>
+        <li><a href="/terminos">Términos de uso</a></li>
+        <li><a href="/privacidad">Privacidad</a></li>
+        <li><a href="/cookies">Cookies</a></li>
       </ul>
     </div>
   </div>

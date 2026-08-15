@@ -23,7 +23,6 @@ const files = Object.fromEntries(await Promise.all([
   'js/analytics-engine.js',
   'js/calendar-sync.js',
   'js/relationship-engine.js',
-  'functions/index.js',
   'scripts/firebase-automation-worker.mjs',
 ].map(async (file) => [file, await read(file)])));
 
@@ -40,8 +39,9 @@ assert(chat.includes('messageSenderDisplayName'), 'Chat messages must resolve ol
 assert(chat.includes('loadRoleProfile'), 'Chat must use role profiles as a fallback for contact identity.');
 assert(chat.includes('teacherProfile.foto_url'), 'Family chat must recover the teacher profile photo when assignment data is incomplete.');
 assert(!chat.includes('teacherProfile.telefono'), 'Family chat must not read the teacher real phone for chat calls.');
-assert(chat.includes('data-chat-call-request'), 'Chat must render an in-app call request action.');
-assert(chat.includes("messageType: 'call'"), 'Chat call requests must stay inside the chat as call messages.');
+assert(chat.includes('data-chat-start-call'), 'Chat must render an in-app voice call action.');
+assert(chat.includes('RTCPeerConnection'), 'Chat voice calls must stay inside the browser.');
+assert(chat.includes("messageType: 'call'"), 'Chat voice calls must stay inside the chat as call messages.');
 assert(!chat.includes('href="tel:'), 'Chat must not expose real phone numbers through tel links.');
 assert(chat.includes('Profesor RWS1') === false, 'No hardcoded generated teacher example should be rendered.');
 assert(chat.includes('Alumno XDZJ') === false, 'No hardcoded generated student example should be rendered.');

@@ -327,7 +327,7 @@ async function main() {
   checkCli();
   checkCodeTouchpoints();
   console.log('\nNext external gates');
-  console.log('- Firebase Storage: initialize the default bucket.');
+  console.log('- Firebase Storage: initialize the default bucket for files over 5 MB and chat multimedia pesada; documentos y justificantes habituales tienen fallback troceado en Firestore.');
   console.log('- Private app: replace db.from compatibility calls with dedicated Firebase adapters when each dashboard is migrated module by module.');
 }
 

@@ -4,6 +4,7 @@ import {
   buildAlertPriorityPlan,
   buildAutomaticIncidentPayload,
   buildIncidentStats,
+  buildIncidentResolutionGuide,
   buildIncidentUpdatePatch,
   buildPreventiveIncidentPlan,
   incidentPriorityMeta,
@@ -34,6 +35,14 @@ assert.equal(created.prioridad, 'alta');
 assert.equal(created.priority, 'high');
 assert.equal(created.slaDueAt, '2026-06-28T22:00:00.000Z');
 assert.equal(incidentPriorityMeta('urgente').severity, 'critical');
+
+const guide = buildIncidentResolutionGuide(created, { config, nowIso: '2026-06-28T11:00:00.000Z' });
+assert.equal(guide.category, 'pago');
+assert.ok(guide.possibleCauses.length >= 2, 'Incident guide must explain likely causes.');
+assert.ok(guide.checks.length >= 2, 'Incident guide must include checks.');
+assert.ok(guide.suggestedActions.length >= 2, 'Incident guide must include resolution actions.');
+assert.match(guide.suggestedResolution, /Pago/i);
+assert.match(guide.userMessage, /justificante|pago/i);
 
 const resolved = buildIncidentUpdatePatch(created, {
   estado: 'resuelta',
@@ -176,7 +185,7 @@ const preventive = buildPreventiveIncidentPlan({
   teacherNonResponseHours: 8,
   staleRequestHours: 24,
   unscheduledAssignmentHours: 48,
-  paymentGraceHours: 24,
+  paymentGraceHours: 48,
   repeatedCancellationThreshold: 3,
   recurrentIncidentThreshold: 3,
   incompleteProfilePercent: 85,
@@ -261,7 +270,18 @@ const dataClient = fs.readFileSync('js/firebase-data-client.js', 'utf8');
 
 assert.match(adminHtml, /initAdminIncidents/);
 assert.match(adminHtml, /incidents-summary-grid/);
-assert.match(adminModule, /Centro de incidencias|buildIncidentUpdatePatch|btn-guardar-inc/s);
+assert.match(adminHtml, /inc-ai-guide/);
+assert.match(adminHtml, /modal-wide incident-modal/);
+assert.match(adminHtml, /Problemas por resolver/);
+assert.match(adminModule, /incident-simple-row|buildIncidentUpdatePatch|btn-guardar-inc/s);
+assert.match(adminModule, /buildIncidentResolutionGuide/);
+assert.match(adminModule, /Guia rapida/);
+assert.match(adminModule, /Motivo probable/);
+assert.match(adminModule, /Accion recomendada/);
+assert.match(adminModule, /data-incident-fix-button="true"/);
+assert.match(adminModule, /Arreglar con este plan/);
+assert.match(adminModule, /data-incident-guide-action="apply-plan"/);
+assert.match(adminModule, /data-incident-guide-action="resolve-now"/);
 assert.match(worker, /createOperationalIncidentOnce/);
 assert.match(worker, /payment_overdue/);
 assert.match(worker, /document_stale/);

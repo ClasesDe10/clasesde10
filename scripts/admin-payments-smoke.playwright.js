@@ -1,5 +1,8 @@
 async (page) => {
-  await page.locator('[data-section="pagos"]').first().click();
+  await page.evaluate(() => {
+    window.location.hash = '#pagos';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  });
   await page.waitForFunction(() => {
     const section = document.querySelector('#section-pagos');
     const tbody = document.querySelector('#tbody-pagos');

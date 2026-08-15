@@ -1,5 +1,10 @@
 async (page) => {
-  await page.locator('[data-section="configuracion"]').click({ timeout: 20000 });
+  await page.evaluate(() => {
+    const link = document.querySelector('.sidebar-link[data-section="configuracion"]');
+    const group = link?.closest('details');
+    if (group) group.open = true;
+    link?.click();
+  });
   await page.waitForFunction(() => {
     const root = document.querySelector('[data-platform-config-root]');
     return root

@@ -2,7 +2,12 @@ async (page) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#hamburger').click();
   await page.waitForFunction(() => document.querySelector('#sidebar')?.classList.contains('open'), null, { timeout: 5000 });
-  await page.locator('[data-section="analitica"]').first().click();
+  await page.evaluate(() => {
+    const link = document.querySelector('.sidebar-link[data-section="analitica"]');
+    const group = link?.closest('details');
+    if (group) group.open = true;
+    link?.click();
+  });
   await page.waitForFunction(() => {
     const section = document.querySelector('#section-analitica');
     const stats = document.querySelector('#analytics-kpis');

@@ -63,7 +63,6 @@ assertIncludes('pages/dashboard/admin.html', 'initAdminPlatformConfig', 'Admin d
 assertIncludes('pages/dashboard/admin.html', 'window.CD10PlatformConfig', 'Admin dashboard must share active configuration with modules.');
 assertIncludes('firebase/firestore.rules', 'match /platformConfigHistory/{historyId}', 'Firestore rules must protect config history.');
 assertIncludes('firebase/firestore.indexes.json', '"collectionGroup": "platformConfigHistory"', 'Firestore indexes must include config history.');
-assertIncludes('functions/index.js', 'loadPlatformConfig', 'Functions must load platform configuration.');
 assertIncludes('scripts/firebase-automation-worker.mjs', 'loadWorkerPlatformConfig', 'Worker must load platform configuration.');
 
 const classPayload = buildAdminClassPayload({

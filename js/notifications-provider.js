@@ -25,7 +25,8 @@ import {
   DEFAULT_NOTIFICATION_SETTINGS,
   buildNotificationDocument,
   mergeNotificationSettings,
-} from './notification-engine.js';
+  shouldDisplayNotification,
+} from './notification-engine.js?v=20260808-action-center';
 
 function normalizeDate(value) {
   if (!value) return '';
@@ -43,7 +44,7 @@ function isUnread(item) {
   return !item.readAt && item.leida !== true;
 }
 
-export async function watchUnreadNotifications(db, usuarioId, callback) {
+export async function watchUnreadNotifications(db, usuarioId, callback, role = '') {
   if (!db || !usuarioId || typeof callback !== 'function') return null;
 
   return onSnapshot(
@@ -53,7 +54,10 @@ export async function watchUnreadNotifications(db, usuarioId, callback) {
       where('readAt', '==', null),
       limit(200),
     ),
-    (snapshot) => callback(snapshot.docs.filter((item) => isUnread(item.data())).length),
+    (snapshot) => callback(snapshot.docs.filter((item) => {
+      const notification = item.data();
+      return isUnread(notification) && shouldDisplayNotification(notification, role);
+    }).length),
     () => callback(0),
   );
 }
@@ -117,7 +121,7 @@ export async function saveNotificationSettings(settings = {}, publicConfig = {})
   return merged;
 }
 
-export async function createAdminNotification({ targetRole = 'todos', title, body, currentUid = '' } = {}) {
+export async function createAdminNotification({ targetRole = 'todos', title, body, actionUrl = '', currentUid = '' } = {}) {
   const usersQuery = targetRole && targetRole !== 'todos'
     ? query(collection(firebaseDb, 'users'), where('role', '==', targetRole))
     : collection(firebaseDb, 'users');
@@ -135,7 +139,7 @@ export async function createAdminNotification({ targetRole = 'todos', title, bod
       type: 'admin_manual',
       source: 'admin',
       createdByUid: currentUid,
-      payload: { targetRole, url: '/pages/login.html' },
+      payload: { targetRole, url: actionUrl || '/pages/login.html' },
     }),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

@@ -532,6 +532,12 @@ function normalizeWritePayload(table, payload, isCreate = false) {
     data.familyUid = data.familyUid || data.creado_por;
   }
 
+  // Los registros del centro documental ya llegan normalizados por
+  // buildDocumentUploadRecord/buildDocumentVerificationPatch. El normalizador
+  // generico anadiria campos de busqueda y esquema que no forman parte del
+  // contrato privado validado por las reglas de documentos.
+  if (table === 'documentos') return data;
+
   return normalizeEntityForWrite(table, data, { isCreate });
 }
 
@@ -734,7 +740,8 @@ class FirebaseCompatQuery {
       const payloads = Array.isArray(this.writePayload) ? this.writePayload : [this.writePayload];
       const written = [];
       for (const payload of payloads) {
-        const data = withWriteTimestamps(normalizeWritePayload(this.table, payload, true), true);
+        const normalized = normalizeWritePayload(this.table, payload, true);
+        const data = this.table === 'documentos' ? normalized : withWriteTimestamps(normalized, true);
         if (this.table === 'alumno_invitaciones' && data.token) {
           await setDoc(doc(firebaseDb, target, data.token), data, { merge: false });
           written.push({ id: data.token, ...data });
@@ -767,7 +774,8 @@ class FirebaseCompatQuery {
     const rows = Array.isArray(matches.data) ? matches.data : matches.data ? [matches.data] : [];
 
     if (this.writeMode === 'update') {
-      const data = withWriteTimestamps(normalizeWritePayload(this.table, this.writePayload, false), false);
+      const normalized = normalizeWritePayload(this.table, this.writePayload, false);
+      const data = this.table === 'documentos' ? normalized : withWriteTimestamps(normalized, false);
       await Promise.all(rows.map((row) => updateDoc(doc(firebaseDb, target, row.id), data)));
       const updatedRows = rows.map((row) => ({ ...row, ...data }));
       await auditDataWrite(this.table, 'update', rows.map((row, index) => ({

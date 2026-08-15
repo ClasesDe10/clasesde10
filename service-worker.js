@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'clasesde10-pwa-v42';
+const CACHE_VERSION = 'clasesde10-pwa-v83';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 const FIREBASE_CONFIG = {
@@ -24,6 +24,7 @@ const PRECACHE_URLS = [
   '/pages/login.html',
   '/pages/registro.html',
   '/pages/reset-password.html',
+  '/pages/crear-contrasena.html',
   '/assets/img/logo-192.png',
   '/assets/img/logo-512.png'
 ];
@@ -43,6 +44,7 @@ const AUTH_SHELL_PATHS = [
   /^\/pages\/login(?:\.html)?$/,
   /^\/pages\/registro(?:\.html)?$/,
   /^\/pages\/reset-password(?:\.html)?$/,
+  /^\/pages\/crear-contrasena(?:\.html)?$/,
 ];
 
 try {

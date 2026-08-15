@@ -4,6 +4,7 @@ import process from 'node:process';
 import {
   ensureRecurringClassOccurrencesForRange,
   missingRecurringOccurrences,
+  recurringScheduleSeedsFromAcceptedProposals,
   recurringOccurrenceId,
 } from '../js/recurring-class-sync.js';
 
@@ -140,18 +141,138 @@ assert(!('id' in writes[0].payload), 'Firestore class documents must not include
 assert(writes[0].payload.createdAt === 'SERVER_TIMESTAMP', 'Generated occurrences must use server timestamps on create.');
 assert(writes[0].payload.status === 'confirmada', 'Generated occurrences must be scheduled classes, not copied completed classes.');
 
-const [family, teacher, rules] = await Promise.all([
+const acceptedChat = {
+  id: 'chat_legacy',
+  teacherUid: 'teacher-auth',
+  profesor_id: 'teacher-auth',
+  familyUid: 'family-auth',
+  familia_id: 'family-auth',
+  studentId: 'student-1',
+  alumno_id: 'student-1',
+  materia: 'Matematicas',
+  familyName: 'Esperanza Gonzalvo Cirac',
+  teacherName: 'Miguel Gutierrez de Cabiedes Gonzalvo',
+  studentName: 'Juan Pablo',
+  participantUids: {
+    'teacher-auth': true,
+    'family-auth': true,
+  },
+};
+const legacyWednesdayClass = {
+  id: 'chat_chat_legacy_wed',
+  calendarUid: 'chat_chat_legacy_wed',
+  assignmentId: 'chat_legacy',
+  asignacion_id: 'chat_legacy',
+  teacherUid: 'teacher-auth',
+  profesor_id: 'teacher-auth',
+  familyUid: 'family-auth',
+  familia_id: 'family-auth',
+  studentId: 'student-1',
+  alumno_id: 'student-1',
+  fecha: '2026-07-01',
+  date: '2026-07-01',
+  hora_inicio: '17:00',
+  startTime: '17:00',
+  hora_fin: '18:00',
+  endTime: '18:00',
+  duracion_minutos: 60,
+  durationMinutes: 60,
+  materia: 'Matematicas',
+  estado: 'confirmada',
+  status: 'confirmada',
+  participantUids: {
+    'teacher-auth': true,
+    'family-auth': true,
+  },
+};
+const legacyMondayClass = {
+  ...legacyWednesdayClass,
+  id: 'chat_chat_legacy_mon',
+  calendarUid: 'chat_chat_legacy_mon',
+  fecha: '2026-07-06',
+  date: '2026-07-06',
+  hora_inicio: '17:30',
+  startTime: '17:30',
+  hora_fin: '18:03',
+  endTime: '18:03',
+  duracion_minutos: 33,
+  durationMinutes: 33,
+};
+const legacyProposals = [
+  {
+    id: 'wed',
+    chatId: 'chat_legacy',
+    status: 'aceptada',
+    scheduleKind: 'weekly_recurring',
+    fecha: '2026-07-01',
+    firstClassDate: '2026-07-01',
+    hora_inicio: '17:00',
+    hora_fin: '18:00',
+    durationMinutes: 60,
+    materia: 'Matematicas',
+    recurrence: { frequency: 'weekly', dayOfWeek: 2, startTime: '17:00', endTime: '18:00', timezone: 'Europe/Madrid' },
+    recurrenceLabel: 'Todos los miercoles 17:00-18:00',
+  },
+  {
+    id: 'mon',
+    chatId: 'chat_legacy',
+    status: 'aceptada',
+    scheduleKind: 'weekly_recurring',
+    fecha: '2026-07-06',
+    firstClassDate: '2026-07-06',
+    hora_inicio: '17:30',
+    hora_fin: '18:03',
+    durationMinutes: 33,
+    materia: 'Matematicas',
+    recurrence: { frequency: 'weekly', dayOfWeek: 0, startTime: '17:30', endTime: '18:03', timezone: 'Europe/Madrid' },
+    recurrenceLabel: 'Todos los lunes 17:30-18:03',
+  },
+];
+const legacyClasses = [legacyWednesdayClass, legacyMondayClass];
+const proposalSeeds = recurringScheduleSeedsFromAcceptedProposals([acceptedChat], legacyProposals, legacyClasses);
+const legacyMissing = missingRecurringOccurrences(legacyClasses, '2026-07-01', '2026-07-31', {
+  currentUid: 'teacher-auth',
+  currentRole: 'profesor',
+  serverTimestamp: () => 'SERVER_TIMESTAMP',
+  bufferDays: 0,
+  recurrenceSeeds: proposalSeeds,
+});
+const legacyDates = legacyMissing.map((item) => `${item.fecha} ${item.hora_inicio}-${item.hora_fin}`).sort();
+assert(proposalSeeds.length === 2, 'Accepted weekly chat proposals must become recurring calendar seeds.');
+assert(
+  legacyDates.join('|') === [
+    '2026-07-08 17:00-18:00',
+    '2026-07-13 17:30-18:03',
+    '2026-07-15 17:00-18:00',
+    '2026-07-20 17:30-18:03',
+    '2026-07-22 17:00-18:00',
+    '2026-07-27 17:30-18:03',
+    '2026-07-29 17:00-18:00',
+  ].join('|'),
+  'Legacy accepted weekly schedules must render every missing July occurrence without duplicating the first class.',
+);
+
+const [family, teacher, student, rules] = await Promise.all([
   read('pages/dashboard/familia.html'),
   read('pages/dashboard/profesor.html'),
+  read('pages/dashboard/alumno.html'),
   read('firebase/firestore.rules'),
 ]);
 
 for (const [name, html] of [['family', family], ['teacher', teacher]]) {
-  assert(html.includes('recurring-class-sync.js?v=20260706-recurring-calendar-sync'), `${name} dashboard must import recurring calendar sync.`);
+  assert(html.includes('recurring-class-sync.js?v=20260706-recurring-chat-seeds'), `${name} dashboard must import recurring calendar sync.`);
   assert(html.includes('loadParticipantClasses'), `${name} dashboard must read classes through participantUids.`);
+  assert(html.includes('loadAcceptedRecurringScheduleSeeds'), `${name} dashboard must use accepted weekly chat proposals as recurring seeds.`);
   assert(html.includes('ensureRecurringClassOccurrencesForRange'), `${name} dashboard must materialize missing recurring occurrences.`);
+  assert(html.includes('missingRecurringOccurrences(rows, options.desde, options.hasta'), `${name} dashboard must display recurring occurrences even if persistence is blocked.`);
+  assert(html.includes('recurrenceSeeds'), `${name} dashboard must pass chat-derived recurrence seeds into calendar expansion.`);
   assert(html.includes("currentRole: 'familia'") || html.includes("currentRole: 'profesor'"), `${name} dashboard must write occurrences with the active role.`);
 }
+
+assert(student.includes('recurring-class-sync.js?v=20260706-recurring-calendar-sync'), 'student dashboard must import recurring calendar sync.');
+assert(student.includes('missingRecurringOccurrences(rows, options.desde, options.hasta'), 'student dashboard must expand weekly recurring classes locally.');
+assert(student.includes('cargarClasesAlumno({ desde: desdeCalculo, hasta'), 'student calendar must load a seed range before the visible month.');
+assert(student.includes("currentRole: 'alumno'"), 'student recurring expansion must identify the active role.');
 
 assert(rules.includes("get(proposalPath).data.status == 'aceptada'"), 'Rules must allow extending an already accepted weekly series.');
 assert(rules.includes("get(proposalPath).data.scheduleKind == 'weekly_recurring'"), 'Rules must limit accepted proposal extensions to weekly recurring series.');

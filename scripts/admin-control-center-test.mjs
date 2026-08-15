@@ -61,7 +61,7 @@ assert(module.includes('Estado tecnico de la plataforma'), 'Mission Control must
 assert(module.includes('Firebase'), 'Mission Control must monitor Firebase.');
 assert(module.includes('Base de datos'), 'Mission Control must monitor the database.');
 assert(module.includes('Autenticacion'), 'Mission Control must monitor authentication.');
-assert(module.includes('Cloud Functions'), 'Mission Control must monitor Cloud Functions.');
+assert(module.includes('Worker de automatizacion'), 'Mission Control must monitor the automation worker.');
 assert(module.includes('APIs externas'), 'Mission Control must monitor external APIs.');
 assert(module.includes('Notificaciones'), 'Mission Control must monitor notifications.');
 assert(module.includes('IA'), 'Mission Control must monitor AI.');
@@ -82,6 +82,8 @@ assert(module.includes('detectBusinessAnomalies'), 'Control center must detect b
 assert(module.includes('computeTeacherLeaderboard'), 'Control center must rank outstanding teachers.');
 assert(module.includes('computeOperationalTiming'), 'Control center must compute operational timing.');
 assert(module.includes('buildAdminDecisionCenter'), 'Control center must build an admin decision center.');
+assert(module.includes('computeTeacherPayouts'), 'Control center must compute teacher payout days for the admin.');
+assert(module.includes('teacher-payout-inbox'), 'Control center must render the teacher payout inbox.');
 assert(module.includes('Centro de decision'), 'Control center must render a decision center.');
 assert(module.includes('Que necesita decidir el administrador ahora'), 'Decision center must explain the immediate admin decision.');
 assert(module.includes('Cola de decisiones'), 'Decision center must render a prioritized decision queue.');

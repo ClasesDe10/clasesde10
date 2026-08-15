@@ -117,6 +117,7 @@ try {
     browserResult: {
       wroteUser: browserResult.wroteUser,
       wroteTeacher: browserResult.wroteTeacher,
+      payoutChangeDenied: browserResult.payoutChangeDenied,
     },
     writes: ['users', 'profesores'],
     cleanup,
