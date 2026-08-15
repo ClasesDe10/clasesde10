@@ -46,12 +46,11 @@ Auditar y completar de forma autónoma toda la cola de solicitudes del hilo para
 | Q18 | Corregir Documentos y Disponibilidad | completado | Smokes productivos desktop/móvil, CRUD, subida/apertura y responsive superados. |
 | Q19 | Continuidad tras pérdida de red/interrupciones y finalización de toda la cola | completado | Objetivo duradero utilizado; protocolo y cola persistente en disco; smokes migrados de tokens temporales a ADC para reanudaciones fiables. |
 | Q20 | Alta asistida de familias, bandeja de formularios y revisión integral del contenido público | completado | Formulario mínimo, activación segura sin contraseña predecible, perfil obligatorio, avisos admin y contenido público/SEO desplegados; escritura anónima temporal y limpieza, reglas, 36 URLs, cabeceras y marcadores productivos verificados. |
-| Q21 | Producción obligatoria en todos los prompts y publicación de todo cambio acumulado local | en curso | Regla permanente añadida a `AGENTS.md`; siguiente paso: auditar el árbol completo, validar, publicar Firebase y sincronizar el código fuente/automatizaciones remotas. |
+| Q21 | Producción obligatoria en todos los prompts y publicación de todo cambio acumulado local | completado | Regla permanente añadida a `AGENTS.md`; 447 archivos reconciliados, validados y fusionados mediante la PR #1 con ambos controles CI aprobados; Firebase Hosting y reglas de Firestore publicados en `clasesde10-50add`; auditorías productivas superadas y dependencias con 0 vulnerabilidades conocidas. |
 
 ## Último punto de control
 
 - Fecha: 2026-08-15.
-- Completado: Q01-Q19 reconciliados, implementados, desplegados y verificados en producción.
-- Completado: Q01-Q20 reconciliados, implementados, desplegados y verificados en producción.
-- En curso: Q21, reconciliación completa del repositorio local con Firebase y GitHub.
-- Acción siguiente: excluir artefactos temporales/secretos, ejecutar la validación integral, desplegar la versión completa y sincronizar la rama remota.
+- Completado: Q01-Q21 reconciliados, implementados, desplegados y verificados en producción.
+- Evidencia final: PR #1 fusionada en `main`, CI verde, Hosting y reglas de Firestore publicados, dominio principal operativo, PWA renovada y árbol local/remoto sincronizado.
+- Acción siguiente: ninguna; la cola está cerrada.
