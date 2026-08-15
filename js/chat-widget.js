@@ -59,7 +59,7 @@ import {
   notificationDisplayGroupKey,
   notificationPriorityClass,
   visibleNotificationsForRole,
-} from './notification-engine.js?v=20260815-clear-notices';
+} from './notification-engine.js?v=20260815-debt-summary';
 import {
   registerPushNotifications,
   watchForegroundPushMessages,

@@ -690,6 +690,21 @@ async function verifyAdminIdentityAndApprove(page, fixture) {
   assert.ok(familyDebtText.includes(`Profesor Aceptacion ${fixture.label}`), 'Admin debt card is missing the related teacher.');
   assert.ok(await familyDebtCard.locator('[data-action="ver-persona-admin"]').count() >= 3, 'Admin debt card does not expose every related profile action.');
 
+  await page.evaluate(() => window.cd10AdminGoTo('notificaciones'));
+  const debtNoticeCards = page.locator('#notification-center-admin .notification-center-item').filter({ hasText: `Familia Aceptacion ${fixture.label}` });
+  await debtNoticeCards.first().waitFor({ state: 'visible', timeout: 30000 });
+  await waitFor('one grouped admin family debt notice', async () => (await debtNoticeCards.count()) === 1);
+  const debtNotice = debtNoticeCards.first();
+  const debtNoticeText = (await debtNotice.innerText()).replace(/\s+/g, ' ').trim();
+  assert.match(debtNoticeText, /debe\s+(?:25,00|25\.00)/i, 'Admin debt notice does not state the exact amount.');
+  assert.match(debtNoticeText, /1 clase/i, 'Admin debt notice does not state the exact class count.');
+  assert.match(debtNoticeText, /pago mas antiguo vencio/i, 'Admin debt notice is not a complete explanatory sentence.');
+  assert.doesNotMatch(debtNoticeText, /payment_overdue|fingerprint|classId|familyUid|source\s*:/i, 'Admin debt notice exposes internal codes.');
+  for (const expected of [`Familia Aceptacion ${fixture.label}`, `Hijo Aceptacion ${fixture.label}`, `Profesor Aceptacion ${fixture.label}`]) {
+    assert.ok(debtNoticeText.includes(expected), `Admin debt notice is missing "${expected}".`);
+  }
+  assert.ok(await debtNotice.locator('[data-action="ver-persona-admin"]').count() >= 3, 'Admin debt notice does not expose every related profile action.');
+
   await page.evaluate(async (paymentId) => {
     await window.validarPago(paymentId, 'validado', { silent: true, refresh: false, source: 'post_reset_acceptance' });
   }, fixture.paymentId);
@@ -713,12 +728,17 @@ async function verifyAdminIdentityAndApprove(page, fixture) {
       ? state
       : null;
   }, { timeoutMs: 45000 });
+  await page.waitForFunction((familyLabel) => ![...document.querySelectorAll('#notification-center-admin .notification-center-item')]
+    .some((item) => item.textContent?.includes(familyLabel)), `Familia Aceptacion ${fixture.label}`, { timeout: 30000 });
   return {
     familyCardText,
     crmText,
     familyCollectionText,
     familyDebtText,
     teacherPayoutText,
+    debtNoticeText,
+    groupedDebtNoticeCount: 1,
+    debtNoticeResolvedAfterApproval: true,
     finalState,
   };
 }
@@ -810,6 +830,11 @@ try {
     adminTeacherPayoutCalendarVerified: /debes pagar exactamente\s+(?:40,00|40\.00)/i.test(approved.teacherPayoutText),
     adminCalendarFullIdentityVerified: approved.familyCollectionText.includes(`Hijo Aceptacion ${fixture.label}`)
       && approved.teacherPayoutText.includes(`Hijo Aceptacion ${fixture.label}`),
+    conciseGroupedAdminDebtNoticeVerified: approved.groupedDebtNoticeCount === 1
+      && /pago mas antiguo vencio/i.test(approved.debtNoticeText),
+    adminDebtNoticeFullIdentityVerified: approved.debtNoticeText.includes(`Hijo Aceptacion ${fixture.label}`)
+      && approved.debtNoticeText.includes(`Profesor Aceptacion ${fixture.label}`),
+    adminDebtNoticeResolvedAfterApproval: approved.debtNoticeResolvedAfterApproval === true,
     exactScheduledFamilyCollectionAmount: 60,
     exactAdminDebtAmount: 25,
     exactTeacherPayoutAmount: 40,

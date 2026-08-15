@@ -58,6 +58,8 @@ assert.match(adminDashboard, /buildAdminFamilyDebtCalendarEvents/, 'Admin calend
 assert.match(adminDashboard, /debes pagar exactamente/, 'Professor payout card must state the exact amount as a complete sentence.');
 assert.match(adminDashboard, /debe exactamente/, 'Family debt card must state the exact amount as a complete sentence.');
 assert.match(adminDashboard, /CLASS_RESET_CUTOFF_ISO/, 'Admin economic queries must honor the active reset generation.');
+assert.match(adminDashboard, /loadAdminCalendarClassesExact/, 'Admin calendar must load every class in the requested range.');
+assert.match(adminDashboard, /firestoreStartAfter\(cursor\)/, 'Admin calendar class reads must paginate instead of stopping at a fixed limit.');
 assert.match(calendarModule, /daySummaryItems/, 'Calendar must support multiple exact financial summaries per day.');
 
 console.log('Admin economic calendar validation passed.');

@@ -124,6 +124,7 @@ assert(/clases pendientes de justificar/i.test(minimalUserNotificationCopy({
 }).body), 'Grouped family payment notifications must use generic copy.');
 assert(shouldDisplayNotification({ type: 'chat_message', readAt: null }, 'familia') === false, 'Chat messages must stay out of the notification centre.');
 assert(shouldDisplayNotification({ type: 'class_incident', priority: 'critical', readAt: null }, 'profesor') === true, 'Critical incidents must stay visible.');
+assert(shouldDisplayNotification({ type: 'payment_overdue', priority: 'critical', readAt: null, resolvedAt: '2026-08-15T10:00:00.000Z' }, 'admin') === false, 'Resolved family debt must disappear from the action inbox.');
 assert(shouldDisplayNotification({
   type: 'payment_verified',
   priority: 'normal',
@@ -223,10 +224,11 @@ assert(notificationCenter.includes('Centro de avisos'), 'Dedicated notification 
 assert(notificationCenter.includes('Los mensajes están en Chat'), 'Notification centre must explain the separation from chat.');
 assert(notificationCenter.includes('data-resolve-notification'), 'Visible notifications must expose a direct resolution action.');
 assert(notificationCenter.includes('visibleNotificationsForRole'), 'Notification centre must apply the low-noise policy.');
+assert(notificationCenter.includes('notificationPeople(payload)') && notificationCenter.includes('payload.students') && notificationCenter.includes('payload.teachers'), 'Admin notices must render every related child and teacher.');
 [familyDashboard, teacherDashboard, studentDashboard, adminDashboard].forEach((dashboard, index) => {
   assert(dashboard.includes('section-notificaciones'), `Dashboard ${index + 1} must have a dedicated notification section.`);
   assert(dashboard.includes('notification-center.js?v='), `Dashboard ${index + 1} must load a versioned notification centre.`);
 });
-assert(adminDashboard.includes('notification-center.js?v=20260815-admin-person-context'), 'Admin must load the identity-aware notification centre.');
+assert(adminDashboard.includes('notification-center.js?v=20260815-debt-summary'), 'Admin must load the identity-aware, low-noise debt notification centre.');
 
 console.log('Notification system validation passed.');

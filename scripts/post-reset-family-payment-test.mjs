@@ -21,6 +21,8 @@ assert(source.includes('paymentSchedules/${fixture.scheduleId}') && source.inclu
 assert(source.includes('.admin-family-payment-event') && source.includes('Admin calendar does not state the exact overdue family debt.'), 'The flow must verify exact family debt in the authenticated admin calendar.');
 assert(source.includes('.admin-teacher-payout-event') && source.includes('Admin calendar does not state the exact teacher payout.'), 'The flow must verify the exact teacher payout in the authenticated admin calendar.');
 assert(source.includes('Admin debt card is missing the related child.') && source.includes('Admin debt card does not expose every related profile action.'), 'The flow must verify child identity and profile actions on admin debt alerts.');
+assert(source.includes('one grouped admin family debt notice') && source.includes('Admin debt notice exposes internal codes.'), 'The flow must verify one concise, human-readable admin debt notice.');
+assert(source.includes('adminDebtNoticeFullIdentityVerified') && source.includes('adminDebtNoticeResolvedAfterApproval'), 'The flow must verify notice identities and live removal after payment approval.');
 assert(source.includes('liveUnlockWithoutReload') && source.includes("classList.contains('payment-paid')"), 'The flow must verify live unlock and green paid calendar state.');
 assert(source.includes('preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket)') && source.includes('preFixtureVerification = runIndependentVerification()'), 'A retry must remove orphan fixtures and prove a clean pre-test state.');
 assert(source.includes('finally {') && source.includes('cleanupAcceptanceArtifacts(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');

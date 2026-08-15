@@ -24,7 +24,7 @@ import {
   notificationDisplayGroupKey,
   notificationPriorityClass,
   visibleNotificationsForRole,
-} from './notification-engine.js?v=20260815-clear-notices';
+} from './notification-engine.js?v=20260815-debt-summary';
 import {
   registerPushNotifications,
   watchForegroundPushMessages,
@@ -100,6 +100,30 @@ function entityId(notification = {}) {
 
 function displayGroupKey(notification = {}) {
   return notificationDisplayGroupKey(notification);
+}
+
+function notificationPeople(payload = {}) {
+  const references = [];
+  if (payload.familyUid || payload.familia_id) {
+    references.push({ role: 'familia', id: payload.familyUid || payload.familia_id, name: payload.familyName || payload.familia_nombre });
+  }
+  const students = Array.isArray(payload.students) ? [...payload.students] : [];
+  if (payload.studentId || payload.alumno_id) {
+    students.unshift({ id: payload.studentId || payload.alumno_id, name: payload.studentName || payload.alumno_nombre });
+  }
+  students.forEach((student) => references.push({ role: 'alumno', id: student.id || student.studentId || student.alumno_id, name: student.name || student.studentName || student.alumno_nombre }));
+  const teachers = Array.isArray(payload.teachers) ? [...payload.teachers] : [];
+  if (payload.teacherUid || payload.teacherId || payload.profesor_id) {
+    teachers.unshift({ id: payload.teacherUid || payload.teacherId || payload.profesor_id, name: payload.teacherName || payload.profesor_nombre });
+  }
+  teachers.forEach((teacher) => references.push({ role: 'profesor', id: teacher.id || teacher.teacherUid || teacher.profesor_id, name: teacher.name || teacher.teacherName || teacher.profesor_nombre }));
+  const seen = new Set();
+  return references.filter((person) => {
+    const key = `${person.role}:${clean(person.id || person.name, 240).toLowerCase()}`;
+    if ((!person.id && !person.name) || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function groupNotifications(notifications = []) {
@@ -251,11 +275,9 @@ function renderNotifications(container, notifications, role, renderPerson = null
       notification.duplicateCount > 1 ? `${notification.duplicateCount} avisos reunidos` : '',
     ].filter(Boolean).join(' · ');
     const payload = notification.payload || {};
-    const people = role === 'admin' && renderPerson ? [
-      payload.familyUid || payload.familia_id ? renderPerson({ role: 'familia', id: payload.familyUid || payload.familia_id, name: payload.familyName || payload.familia_nombre, source: payload, compact: true }) : '',
-      payload.studentId || payload.alumno_id ? renderPerson({ role: 'alumno', id: payload.studentId || payload.alumno_id, name: payload.studentName || payload.alumno_nombre, source: payload, compact: true }) : '',
-      payload.teacherUid || payload.teacherId || payload.profesor_id ? renderPerson({ role: 'profesor', id: payload.teacherUid || payload.teacherId || payload.profesor_id, name: payload.teacherName || payload.profesor_nombre, source: payload, compact: true }) : '',
-    ].filter(Boolean).join('') : '';
+    const people = role === 'admin' && renderPerson
+      ? notificationPeople(payload).map((person) => renderPerson({ ...person, source: payload, compact: true })).filter(Boolean).join('')
+      : '';
     return `
       <article class="notification-center-item priority-${escapeHtml(priority)} ${unread ? 'unread' : ''}" data-notification-id="${escapeHtml(notification.id)}">
         <div class="notification-center-copy">

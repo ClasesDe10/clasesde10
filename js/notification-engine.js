@@ -644,6 +644,8 @@ export function shouldDisplayNotification(notification = {}, role = '', nowMs = 
   const level = notificationPriorityLevel(type, notification.priority);
   const unread = isNotificationUnread(notification);
 
+  if (notification.resolvedAt || notification.resolved_at || notification.payload?.resolved === true) return false;
+
   if (type === NOTIFICATION_EVENTS.CHAT_MESSAGE) return false;
   if (NOTIFICATION_CENTER_HIDDEN_TYPES.includes(type) && !['critical', 'high'].includes(level)) return false;
   if (isUserFacingNotificationRole(normalizedRole)

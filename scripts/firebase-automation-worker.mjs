@@ -68,6 +68,7 @@ import {
   buildFamilyPaymentAccessState,
   buildPaymentValidationPayload,
   isFamilyPayment,
+  isFamilyConfirmedGivenClass,
   isPaymentOverdue,
   isPaymentVerified,
   isTeacherPayout,
@@ -77,6 +78,7 @@ import {
   paymentAmount,
   weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
+import { groupFamilyDebtEntries } from '../js/admin-economic-calendar.js';
 import {
   FINANCE_ERP_VERSION,
   buildFinanceErpReport,
@@ -139,6 +141,7 @@ const CLASS_UNMARKED_PENALTY_POINTS = -2;
 const PAYMENT_PROOF_OVERDUE_PENALTY_POINTS = -2;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const PAYMENT_OVERDUE_ESCALATION_VERSION = 'payment-overdue-escalation-2026-07-05';
+const ADMIN_FAMILY_DEBT_SUMMARY_VERSION = 'admin-family-debt-summary-v2';
 const PAYMENT_OVERDUE_ESCALATION_STEPS = Object.freeze([
   {
     key: 'due_48h',
@@ -442,8 +445,17 @@ function leadToPublicRequest(leadId, lead) {
 }
 
 async function getAdminUsers(db) {
-  const snap = await db.collection('users').where('role', '==', 'admin').get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const snapshots = await Promise.all([
+    db.collection('users').where('role', '==', 'admin').get(),
+    db.collection('users').where('rol', '==', 'admin').get(),
+  ]);
+  const admins = new Map();
+  snapshots.forEach((snapshot) => snapshot.docs.forEach((document) => {
+    const data = document.data() || {};
+    if (data.active === false || data.activo === false) return;
+    admins.set(document.id, { id: document.id, ...data });
+  }));
+  return Array.from(admins.values());
 }
 
 async function notifyAdmins(db, title, body, payload = {}) {
@@ -937,6 +949,115 @@ async function listCollection(db, collectionName, maxDocs = trustContextLimit) {
   const snap = await ref.limit(maxDocs).get();
   const rows = snap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
   return collectionName === 'clases' ? filterAfterClassReset(rows) : rows;
+}
+
+function adminFamilyDebtSummaryFingerprint(group = {}) {
+  return [
+    ...(group.classIds || []).map(String).sort(),
+    Number(group.amount || 0).toFixed(2),
+    clean(group.oldestDueAt, 80),
+  ].join('|');
+}
+
+function adminFamilyDebtSummaryDocumentId(familyKey, adminUid) {
+  return notificationId(`payment_overdue_family_${familyKey}_admin`, adminUid);
+}
+
+function adminFamilyDebtSummaryBody(group = {}) {
+  const count = Number(group.classCount || group.classes?.length || 0);
+  const amount = Number(group.amount || 0).toFixed(2);
+  const dueAt = clean(group.oldestDueAt, 80);
+  const dueText = dueAt ? ` El pago mas antiguo vencio el ${dueAt.slice(0, 10)}.` : '';
+  return `${group.familyName || 'Una familia'} debe exactamente ${amount} EUR por ${count} ${count === 1 ? 'clase' : 'clases'}.${dueText} Revisa el detalle en el calendario.`;
+}
+
+async function upsertAdminFamilyDebtSummary(db, admins = [], group = {}) {
+  const familyKey = clean(group.familyUid || group.key || group.familyName, 180);
+  if (!familyKey || !admins.length) return 0;
+  const fingerprint = adminFamilyDebtSummaryFingerprint(group);
+  const students = (group.students || []).map(({ id, name }) => ({ id: clean(id, 180), name: clean(name, 240) })).filter((item) => item.id || item.name);
+  const teachers = (group.teachers || []).map(({ id, name }) => ({ id: clean(id, 180), name: clean(name, 240) })).filter((item) => item.id || item.name);
+  let changed = 0;
+  for (const adminUser of admins) {
+    const adminUid = clean(adminUser.id || adminUser.uid, 180);
+    if (!adminUid) continue;
+    const id = adminFamilyDebtSummaryDocumentId(familyKey, adminUid);
+    const ref = db.collection('notificaciones').doc(id);
+    const existing = await ref.get();
+    const existingData = existing.exists ? existing.data() : {};
+    if (existingData.debtFingerprint === fingerprint && !existingData.resolvedAt) continue;
+    const payload = {
+      type: 'payment_overdue',
+      familyUid: group.familyUid || group.key || '',
+      familyName: group.familyName || '',
+      classIds: group.classIds || [],
+      classCount: group.classCount || group.classes?.length || 0,
+      amount: Number(group.amount || 0),
+      dueAt: group.oldestDueAt || '',
+      students,
+      teachers,
+      studentId: students[0]?.id || '',
+      studentName: students[0]?.name || '',
+      teacherUid: teachers[0]?.id || '',
+      teacherName: teachers[0]?.name || '',
+      resolved: false,
+      url: '/pages/dashboard/admin.html#calendario',
+    };
+    await writeDoc(db.collection('notificaciones'), id, {
+      ...buildNotificationDocument({
+        userUid: adminUid,
+        role: 'admin',
+        title: `${group.familyName || 'Una familia'} debe ${Number(group.amount || 0).toFixed(2)} EUR`,
+        body: adminFamilyDebtSummaryBody(group),
+        type: 'payment_overdue',
+        priority: 'critical',
+        category: 'pagos',
+        source: 'system',
+        payload,
+      }),
+      debtSummaryVersion: ADMIN_FAMILY_DEBT_SUMMARY_VERSION,
+      debtFingerprint: fingerprint,
+      idempotencyKey: id,
+      notificationKey: id,
+      resolvedAt: null,
+      resolved_at: null,
+      readAt: null,
+      leida: false,
+      fromRole: 'system',
+      fromAutomation: true,
+      createdAt: existingData.createdAt || now(),
+      created_at: existingData.created_at || isoNow(),
+      updatedAt: now(),
+      updated_at: isoNow(),
+    }, { merge: false });
+    changed += 1;
+  }
+  return changed;
+}
+
+async function resolveInactiveAdminFamilyDebtSummaries(db, activeFamilyKeys = new Set(), admins = []) {
+  const adminUids = new Set(admins.map((item) => clean(item.id || item.uid, 180)).filter(Boolean));
+  const snapshot = await db.collection('notificaciones')
+    .where('type', 'in', ['payment_overdue', 'payment_overdue_reminder', 'payment_teacher_pause_warning'])
+    .get();
+  let resolved = 0;
+  for (const document of snapshot.docs) {
+    const data = document.data() || {};
+    const familyKey = clean(data.payload?.familyUid || data.payload?.familia_id || data.payload?.familyName, 180);
+    const recipientUid = clean(data.userUid || data.usuario_id, 180);
+    if ((!adminUids.has(recipientUid) && clean(data.role, 40) !== 'admin') || activeFamilyKeys.has(familyKey) || data.resolvedAt) continue;
+    await updateRef(document.ref, {
+      resolvedAt: now(),
+      resolved_at: isoNow(),
+      readAt: now(),
+      leida: true,
+      payload: { ...(data.payload || {}), resolved: true },
+      updatedAt: now(),
+      updated_at: isoNow(),
+    });
+    resolved += 1;
+  }
+  return resolved;
 }
 
 async function loadCompleteFamilyPaymentAccessContext(db) {
@@ -4094,6 +4215,49 @@ async function processPaymentReminders(db, stats) {
     if (!classesByFamily.has(familyUid)) classesByFamily.set(familyUid, []);
     classesByFamily.get(familyUid).push(classData);
   });
+  const exhaustiveDebtGroups = groupFamilyDebtEntries(paymentAccessClasses
+    .filter((classData) => isFamilyConfirmedGivenClass(classData))
+    .filter((classData) => classFamilyAmount(classData) > 0 && !classHasPaidStatus(classData))
+    .map((classData) => ({
+      classData,
+      paymentState: classFamilyPaymentState(classData, paymentScheduleForClass(classData, scheduleIndex), {
+        classEndAt: classEndAt(classData),
+        nowMs: Date.now(),
+      }),
+    }))
+    .filter(({ paymentState }) => paymentState.overdue)
+    .map(({ classData, paymentState }) => {
+      const familyUid = clean(classData.familyUid || classData.familia_id, 180);
+      const studentId = clean(classData.studentId || classData.alumno_id, 180);
+      const teacherUid = clean(classData.teacherUid || classData.profesor_id, 180);
+      return {
+        ...classData,
+        familyUid,
+        familyName: workerPersonName('Familia', familyUid, classData.familyName, classData.familia_nombre, classData.parentName),
+        studentId,
+        studentName: workerPersonName('Alumno', studentId, classData.studentName, classData.alumno_nombre, classData.alumnoName),
+        teacherUid,
+        teacherName: workerPersonName('Profesor', teacherUid, classData.teacherName, classData.profesor_nombre, classData.teacherDisplayName),
+        amount: classFamilyAmount(classData),
+        dueAt: paymentState.dueAt || '',
+      };
+    }));
+  const activeDebtFamilyKeys = new Set(exhaustiveDebtGroups
+    .map((group) => clean(group.familyUid || group.key || group.familyName, 180))
+    .filter(Boolean));
+  const debtSummaryAdmins = exhaustiveDebtGroups.length ? await getAdminUsers(db) : [];
+  if (exhaustiveDebtGroups.length && !debtSummaryAdmins.length) {
+    await addAutomationEvent(db, {
+      type: 'admin_notification_missing_recipient',
+      title: 'Hay familias con pagos vencidos',
+      body: `${exhaustiveDebtGroups.length} familia(s) necesitan revision en el calendario.`,
+      adminEmail: ADMIN_EMAIL,
+    });
+  }
+  for (const group of exhaustiveDebtGroups) {
+    stats.adminFamilyDebtSummariesUpserted += await upsertAdminFamilyDebtSummary(db, debtSummaryAdmins, group);
+  }
+  stats.adminFamilyDebtSummariesResolved += await resolveInactiveAdminFamilyDebtSummaries(db, activeDebtFamilyKeys, debtSummaryAdmins);
   const lockedProfilesByUid = new Map();
   lockedFamilies.forEach((profile) => {
     [profile.id, profile.userUid, profile.usuario_id, profile.uid].map((value) => clean(value, 180)).filter(Boolean)
@@ -6286,6 +6450,21 @@ async function main() {
     }, paymentAccessFixture)) {
       throw new Error('Self-test failed: changed family payment debt was incorrectly treated as stable.');
     }
+    const debtSummaryFixture = groupFamilyDebtEntries([
+      { id: 'class_old', familyUid: 'family_1', familyName: 'Familia Prueba', studentId: 'student_1', studentName: 'Hija Prueba', teacherUid: 'teacher_1', teacherName: 'Profesor Prueba', amount: 25, dueAt: '2026-07-01T20:00:00.000Z' },
+      { id: 'class_current', familyUid: 'family_1', familyName: 'Familia Prueba', studentId: 'student_1', studentName: 'Hija Prueba', teacherUid: 'teacher_1', teacherName: 'Profesor Prueba', amount: 35, dueAt: '2026-07-15T20:00:00.000Z' },
+    ])[0];
+    if (debtSummaryFixture.amount !== 60 || debtSummaryFixture.classCount !== 2 || debtSummaryFixture.students.length !== 1 || debtSummaryFixture.teachers.length !== 1) {
+      throw new Error('Self-test failed: exhaustive family debt was not grouped into one exact summary.');
+    }
+    const summaryBody = adminFamilyDebtSummaryBody(debtSummaryFixture);
+    if (!summaryBody.includes('60.00 EUR') || !summaryBody.endsWith('Revisa el detalle en el calendario.') || /fingerprint|classId|familyUid|payment_overdue/i.test(summaryBody)) {
+      throw new Error('Self-test failed: admin family debt summary is not concise and human-readable.');
+    }
+    const summaryId = adminFamilyDebtSummaryDocumentId('family_1', 'admin_1');
+    if (!summaryId.includes('family_1') || summaryId === adminFamilyDebtSummaryDocumentId('family_1', 'admin_2')) {
+      throw new Error('Self-test failed: admin family debt summary id is not stable.');
+    }
 
     console.log(JSON.stringify({
       selfTest: 'passed',
@@ -6293,6 +6472,7 @@ async function main() {
       maintenanceHealthVersion: MAINTENANCE_HEALTH_VERSION,
       maintenanceStatus: maintenanceHealth.status,
       familyPaymentAccessSweep: 'passed',
+      adminFamilyDebtSummary: 'passed',
       best: aiMerged[0],
     }, null, 2));
     return;
@@ -6334,6 +6514,8 @@ async function main() {
     paymentEscalationNoticesCreated: 0,
     familyPaymentAccessLocksApplied: 0,
     familyPaymentAccessLocksRestored: 0,
+    adminFamilyDebtSummariesUpserted: 0,
+    adminFamilyDebtSummariesResolved: 0,
     classPaymentContextsUpdated: 0,
     lifecycleClassesEvaluated: 0,
     lifecycleTransitionsApplied: 0,

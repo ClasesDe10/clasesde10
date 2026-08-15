@@ -1328,11 +1328,11 @@ import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260815-admin-person-context';
-import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-admin-person-context';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-debt-summary';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
-} from '../../js/notification-engine.js?v=20260815-clear-notices';
+} from '../../js/notification-engine.js?v=20260815-debt-summary';
 import { CLASS_RESET_CUTOFF_ISO, isAfterClassReset } from '../../js/class-reset.js?v=20260816-reset';
 import {
   buildAdminFinancialDaySummaries,
@@ -1343,6 +1343,7 @@ import {
 import {
   addDoc,
   collection,
+  documentId as firestoreDocumentId,
   doc as firestoreDoc,
   getDoc,
   getDocs,
@@ -1351,6 +1352,7 @@ import {
   query as firestoreQuery,
   serverTimestamp,
   setDoc,
+  startAfter as firestoreStartAfter,
   updateDoc,
   where,
   writeBatch,
@@ -2012,14 +2014,17 @@ function adminClassEndAt(clase = {}) {
 }
 
 async function loadAdminNotificationRecipients() {
-  const snap = await getDocs(firestoreQuery(
+  const snapshots = await Promise.all(['role', 'rol'].map((field) => getDocs(firestoreQuery(
     collection(firebaseDb, 'users'),
-    where('role', '==', 'admin'),
-    firestoreLimit(25),
-  )).catch(() => null);
-  const admins = snap?.docs
-    ?.map((item) => ({ id: item.id, ...item.data() }))
-    .filter((item) => item.active !== false) || [];
+    where(field, '==', 'admin'),
+  )).catch(() => null)));
+  const byId = new Map();
+  snapshots.forEach((snapshot) => snapshot?.docs?.forEach((item) => {
+    const data = item.data() || {};
+    if (data.active === false || data.activo === false) return;
+    byId.set(item.id, { id: item.id, ...data });
+  }));
+  const admins = Array.from(byId.values());
   if (!admins.length && usuario?.uid) {
     admins.push({ id: usuario.uid, role: 'admin' });
   }
@@ -2078,6 +2083,8 @@ function adminFamilyDebtNotificationBody(group = {}) {
   return `${group.familyName || 'Una familia'} debe exactamente ${formatEuros(group.amount)} por ${classText}. El pago mas antiguo vencio ${dueText ? `el ${dueText}` : 'y sigue pendiente'}. Revisa el detalle en el calendario.`;
 }
 
+const ADMIN_FAMILY_DEBT_SUMMARY_VERSION = 'admin-family-debt-summary-v2';
+
 async function writeAdminPaymentOverdueNotification(adminUser, group = {}) {
   const type = NOTIFICATION_EVENTS.PAYMENT_OVERDUE;
   const familyKey = cleanAdminNotificationText(group.familyUid || group.key || group.familyName, 180);
@@ -2091,8 +2098,10 @@ async function writeAdminPaymentOverdueNotification(adminUser, group = {}) {
     roundMoney(group.amount),
     group.oldestDueAt || '',
   ].join('|');
-  if (existing?.exists() && existing.data()?.debtFingerprint === fingerprint) return false;
+  if (existing?.exists() && existing.data()?.debtFingerprint === fingerprint && !existing.data()?.resolvedAt) return false;
   const nowIso = new Date().toISOString();
+  const students = (group.students || []).map(({ id, name }) => ({ id, name })).filter((item) => item.id || item.name);
+  const teachers = (group.teachers || []).map(({ id, name }) => ({ id, name })).filter((item) => item.id || item.name);
   await setDoc(ref, {
     ...buildNotificationDocument({
       userUid: adminUid,
@@ -2111,18 +2120,78 @@ async function writeAdminPaymentOverdueNotification(adminUser, group = {}) {
         classCount: group.classCount || group.classes?.length || 0,
         amount: roundMoney(group.amount),
         dueAt: group.oldestDueAt || '',
+        students,
+        teachers,
+        studentId: students[0]?.id || '',
+        studentName: students[0]?.name || '',
+        teacherUid: teachers[0]?.id || '',
+        teacherName: teachers[0]?.name || '',
+        resolved: false,
         url: '/pages/dashboard/admin.html#calendario',
       },
     }),
+    debtSummaryVersion: ADMIN_FAMILY_DEBT_SUMMARY_VERSION,
     debtFingerprint: fingerprint,
     idempotencyKey: id,
     notificationKey: id,
+    resolvedAt: null,
+    resolved_at: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     created_at: nowIso,
     updated_at: nowIso,
   }, { merge: false });
   return true;
+}
+
+async function resolveAdminFamilyDebtNotifications(familyUid) {
+  const familyKey = cleanAdminNotificationText(familyUid, 180);
+  if (!familyKey) return 0;
+  const admins = await loadAdminNotificationRecipients();
+  const adminUids = new Set(admins.map((item) => cleanAdminNotificationText(item.id || item.uid, 180)).filter(Boolean));
+  const snapshots = await Promise.all(['familyUid', 'familia_id'].map((field) => getDocs(firestoreQuery(
+    collection(firebaseDb, 'notificaciones'),
+    where(`payload.${field}`, '==', familyKey),
+  )).catch(() => null)));
+  const documents = new Map();
+  snapshots.forEach((snapshot) => snapshot?.docs?.forEach((item) => documents.set(item.id, item)));
+  for (const adminUid of adminUids) {
+    const id = adminNotificationDocId(NOTIFICATION_EVENTS.PAYMENT_OVERDUE, `family_${familyKey}`, adminUid);
+    if (documents.has(id)) continue;
+    const existing = await getDoc(firestoreDoc(firebaseDb, 'notificaciones', id)).catch(() => null);
+    if (existing?.exists()) documents.set(existing.id, existing);
+  }
+  const debtTypes = new Set([
+    NOTIFICATION_EVENTS.PAYMENT_OVERDUE,
+    NOTIFICATION_EVENTS.PAYMENT_OVERDUE_REMINDER,
+    NOTIFICATION_EVENTS.PAYMENT_TEACHER_PAUSE_WARNING,
+  ]);
+  const pending = Array.from(documents.values()).filter((item) => {
+    const data = item.data() || {};
+    return adminUids.has(cleanAdminNotificationText(data.userUid || data.usuario_id, 180))
+      && debtTypes.has(cleanAdminNotificationText(data.type || data.payload?.type, 80))
+      && !data.resolvedAt;
+  });
+  let resolved = 0;
+  for (let index = 0; index < pending.length; index += 450) {
+    const batch = writeBatch(firebaseDb);
+    const nowIso = new Date().toISOString();
+    pending.slice(index, index + 450).forEach((item) => {
+      const data = item.data() || {};
+      batch.set(item.ref, {
+        resolvedAt: serverTimestamp(),
+        resolved_at: nowIso,
+        readAt: serverTimestamp(),
+        leida: true,
+        payload: { ...(data.payload || {}), resolved: true },
+        updatedAt: serverTimestamp(),
+        updated_at: nowIso,
+      }, { merge: true });
+    });
+    await batch.commit();
+    resolved += Math.min(450, pending.length - index);
+  }
+  return resolved;
 }
 
 async function ensureAdminOverdueClassPaymentNotifications() {
@@ -4511,21 +4580,42 @@ async function iniciarCalendario() {
   await cargarClasesCalendario(cal.anio, cal.mes);
 }
 
+async function loadAdminCalendarClassesExact(fromDate, toDate) {
+  const pageSize = 500;
+  const rows = [];
+  let cursor = null;
+  do {
+    const constraints = [
+      where('date', '>=', fromDate),
+      where('date', '<=', toDate),
+      firestoreOrderBy('date', 'asc'),
+      firestoreOrderBy(firestoreDocumentId(), 'asc'),
+      firestoreLimit(pageSize),
+    ];
+    if (cursor) constraints.push(firestoreStartAfter(cursor));
+    const snapshot = await getDocs(firestoreQuery(collection(firebaseDb, 'clases'), ...constraints));
+    snapshot.docs.forEach((item) => rows.push({ id: item.id, ...item.data() }));
+    cursor = snapshot.docs.at(-1) || null;
+    if (snapshot.size < pageSize) break;
+  } while (cursor);
+  return rows;
+}
+
 async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = `${anio}-${String(mes+1).padStart(2,'0')}-31`;
   const consultaDesde = CLASS_RESET_CUTOFF_ISO.slice(0, 10);
   const classQuery = hasta < consultaDesde
-    ? Promise.resolve({ data: [], error: null })
-    : db.from('v_clases_completas').select('*').gte('fecha', consultaDesde).lte('fecha', hasta);
-  const [{ data }, paymentContext, profesoresResult] = await Promise.all([
+    ? Promise.resolve([])
+    : loadAdminCalendarClassesExact(consultaDesde, hasta);
+  const [calendarClasses, paymentContext, profesoresResult] = await Promise.all([
     classQuery,
     loadAdminPaymentContext(),
     db.from('profesores').select('*').range(0, adminReadLimit('profesores') - 1),
     ensureAdminPersonDirectory(),
   ]);
-  const clasesConContexto = applyClassPaymentContext((data || []).filter((clase) => isAfterClassReset(clase)), paymentContext.payments);
+  const clasesConContexto = applyClassPaymentContext((calendarClasses || []).filter((clase) => isAfterClassReset(clase)), paymentContext.payments);
   registerAdminPersonData({ classes: clasesConContexto, teachers: profesoresResult.data || [] });
   const clasesMes = clasesConContexto.filter((clase) => {
     const dateIso = adminClassDateIso(clase);
@@ -8068,6 +8158,7 @@ window.validarPago = async (id, estado, options = {}) => {
   const isFamilyApproval = !esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado) && linkedClassIds.length > 0;
   const isFamilyRejection = !esPagoProfesor(pagoActual) && shouldReopenFamilyClassPayment(normalizedEstado);
   let paymentUpdatedAtomically = false;
+  let familyDebtResolvedByApproval = false;
   let rejectedPayment = null;
   let rejectedClassIds = [];
 
@@ -8079,6 +8170,14 @@ window.validarPago = async (id, estado, options = {}) => {
       paidIds.has(String(clase.id)) ? { ...clase, ...paidClassPatch, familyPaymentId: id } : clase
     ));
     const access = buildFamilyPaymentAccessState(reconciledClasses, familyScheduleIndex || new Map());
+    familyDebtResolvedByApproval = !reconciledClasses.some((clase) => (
+      isFamilyConfirmedGivenClass(clase)
+      && classTotal(clase) > 0
+      && classFamilyPaymentState(clase, paymentScheduleForClass(clase, familyScheduleIndex || new Map()), {
+        classEndAt: adminClassEndAt(clase),
+        nowMs: Date.now(),
+      }).overdue
+    ));
     const batch = writeBatch(firebaseDb);
     batch.update(firestoreDoc(firebaseDb, 'pagos', id), { ...payload, updatedAt: serverTimestamp() });
     linkedClassIds.forEach((classId) => batch.update(
@@ -8127,6 +8226,11 @@ window.validarPago = async (id, estado, options = {}) => {
   if (rejectedPayment) {
     await notifyFamilyPaymentRejected(rejectedPayment, normalizedEstado, rejectedClassIds, fechaValidacion).catch((notificationError) => {
       console.warn('No se pudo avisar a la familia del justificante rechazado', notificationError);
+    });
+  }
+  if (isFamilyApproval && familyUid && familyDebtResolvedByApproval) {
+    await resolveAdminFamilyDebtNotifications(familyUid).catch((notificationError) => {
+      console.warn('No se pudo cerrar el aviso de deuda familiar', notificationError);
     });
   }
 

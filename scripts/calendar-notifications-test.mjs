@@ -133,6 +133,9 @@ assert(automationWorker.includes('processLinkedFamilyPaymentContext'), 'Automati
 assert(automationWorker.includes('linkedFamilyPaymentContextPatch'), 'Automation worker must materialize linked payment status on classes.');
 assert(automationWorker.includes("type: 'class.payment_review_started'"), 'Automation worker must emit a specific event when class payment review starts.');
 assert(automationWorker.includes('notifyUserOnce'), 'Automation notifications must be idempotent.');
+assert(automationWorker.includes('ADMIN_FAMILY_DEBT_SUMMARY_VERSION') && automationWorker.includes('groupFamilyDebtEntries(paymentAccessClasses'), 'Admin debt summaries must reuse the exhaustive family payment sweep.');
+assert(automationWorker.includes('resolveInactiveAdminFamilyDebtSummaries'), 'Resolved family debts must close their persistent admin summary.');
+assert(adminDashboard.includes("existing.data()?.debtFingerprint === fingerprint && !existing.data()?.resolvedAt"), 'Admin must reopen a resolved debt summary if the same classes become due again.');
 assert(automationWorker.includes('processClassLifecycle'), 'Automation worker must process lifecycle transitions.');
 assert(automationWorker.includes('classLifecycleEvents'), 'Automation worker must write lifecycle history events.');
 assert(automationWorker.includes('class_lifecycle_transition'), 'Automation worker must audit lifecycle transitions.');
