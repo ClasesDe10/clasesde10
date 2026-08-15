@@ -116,6 +116,20 @@ async function seed(db, bucket) {
       classResetGeneration: 'old-generation',
     },
     'chats/chat_1/mensajes/schedule_message': { body: 'Horario semanal aceptado', classId: 'class_future' },
+    'chats/chat_1/mensajes/payment_attachment': {
+      body: 'Justificante de pago adjunto',
+      attachment: {
+        kind: 'file',
+        name: 'justificante-bizum.pdf',
+        mimeType: 'application/pdf',
+        storagePath: 'chats/chat_1/family_1/justificante-bizum.pdf',
+      },
+    },
+    'chats/chat_1/reacciones/payment_attachment_family_1': {
+      messageId: 'payment_attachment',
+      uid: 'family_1',
+      emoji: '👍',
+    },
   };
   const preservedDocuments = {
     'documentos/identity_document': { type: 'dni', storagePath: 'documents/identity.txt' },
@@ -127,6 +141,15 @@ async function seed(db, bucket) {
     'importAudits/contact_import': { description: 'Contactos importados' },
     'legacyImports/user_legacy': { source: 'usuarios', rows: 1 },
     'chats/chat_1/mensajes/hello_message': { body: 'Hola, encantado' },
+    'chats/chat_2/mensajes/normal_attachment': {
+      body: 'Archivo: apuntes.pdf',
+      attachment: {
+        kind: 'file',
+        name: 'apuntes.pdf',
+        mimeType: 'application/pdf',
+        storagePath: 'chats/chat_2/family_1/apuntes.pdf',
+      },
+    },
   };
 
   await Promise.all([
@@ -185,6 +208,8 @@ async function seed(db, bucket) {
   await Promise.all([
     bucket.file('pagos/family_1/receipt.txt').save('current receipt'),
     bucket.file('receipts/historical-proof.txt').save('historical receipt'),
+    bucket.file('chats/chat_1/family_1/justificante-bizum.pdf').save('chat payment receipt'),
+    bucket.file('chats/chat_2/family_1/apuntes.pdf').save('normal chat attachment'),
     bucket.file('documents/identity.txt').save('identity document'),
   ]);
 }
@@ -220,6 +245,8 @@ async function assertReset(db, bucket, result, manifests) {
     'legacyImports/payment_legacy',
     'chats/chat_1/programaciones/proposal_1',
     'chats/chat_1/mensajes/schedule_message',
+    'chats/chat_1/mensajes/payment_attachment',
+    'chats/chat_1/reacciones/payment_attachment_family_1',
   ]) {
     assert.equal(await documentExists(db, deletedPath), false, `${deletedPath} must be deleted.`);
   }
@@ -234,6 +261,7 @@ async function assertReset(db, bucket, result, manifests) {
     'importAudits/contact_import',
     'legacyImports/user_legacy',
     'chats/chat_1/mensajes/hello_message',
+    'chats/chat_2/mensajes/normal_attachment',
   ]) {
     assert.equal(await documentExists(db, preservedPath), true, `${preservedPath} must be preserved.`);
   }
@@ -274,13 +302,15 @@ async function assertReset(db, bucket, result, manifests) {
 
   assert.equal((await bucket.file('pagos/family_1/receipt.txt').exists())[0], false);
   assert.equal((await bucket.file('receipts/historical-proof.txt').exists())[0], false);
+  assert.equal((await bucket.file('chats/chat_1/family_1/justificante-bizum.pdf').exists())[0], false);
+  assert.equal((await bucket.file('chats/chat_2/family_1/apuntes.pdf').exists())[0], true);
   assert.equal((await bucket.file('documents/identity.txt').exists())[0], true);
 
   assert.equal(result.verification.clean, true);
-  assert.deepEqual(result.verification.remainingChatSchedulePreviews, []);
+  assert.deepEqual(result.verification.remainingChatClassFinancePreviews, []);
   assert.equal(result.verification.remainingPaymentStorageFiles, 0);
   assert(result.deletedFirestoreDocuments >= 30);
-  assert.equal(result.deletedStorageFiles, 2);
+  assert.equal(result.deletedStorageFiles, 3);
 
   const backedUpPaths = new Set(manifests.flatMap((manifest) => manifest.firestoreDocuments.map((item) => item.path)));
   assert(backedUpPaths.has('clases/class_past'));
@@ -292,7 +322,11 @@ async function assertReset(db, bucket, result, manifests) {
   const backedUpStoragePaths = new Set(manifests.flatMap((manifest) => manifest.storageFiles
     .filter((item) => item.existed)
     .map((item) => item.path)));
-  assert.deepEqual(Array.from(backedUpStoragePaths).sort(), ['pagos/family_1/receipt.txt', 'receipts/historical-proof.txt']);
+  assert.deepEqual(Array.from(backedUpStoragePaths).sort(), [
+    'chats/chat_1/family_1/justificante-bizum.pdf',
+    'pagos/family_1/receipt.txt',
+    'receipts/historical-proof.txt',
+  ]);
   assert(manifests.some((manifest) => manifest.familyProfilesBeforeDerivedReset[0].data.crmStatus === 'seguimiento'));
 }
 
