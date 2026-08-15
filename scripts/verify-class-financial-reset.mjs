@@ -54,6 +54,23 @@ const filteredCollections = [
 ];
 const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendance|asistencia|schedule|horario|payment|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€/i;
 const paymentDocumentWords = /(?:justificante|comprobante|receipt|recibo|payment|pago|bizum|transferencia|factura)/i;
+const familyResetFields = new Set([
+  'updatedAt',
+  'updated_at',
+  'paymentAccessLocked',
+  'paymentAccessStatus',
+  'paymentAccessReason',
+  'paymentAccessDebtAmount',
+  'paymentAccessDebtClassCount',
+  'paymentAccessDebtClassIds',
+  'paymentAccessOldestDebtDueAt',
+  'paymentAccessLockedAt',
+  'paymentAccessRestoredAt',
+  'paymentAccessUpdatedAt',
+  'reputationMetrics',
+  'publicTrustStats',
+  'adminTrustStats',
+]);
 
 function initFirebase() {
   if (admin.apps.length) return admin.app();
@@ -66,6 +83,28 @@ function initFirebase() {
 
 function jsonText(value) {
   return JSON.stringify(value ?? {}).slice(0, 200000);
+}
+
+function stable(value) {
+  if (value === undefined) return null;
+  if (value === null || typeof value !== 'object') return value;
+  if (typeof value.toDate === 'function') return { __timestamp: value.toDate().toISOString() };
+  if (Number.isFinite(value.seconds)) return { __timestamp: new Date(value.seconds * 1000).toISOString() };
+  if (Buffer.isBuffer(value)) return { __bufferBase64: value.toString('base64') };
+  if (Array.isArray(value)) return value.map(stable);
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, stable(item)]));
+}
+
+function familyCrmData(data = {}) {
+  return Object.fromEntries(Object.entries(stable(data) || {})
+    .filter(([key]) => !familyResetFields.has(key) && !key.startsWith('trust'))
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function changedKeys(expected = {}, actual = {}) {
+  return Array.from(new Set([...Object.keys(expected), ...Object.keys(actual)]))
+    .filter((key) => JSON.stringify(expected[key]) !== JSON.stringify(actual[key]))
+    .sort();
 }
 
 function paymentDocument(data = {}) {
@@ -116,12 +155,21 @@ async function fileEvidence(resetState) {
   const backupDirectories = Array.from(new Set((resetState.backupDirectories || []).map(String).filter(Boolean)));
   const missingBackupPaths = [];
   const invalidBackupPaths = [];
+  const expectedFamilyProfiles = {};
   for (const backupPath of backupPaths) {
     try {
       const manifest = JSON.parse(await fs.readFile(backupPath, 'utf8'));
-      if (manifest.projectId !== PROJECT_ID || !Array.isArray(manifest.firestoreDocuments) || !Array.isArray(manifest.storageFiles)) {
+      if (manifest.projectId !== PROJECT_ID
+        || !Array.isArray(manifest.firestoreDocuments)
+        || !Array.isArray(manifest.storageFiles)
+        || !Array.isArray(manifest.familyProfilesBeforeDerivedReset)) {
         invalidBackupPaths.push(backupPath);
+        continue;
       }
+      manifest.familyProfilesBeforeDerivedReset.forEach((profile) => {
+        if (!profile?.path || Object.hasOwn(expectedFamilyProfiles, profile.path)) return;
+        expectedFamilyProfiles[profile.path] = familyCrmData(profile.data || {});
+      });
     } catch {
       missingBackupPaths.push(backupPath);
     }
@@ -140,6 +188,33 @@ async function fileEvidence(resetState) {
     missingBackupPaths,
     invalidBackupPaths,
     missingBackupDirectories,
+    expectedFamilyProfiles,
+  };
+}
+
+async function preservedFamilyProfileEvidence(db, expectedProfiles = {}) {
+  const missingPaths = [];
+  const mismatches = [];
+  const entries = Object.entries(expectedProfiles).sort(([left], [right]) => left.localeCompare(right));
+  for (let index = 0; index < entries.length; index += 200) {
+    const chunk = entries.slice(index, index + 200);
+    const snapshots = await db.getAll(...chunk.map(([documentPath]) => db.doc(documentPath)));
+    snapshots.forEach((snapshot, snapshotIndex) => {
+      const [documentPath, expected] = chunk[snapshotIndex];
+      if (!snapshot.exists) {
+        missingPaths.push(documentPath);
+        return;
+      }
+      const actual = familyCrmData(snapshot.data() || {});
+      const fields = changedKeys(expected, actual);
+      if (fields.length) mismatches.push({ path: documentPath, changedFields: fields });
+    });
+  }
+  return {
+    expectedCount: entries.length,
+    preservedCount: entries.length - missingPaths.length - mismatches.length,
+    missingPaths,
+    mismatches,
   };
 }
 
@@ -191,7 +266,9 @@ async function main() {
     ...paymentPrefixFiles.map((file) => file.name),
     ...explicitStoragePaths,
   ])).sort();
-  const backups = await fileEvidence(resetState);
+  const backupEvidence = await fileEvidence(resetState);
+  const preservedFamilyProfiles = await preservedFamilyProfileEvidence(db, backupEvidence.expectedFamilyProfiles);
+  const { expectedFamilyProfiles: _expectedFamilyProfiles, ...backups } = backupEvidence;
 
   const clean = Object.values(remainingWholeCollections).every((count) => count === 0)
     && remainingPaymentDocuments.length === 0
@@ -206,7 +283,9 @@ async function main() {
     && backups.backupPaths.length > 0
     && backups.missingBackupPaths.length === 0
     && backups.invalidBackupPaths.length === 0
-    && backups.missingBackupDirectories.length === 0;
+    && backups.missingBackupDirectories.length === 0
+    && preservedFamilyProfiles.missingPaths.length === 0
+    && preservedFamilyProfiles.mismatches.length === 0;
 
   const result = {
     ok: clean,
@@ -227,6 +306,7 @@ async function main() {
     remainingTargetPaths,
     remainingPaymentStoragePaths,
     backups,
+    preservedFamilyProfiles,
     clean,
   };
   console.log(JSON.stringify(result, null, 2));

@@ -191,6 +191,7 @@ async function seed(db, bucket) {
       crmStatus: 'seguimiento',
       trustScore: 82,
       trustBadges: ['puntual'],
+      reputationMetrics: { overdueClassPayments: 1 },
       paymentAccessLocked: true,
       paymentAccessStatus: 'blocked_overdue_payment',
       paymentAccessDebtAmount: 40,
@@ -293,6 +294,7 @@ async function assertReset(db, bucket, result, manifests) {
   assert.equal(family.paymentAccessDebtAmount, 0);
   assert.equal('trustScore' in family, false);
   assert.equal('trustBadges' in family, false);
+  assert.equal('reputationMetrics' in family, false);
 
   const professor = (await db.doc('profesores/teacher_1').get()).data();
   assert.equal(professor.nombre, 'Luis');
@@ -404,6 +406,10 @@ try {
   assert.equal(independentResult.clean, true);
   assert.deepEqual(independentResult.remainingTargetPaths, []);
   assert.deepEqual(independentResult.remainingPaymentStoragePaths, []);
+  assert.equal(independentResult.preservedFamilyProfiles.expectedCount, 1);
+  assert.equal(independentResult.preservedFamilyProfiles.preservedCount, 1);
+  assert.deepEqual(independentResult.preservedFamilyProfiles.missingPaths, []);
+  assert.deepEqual(independentResult.preservedFamilyProfiles.mismatches, []);
   const idempotent = runReset();
   assert.equal(idempotent.status, 0, `Completed reset verification failed.\n${idempotent.stderr}`);
   const idempotentResult = JSON.parse(idempotent.stdout.trim());

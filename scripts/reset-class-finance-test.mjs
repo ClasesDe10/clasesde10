@@ -73,6 +73,8 @@ for (const mutation of ['.delete(', '.update(', '.set(', '.add(']) {
   assert(!verifierSource.includes(mutation), `The independent verifier must never mutate Firebase (${mutation}).`);
 }
 assert(verifierSource.includes('remainingTargetPaths') && verifierSource.includes('remainingPaymentStoragePaths'), 'The independent verifier must recheck every planned Firestore and Storage target.');
+assert(verifierSource.includes('familyProfilesBeforeDerivedReset') && verifierSource.includes('preservedFamilyProfiles'), 'The independent verifier must compare preserved family CRM profiles with the pre-reset backup.');
+assert(verifierSource.includes("!key.startsWith('trust')") && verifierSource.includes('familyResetFields'), 'The family CRM comparison may ignore only reset-owned trust/payment fields.');
 
 assert(normalizeStoragePath('gs://clasesde10-50add.firebasestorage.app/pagos/family/receipt.png') === 'pagos/family/receipt.png', 'gs:// receipt paths must normalize.');
 assert(

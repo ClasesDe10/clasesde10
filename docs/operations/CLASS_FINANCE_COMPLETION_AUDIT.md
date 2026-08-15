@@ -1,6 +1,6 @@
 # Auditoría de cierre: clases, finanzas y pagos familiares
 
-Fecha del punto de control: 2026-08-15 22:55 CEST.
+Fecha del punto de control: 2026-08-15 23:12 CEST.
 
 Este documento define la evidencia mínima para cerrar el objetivo. Un test local, un despliegue correcto o la ausencia de errores no sustituyen la verificación directa del estado productivo.
 
@@ -12,7 +12,7 @@ Este documento define la evidencia mínima para cerrar el objetivo. Un test loca
 | Eliminar pagos, calendarios de pago y datos económicos derivados | pendiente de producción | Cobertura explícita de `pagos`, `paymentSchedules`, lifecycle, métricas, rollups, resúmenes, health checks y snapshots | Verificación productiva de todos los contadores y objetivos derivados a cero |
 | Eliminar justificantes y binarios asociados | pendiente de producción | Detección de documentos, blobs, chunks, URLs históricas, adjuntos de chat y rutas de Storage; copia binaria previa probada | Cero documentos de pago, cero rutas `pagos/`, cero rutas explícitas y copia privada inspeccionada |
 | Eliminar rastros de clase/pago en chats sin borrar conversación normal | pendiente de producción | Ensayo de previews, mensajes, adjuntos, reacciones y `programaciones`; mensajes normales conservados | Verificación productiva de previews/estado de clase y objetivos de chat a cero |
-| Preservar el CRM familiar más reciente | probado en código; pendiente tras reset | CRM familiar separado y publicado; emulador conserva perfiles, mensajes y adjuntos normales | Abrir una ficha familiar autenticada después del reset y comprobar secciones/datos CRM |
+| Preservar el CRM familiar más reciente | probado en código; pendiente tras reset | CRM familiar separado y publicado; emulador conserva perfiles, mensajes y adjuntos normales; verificador independiente compara todas las fichas con la copia previa campo por campo | Abrir una ficha familiar autenticada después del reset y confirmar la comparación productiva sin ausencias ni diferencias CRM |
 | Pagar toda la deuda vencida más el periodo semanal/quincenal actual | desplegado y probado | `2798169`, validación exacta `27faac9`, prueba productiva 60 € frente a parciales/manipulados | Repetir flujo autenticado después del reset con fixture temporal y limpiar el fixture |
 | Exigir marcar dada/no dada antes de pagar; solo dadas son pagables | desplegado y probado | Motor, interfaz, reglas de aprobación y batería integral verdes | Comprobación autenticada de mensaje, selección y rechazo administrativo |
 | Mostrar pagadas en verde tras validación admin | desplegado y probado | Estado económico común y render productivo comprobado | Comprobación autenticada tras aprobar un justificante temporal |
@@ -32,8 +32,9 @@ Este documento define la evidencia mínima para cerrar el objetivo. Un test loca
 - Estado durable escrito antes de borrar y recuperación idempotente tras interrupción.
 - El marcador de éxito solo se crea si `mode=apply`, `verification.clean=true`, el estado durable está `completed` y todos los manifiestos de copia existen.
 - Un estado ya completado se limita a verificar y rechaza borrar datos creados posteriormente.
-- El segundo verificador es un programa separado, no contiene operaciones de escritura, reconsulta todas las colecciones/rutas de Firestore y Storage y valida también los manifiestos de la copia.
-- La tarea `ClasesDe10-ClassFinanceVerify-20260816` espera el marcador del reset sin consumir lecturas, fija el verificador por SHA-256 `1F41BC962E798E93633819E5BFFE97DEBF9AD3A1BBCD858E594690BD4A24B3AE` y reintenta los días 16, 17 y 18 a las 09:15 CEST cada 10 minutos durante cuatro horas.
+- El segundo verificador es un programa separado, no contiene operaciones de escritura, reconsulta todas las colecciones/rutas de Firestore y Storage, valida los manifiestos de la copia y compara cada ficha familiar con su versión anterior al reset, ignorando únicamente los campos de confianza/pago que el contrato ordena reiniciar.
+- La tarea `ClasesDe10-ClassFinanceVerify-20260816` espera el marcador del reset sin consumir lecturas, fija el verificador por SHA-256 `CA547C50D8F0C116532DB8C7139D509218262A4064FDD8CE239A55A37C2AEED1` y reintenta los días 16, 17 y 18 a las 09:15 CEST cada 10 minutos durante cuatro horas.
+- La aceptación autenticada posterior está aislada en `ClasesDe10-PostResetAcceptance-20260816`: solo arranca después de los dos marcadores limpios, crea tres cuentas y datos temporales identificables, prueba CRM, marcado, deuda 25 + 35, rechazo parcial/manipulado, justificante real, bloqueo, aprobación atómica, desbloqueo en vivo y verde en calendario; su `finally` elimina cuentas/documentos/binarios y vuelve a ejecutar el verificador independiente. El script está fijado por SHA-256 `F21470006F373E417BBEDB982EA0729F3E3D018A2DB989D3F99C2C60681102FA` y reintenta desde las 09:35 CEST.
 
 ## Secuencia obligatoria de cierre
 
@@ -41,8 +42,8 @@ Este documento define la evidencia mínima para cerrar el objetivo. Un test loca
 2. Esperar el reset programado de las 09:05 CEST sin consumir antes la cuota de Firestore.
 3. Inspeccionar todos los logs, el marcador de éxito, el estado durable y los manifiestos/binarios de la copia privada.
 4. Inspeccionar el resultado de la verificación independiente automática de Firestore y Storage para cada contador y ruta del contrato.
-5. Ejecutar las comprobaciones autenticadas de CRM, pago completo, asistencia, bloqueo y desbloqueo con datos temporales identificables.
-6. Eliminar todos los datos temporales de las comprobaciones y volver a demostrar el estado productivo a cero.
+5. Inspeccionar la aceptación autenticada automática de CRM, pago completo, asistencia, bloqueo, aprobación y desbloqueo con datos temporales identificables.
+6. Confirmar que su limpieza final eliminó cuentas, documentos y binarios y volvió a demostrar el estado productivo a cero.
 7. Confirmar la primera ejecución correcta del worker exhaustivo posterior al reset.
 8. Retirar las tareas programadas temporales y la automatización de seguimiento cuando ya no sean necesarias.
 9. Actualizar Q25, Q26 y Q29 y marcar el objetivo completo solo si todas las filas pendientes tienen evidencia directa.

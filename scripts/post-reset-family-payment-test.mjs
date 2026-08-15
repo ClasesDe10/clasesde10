@@ -1,0 +1,25 @@
+import fs from 'node:fs';
+
+const source = fs.readFileSync(new URL('./post-reset-family-payment-production-smoke.mjs', import.meta.url), 'utf8');
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+assert(source.includes("const APPLY_TOKEN = 'POST_RESET_FAMILY_PAYMENT_ACCEPTANCE'"), 'Post-reset acceptance must require its explicit apply token.');
+assert(source.includes("PROJECT_ID !== 'clasesde10-50add'"), 'Post-reset acceptance must be pinned to the production project.');
+assert(source.includes("['clasesde10.com', 'clasesde10-50add.web.app']"), 'Post-reset acceptance must restrict the production host.');
+assert(source.includes('resetMarkerPath') && source.includes('verificationMarkerPath') && source.includes('resetStatePath'), 'Post-reset acceptance must require all three reset evidence files.');
+assert(source.includes("verificationMarker.verification?.mode, 'read_only_independent_verification'"), 'Post-reset acceptance must require the independent read-only verifier.');
+assert(source.includes('paymentAccessLocked: true') && source.includes('paymentAccessDebtAmount: 25'), 'The fixture must cover the overdue access lock.');
+assert(source.includes('unmarkedClassId') && source.includes("selectOption('no_realizada')"), 'The flow must mark a past class as not given before payment.');
+assert(source.includes("value = '35.00'") && source.includes("value = '59.00'") && source.includes("value = '60.00'"), 'The flow must reject partial and altered payments before accepting the exact total.');
+assert(source.includes("setInputFiles({") && source.includes('proofDocumentCreated'), 'The flow must upload and verify a real payment proof.');
+assert(source.includes("window.validarPago(paymentId, 'validado'") && source.includes('atomic admin payment approval'), 'The flow must approve the proof through the authenticated admin application.');
+assert(source.includes('Admin CRM profile is missing') && source.includes('Hijo Aceptacion'), 'The flow must verify full family and child identity in the admin CRM.');
+assert(source.includes('liveUnlockWithoutReload') && source.includes("classList.contains('payment-paid')"), 'The flow must verify live unlock and green paid calendar state.');
+assert(source.includes('finally {') && source.includes('cleanupFixture(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');
+assert(source.includes("identity('delete'") && source.includes("bucket.getFiles({ prefix })"), 'Cleanup must remove temporary identities and proof files.');
+assert(source.includes('postCleanupVerification = runIndependentVerification()'), 'A second independent zero verification must run after cleanup.');
+
+console.log('Post-reset family payment acceptance safety validation passed.');
