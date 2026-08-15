@@ -1,6 +1,6 @@
 # Auditoría de cierre: clases, finanzas y pagos familiares
 
-Fecha del punto de control: 2026-08-15 22:42 CEST.
+Fecha del punto de control: 2026-08-15 22:55 CEST.
 
 Este documento define la evidencia mínima para cerrar el objetivo. Un test local, un despliegue correcto o la ausencia de errores no sustituyen la verificación directa del estado productivo.
 
@@ -8,7 +8,7 @@ Este documento define la evidencia mínima para cerrar el objetivo. Un test loca
 
 | Requisito | Estado | Evidencia autoritativa disponible | Evidencia que aún falta |
 |---|---|---|---|
-| Eliminar todas las clases pasadas y futuras | pendiente de producción | Reset idempotente y ensayo destructivo en emulador: interrupción recuperada y cero final | `completed.json`, estado durable `completed` y consulta independiente de `clases` con cero documentos |
+| Eliminar todas las clases pasadas y futuras | pendiente de producción | Reset idempotente y ensayo destructivo en emulador: interrupción recuperada y cero final; el verificador independiente y de solo lectura también obtiene cero | `completed.json`, estado durable `completed` y ejecución del verificador independiente contra producción |
 | Eliminar pagos, calendarios de pago y datos económicos derivados | pendiente de producción | Cobertura explícita de `pagos`, `paymentSchedules`, lifecycle, métricas, rollups, resúmenes, health checks y snapshots | Verificación productiva de todos los contadores y objetivos derivados a cero |
 | Eliminar justificantes y binarios asociados | pendiente de producción | Detección de documentos, blobs, chunks, URLs históricas, adjuntos de chat y rutas de Storage; copia binaria previa probada | Cero documentos de pago, cero rutas `pagos/`, cero rutas explícitas y copia privada inspeccionada |
 | Eliminar rastros de clase/pago en chats sin borrar conversación normal | pendiente de producción | Ensayo de previews, mensajes, adjuntos, reacciones y `programaciones`; mensajes normales conservados | Verificación productiva de previews/estado de clase y objetivos de chat a cero |
@@ -32,13 +32,15 @@ Este documento define la evidencia mínima para cerrar el objetivo. Un test loca
 - Estado durable escrito antes de borrar y recuperación idempotente tras interrupción.
 - El marcador de éxito solo se crea si `mode=apply`, `verification.clean=true`, el estado durable está `completed` y todos los manifiestos de copia existen.
 - Un estado ya completado se limita a verificar y rechaza borrar datos creados posteriormente.
+- El segundo verificador es un programa separado, no contiene operaciones de escritura, reconsulta todas las colecciones/rutas de Firestore y Storage y valida también los manifiestos de la copia.
+- La tarea `ClasesDe10-ClassFinanceVerify-20260816` espera el marcador del reset sin consumir lecturas, fija el verificador por SHA-256 `1F41BC962E798E93633819E5BFFE97DEBF9AD3A1BBCD858E594690BD4A24B3AE` y reintenta los días 16, 17 y 18 a las 09:15 CEST cada 10 minutos durante cuatro horas.
 
 ## Secuencia obligatoria de cierre
 
 1. Confirmar la actualización de Codex `26.810.7004.0` o posterior y revisar nuevos eventos de cierre.
 2. Esperar el reset programado de las 09:05 CEST sin consumir antes la cuota de Firestore.
 3. Inspeccionar todos los logs, el marcador de éxito, el estado durable y los manifiestos/binarios de la copia privada.
-4. Ejecutar una verificación independiente de Firestore y Storage para cada contador y ruta del contrato.
+4. Inspeccionar el resultado de la verificación independiente automática de Firestore y Storage para cada contador y ruta del contrato.
 5. Ejecutar las comprobaciones autenticadas de CRM, pago completo, asistencia, bloqueo y desbloqueo con datos temporales identificables.
 6. Eliminar todos los datos temporales de las comprobaciones y volver a demostrar el estado productivo a cero.
 7. Confirmar la primera ejecución correcta del worker exhaustivo posterior al reset.

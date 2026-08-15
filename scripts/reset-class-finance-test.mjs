@@ -11,6 +11,7 @@ function assert(condition, message) {
 }
 
 const source = fs.readFileSync(new URL('./reset-class-financial-data.mjs', import.meta.url), 'utf8');
+const verifierSource = fs.readFileSync(new URL('./verify-class-financial-reset.mjs', import.meta.url), 'utf8');
 
 assert(source.includes("const APPLY_TOKEN = 'DELETE_CLASS_FINANCE_DATA'"), 'Production reset must require an explicit confirmation token.');
 assert(source.includes("const apply = args.has('--apply')"), 'Production reset must remain a dry-run by default.');
@@ -66,6 +67,12 @@ assert(source.includes("collectionGroup('reacciones')") && source.includes('cont
 assert(source.includes('data.attachment') && source.includes('storagePathsFromData(doc.data())'), 'Production reset must discover payment proofs attached inside chats.');
 assert(source.includes('remainingDerivedTargets') && source.includes('remainingLockedFamilies'), 'Production reset must verify derived data and family locks are empty after deletion.');
 assert(source.includes('if (!verification.clean) process.exitCode = 2'), 'Production reset must fail when final zero-state verification is not clean.');
+assert(verifierSource.includes("mode: 'read_only_independent_verification'"), 'The independent verifier must identify its read-only mode.');
+assert(verifierSource.includes("resetState.status !== 'completed'") && verifierSource.includes('resetState.verification?.clean !== true'), 'The independent verifier must refuse to run without a completed clean reset state.');
+for (const mutation of ['.delete(', '.update(', '.set(', '.add(']) {
+  assert(!verifierSource.includes(mutation), `The independent verifier must never mutate Firebase (${mutation}).`);
+}
+assert(verifierSource.includes('remainingTargetPaths') && verifierSource.includes('remainingPaymentStoragePaths'), 'The independent verifier must recheck every planned Firestore and Storage target.');
 
 assert(normalizeStoragePath('gs://clasesde10-50add.firebasestorage.app/pagos/family/receipt.png') === 'pagos/family/receipt.png', 'gs:// receipt paths must normalize.');
 assert(

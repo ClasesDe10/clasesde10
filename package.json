@@ -71,6 +71,7 @@
     "firebase:professors:normalize:apply": "node scripts/normalize-firestore-professors.mjs --apply",
     "firebase:reset-class-finance": "node scripts/run-with-firebase-cli-adc.mjs node scripts/reset-class-financial-data.mjs",
     "firebase:reset-class-finance:apply": "node scripts/run-with-firebase-cli-adc.mjs node scripts/reset-class-financial-data.mjs --apply --confirm=DELETE_CLASS_FINANCE_DATA",
+    "firebase:verify-class-finance-reset": "node scripts/run-with-firebase-cli-adc.mjs node scripts/verify-class-financial-reset.mjs",
     "firebase:data-model:normalize": "node scripts/firestore-data-model-audit.mjs --apply",
     "firebase:data-model:normalize:cli": "node scripts/run-with-firebase-cli-adc.mjs node scripts/firestore-data-model-audit.mjs --apply",
     "firebase:storage:create-default": "node scripts/firebase-storage-create-default.mjs",

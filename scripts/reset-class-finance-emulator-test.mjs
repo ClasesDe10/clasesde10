@@ -350,6 +350,23 @@ function runReset(extraArgs = []) {
   });
 }
 
+function runIndependentVerification() {
+  return spawnSync(process.execPath, [
+    path.join(workspace, 'scripts', 'verify-class-financial-reset.mjs'),
+  ], {
+    cwd: workspace,
+    env: {
+      ...process.env,
+      FIREBASE_PROJECT_ID: PROJECT_ID,
+      GCLOUD_PROJECT: PROJECT_ID,
+      CLASS_FINANCE_BACKUP_ROOT: backupRoot,
+      STORAGE_EMULATOR_HOST: storageHost,
+    },
+    encoding: 'utf8',
+    timeout: 120000,
+  });
+}
+
 initializeFirebase();
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
@@ -380,6 +397,13 @@ try {
   const completedState = JSON.parse(await fs.readFile(result.resetStatePath, 'utf8'));
   assert.equal(completedState.status, 'completed');
   assert.equal(completedState.verification.clean, true);
+  const independentVerification = runIndependentVerification();
+  assert.equal(independentVerification.status, 0, `Independent verification failed.\nSTDOUT:\n${independentVerification.stdout}\nSTDERR:\n${independentVerification.stderr}`);
+  const independentResult = JSON.parse(independentVerification.stdout.trim());
+  assert.equal(independentResult.mode, 'read_only_independent_verification');
+  assert.equal(independentResult.clean, true);
+  assert.deepEqual(independentResult.remainingTargetPaths, []);
+  assert.deepEqual(independentResult.remainingPaymentStoragePaths, []);
   const idempotent = runReset();
   assert.equal(idempotent.status, 0, `Completed reset verification failed.\n${idempotent.stderr}`);
   const idempotentResult = JSON.parse(idempotent.stdout.trim());
@@ -403,6 +427,7 @@ try {
     resetAttempts: completedState.attempts,
     deletedFirestoreDocuments: result.deletedFirestoreDocuments,
     deletedStorageFiles: result.deletedStorageFiles,
+    independentVerification: independentResult.clean,
     verification: result.verification,
   }, null, 2));
 } finally {
