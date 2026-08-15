@@ -287,7 +287,6 @@ function displayName(item = {}, fallback = 'Sin nombre') {
     first(item.nombre, nested.nombre),
     first(item.apellidos, nested.apellidos),
   ].filter(Boolean).join(' '), 160)
-    || clean(first(item.email, nested.email, item.id), 160)
     || fallback;
 }
 
@@ -442,6 +441,8 @@ function computeTeacherPayouts(data = {}, options = {}) {
         amount,
         classes: payoutClasses.map((item) => ({
           id: clean(first(item.id, item.classId), 180),
+          studentId: clean(first(item.studentId, item.alumno_id, item.studentUid), 180),
+          familyUid: clean(first(item.familyUid, item.familia_id, item.familyId), 180),
           date: dateOnly(classDate(item)),
           startTime: clean(first(item.hora_inicio, item.startTime), 20),
           studentName: clean(first(item.alumno_nombre, item.studentName, item.alumnoName), 180) || 'Alumno',
@@ -2828,7 +2829,7 @@ function renderDecisionCenter(decisionCenter) {
   </section>`;
 }
 
-function renderTeacherPayoutInbox(items = []) {
+function renderTeacherPayoutInbox(items = [], state = {}) {
   if (!items.length) return '';
   const total = items.reduce((sum, item) => sum + asNumber(item.amount), 0);
   const today = new Date().toISOString().slice(0, 10);
@@ -2843,7 +2844,9 @@ function renderTeacherPayoutInbox(items = []) {
         return `<article class="teacher-payout-inbox-row ${escapeHtml(item.date < today ? 'overdue' : item.date === today ? 'today' : 'upcoming')}">
           <div class="teacher-payout-inbox-top">
             <div>
-              <strong>${escapeHtml(item.teacherName)}</strong>
+              ${state.renderPerson
+                ? state.renderPerson({ role: 'profesor', id: item.teacherId, name: item.teacherName, source: { ...item, classes }, compact: true })
+                : `<strong>${escapeHtml(item.teacherName)}</strong>`}
               <span>${escapeHtml(formatDateOnly(item.date))} · ${escapeHtml(item.frequencyLabel)} · ${escapeHtml(formatDateOnly(item.periodStart))}-${escapeHtml(formatDateOnly(item.periodEnd))}</span>
             </div>
             <strong>${escapeHtml(formatEuros(item.amount))}</strong>
@@ -2851,7 +2854,9 @@ function renderTeacherPayoutInbox(items = []) {
           <div class="teacher-payout-inbox-classes">
             ${classes.slice(0, 3).map((clase) => `<div>
               <span>${escapeHtml(formatDateOnly(clase.date))} ${escapeHtml(clase.startTime || '')}</span>
-              <strong>${escapeHtml(clase.studentName)} · ${escapeHtml(clase.subject)}</strong>
+              <div>${state.renderPerson
+                ? state.renderPerson({ role: 'alumno', id: clase.studentId || clase.id, name: clase.studentName, source: clase, compact: true })
+                : `<strong>${escapeHtml(clase.studentName)}</strong>`}<strong>${escapeHtml(clase.subject)}</strong></div>
               <em>${escapeHtml(formatEuros(clase.amount))}</em>
             </div>`).join('')}
             ${classes.length > 3 ? `<small>+${classes.length - 3} clase(s) mas</small>` : ''}
@@ -2874,7 +2879,7 @@ function renderControlCenter(container, metrics, state) {
 
   container.innerHTML = `<div class="control-center">
     ${renderDecisionCenter(decisionCenter)}
-    ${renderTeacherPayoutInbox(metrics.teacherPayoutsDue || [])}
+    ${renderTeacherPayoutInbox(metrics.teacherPayoutsDue || [], state)}
 
     ${renderMissionControl(metrics.missionControl)}
 
@@ -3175,6 +3180,8 @@ export async function initAdminControlCenter({
   navigate = () => {},
   showToast = () => {},
   actor = null,
+  registerPeople = null,
+  renderPerson = null,
 }) {
   if (!container || !db) return null;
 
@@ -3187,6 +3194,8 @@ export async function initAdminControlCenter({
       navigate,
       showToast,
       actor,
+      registerPeople,
+      renderPerson,
       live: false,
       loading: false,
       subscribed: false,
@@ -3201,6 +3210,14 @@ export async function initAdminControlCenter({
       if (manual) renderLoading(container);
       try {
         const data = await loadData(db, leadsAdapter);
+        state.registerPeople?.({
+          teachers: data.teachers || [],
+          families: data.families || [],
+          students: data.students || [],
+          classes: data.classes || [],
+          requests: data.requests || [],
+          assignments: data.assignments || [],
+        });
         const metrics = computeControlCenter(data);
         updateSidebarBadges(metrics);
         renderControlCenter(container, metrics, state);
@@ -3229,6 +3246,8 @@ export async function initAdminControlCenter({
     state.navigate = navigate;
     state.showToast = showToast;
     state.actor = actor;
+    state.registerPeople = registerPeople;
+    state.renderPerson = renderPerson;
   }
 
   await state.refresh(false);

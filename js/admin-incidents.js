@@ -41,6 +41,7 @@ export async function initAdminIncidents({
   crmDateShort,
   crmBadge,
   recordAdminAudit,
+  renderPerson = null,
 } = {}) {
   if (!section || !db) return null;
   if (instances.has(section)) {
@@ -99,6 +100,13 @@ export async function initAdminIncidents({
   }
 
   function relatedSummary(item) {
+    if (renderPerson) {
+      const people = [];
+      if (item.familyUid) people.push(renderPerson({ role: 'familia', id: item.familyUid, source: item, compact: true }));
+      if (item.teacherUid) people.push(renderPerson({ role: 'profesor', id: item.teacherUid, source: item, compact: true }));
+      if (item.studentId || item.alumno_id) people.push(renderPerson({ role: 'alumno', id: item.studentId || item.alumno_id, source: item, compact: true }));
+      if (people.length) return `<div class="incident-related-people">${people.join('')}</div>`;
+    }
     const parts = [
       item.classId ? `Clase ${item.classId}` : '',
       item.paymentId ? `Pago ${item.paymentId}` : '',
@@ -151,6 +159,7 @@ export async function initAdminIncidents({
       tableHead.innerHTML = `<tr>
         <th>Prioridad</th>
         <th>Problema</th>
+        <th>Personas relacionadas</th>
         <th>Motivo probable</th>
         <th>Accion recomendada</th>
         <th>Estado</th>
@@ -158,7 +167,7 @@ export async function initAdminIncidents({
       </tr>`;
     }
     if (!filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin incidencias con estos filtros.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin incidencias con estos filtros.</td></tr>';
     } else {
       tbody.innerHTML = filtered.map((item) => {
         const guide = rowGuide(item);
@@ -171,6 +180,7 @@ export async function initAdminIncidents({
           <div class="incident-simple-meta">${sanitize(item.ticketId)} · ${sanitize(crmDateShort(item.createdAt))} · ${sanitize(optionLabel(item.categoria))}</div>
           <div class="incident-simple-desc" title="${sanitize(item.descripcion)}">${sanitize(item.descripcion || 'Sin descripcion')}</div>
         </td>
+        <td>${relatedSummary(item)}</td>
         <td class="incident-simple-text">${sanitize(cause)}</td>
         <td class="incident-simple-text">${sanitize(action)}</td>
         <td>${crmBadge(item.estado)}</td>
@@ -308,7 +318,8 @@ export async function initAdminIncidents({
       <div class="stat-card"><div class="stat-card-label">Ticket</div><div class="stat-card-value" style="font-size:1rem">${sanitize(item.ticketId)}</div></div>
       <div class="stat-card"><div class="stat-card-label">SLA</div><div class="stat-card-value" style="font-size:1rem">${sanitize(crmDateShort(item.slaDueAt))}</div></div>
       <div class="stat-card"><div class="stat-card-label">Origen</div><div class="stat-card-value" style="font-size:1rem">${sanitize(item.source || 'manual')}</div></div>
-      <button type="button" class="btn btn-outline btn-sm incident-assign-btn" data-incident-guide-action="assign-me">Asignarmela</button>`;
+      <button type="button" class="btn btn-outline btn-sm incident-assign-btn" data-incident-guide-action="assign-me">Asignarmela</button>
+      <div class="incident-related-people">${relatedSummary(item)}</div>`;
     field('inc-desc').innerHTML = existing
       ? `<strong>${sanitize(item.titulo)}</strong><br>${sanitize(item.descripcion || 'Sin descripcion')}`
       : '<input class="form-control" id="inc-new-title" placeholder="Titulo de la incidencia" style="margin-bottom:8px"><textarea class="form-control" id="inc-new-description" rows="3" placeholder="Descripcion detallada"></textarea>';

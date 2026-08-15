@@ -3852,6 +3852,99 @@ pre,
   font-style: normal;
   font-weight: 800;
 }
+
+/* Referencia personal común del panel administrativo. */
+.admin-person-reference {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-person-reference__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-person-reference__copy strong {
+  color: var(--navy);
+  font-size: .875rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.admin-person-reference__copy span {
+  color: var(--gray-mid);
+  font-size: .75rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.admin-person-reference__action {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.admin-person-reference.is-compact {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.admin-person-reference.is-compact .admin-person-reference__action {
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.chat-admin-person-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 6px;
+}
+
+.chat-admin-person-links .admin-person-reference {
+  padding-right: 10px;
+  border-right: 1px solid rgba(15, 31, 61, .12);
+}
+
+.chat-admin-person-links .admin-person-reference:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.admin-class-person-context {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: -4px 0 14px;
+}
+
+.admin-class-person-context:empty {
+  display: none;
+}
+
+.admin-class-person-context .admin-person-reference {
+  padding: 10px;
+  border: 1px solid rgba(15, 31, 61, .12);
+  background: var(--gray-soft);
+}
+
+@media (max-width: 560px) {
+  .admin-class-person-context {
+    grid-template-columns: 1fr;
+  }
+  .admin-person-reference:not(.is-compact) {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-person-reference:not(.is-compact) .admin-person-reference__action {
+    width: 100%;
+  }
+}
 .admin-teacher-payout-class.is-overdue {
   border-radius: 6px;
   background: rgba(220,38,38,.055);

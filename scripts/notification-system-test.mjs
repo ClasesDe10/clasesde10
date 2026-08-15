@@ -225,7 +225,8 @@ assert(notificationCenter.includes('data-resolve-notification'), 'Visible notifi
 assert(notificationCenter.includes('visibleNotificationsForRole'), 'Notification centre must apply the low-noise policy.');
 [familyDashboard, teacherDashboard, studentDashboard, adminDashboard].forEach((dashboard, index) => {
   assert(dashboard.includes('section-notificaciones'), `Dashboard ${index + 1} must have a dedicated notification section.`);
-  assert(dashboard.includes('notification-center.js?v=20260815-clear-notices'), `Dashboard ${index + 1} must load the current notification centre.`);
+  assert(dashboard.includes('notification-center.js?v='), `Dashboard ${index + 1} must load a versioned notification centre.`);
 });
+assert(adminDashboard.includes('notification-center.js?v=20260815-admin-person-context'), 'Admin must load the identity-aware notification centre.');
 
 console.log('Notification system validation passed.');

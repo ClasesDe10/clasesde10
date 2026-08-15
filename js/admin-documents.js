@@ -201,6 +201,8 @@ export async function initAdminDocuments({
   exportarCSV,
   recordAdminAudit,
   getDocumentUrl,
+  registerPeople = null,
+  renderPerson = null,
 } = {}) {
   if (!container) return null;
   if (instances.has(container)) {
@@ -292,6 +294,18 @@ export async function initAdminDocuments({
     };
   }
 
+  function renderOwner(doc, compact = true) {
+    const owner = ownerOf(doc);
+    if (!renderPerson) return `<strong>${sanitize(owner.name)}</strong><br><span style="color:var(--gray-mid);font-size:.76rem">${sanitize(owner.role || doc.role)} · ${sanitize(owner.email || doc.ownerUid)}</span>`;
+    return renderPerson({
+      role: owner.role || doc.role || 'usuario',
+      id: owner.profileId || owner.uid || doc.ownerUid,
+      name: owner.name,
+      source: doc,
+      compact,
+    });
+  }
+
   function badge(status) {
     const map = {
       validado: 'success',
@@ -369,7 +383,7 @@ export async function initAdminDocuments({
     }
     target.innerHTML = `<div class="doc-risk-list">${report.risks.slice(0, 12).map((risk) => `
       <div class="doc-risk">
-        <div><strong>${sanitize(risk.label)}</strong><br><span style="color:var(--gray-mid);font-size:.82rem">${sanitize(risk.type)} - ${sanitize(risk.ownerUid || risk.documentId || '')}</span></div>
+        <div><strong>${sanitize(risk.label)}</strong>${risk.ownerUid ? renderOwner({ ownerUid: risk.ownerUid, role: owners.get(risk.ownerUid)?.role || '' }) : `<br><span style="color:var(--gray-mid);font-size:.82rem">${sanitize(risk.type)} - ${sanitize(risk.documentId || '')}</span>`}</div>
         <span class="badge badge-${risk.severity === 'high' ? 'danger' : 'warning'}">${sanitize(risk.severity)}</span>
       </div>`).join('')}</div>`;
   }
@@ -386,7 +400,7 @@ export async function initAdminDocuments({
     tbody.innerHTML = filtered.map((doc) => {
       const owner = ownerOf(doc);
       return `<tr class="${doc.id === selectedId ? 'table-row-selected' : ''}">
-        <td data-label="Usuario"><strong>${sanitize(owner.name)}</strong><br><span style="color:var(--gray-mid);font-size:.76rem">${sanitize(owner.role || doc.role)} · ${sanitize(owner.email || doc.ownerUid)}</span></td>
+        <td data-label="Usuario">${renderOwner(doc)}</td>
         <td data-label="Documento"><strong>${sanitize(doc.typeLabel)}</strong><br><span style="color:var(--gray-mid);font-size:.76rem">${sanitize(doc.name)}</span></td>
         <td data-label="Estado">${badge(doc.status)}<br>${riskBadge(doc)}</td>
         <td data-label="Caducidad">${sanitize(formatShortDate(doc.expiresAt))}<br><span style="font-size:.76rem;color:var(--gray-mid)">${doc.expiresAt ? `${safeText(sanitize, doc.daysToExpiry)} dias` : 'Sin caducidad'}</span></td>
@@ -415,7 +429,7 @@ export async function initAdminDocuments({
           <p style="margin:4px 0 0;color:var(--gray-mid);overflow-wrap:anywhere">${sanitize(doc.name)}</p>
         </div>
         <div class="doc-metadata">
-          <div><span>Usuario</span><strong>${sanitize(owner.name)}</strong></div>
+          <div><span>Usuario</span>${renderOwner(doc, false)}</div>
           <div><span>Rol</span><strong>${sanitize(owner.role || doc.role)}</strong></div>
           <div><span>Estado</span><strong>${badge(doc.status)}</strong></div>
           <div><span>Categoria</span><strong>${sanitize(definition.category)}</strong></div>
@@ -465,13 +479,15 @@ export async function initAdminDocuments({
   }
 
   async function refresh() {
-    const [rawDocs, users, teachers, families] = await Promise.all([
+    const [rawDocs, users, teachers, families, students] = await Promise.all([
       safeList('documentos'),
       safeList('users'),
       safeList('profesores'),
       safeList('familias'),
+      safeList('alumnos'),
     ]);
     owners = buildOwnerIndex(users, teachers, families);
+    registerPeople?.({ users, teachers, families, students });
     documents = rawDocs.map((doc) => normalizeDocumentRecord(doc))
       .sort((a, b) => {
         const riskA = (a.expired ? 0 : a.expiresSoon ? 1 : ['pendiente', 'en_revision'].includes(a.status) ? 2 : 3);

@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-family-payment-lock">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-admin-person-context">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260809-teacher-calendar">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -1018,6 +1018,7 @@
             </select>
           </div>
         </div>
+        <div id="clase-personas-contexto" class="admin-class-person-context" aria-live="polite"></div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Fecha <span class="required">*</span></label>
@@ -1314,20 +1315,20 @@
 <script type="module">
 import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
 import { leads } from '../../js/adapters/index.js?v=20260701-no-aggregate-counts';
-import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260710-actionable-incidents';
-import { initAdminOpsWorkbench } from '../../js/admin-ops-workbench.js?v=20260710-actionable-incidents';
+import { initAdminControlCenter } from '../../js/admin-control-center.js?v=20260815-admin-person-context';
+import { initAdminOpsWorkbench } from '../../js/admin-ops-workbench.js?v=20260815-admin-person-context';
 import { initAdminAiAssistant } from '../../js/admin-ai-assistant.js?v=20260717-solution-admin-ai';
 import { initAdminAnalytics } from '../../js/admin-analytics.js?v=20260628-analytics';
 import { initAdminExperimentation } from '../../js/admin-experimentation.js?v=20260628-experiments';
-import { initAdminDocuments } from '../../js/admin-documents.js?v=20260628-documents';
+import { initAdminDocuments } from '../../js/admin-documents.js?v=20260815-admin-person-context';
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260630-supervision';
-import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260710-actionable-incidents';
+import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260815-admin-person-context';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260630-supervision';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260815-clear-notices';
-import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-clear-notices';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260815-admin-person-context';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-admin-person-context';
 import {
   NOTIFICATION_EVENTS,
   buildNotificationDocument,
@@ -1413,6 +1414,12 @@ import {
   getIniciales, debounce, exportarCSV, Paginacion, fechaHoy, sanitize, initNotificacionesBadge
 } from '../../js/utils.js';
 import { Calendario } from '../../js/calendario.js?v=20260815-economic-summaries';
+import {
+  adminPersonDirectory,
+  adminPersonName as resolveAdminPersonName,
+  normalizeAdminPersonRole,
+  renderAdminPersonReference,
+} from '../../js/admin-person-context.js?v=20260815-admin-person-context';
 
 // ── PROTEGER RUTA ────────────────────────────────────────────────
 const usuario = await requireAuth(['admin']);
@@ -1474,6 +1481,7 @@ let profesoresFirestoreCache = null;
 let familiasCache = new Map();
 let familiasFirestoreCache = null;
 let alumnosCache = new Map();
+let adminPersonDirectoryPromise = null;
 let alumnoDetalleActivoId = '';
 let trustContextCache = null;
 const selectedProfesores = new Set();
@@ -1785,6 +1793,13 @@ function sectionFromHash(defaultSection = 'dashboard') {
 window.addEventListener('hashchange', () => irA(sectionFromHash(), { fromHash: true }));
 
 document.addEventListener('click', (e) => {
+  const personTrigger = e.target.closest('[data-action="ver-persona-admin"]');
+  if (personTrigger) {
+    e.preventDefault();
+    e.stopPropagation();
+    void abrirFichaPersonaAdmin(personTrigger.dataset.personRole, personTrigger.dataset.personId);
+    return;
+  }
   const sectionTrigger = e.target.closest('[data-section]');
   if (!sectionTrigger) return;
   e.preventDefault();
@@ -1795,12 +1810,14 @@ simplifyAdminDashboard();
 initSidebar();
 initModals();
 initNotificacionesBadge(usuario.uid || usuario.id, db);
+await ensureAdminPersonDirectory();
 initNotificationCenter({
   container: document.getElementById('notification-center-admin'),
   usuario,
   role: 'admin',
   showToast,
   navigateSection: (section) => { irA(section); return true; },
+  renderPerson: renderAdminPerson,
 });
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
@@ -1884,11 +1901,84 @@ function adminPersonFallback(role, id = '') {
 }
 
 function adminPersonName(role, id = '', ...values) {
-  for (const value of values) {
-    const candidate = cleanAdminNotificationText(value, 180);
-    if (candidate && !isGenericAdminPersonLabel(candidate)) return candidate;
+  return resolveAdminPersonName({ role, id, name: values });
+}
+
+function registerAdminPersonData(data = {}) {
+  adminPersonDirectory.register({
+    users: data.users || [],
+    teachers: data.teachers || data.profesores || [],
+    families: data.families || data.familias || [],
+    students: data.students || data.alumnos || [],
+    classes: data.classes || data.clases || [],
+    requests: data.requests || data.solicitudes || [],
+    assignments: data.assignments || data.asignaciones || [],
+  });
+  return adminPersonDirectory;
+}
+
+async function ensureAdminPersonDirectory() {
+  if (adminPersonDirectoryPromise) return adminPersonDirectoryPromise;
+  adminPersonDirectoryPromise = Promise.all([
+    cargarProfesoresFirestore(),
+    cargarFamiliasFirestore(),
+    safeListFirestore('alumnos'),
+    safeListFirestore('clases'),
+  ])
+    .then(([teachers, families, students, classes]) => registerAdminPersonData({ teachers, families, students, classes }))
+    .catch((error) => {
+      console.warn('No se pudo completar el directorio de identidades admin', error);
+      return adminPersonDirectory;
+    });
+  return adminPersonDirectoryPromise;
+}
+
+function renderAdminPerson(options = {}) {
+  return renderAdminPersonReference(options, adminPersonDirectory);
+}
+
+function inferAdminPersonRole(id, fallback = 'usuario') {
+  if (adminPersonDirectory.get('familia', id)) return 'familia';
+  if (adminPersonDirectory.get('profesor', id)) return 'profesor';
+  if (adminPersonDirectory.get('alumno', id)) return 'alumno';
+  return fallback;
+}
+
+function adminPersonOptions(role, source = {}, overrides = {}) {
+  const normalizedRole = normalizeAdminPersonRole(role);
+  const id = normalizedRole === 'profesor'
+    ? firstAdminValue(source.teacherUid, source.teacherId, source.profesor_id, source.profesorId, source.assignedTeacherUid, source.profesor_asignado_id, source.profesores?.id)
+    : normalizedRole === 'familia'
+      ? firstAdminValue(source.familyUid, source.familyId, source.familia_id, source.familiaId, source.familias?.id)
+      : firstAdminValue(source.studentId, source.studentUid, source.alumno_id, source.alumnoId, source.alumnos?.id);
+  return {
+    role: normalizedRole,
+    id,
+    source,
+    studentId: firstAdminValue(source.studentId, source.studentUid, source.alumno_id, source.alumnoId, source.alumnos?.id),
+    familyId: firstAdminValue(source.familyUid, source.familyId, source.familia_id, source.familiaId, source.familias?.id),
+    ...overrides,
+  };
+}
+
+async function abrirFichaPersonaAdmin(role, id) {
+  await ensureAdminPersonDirectory();
+  const normalizedRole = normalizeAdminPersonRole(role);
+  const person = adminPersonDirectory.get(normalizedRole, id);
+  const profileId = person?.profileId || id;
+  if (normalizedRole === 'profesor') {
+    await window.verProfesor(profileId);
+    return;
   }
-  return adminPersonFallback(role, id);
+  if (normalizedRole === 'familia') {
+    await abrirFamiliaDetalle(profileId);
+    return;
+  }
+  if (normalizedRole === 'alumno') {
+    const student = person?.raw;
+    if (student?.id && !alumnosCache.has(student.id)) alumnosCache.set(student.id, student);
+    abrirAlumnoDetalle(profileId);
+  }
 }
 
 function adminNotificationDocId(type, classId, adminUid) {
@@ -2281,6 +2371,8 @@ async function iniciarOperaciones(options = {}) {
     showToast,
     recordAdminAudit,
     autoLoad: !options.background,
+    registerPeople: registerAdminPersonData,
+    renderPerson: renderAdminPerson,
   });
   adminOpsInicializada = true;
   return adminOpsApi;
@@ -2333,6 +2425,8 @@ async function iniciarDocumentos() {
     exportarCSV,
     recordAdminAudit,
     getDocumentUrl,
+    registerPeople: registerAdminPersonData,
+    renderPerson: renderAdminPerson,
   });
   adminDocumentsInicializada = true;
   await cargarBadgeDocumentos();
@@ -2365,6 +2459,7 @@ async function iniciarIncidencias() {
     crmDateShort,
     crmBadge,
     recordAdminAudit,
+    renderPerson: renderAdminPerson,
   });
   adminIncidentsInicializada = true;
   return api;
@@ -2385,6 +2480,8 @@ async function cargarDashboard() {
       navigate: irA,
       showToast,
       actor: usuario,
+      registerPeople: registerAdminPersonData,
+      renderPerson: renderAdminPerson,
     });
     return;
   }
@@ -2508,9 +2605,11 @@ async function cargarDashboardFirebaseFallback() {
 }
 
 async function cargarSolicitudesRecientes() {
-  const { data } = await db.from('solicitudes')
-    .select('*, familias(usuarios(nombre,apellidos)), alumnos(nombre,apellidos)')
-    .order('created_at', { ascending: false }).limit(5);
+  const [{ data }] = await Promise.all([
+    db.from('solicitudes').select('*, familias(usuarios(nombre,apellidos)), alumnos(nombre,apellidos)').order('created_at', { ascending: false }).limit(5),
+    ensureAdminPersonDirectory(),
+  ]);
+  registerAdminPersonData({ requests: data || [] });
 
   const cont = document.getElementById('lista-solicitudes-recientes');
   if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-title">Sin solicitudes</div></div>'; return; }
@@ -2518,20 +2617,23 @@ async function cargarSolicitudesRecientes() {
   cont.innerHTML = data.map(s => `
     <div class="clase-item" style="padding:12px 20px">
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(s.materia)} — ${sanitize(s.alumnos?.nombre||'Alumno')} ${sanitize(s.alumnos?.apellidos||'')}</div>
-        <div class="clase-materia">${sanitize(s.familias?.usuarios?.nombre||'')} · ${formatFechaCorta(s.created_at)}</div>
+        <div class="clase-materia">${sanitize(s.materia)} · ${formatFechaCorta(s.created_at)}</div>
+        ${renderAdminPerson(adminPersonOptions('alumno', s, { compact: true }))}
+        ${renderAdminPerson(adminPersonOptions('familia', s, { compact: true }))}
       </div>
       <div>${badgeEstado(s.estado)}</div>
     </div>`).join('');
 }
 
 async function cargarProximasClasesDash() {
-  const { data: dataRaw } = await db.from('v_clases_completas')
-    .select('*').gte('fecha', fechaHoy())
-    .order('fecha').limit(20);
+  const [{ data: dataRaw }] = await Promise.all([
+    db.from('v_clases_completas').select('*').gte('fecha', fechaHoy()).order('fecha').limit(20),
+    ensureAdminPersonDirectory(),
+  ]);
   const data = (dataRaw || [])
     .filter((clase) => SCHEDULED_CLASS_STATUSES.includes(statusClase(clase)) || normalizeClassStatus(statusClase(clase)) === 'confirmada')
     .slice(0, 5);
+  registerAdminPersonData({ classes: data });
 
   const cont = document.getElementById('lista-proximas-clases');
   if (!data?.length) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><div class="empty-title">Sin clases próximas</div></div>'; return; }
@@ -2543,16 +2645,18 @@ async function cargarProximasClasesDash() {
         <div class="clase-time-min">${formatFechaCorta(c.fecha)}</div>
       </div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(c.alumno_nombre)}</div>
-        <div class="clase-materia">${sanitize(c.materia)} · ${sanitize(c.profesor_nombre)}</div>
+        ${renderAdminPerson(adminPersonOptions('alumno', c, { compact: true }))}
+        <div class="clase-materia">${sanitize(c.materia)}</div>
+        ${renderAdminPerson(adminPersonOptions('profesor', c, { compact: true }))}
       </div>
     </div>`).join('');
 }
 
 async function cargarPagosPendientesDash() {
-  const { data } = await db.from('pagos')
-    .select('*, familias(usuarios(nombre,apellidos)), profesores(usuarios(nombre,apellidos))')
-    .order('created_at').limit(40);
+  const [{ data }] = await Promise.all([
+    db.from('pagos').select('*, familias(usuarios(nombre,apellidos)), profesores(usuarios(nombre,apellidos))').order('created_at').limit(40),
+    ensureAdminPersonDirectory(),
+  ]);
 
   const cont = document.getElementById('lista-pagos-pendientes');
   const pendientes = (data || []).filter((p) => ['pendiente', 'solicitado', 'procesando', 'vencido'].includes(paymentStatusForBadge(p))).slice(0, 5);
@@ -2566,7 +2670,7 @@ async function cargarPagosPendientesDash() {
       const estadoAprobado = esPagoProfesor(p) ? 'pagado' : 'validado';
       const accionAprobado = esPagoProfesor(p) ? 'Pagado' : 'Validar';
       return `<tr>
-      <td>${sanitize(nombreOrigenPago(p))}</td>
+      <td>${renderAdminPerson(adminPersonOptions(esPagoProfesor(p) ? 'profesor' : 'familia', p, { name: nombreOrigenPago(p), compact: true }))}</td>
       <td><strong>${formatEuros(p.monto)}</strong></td>
       <td>${sanitize(p.metodo)}</td>
       <td style="font-family:monospace;font-size:.8rem">${sanitize(referencia)}</td>
@@ -3380,11 +3484,13 @@ async function cargarClases() {
   const [{ data, count }, paymentContext] = await Promise.all([
     q,
     loadAdminPaymentContext(),
+    ensureAdminPersonDirectory(),
   ]);
   const clasesBase = estado === 'confirmada'
     ? (data || []).filter((clase) => classStatusForBadge(clase) === 'confirmada')
     : (data || []);
   const clases = applyClassPaymentContext(clasesBase, paymentContext.payments);
+  registerAdminPersonData({ classes: clases });
   PAG_CLASES.setTotal(count||0);
   document.getElementById('clases-count').textContent = `${estado === 'confirmada' ? clases.length : count || 0} clases`;
 
@@ -3399,8 +3505,8 @@ async function cargarClases() {
     return `<tr>
     <td>${formatFechaCorta(c.fecha)}</td>
     <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
-    <td><strong>${sanitize(c.alumno_nombre)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(c.nivel_educativo||'')} ${sanitize(c.curso||'')}</span></td>
-    <td>${sanitize(c.profesor_nombre)}</td>
+    <td>${renderAdminPerson(adminPersonOptions('alumno', c, { compact: true }))}<span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(c.nivel_educativo||'')} ${sanitize(c.curso||'')}</span></td>
+    <td>${renderAdminPerson(adminPersonOptions('profesor', c, { compact: true }))}</td>
     <td>${sanitize(c.materia)}</td>
     <td>${c.duracion_minutos} min</td>
     <td>
@@ -3451,12 +3557,30 @@ async function cargarSelectoresClase() {
     db.from('profesores').select('id, usuarios(nombre,apellidos)').eq('estado_verificacion','verificado'),
     db.from('alumnos').select('id, nombre, apellidos, familyUid, familia_id').eq('activo', true),
   ]);
+  registerAdminPersonData({ teachers: profs || [], students: alums || [] });
 
   document.getElementById('clase-profesor').innerHTML = '<option value="">Seleccionar…</option>' +
     (profs||[]).map(p => `<option value="${p.id}">${sanitize(p.usuarios?.nombre)} ${sanitize(p.usuarios?.apellidos)}</option>`).join('');
   document.getElementById('clase-alumno').innerHTML = '<option value="">Seleccionar…</option>' +
     (alums||[]).map(a => `<option value="${a.id}" data-family-uid="${sanitize(a.familyUid || a.familia_id || '')}">${sanitize(a.nombre)} ${sanitize(a.apellidos)}</option>`).join('');
+  renderClasePersonasContexto();
 }
+
+function renderClasePersonasContexto() {
+  const target = document.getElementById('clase-personas-contexto');
+  if (!target) return;
+  const teacherId = document.getElementById('clase-profesor')?.value || '';
+  const studentId = document.getElementById('clase-alumno')?.value || '';
+  const familyId = document.getElementById('clase-alumno')?.selectedOptions?.[0]?.dataset.familyUid || '';
+  target.innerHTML = [
+    teacherId ? renderAdminPerson({ role: 'profesor', id: teacherId, studentId, compact: true }) : '',
+    studentId ? renderAdminPerson({ role: 'alumno', id: studentId, familyId, compact: true }) : '',
+  ].filter(Boolean).join('');
+}
+
+['clase-profesor', 'clase-alumno'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('change', renderClasePersonasContexto);
+});
 
 let claseEditandoActual = null;
 window.editarClase = async (id) => {
@@ -3476,6 +3600,7 @@ window.editarClase = async (id) => {
   await cargarSelectoresClase();
   document.getElementById('clase-profesor').value = data.profesor_id;
   document.getElementById('clase-alumno').value = data.alumno_id;
+  renderClasePersonasContexto();
   updateClaseMoneyPreview();
   openModal('modal-clase');
 };
@@ -3966,6 +4091,7 @@ function calcularFinanzas(clases, pagos, mes, extra = {}) {
     proyeccionCierre: metrics.forecast.monthly,
     margenProyectado: metrics.profit.forecastGross,
     profesores: metrics.breakdowns.byTeacher.map((item) => ({
+      id: item.key || item.id || '',
       nombre: item.label,
       clases: item.classes,
       facturado: item.revenue,
@@ -4008,7 +4134,7 @@ function renderFinanceMiniBar(label, value, max, extra = '', formatter = formatE
   </div>`;
 }
 
-function renderFinanceBreakdown(title, rows, valueField = 'revenue') {
+function renderFinanceBreakdown(title, rows, valueField = 'revenue', personRole = '') {
   const metric = Object.values({
     revenue: financeMetricConfig('revenue'),
     profit: financeMetricConfig('profit'),
@@ -4020,7 +4146,9 @@ function renderFinanceBreakdown(title, rows, valueField = 'revenue') {
   const max = Math.max(...top.map((item) => Number(item[valueField] || 0)), 0);
   return `<div class="finance-breakdown-block">
     <h4>${sanitize(title)}</h4>
-    ${top.length ? top.map((item) => renderFinanceMiniBar(item.label || item.key, item[valueField], max, `${item.classes || item.payments || 0} mov.`, metric.format)).join('') : '<p class="muted">Sin datos.</p>'}
+    ${top.length ? top.map((item) => personRole
+      ? `<div class="finance-person-breakdown">${renderAdminPerson({ role: personRole, id: item.key || item.id, name: item.label, compact: true })}${renderFinanceMiniBar('', item[valueField], max, `${item.classes || item.payments || 0} mov.`, metric.format)}</div>`
+      : renderFinanceMiniBar(item.label || item.key, item[valueField], max, `${item.classes || item.payments || 0} mov.`, metric.format)).join('') : '<p class="muted">Sin datos.</p>'}
   </div>`;
 }
 
@@ -4070,7 +4198,7 @@ function renderAdminTeacherPayoutPlanner(events = []) {
       return `
         <div class="admin-teacher-payout-class ${clase.payoutBucket === 'carryover' ? 'is-overdue' : ''}">
           <span>${sanitize(formatFechaCorta(adminClassDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
-          <strong>${clase.payoutBucket === 'carryover' ? '<em>Pendiente anterior</em> ' : ''}${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
+          <div>${clase.payoutBucket === 'carryover' ? '<em>Pendiente anterior</em>' : ''}${renderAdminPerson(adminPersonOptions('alumno', clase, { name: studentName, compact: true }))}<strong>${sanitize(clase.materia || clase.subject || 'Clase')}</strong></div>
           <em>${sanitize(formatEuros(classTeacherAmount(clase)))}</em>
         </div>
       `;
@@ -4087,7 +4215,7 @@ function renderAdminTeacherPayoutPlanner(events = []) {
         <div class="admin-teacher-payout-main">
           <div class="admin-teacher-payout-head">
             <div>
-              <strong>${sanitize(event.teacherName || 'Profesor pendiente de nombre')}</strong>
+              ${renderAdminPerson(adminPersonOptions('profesor', event, { id: event.teacherUid || event.teacherId || event.profesor_id, name: event.teacherName, compact: true }))}
               <small>${sanitize(event.payoutFrequencyLabel || 'Fecha acordada de pago')} · Periodo actual ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</small>
             </div>
             <strong class="admin-teacher-payout-amount">${sanitize(formatEuros(event.payoutAmount))}</strong>
@@ -4195,15 +4323,15 @@ function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
   `;
   document.getElementById('finanzas-segmentos').innerHTML = `
     <div class="finance-breakdown-grid">
-      ${renderFinanceBreakdown(`${grouping.title}: ${metric.label}`, grouping.rows, metric.field)}
+      ${renderFinanceBreakdown(`${grouping.title}: ${metric.label}`, grouping.rows, metric.field, filters.group === 'teacher' ? 'profesor' : filters.group === 'family' ? 'familia' : '')}
       ${renderFinanceBreakdown('Materias por facturacion', fin.metrics.breakdowns.bySubject)}
       ${renderFinanceBreakdown('Modalidades por facturacion', fin.metrics.breakdowns.byModality)}
     </div>
   `;
   document.getElementById('finanzas-rankings').innerHTML = `
     <div class="finance-breakdown-grid">
-      ${renderFinanceBreakdown('Profesores rentables', fin.metrics.breakdowns.topProfitableTeachers, 'profit')}
-      ${renderFinanceBreakdown('Familias activas', fin.metrics.breakdowns.activeFamilies, 'revenue')}
+      ${renderFinanceBreakdown('Profesores rentables', fin.metrics.breakdowns.topProfitableTeachers, 'profit', 'profesor')}
+      ${renderFinanceBreakdown('Familias activas', fin.metrics.breakdowns.activeFamilies, 'revenue', 'familia')}
     </div>
   `;
 
@@ -4211,7 +4339,7 @@ function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
   tbodyRiesgos.innerHTML = fin.riesgos.slice(0, 15).length
     ? fin.riesgos.slice(0, 15).map(({ tipo, clase }) => `<tr>
         <td data-label="Fecha">${formatFechaCorta(clase.fecha || clase.date)}</td>
-        <td data-label="Clase"><strong>${sanitize(tipo)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(clase.studentName ? `${clase.studentName} / ${clase.subject} / ${clase.teacherName}` : nombreClaseFinanzas(clase))}</span></td>
+        <td data-label="Clase"><strong>${sanitize(tipo)}</strong>${renderAdminPerson(adminPersonOptions('alumno', clase, { compact: true }))}${renderAdminPerson(adminPersonOptions('profesor', clase, { compact: true }))}${renderAdminPerson(adminPersonOptions('familia', clase, { compact: true }))}</td>
         <td data-label="Total">${formatEuros(clase.familyAmount ?? classTotal(clase))}</td>
         <td data-label="Profesor">${formatEuros(clase.teacherAmount ?? classTeacherAmount(clase))}</td>
         <td data-label="Margen">${formatEuros(clase.platformFee ?? classPlatformFee(clase))} (${roundMoney(clase.marginPct ?? classMarginPct(clase))}%)</td>
@@ -4221,7 +4349,7 @@ function renderizarFinanzas(clases, pagos, mes, vista, extra = {}) {
   const tbodyProfesores = document.getElementById('tbody-finanzas-profesores');
   tbodyProfesores.innerHTML = fin.profesores.slice(0, 15).length
     ? fin.profesores.slice(0, 15).map((p) => `<tr>
-        <td data-label="Profesor">${sanitize(p.nombre)}</td>
+        <td data-label="Profesor">${renderAdminPerson({ role: 'profesor', id: p.id, name: p.nombre, compact: true })}</td>
         <td data-label="Clases">${p.clases}</td>
         <td data-label="Facturado">${formatEuros(p.facturado)}</td>
         <td data-label="A cobrar">${formatEuros(p.profesor)}</td>
@@ -4251,6 +4379,12 @@ async function cargarFinanzas() {
   ]);
   if (clasesRes.error) throw clasesRes.error;
   if (pagosRes.error) throw pagosRes.error;
+  registerAdminPersonData({
+    teachers: profesores || [],
+    families: familias || [],
+    students: alumnos || [],
+    classes: clasesRes.data || [],
+  });
   populateFinanceFilters(clasesRes.data || [], {
     teachers: profesores || [],
     families: familias || [],
@@ -4348,8 +4482,10 @@ async function cargarClasesCalendario(anio, mes) {
     classQuery,
     loadAdminPaymentContext(),
     db.from('profesores').select('*').range(0, adminReadLimit('profesores') - 1),
+    ensureAdminPersonDirectory(),
   ]);
   const clasesConContexto = applyClassPaymentContext((data || []).filter((clase) => isAfterClassReset(clase)), paymentContext.payments);
+  registerAdminPersonData({ classes: clasesConContexto, teachers: profesoresResult.data || [] });
   const clasesMes = clasesConContexto.filter((clase) => {
     const dateIso = adminClassDateIso(clase);
     return dateIso >= desde && dateIso <= hasta;
@@ -4478,8 +4614,9 @@ function mostrarClasesDia(fecha, clases) {
     <div class="clase-item">
       <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div></div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(studentName)}</div>
+        ${renderAdminPerson(adminPersonOptions('alumno', c, { name: studentName, compact: true }))}
         <div class="clase-materia">${sanitize(c.materia||'')}</div>
+        ${renderAdminPerson(adminPersonOptions('profesor', c, { compact: true }))}
       </div>
       <div>${badgeEstado(classStatusForBadge(c))}</div>
     </div>`;
@@ -4585,8 +4722,9 @@ function renderAdminFamilyPaymentCalendarCard(event = {}) {
         <div class="clase-time-fin">${sanitize(formatFechaCorta(isDebt ? (event.dueDate || event.fecha) : (event.fecha || event.date)))}</div>
       </div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(group.familyName || 'Familia pendiente de nombre')}</div>
-        <div class="clase-materia">${sanitize(group.studentName || 'Alumno pendiente de nombre')} · ${sanitize(group.teacherName || 'Profesor pendiente de nombre')}</div>
+        ${renderAdminPerson(adminPersonOptions('familia', { ...group, ...event }, { name: group.familyName, compact: true }))}
+        ${renderAdminPerson(adminPersonOptions('alumno', { ...group, ...event }, { name: group.studentName, compact: true }))}
+        ${group.teacherUid || group.profesor_id || group.teacherName ? renderAdminPerson(adminPersonOptions('profesor', { ...group, ...event }, { name: group.teacherName, compact: true })) : ''}
         <div class="calendar-payment-period">${sanitize(periodText)}</div>
         ${paymentMeta}
         ${isDebt ? `<div class="calendar-economic-callout is-debt">${sanitize(group.familyName || 'Esta familia')} debe exactamente ${sanitize(formatEuros(group.amount))} por ${sanitize(String(group.classCount || classes.length))} ${Number(group.classCount || classes.length) === 1 ? 'clase' : 'clases'}.</div>` : ''}
@@ -4620,7 +4758,7 @@ function renderAdminTeacherPayoutCalendarCard(event = {}) {
     return `
       <div class="calendar-payout-row ${clase.payoutBucket === 'carryover' ? 'is-overdue' : ''}">
         <span>${sanitize(formatFechaCorta(adminClassDateIso(clase)))} ${sanitize(formatHora(clase.hora_inicio || clase.startTime || ''))}</span>
-        <strong>${clase.payoutBucket === 'carryover' ? '<em>Pendiente anterior</em> ' : ''}${sanitize(studentName)} · ${sanitize(clase.materia || clase.subject || 'Clase')}</strong>
+        <div>${clase.payoutBucket === 'carryover' ? '<em>Pendiente anterior</em>' : ''}${renderAdminPerson(adminPersonOptions('alumno', clase, { name: studentName, compact: true }))}<strong>${sanitize(clase.materia || clase.subject || 'Clase')}</strong></div>
         <em>${sanitize(formatEuros(classTeacherAmount(clase)))}</em>
       </div>
     `;
@@ -4635,7 +4773,7 @@ function renderAdminTeacherPayoutCalendarCard(event = {}) {
         <div class="clase-time-fin">${sanitize(formatFechaCorta(event.payoutDate))}</div>
       </div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(event.teacherName || 'Profesor pendiente de nombre')}</div>
+        ${renderAdminPerson(adminPersonOptions('profesor', event, { id: event.teacherUid || event.teacherId || event.profesor_id, name: event.teacherName, compact: true }))}
         <div class="clase-materia">${sanitize(event.payoutFrequencyLabel || 'Fecha acordada de pago')} · Periodo actual ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</div>
         ${total > 0 ? `<div class="calendar-economic-callout is-payout">El ${sanitize(formatFechaCorta(event.payoutDate))} debes pagar exactamente ${sanitize(formatEuros(total))} a ${sanitize(event.teacherName || 'este profesor')}.</div>` : ''}
         <div class="calendar-payout-summary">
@@ -4714,8 +4852,9 @@ function mostrarClasesDiaEconomico(fecha, clases) {
     <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}">
       <div class="clase-time"><div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div><div class="clase-time-fin">${formatHora(c.hora_fin||'')}</div></div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(calendarStudentName)}</div>
-        <div class="clase-materia">${sanitize(c.materia||'Clase')} · ${sanitize(calendarTeacherName)}</div>
+        ${renderAdminPerson(adminPersonOptions('alumno', c, { name: calendarStudentName, compact: true }))}
+        <div class="clase-materia">${sanitize(c.materia||'Clase')}</div>
+        ${renderAdminPerson(adminPersonOptions('profesor', c, { name: calendarTeacherName, compact: true }))}
         <div class="admin-calendar-money-line">
           <span>Familia ${sanitize(formatEuros(economic.familyAmount))}</span>
           <span>Profesor ${sanitize(formatEuros(economic.teacherAmount))}</span>
@@ -5916,6 +6055,7 @@ async function cargarProfesoresFirestore() {
       };
     })
     .sort((a, b) => b.createdSort - a.createdSort);
+  registerAdminPersonData({ teachers: profesoresFirestoreCache });
   return profesoresFirestoreCache;
 }
 
@@ -6216,6 +6356,7 @@ async function cargarProfesores() {
           id: p.id,
           name,
           photoUrl: adminPhotoUrl(p),
+          subtitle: adminPersonDirectory.resolve({ role: 'profesor', id: p.id, source: p }).relationshipLabel,
           checkbox: `<input type="checkbox" class="crm-prof-check" data-id="${sanitize(p.id)}" ${selectedProfesores.has(p.id) ? 'checked' : ''} aria-label="Seleccionar profesor">`,
           actions: `
             <button class="btn btn-primary btn-sm" data-action="ver-profesor" data-id="${sanitize(p.id)}">Ver ficha</button>
@@ -6241,7 +6382,8 @@ async function cargarProfesores() {
   }
   q = q.order('created_at', {ascending:false}).range(PAG_PROF.offset(), PAG_PROF.offset()+19);
 
-  const { data, count } = await q;
+  const [{ data, count }] = await Promise.all([q, ensureAdminPersonDirectory()]);
+  registerAdminPersonData({ requests: data || [] });
   PAG_PROF.setTotal(count||0);
   document.getElementById('prof-count').textContent = `${count||0} profesores`;
 
@@ -6385,7 +6527,15 @@ document.getElementById('tbody-profesores')?.addEventListener('click', (e) => {
 });
 
 window.verProfesor = async (id) => {
-  const profesor = profesoresCache.get(id);
+  await ensureAdminPersonDirectory();
+  const person = adminPersonDirectory.get('profesor', id);
+  const profesor = profesoresCache.get(id)
+    || profesoresFirestoreCache?.find((item) => [item.id, item.uid, item.userUid, item.usuario_id].includes(id))
+    || person?.raw;
+  if (!profesor) {
+    showToast('Ficha no disponible', 'No se ha podido cargar todavía el perfil completo del profesor.', 'warning');
+    return;
+  }
   crmActivo = { type: 'profesor', id, entity: profesor };
   const context = await cargarTrustContextFirestore();
   document.getElementById('profesor-detalle-body').innerHTML = renderCrmFicha(profesor, 'profesor', context);
@@ -6521,6 +6671,7 @@ async function cargarFamiliasFirestore() {
       };
     })
     .sort((a, b) => b.createdSort - a.createdSort);
+  registerAdminPersonData({ families: familiasFirestoreCache });
   return familiasFirestoreCache;
 }
 
@@ -6566,6 +6717,7 @@ async function cargarFamilias() {
           id: f.id,
           name,
           photoUrl: adminPhotoUrl(f),
+          subtitle: adminPersonDirectory.resolve({ role: 'familia', id: f.id, source: f }).relationshipLabel,
           checkbox: `<input type="checkbox" class="crm-fam-check" data-id="${sanitize(f.id)}" ${selectedFamilias.has(f.id) ? 'checked' : ''} aria-label="Seleccionar familia">`,
           actions: `<button class="btn btn-primary btn-sm" data-action="ver-familia" data-id="${sanitize(f.id)}">Ver ficha</button>`,
         })}
@@ -6601,6 +6753,24 @@ function renderFamiliaDetalle(f) {
   `;
 }
 
+async function abrirFamiliaDetalle(id) {
+  await ensureAdminPersonDirectory();
+  const person = adminPersonDirectory.get('familia', id);
+  const familia = familiasCache.get(id)
+    || familiasFirestoreCache?.find((item) => [item.id, item.uid, item.userUid, item.usuario_id].includes(id))
+    || person?.raw;
+  if (!familia) {
+    showToast('Ficha no disponible', 'No se ha podido cargar todavía el perfil completo de la familia.', 'warning');
+    return;
+  }
+  crmActivo = { type: 'familia', id: familia.id || id, entity: familia };
+  const context = await cargarTrustContextFirestore();
+  document.getElementById('familia-detalle-body').innerHTML = renderCrmFicha(familia, 'familia', context);
+  openModal('modal-familia-detalle');
+}
+
+window.verFamilia = abrirFamiliaDetalle;
+
 document.getElementById('tbody-familias')?.addEventListener('click', (e) => {
   const check = e.target.closest('.crm-fam-check');
   if (check) {
@@ -6613,12 +6783,7 @@ document.getElementById('tbody-familias')?.addEventListener('click', (e) => {
   const card = e.target.closest('[data-admin-directory-card="familia"]');
   const id = btn?.dataset.id || (!e.target.closest('button,input,a,label') ? card?.dataset.id : '');
   if (!id) return;
-  const familia = familiasCache.get(id);
-  crmActivo = { type: 'familia', id, entity: familia };
-  cargarTrustContextFirestore().then((context) => {
-    document.getElementById('familia-detalle-body').innerHTML = renderCrmFicha(familia, 'familia', context);
-    openModal('modal-familia-detalle');
-  });
+  void abrirFamiliaDetalle(id);
 });
 ['filtro-fam-busqueda','filtro-fam-nivel','filtro-fam-riesgo'].forEach(id => {
   document.getElementById(id)?.addEventListener('input', debounce(cargarFamilias, 350));
@@ -6686,7 +6851,7 @@ document.getElementById('btn-export-familias').addEventListener('click', async (
 const PAG_ALUM = new Paginacion({ porPagina:20, contenedor: document.getElementById('paginacion-alumnos'), onPageChange: cargarAlumnos });
 
 function nombreAlumno(a = {}) {
-  return [a.nombre, a.apellidos].filter(Boolean).join(' ').trim() || 'Alumno';
+  return resolveAdminPersonName({ role: 'alumno', id: a.id || a.studentId || a.alumno_id, source: a });
 }
 
 function renderAlumnoDetalle(a = {}) {
@@ -6716,9 +6881,10 @@ function renderAlumnoDetalle(a = {}) {
 }
 
 function abrirAlumnoDetalle(id) {
-  const alumno = alumnosCache.get(id);
+  const person = adminPersonDirectory.get('alumno', id);
+  const alumno = alumnosCache.get(id) || person?.raw;
   if (!alumno) return;
-  alumnoDetalleActivoId = id;
+  alumnoDetalleActivoId = alumno.id || id;
   document.getElementById('alumno-detalle-body').innerHTML = renderAlumnoDetalle(alumno);
   openModal('modal-alumno-detalle');
 }
@@ -6737,7 +6903,8 @@ async function cargarAlumnos() {
   let q = db.from('alumnos').select('*, familias(usuarios(nombre,apellidos))', {count:'exact'}).eq('activo',true);
   q = q.order('created_at',{ascending:false}).range(PAG_ALUM.offset(), PAG_ALUM.offset()+19);
 
-  const { data, count } = await q;
+  const [{ data, count }] = await Promise.all([q, ensureAdminPersonDirectory()]);
+  registerAdminPersonData({ students: data || [] });
   PAG_ALUM.setTotal(count||0);
   document.getElementById('alum-count').textContent = `${count||0} alumnos`;
 
@@ -6756,6 +6923,7 @@ async function cargarAlumnos() {
           id: a.id,
           name,
           photoUrl: adminPhotoUrl(a),
+          subtitle: adminPersonDirectory.resolve({ role: 'alumno', id: a.id, source: a }).relationshipLabel,
           actions: `
             <button class="btn btn-primary btn-sm" data-action="ver-alumno" data-id="${sanitize(a.id)}">Ver ficha</button>
           `,
@@ -6846,6 +7014,7 @@ const PAG_SOL = new Paginacion({ porPagina:20, contenedor: document.getElementBy
 async function cargarSolicitudes() {
   const estado = document.getElementById('filtro-sol-estado').value;
   const solicitudesFirestore = await cargarSolicitudesFirestore();
+  registerAdminPersonData({ requests: solicitudesFirestore });
   const filtradasFirestore = solicitudesFirestore.filter((s) => !estado || String(s.estado || s.status || '').toLowerCase() === estado);
   PAG_SOL.setTotal(filtradasFirestore.length);
   document.getElementById('sol-count').textContent = `${filtradasFirestore.length} solicitudes`;
@@ -6859,13 +7028,13 @@ async function cargarSolicitudes() {
   const paginaSolicitudes = filtradasFirestore.slice(PAG_SOL.offset(), PAG_SOL.offset() + 20);
   tbodySolicitudes.innerHTML = paginaSolicitudes.map(s => `<tr>
     <td>${formatFechaCorta(s.created_at)}</td>
-    <td>${sanitize(s.familias?.usuarios?.nombre||'')} ${sanitize(s.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(s.alumnos?.nombre||'-')} ${sanitize(s.alumnos?.apellidos||'')}</td>
+    <td>${renderAdminPerson(adminPersonOptions('familia', s, { compact: true }))}</td>
+    <td>${renderAdminPerson(adminPersonOptions('alumno', s, { compact: true }))}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
     <td>${sanitize(s.nivel||'-')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'-')}</td>
     <td>${badgeEstado(s.estado)}</td>
-    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : '-'}</td>
+    <td>${s.profesor_asignado_id ? renderAdminPerson(adminPersonOptions('profesor', s, { compact: true })) : '-'}</td>
     <td>
       ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm"
                                       data-action="abrir-asignar"
@@ -6890,13 +7059,13 @@ async function cargarSolicitudes() {
 
   tbody.innerHTML = data.map(s => `<tr>
     <td>${formatFechaCorta(s.created_at)}</td>
-    <td>${sanitize(s.familias?.usuarios?.nombre||'')} ${sanitize(s.familias?.usuarios?.apellidos||'')}</td>
-    <td>${sanitize(s.alumnos?.nombre||'—')} ${sanitize(s.alumnos?.apellidos||'')}</td>
+    <td>${renderAdminPerson(adminPersonOptions('familia', s, { compact: true }))}</td>
+    <td>${renderAdminPerson(adminPersonOptions('alumno', s, { compact: true }))}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
     <td>${sanitize(s.nivel||'—')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'—')}</td>
     <td>${badgeEstado(s.estado)}</td>
-    <td>${s.profesor_asignado_id ? sanitize(s.profesores?.usuarios?.nombre||'')+ ' ' + sanitize(s.profesores?.usuarios?.apellidos||'') : '—'}</td>
+    <td>${s.profesor_asignado_id ? renderAdminPerson(adminPersonOptions('profesor', s, { compact: true })) : '—'}</td>
     <td>
       ${s.estado === 'nueva' ? `<button class="btn btn-primary btn-sm"
                                       data-action="abrir-asignar"
@@ -6927,10 +7096,11 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
 
     window.solicitudAsignacionActual = solicitud || null;
     if (solicitud) {
+      registerAdminPersonData({ requests: [solicitud] });
       document.getElementById('asignar-solicitud-info').innerHTML = `
         <strong>Materia:</strong> ${sanitize(solicitud.materia || materia)}<br>
-        <strong>Familia:</strong> ${sanitize(solicitud.familias?.usuarios?.nombre || familia || '-')}<br>
-        <strong>Alumno:</strong> ${sanitize([solicitud.alumnos?.nombre, solicitud.alumnos?.apellidos].filter(Boolean).join(' ') || solicitud.alumno_nombre || '-')}<br>
+        ${renderAdminPerson(adminPersonOptions('familia', solicitud, { name: familia, compact: true }))}
+        ${renderAdminPerson(adminPersonOptions('alumno', solicitud, { compact: true }))}
         <strong>Nivel:</strong> ${sanitize(solicitud.nivel || '-')}<br>
         <strong>Horario:</strong> ${sanitize(solicitud.preferencia_horario || '-')}
       `;
@@ -7192,7 +7362,11 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
     return `
       <div data-ai-match="teacher" style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
-          <strong>${sanitize(adminPersonName('Profesor', teacherId, m.teacherName, m.nombreProfesor, m.teacherEmail))}</strong>
+          ${renderAdminPerson(adminPersonOptions('profesor', { ...(window.solicitudAsignacionActual || {}), ...m, teacherUid: teacherId }, {
+            id: teacherId,
+            name: adminPersonName('Profesor', teacherId, m.teacherName, m.nombreProfesor, m.teacherEmail),
+            compact: true,
+          }))}
           <span class="badge ${badgeClass}" title="${sanitize(sourceLabel)}">${score}%</span>
         </div>
         ${breakdown ? `<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${breakdown}</div>` : ''}
@@ -7632,6 +7806,7 @@ async function cargarPagos() {
   const [{ data, count, error }, reviewContext] = await Promise.all([
     q,
     loadAdminPaymentReviewContext(),
+    ensureAdminPersonDirectory(),
   ]);
   const pagosEstado = estado === 'vencido' ? (data || []).filter((p) => isPaymentOverdue(p)) : (data || []);
   const pagos = busq
@@ -7647,6 +7822,7 @@ async function cargarPagos() {
       p.status,
     ].map((value) => String(value || '').toLowerCase()).some((value) => value.includes(busq)))
     : pagosEstado;
+  registerAdminPersonData({ classes: reviewContext.classes || [] });
   PAG_PAGO.setTotal(count||0);
   document.getElementById('pago-count').textContent = `${busq || estado === 'vencido' ? pagos.length : count || 0} pagos`;
 
@@ -7680,7 +7856,7 @@ async function cargarPagos() {
 
     return `<tr>
     <td>${formatFechaCorta(p.created_at)}</td>
-    <td>${sanitize(nombreOrigenPago(p))}</td>
+    <td>${renderAdminPerson(adminPersonOptions(esPagoProfesor(p) ? 'profesor' : 'familia', p, { name: nombreOrigenPago(p), compact: true }))}</td>
     <td>${doc?.nombre ? sanitize(doc.nombre) : sanitize(p.concepto || '—')}</td>
     <td><strong>${formatEuros(paymentAmount(p))}</strong></td>
     <td>${sanitize(p.metodo)}</td>
@@ -7967,6 +8143,7 @@ document.getElementById('tbody-leads')?.addEventListener('click', async (e) => {
 });
 
 async function cargarDocumentos() {
+  await ensureAdminPersonDirectory();
   const { data } = await db.from('documentos')
     .select('id, created_at, tipo, nombre, storage_path, estado, notas_admin, usuarios(nombre,apellidos)')
     .order('created_at', {ascending:false});
@@ -7977,7 +8154,13 @@ async function cargarDocumentos() {
   // Usar data-* attributes en lugar de handlers inline para evitar XSS
   tbody.innerHTML = data.map(d => `<tr>
     <td>${formatFechaCorta(d.created_at)}</td>
-    <td>${sanitize(d.usuarios?.nombre||'')} ${sanitize(d.usuarios?.apellidos||'')}</td>
+    <td>${renderAdminPerson({
+      role: inferAdminPersonRole(d.ownerUid || d.usuario_id || d.userUid, d.role || d.rol || 'usuario'),
+      id: d.ownerUid || d.usuario_id || d.userUid,
+      name: [d.usuarios?.nombre, d.usuarios?.apellidos].filter(Boolean).join(' '),
+      source: d,
+      compact: true,
+    })}</td>
     <td>${sanitize(d.tipo)}</td>
     <td>${sanitize(d.nombre)}</td>
     <td>${badgeEstado(d.estado)}</td>
@@ -8065,6 +8248,7 @@ async function actualizarDoc(id, estado) {
 async function cargarChats() {
   if (chatInicializado) return;
   chatInicializado = true;
+  await ensureAdminPersonDirectory();
   await initChatWidget({
     container: document.getElementById('chat-admin'),
     db,
@@ -8073,10 +8257,12 @@ async function cargarChats() {
     profileId: usuario.uid || usuario.firebase_uid || usuario.id,
     showToast,
     showNotifications: false,
+    renderPerson: renderAdminPerson,
   });
 }
 
 async function cargarIncidencias() {
+  await ensureAdminPersonDirectory();
   const estado    = document.getElementById('filtro-inc-estado').value;
   const prioridad = document.getElementById('filtro-inc-prioridad').value;
   let q = db.from('incidencias').select('*, usuarios!reportado_por(nombre,apellidos)');
@@ -8090,7 +8276,11 @@ async function cargarIncidencias() {
 
   tbody.innerHTML = data.map(i => `<tr>
     <td>${formatFechaCorta(i.created_at)}</td>
-    <td>${sanitize(i.usuarios?.nombre||'')} ${sanitize(i.usuarios?.apellidos||'')}</td>
+    <td>${[
+      i.reportado_por || i.userUid ? renderAdminPerson({ role: inferAdminPersonRole(i.reportado_por || i.userUid, i.reporterRole || 'usuario'), id: i.reportado_por || i.userUid, name: [i.usuarios?.nombre, i.usuarios?.apellidos].filter(Boolean).join(' '), source: i, compact: true }) : '',
+      i.familyUid ? renderAdminPerson({ role: 'familia', id: i.familyUid, source: i, compact: true }) : '',
+      i.teacherUid ? renderAdminPerson({ role: 'profesor', id: i.teacherUid, source: i, compact: true }) : '',
+    ].filter(Boolean).join('')}</td>
     <td>${sanitize(i.tipo||'—')}</td>
     <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${sanitize(i.descripcion)}">${sanitize(i.descripcion)}</td>
     <td>${badgeEstado(i.prioridad)}</td>

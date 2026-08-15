@@ -12,7 +12,7 @@ import {
   buildAdminOpsModel,
   searchOpsIndex,
   summarizeOpsForClipboard,
-} from './admin-ops-engine.js?v=20260710-actionable-incidents';
+} from './admin-ops-engine.js?v=20260815-admin-person-context';
 import { filterAfterClassReset } from './class-reset.js';
 
 export const ADMIN_OPS_WORKBENCH_VERSION = 'admin-ops-workbench-2026-07-01';
@@ -324,7 +324,15 @@ function renderOpsEmptyState(filters, model) {
     </div>`;
 }
 
-function renderOpsItem(item) {
+function renderOpsItem(item, state) {
+  const directRole = ['profesor', 'familia', 'alumno'].includes(item.entityType) ? item.entityType : '';
+  const people = [
+    ...(Array.isArray(item.metadata?.people) ? item.metadata.people : []),
+    ...(directRole ? [{ role: directRole, id: item.entityId, name: item.entityName }] : []),
+  ].filter((person) => person?.id || person?.name);
+  const peopleHtml = state.renderPerson && people.length
+    ? `<div class="ops-item-people">${people.slice(0, 3).map((person) => state.renderPerson({ ...person, source: item.metadata || {}, compact: true })).join('')}</div>`
+    : (item.entityName ? `<span>${escapeHtml(item.entityName)}</span>` : '');
   return `
     <article class="ops-item ops-item-${escapeHtml(toneBadge(item.tone))}" data-ops-item="${escapeHtml(item.id)}">
       <div class="ops-priority">
@@ -338,7 +346,7 @@ function renderOpsItem(item) {
         </div>
         <p>${escapeHtml(item.detail)}</p>
         <div class="ops-item-meta">
-          ${item.entityName ? `<span>${escapeHtml(item.entityName)}</span>` : ''}
+          ${peopleHtml}
           ${item.createdAt ? `<span>${formatShortDate(item.createdAt)}</span>` : ''}
           ${item.value ? `<span>${formatEuros(item.value)}</span>` : ''}
           ${item.automation ? `<span>${escapeHtml(item.automation)}</span>` : ''}
@@ -360,7 +368,7 @@ function renderItems(state) {
   const items = state.model.items.filter((item) => itemMatches(item, filters));
   if (count) count.textContent = `${formatNumber(items.length)} acciones`;
   list.innerHTML = items.length
-    ? items.slice(0, 80).map(renderOpsItem).join('')
+    ? items.slice(0, 80).map((item) => renderOpsItem(item, state)).join('')
     : renderOpsEmptyState(filters, state.model);
 }
 
@@ -532,6 +540,14 @@ async function refresh(state, { quiet = false } = {}) {
   if (!quiet) renderLoading(state.container);
   try {
     state.dataset = await loadOpsDataset(state.firebaseDb);
+    state.registerPeople?.({
+      teachers: state.dataset.profesores || [],
+      families: state.dataset.familias || [],
+      students: state.dataset.alumnos || [],
+      classes: state.dataset.clases || [],
+      requests: state.dataset.solicitudes || [],
+      assignments: state.dataset.asignaciones || [],
+    });
     state.model = buildAdminOpsModel(state.dataset, { hiddenIds: state.hidden });
     renderShell(state);
     state.globalIndex = state.model.searchIndex || [];
@@ -575,12 +591,13 @@ function renderGlobalSearch(state, input) {
   panel.hidden = false;
   panel.innerHTML = results.length ? `
     <div class="admin-global-search-head">Busqueda operativa</div>
-    ${results.map((result) => `
-      <button type="button" class="admin-global-result" data-ops-nav="${escapeHtml(result.section)}">
-        <strong>${escapeHtml(result.title)}</strong>
-        <span>${escapeHtml(result.type)} - ${escapeHtml(result.subtitle)}</span>
-      </button>
-    `).join('')}
+    ${results.map((result) => {
+      const isPerson = ['profesor', 'familia', 'alumno'].includes(result.entityType);
+      if (isPerson && state.renderPerson) {
+        return `<article class="admin-global-result">${state.renderPerson({ role: result.entityType, id: result.entityId, name: result.title, compact: true })}<span>${escapeHtml(result.subtitle)}</span></article>`;
+      }
+      return `<button type="button" class="admin-global-result" data-ops-nav="${escapeHtml(result.section)}"><strong>${escapeHtml(result.title)}</strong><span>${escapeHtml(result.type)} - ${escapeHtml(result.subtitle)}</span></button>`;
+    }).join('')}
   ` : '<div class="admin-global-search-empty">Sin resultados operativos</div>';
 }
 
@@ -621,6 +638,8 @@ export async function initAdminOpsWorkbench({
   showToast = () => {},
   recordAdminAudit = null,
   autoLoad = true,
+  registerPeople = null,
+  renderPerson = null,
 } = {}) {
   if (!container || !firebaseDb) return null;
   let state = instances.get(container);
@@ -632,6 +651,8 @@ export async function initAdminOpsWorkbench({
       navigate,
       showToast,
       recordAdminAudit,
+      registerPeople,
+      renderPerson,
       hidden: readHidden(actor),
       dataset: null,
       model: null,
@@ -691,6 +712,8 @@ export async function initAdminOpsWorkbench({
     state.navigate = navigate;
     state.showToast = showToast;
     state.recordAdminAudit = recordAdminAudit;
+    state.registerPeople = registerPeople;
+    state.renderPerson = renderPerson;
   }
 
   if (autoLoad && !state.model) await refresh(state);

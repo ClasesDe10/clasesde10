@@ -1969,7 +1969,7 @@ function renderChatList(container, chats, selectedId, role, preferences = {}, cu
   }).join('');
 }
 
-function renderThreadHeader(container, chat, role, preference = {}) {
+function renderThreadHeader(container, chat, role, preference = {}, renderPerson = null) {
   const header = container.querySelector('[data-chat-header]');
   if (!chat) return;
   const customName = clean(preference.displayNameOverride, 120);
@@ -1980,6 +1980,11 @@ function renderThreadHeader(container, chat, role, preference = {}) {
       <div class="chat-thread-heading">
         <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
         <div class="chat-thread-subtitle" data-chat-presence data-default-text="${escapeAttribute(chatSubtitle(chat, role, preference), 240)}">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
+        ${role === 'admin' && renderPerson ? `<div class="chat-admin-person-links">
+          ${renderPerson({ role: 'familia', id: chat.familyUid || chat.familia_id, name: chat.familyName || chat.familia_nombre, source: chat, compact: true })}
+          ${renderPerson({ role: 'alumno', id: chat.studentId || chat.alumno_id, name: chat.studentName || chat.alumno_nombre, source: chat, compact: true })}
+          ${renderPerson({ role: 'profesor', id: chat.teacherUid || chat.profesor_id, name: chat.teacherName || chat.profesor_nombre, source: chat, compact: true })}
+        </div>` : ''}
       </div>
     </div>
     <form class="chat-alias-form" data-chat-name-form hidden>
@@ -2400,6 +2405,7 @@ export async function initChatWidget({
   profileId,
   showToast = () => {},
   showNotifications = true,
+  renderPerson = null,
 }) {
   if (!container) return;
   renderShell(container, role, showNotifications);
@@ -2434,6 +2440,7 @@ export async function initChatWidget({
     messageReactions: [],
     replyTarget: null,
     editTarget: null,
+    renderPerson,
     draftsByChat: {},
     draftSaveTimer: null,
     chatSubscriptions: new Map(),
@@ -4064,7 +4071,7 @@ export async function initChatWidget({
     state.selectedChat = chat;
     container.querySelector('[data-chat-layout]')?.classList.add('chat-mobile-thread-open');
     renderChatListFromState();
-    renderThreadHeader(container, chat, role, state.chatPreferencesById[chat.id] || {});
+    renderThreadHeader(container, chat, role, state.chatPreferencesById[chat.id] || {}, state.renderPerson);
     syncThreadHeaderControls();
     container.querySelector('[data-chat-form]').style.display = '';
     const draftInput = container.querySelector('[data-chat-input]');
@@ -4747,7 +4754,7 @@ export async function initChatWidget({
       try {
         await persistSelectedChatPreference({ displayNameOverride });
         renderChatListFromState();
-        renderThreadHeader(container, state.selectedChat, role, state.chatPreferencesById[state.selectedChat.id] || {});
+        renderThreadHeader(container, state.selectedChat, role, state.chatPreferencesById[state.selectedChat.id] || {}, state.renderPerson);
         syncThreadHeaderControls();
         showToast(displayNameOverride ? 'Nombre guardado' : 'Nombre restablecido', displayNameOverride ? 'Solo lo veras tu en este chat.' : 'Vuelves a ver el nombre por defecto.', 'success');
       } catch (error) {

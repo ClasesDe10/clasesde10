@@ -223,7 +223,7 @@ function renderShell(container, role) {
     </section>`;
 }
 
-function renderNotifications(container, notifications, role) {
+function renderNotifications(container, notifications, role, renderPerson = null) {
   const list = container.querySelector('[data-notification-list]');
   const summary = container.querySelector('[data-notification-summary]');
   const grouped = groupNotifications(notifications);
@@ -250,12 +250,19 @@ function renderNotifications(container, notifications, role) {
       formatDateTime(notification.createdAt),
       notification.duplicateCount > 1 ? `${notification.duplicateCount} avisos reunidos` : '',
     ].filter(Boolean).join(' · ');
+    const payload = notification.payload || {};
+    const people = role === 'admin' && renderPerson ? [
+      payload.familyUid || payload.familia_id ? renderPerson({ role: 'familia', id: payload.familyUid || payload.familia_id, name: payload.familyName || payload.familia_nombre, source: payload, compact: true }) : '',
+      payload.studentId || payload.alumno_id ? renderPerson({ role: 'alumno', id: payload.studentId || payload.alumno_id, name: payload.studentName || payload.alumno_nombre, source: payload, compact: true }) : '',
+      payload.teacherUid || payload.teacherId || payload.profesor_id ? renderPerson({ role: 'profesor', id: payload.teacherUid || payload.teacherId || payload.profesor_id, name: payload.teacherName || payload.profesor_nombre, source: payload, compact: true }) : '',
+    ].filter(Boolean).join('') : '';
     return `
       <article class="notification-center-item priority-${escapeHtml(priority)} ${unread ? 'unread' : ''}" data-notification-id="${escapeHtml(notification.id)}">
         <div class="notification-center-copy">
           <div class="notification-center-priority">${escapeHtml(notificationPriorityLabel(notification))}</div>
           <h3>${escapeHtml(notificationTitle(notification, role))}</h3>
           ${notificationBody(notification, role) ? `<p>${escapeHtml(notificationBody(notification, role))}</p>` : ''}
+          ${people ? `<div class="notification-center-people">${people}</div>` : ''}
           <div class="notification-center-meta">${escapeHtml(meta)}</div>
         </div>
         <div class="notification-center-item-actions">
@@ -298,6 +305,7 @@ export function initNotificationCenter({
   role = '',
   showToast = () => {},
   navigateSection = defaultNavigate,
+  renderPerson = null,
 } = {}) {
   if (!container) return null;
   const currentUid = clean(usuario.uid || usuario.firebase_uid || usuario.id, 180);
@@ -326,7 +334,7 @@ export function initNotificationCenter({
   function refresh(raw) {
     state.raw = raw;
     state.visible = visibleNotificationsForRole(raw, role);
-    renderNotifications(container, state.visible, role);
+    renderNotifications(container, state.visible, role, renderPerson);
     updateBadge();
   }
 

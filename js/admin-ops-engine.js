@@ -209,7 +209,15 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
         minutesSaved: activeAction ? 18 : matches.length ? 12 : 18,
         createdAt: first(request.createdAt, request.created_at),
         source: 'solicitudes',
-        metadata: { matches: matches.length, ageHours: Math.round(age), activeMatchingStatus: activePlan.status || '' },
+        metadata: {
+          matches: matches.length,
+          ageHours: Math.round(age),
+          activeMatchingStatus: activePlan.status || '',
+          people: [
+            { role: 'familia', id: first(request.familyUid, request.familia_id), name: first(request.familyName, request.familia_nombre), studentId: first(request.studentId, request.alumno_id) },
+            { role: 'alumno', id: first(request.studentId, request.alumno_id), name: first(request.studentName, request.alumno_nombre), familyId: first(request.familyUid, request.familia_id) },
+          ],
+        },
       }));
     }
   }
@@ -236,6 +244,11 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
       dueAt: due,
       createdAt: first(payment.createdAt, payment.created_at),
       source: 'pagos',
+      metadata: {
+        people: [first(payment.teacherUid, payment.profesor_id)
+          ? { role: 'profesor', id: first(payment.teacherUid, payment.profesor_id), name: first(payment.teacherName, payment.profesor_nombre), studentId: first(payment.studentId, payment.alumno_id) }
+          : { role: 'familia', id: first(payment.familyUid, payment.familia_id, payment.userUid), name: first(payment.familyName, payment.familia_nombre), studentId: first(payment.studentId, payment.alumno_id) }],
+      },
     }));
   }
 
@@ -258,6 +271,13 @@ export function buildAdminOpsModel(dataset = {}, options = {}) {
       value: amountOf(klass),
       createdAt: first(klass.startAtIso, klass.fecha, klass.createdAt),
       source: 'clases',
+      metadata: {
+        people: [
+          { role: 'alumno', id: first(klass.studentId, klass.alumno_id), name: first(klass.studentName, klass.alumno_nombre), familyId: first(klass.familyUid, klass.familia_id) },
+          { role: 'profesor', id: first(klass.teacherUid, klass.profesor_id), name: first(klass.teacherName, klass.profesor_nombre), studentId: first(klass.studentId, klass.alumno_id) },
+          { role: 'familia', id: first(klass.familyUid, klass.familia_id), name: first(klass.familyName, klass.familia_nombre), studentId: first(klass.studentId, klass.alumno_id) },
+        ],
+      },
     }));
   }
 
