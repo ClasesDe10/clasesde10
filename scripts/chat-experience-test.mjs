@@ -13,8 +13,8 @@ const [chat, css, rules, familyDashboard, professorDashboard] = await Promise.al
 
 assert.match(familyDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'familia'[\s\S]*?showNotifications:\s*false/, 'Family dashboard must use the complete shared chat widget.');
 assert.match(professorDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'profesor'[\s\S]*?showNotifications:\s*false/, 'Professor dashboard must use the complete shared chat widget.');
-assert.match(familyDashboard, /chat-widget\.js\?v=20260815-chat-r6/, 'Family chat must load the same shared widget version as professor chat.');
-assert.match(professorDashboard, /chat-widget\.js\?v=20260815-chat-r6/, 'Professor chat must load the same shared widget version as family chat.');
+assert.match(familyDashboard, /chat-widget\.js\?v=20260815-chat-r7/, 'Family chat must load the same shared widget version as professor chat.');
+assert.match(professorDashboard, /chat-widget\.js\?v=20260815-chat-r7/, 'Professor chat must load the same shared widget version as family chat.');
 
 assert.match(chat, /\[`unreadBy\.\$\{uid\}`\] = increment\(1\)/, 'Each recipient must receive an unread counter increment.');
 assert.match(chat, /deliveredAtBy/, 'The chat must persist delivered receipts.');
