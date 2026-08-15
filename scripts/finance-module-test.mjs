@@ -27,7 +27,18 @@ assert(adminDashboard.includes('id="finanzas-evolucion"'), 'Finance ERP dashboar
 assert(adminDashboard.includes('id="finanzas-cashflow"'), 'Finance ERP dashboard must render cashflow content.');
 assert(adminDashboard.includes('id="finanzas-segmentos"'), 'Finance ERP dashboard must render revenue segmentation.');
 assert(adminDashboard.includes('id="finanzas-rankings"'), 'Finance ERP dashboard must render profitability rankings.');
+assert(adminDashboard.includes('id="finanzas-cobros-profesores"'), 'Finance dashboard must show teacher payout dates and amounts for admin.');
+assert(adminDashboard.includes('renderAdminTeacherPayoutPlanner'), 'Finance dashboard must render teacher payout breakdowns by payout day.');
 assert(adminDashboard.includes('id="finanzas-filtro"'), 'Finance ERP dashboard must include advanced search/filtering.');
+assert(adminDashboard.includes('id="finanzas-profesor"'), 'Finance ERP dashboard must filter by teacher.');
+assert(adminDashboard.includes('id="finanzas-familia"'), 'Finance ERP dashboard must filter by family.');
+assert(adminDashboard.includes('id="finanzas-materia"'), 'Finance ERP dashboard must filter by subject.');
+assert(adminDashboard.includes('id="finanzas-estado"'), 'Finance ERP dashboard must filter by financial state.');
+assert(adminDashboard.includes('id="finanzas-metrica"'), 'Finance ERP dashboard must switch chart metrics.');
+assert(adminDashboard.includes('id="finanzas-agrupacion"'), 'Finance ERP dashboard must switch chart grouping.');
+assert(adminDashboard.includes('function populateFinanceFilters'), 'Finance filters must be populated from real teachers, families and subjects.');
+assert(adminDashboard.includes('function financeMetricConfig'), 'Finance chart metrics must be centrally configured.');
+assert(adminDashboard.includes('function financeGroupingRows'), 'Finance chart grouping must select the requested breakdown.');
 assert(adminDashboard.includes('id="tbody-finanzas-riesgos"'), 'Finance dashboard must render risk table.');
 assert(adminDashboard.includes('id="tbody-finanzas-profesores"'), 'Finance dashboard must render teacher ranking.');
 
@@ -58,9 +69,9 @@ assert(adminDashboard.includes('proyeccionCierre'), 'Finance metrics must projec
 assert(adminDashboard.includes('clasesMargenNegativo'), 'Finance metrics must detect negative margins.');
 assert(adminDashboard.includes('clasesMargenBajo'), 'Finance metrics must detect low-margin classes.');
 assert(adminDashboard.includes('metrics.forecast.annual'), 'Finance metrics must calculate annual forecast.');
-assert(adminDashboard.includes('metrics.breakdowns.byCity'), 'Finance metrics must group revenue by city.');
-assert(adminDashboard.includes('metrics.breakdowns.bySubject'), 'Finance metrics must group revenue by subject.');
-assert(adminDashboard.includes('metrics.breakdowns.byModality'), 'Finance metrics must group revenue by modality.');
+assert(adminDashboard.includes('breakdowns.byCity'), 'Finance metrics must group revenue by city.');
+assert(adminDashboard.includes('breakdowns.bySubject'), 'Finance metrics must group revenue by subject.');
+assert(adminDashboard.includes('breakdowns.byModality'), 'Finance metrics must group revenue by modality.');
 
 assert(financeEngine.includes('resolveTeacherRateForClass'), 'Finance ERP engine must resolve teacher-specific rates.');
 assert(financeEngine.includes('buildClassFinancialPatch'), 'Finance ERP engine must build class financial patches.');

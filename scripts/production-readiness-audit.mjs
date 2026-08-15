@@ -307,39 +307,47 @@ function checkFutureScaleGuards() {
   }
 }
 
-function checkFunctions() {
+function checkFreeAutomation() {
   const config = readJson('firebase.json');
-  if (config.functions?.runtime !== 'nodejs20') fail('Cloud Functions runtime must stay on nodejs20.');
+  if (config.functions) fail('firebase.json must not define Cloud Functions; automation runs through the free GitHub Actions worker.');
 
   const functionsPackage = readJson('functions/package.json');
-  if (functionsPackage.engines?.node !== '20') fail('functions/package.json must pin Node 20.');
-
-  const functionsCode = readText('functions/index.js');
-  const httpExports = [...functionsCode.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*onRequest/g)].map((match) => match[1]);
-  const allowedHttp = new Set(['stripeWebhook']);
-  for (const name of httpExports) {
-    if (!allowedHttp.has(name)) fail(`Unexpected public HTTP Cloud Function: ${name}.`);
+  if (functionsPackage.engines?.node !== '20') fail('functions/package.json must pin Node 20 for shared automation engines.');
+  if (functionsPackage.type !== 'commonjs') fail('Shared automation engines must remain CommonJS-compatible.');
+  if (functionsPackage.main !== 'platform-automation-engine.js') fail('functions/package.json must point at the shared automation engine.');
+  for (const forbidden of ['firebase-functions', 'stripe']) {
+    if (functionsPackage.dependencies?.[forbidden]) fail(`functions/package.json must not depend on ${forbidden}.`);
   }
-  if (!functionsCode.includes("secrets: [STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET]")) {
-    fail('Stripe webhook must require Firebase secret bindings.');
-  }
-  if (!functionsCode.includes('stripe.webhooks.constructEvent')) {
-    fail('Stripe webhook must verify Stripe signatures.');
-  }
-  for (const exportName of ['processSystemJobs', 'rollupScaleMetrics']) {
-    if (!functionsCode.includes(`exports.${exportName}`)) {
-      fail(`Missing scalability Cloud Function export: ${exportName}.`);
-    }
-  }
-  for (const needle of ['deadLetters', 'metricSnapshots', 'opsAlerts', 'systemJobs', 'platformHealthChecks', 'automationRules', 'automationRuleRuns', 'loadPlatformConfig', 'configuracion']) {
-    if (!functionsCode.includes(needle)) fail(`Scalability function path missing: ${needle}.`);
-  }
+  if (fs.existsSync(path.join(root, 'functions/index.js'))) fail('functions/index.js must not exist in the zero-Blaze architecture.');
+  if (fs.existsSync(path.join(root, 'functions/package-lock.json'))) fail('functions/package-lock.json must not reintroduce old Cloud Functions dependencies.');
 
   const workerCode = readText('scripts/firebase-automation-worker.mjs');
   for (const needle of ['processQueuedSystemJobs', 'writeScaleMetricSnapshot', 'systemJobsProcessed', 'metricSnapshotsCreated', 'automationRules', 'automationRuleRuns', 'loadWorkerPlatformConfig', 'createOperationalIncidentOnce']) {
     if (!workerCode.includes(needle)) fail(`GitHub automation worker scalability path missing: ${needle}.`);
   }
   if (!workerCode.includes('platformHealthChecks')) fail('GitHub automation worker must write platform health checks.');
+  if (!workerCode.includes('processEntityAutomationBackfill')) fail('GitHub automation worker must materialize entity automation events without Functions.');
+  if (!workerCode.includes('processChatAutomationBackfill')) fail('GitHub automation worker must materialize chat automation events without Functions.');
+  if (!workerCode.includes('processPendingPushNotifications')) fail('GitHub automation worker must deliver push notifications without Functions.');
+  if (!workerCode.includes('sendEachForMulticast')) fail('GitHub automation worker must send FCM pushes through firebase-admin.');
+
+  const workflow = readText('.github/workflows/firebase-automation.yml');
+  for (const needle of ['schedule:', 'workflow_dispatch:', 'npm run automation:matching', 'FIREBASE_SERVICE_ACCOUNT_JSON']) {
+    if (!workflow.includes(needle)) fail(`Free automation workflow missing: ${needle}.`);
+  }
+  if (/firebase\s+deploy|gcloud\s+functions|cloudbuild\.googleapis\.com|artifactregistry\.googleapis\.com/i.test(workflow)) {
+    fail('Free automation workflow must not deploy or enable Blaze-only infrastructure.');
+  }
+
+  const qualityWorkflow = fs.existsSync(path.join(root, '.github/workflows/quality.yml'))
+    ? readText('.github/workflows/quality.yml')
+    : '';
+  if (/working-directory:\s*functions|functions\/package-lock\.json|node --check index\.js|check:functions/i.test(qualityWorkflow)) {
+    fail('Quality workflow must not validate obsolete Cloud Functions entrypoints.');
+  }
+  for (const needle of ['audit:free-infrastructure', 'check:automation']) {
+    if (!qualityWorkflow.includes(needle)) fail(`Quality workflow missing zero-cost guard: ${needle}.`);
+  }
 
   const adminDashboard = readText('pages/dashboard/admin.html');
   for (const needle of ['data-section="configuracion"', 'initAdminPlatformConfig', 'loadPlatformConfig']) {
@@ -395,7 +403,7 @@ checkPwa();
 checkRules();
 checkIndexes();
 checkFutureScaleGuards();
-checkFunctions();
+checkFreeAutomation();
 checkSupabaseBoundary();
 
 for (const message of warnings) console.warn(`[WARN] ${message}`);

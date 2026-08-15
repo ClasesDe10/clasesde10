@@ -7,8 +7,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, '..');
 const DOMAIN = 'https://clasesde10.com';
-const TODAY = new Date().toISOString().slice(0, 10);
-const SEO_ENGINE_VERSION = 'seo-engine-2026-06-28';
+// Se actualiza únicamente cuando cambia de forma sustancial el contenido SEO.
+// Google recomienda que `lastmod` refleje cambios reales, no cada ejecución.
+const SEO_CONTENT_LASTMOD = '2026-08-15';
+const SEO_ENGINE_VERSION = 'seo-engine-2026-08-15-assisted-family';
+const ORGANIZATION_ID = `${DOMAIN}/#organization`;
+const WEBSITE_ID = `${DOMAIN}/#website`;
 
 const CITIES = [
   { slug: 'madrid', name: 'Madrid', region: 'Comunidad de Madrid', intent: 'alta demanda de refuerzo escolar, Bachillerato y EBAU', modality: 'presencial y online' },
@@ -263,12 +267,12 @@ function cleanUrl(pathname) {
   return `${DOMAIN}${pathname}`;
 }
 
-function subjectUrl(subject, city) {
-  return `/clases-particulares/${subject.slug}-${city.slug}`;
+function subjectUrl(subject) {
+  return `/clases-particulares/${subject.slug}`;
 }
 
-function subjectFile(subject, city) {
-  return path.join(__dirname, `${subject.slug}-${city.slug}.html`);
+function subjectFile(subject) {
+  return path.join(__dirname, `${subject.slug}.html`);
 }
 
 function cityUrl(city) {
@@ -304,7 +308,7 @@ function jsonLd(graph) {
 }
 
 function head({ title, description, canonical, schema, type = 'website' }) {
-  const image = `${DOMAIN}/assets/img/logo-512.png`;
+  const image = `${DOMAIN}/assets/img/social-share.png`;
   return `<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -325,17 +329,21 @@ function head({ title, description, canonical, schema, type = 'website' }) {
 <meta property="og:url" content="${escapeHtml(canonical)}">
 <meta property="og:type" content="${escapeHtml(type)}">
 <meta property="og:image" content="${image}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="${image}">
-<link rel="stylesheet" href="../css/style.css">
+<meta name="twitter:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
+<link rel="stylesheet" href="/css/style.css?v=20260808-editorial">
 ${schema}
 <style>
 .seo-main { background: var(--cream); }
-.seo-hero { padding: calc(var(--nav-h) + 52px) 5vw 64px; background: linear-gradient(135deg, var(--navy), #173866); color: var(--white); }
+.seo-hero { padding: calc(var(--nav-h) + 52px) 5vw 64px; background: var(--navy); color: var(--white); border-bottom: 3px solid var(--gold); }
 .seo-hero-inner { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(260px, .85fr); gap: 34px; align-items: center; }
 .seo-breadcrumb { display: flex; gap: 8px; flex-wrap: wrap; color: rgba(255,255,255,.64); font-size: .82rem; margin-bottom: 20px; }
 .seo-breadcrumb a { color: rgba(255,255,255,.78); text-decoration: none; }
@@ -345,10 +353,10 @@ ${schema}
 .seo-hero h1 em { color: var(--gold); font-style: normal; }
 .seo-hero p { color: rgba(255,255,255,.78); font-size: clamp(1rem, 1.7vw, 1.16rem); line-height: 1.75; max-width: 680px; }
 .seo-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
-.seo-button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-weight: 800; }
+.seo-button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 12px 22px; border-radius: 3px; text-decoration: none; font-weight: 800; }
 .seo-button.primary { background: var(--gold); color: var(--navy); }
 .seo-button.secondary { border: 1px solid rgba(255,255,255,.32); color: var(--white); }
-.seo-proof { display: grid; gap: 12px; padding: 22px; border: 1px solid rgba(255,255,255,.16); border-radius: 8px; background: rgba(255,255,255,.07); box-shadow: 0 18px 60px rgba(0,0,0,.18); }
+.seo-proof { display: grid; gap: 12px; padding: 4px 0 4px 24px; border-left: 2px solid var(--gold); }
 .seo-proof strong { color: var(--white); font-size: 1rem; }
 .seo-proof span { color: rgba(255,255,255,.72); line-height: 1.5; font-size: .9rem; }
 .seo-section { padding: 64px 5vw; }
@@ -357,18 +365,18 @@ ${schema}
 .seo-section h2 { font-family: 'Playfair Display', serif; color: var(--navy); font-size: clamp(1.5rem, 3vw, 2.4rem); line-height: 1.18; margin-bottom: 12px; }
 .seo-section p { color: var(--gray-mid); line-height: 1.75; max-width: 760px; }
 .seo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 14px; margin-top: 26px; }
-.seo-card { display: grid; gap: 8px; padding: 18px; background: var(--white); border: 1px solid rgba(15,31,61,.1); border-radius: 8px; color: var(--text-body); text-decoration: none; min-width: 0; }
-.seo-card:hover { border-color: var(--gold); box-shadow: 0 10px 28px rgba(15,31,61,.08); transform: translateY(-1px); }
+.seo-card { display: grid; gap: 8px; padding: 18px; background: var(--white); border: 1px solid rgba(15,31,61,.16); border-radius: 3px; color: var(--text-body); text-decoration: none; min-width: 0; }
+.seo-card[href]:hover { border-color: var(--gold); }
 .seo-card strong { color: var(--navy); overflow-wrap: anywhere; }
 .seo-card span { color: var(--gray-mid); font-size: .86rem; line-height: 1.55; }
 .seo-steps { counter-reset: step; }
 .seo-step { position: relative; padding-left: 54px; }
-.seo-step::before { counter-increment: step; content: counter(step); position: absolute; left: 18px; top: 18px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--gold); color: var(--navy); font-weight: 900; }
+.seo-step::before { counter-increment: step; content: counter(step); position: absolute; left: 18px; top: 18px; width: 26px; height: 26px; border-radius: 2px; display: grid; place-items: center; background: var(--gold); color: var(--navy); font-weight: 900; }
 .seo-faq { display: grid; gap: 12px; margin-top: 26px; }
-.seo-faq details { background: var(--white); border: 1px solid rgba(15,31,61,.1); border-radius: 8px; padding: 16px 18px; }
+.seo-faq details { background: var(--white); border: 1px solid rgba(15,31,61,.16); border-radius: 3px; padding: 16px 18px; }
 .seo-faq summary { cursor: pointer; color: var(--navy); font-weight: 800; }
 .seo-faq details p { margin-top: 10px; font-size: .94rem; }
-.seo-cta { margin: 0 5vw 64px; padding: 42px 5vw; border-radius: 8px; background: linear-gradient(135deg, var(--navy), var(--teal)); color: var(--white); text-align: center; }
+.seo-cta { margin: 0 5vw 64px; padding: 42px 5vw; border-radius: 3px; background: var(--navy); border-top: 3px solid var(--gold); color: var(--white); text-align: center; }
 .seo-cta h2 { font-family: 'Playfair Display', serif; color: var(--white); font-size: clamp(1.6rem, 4vw, 2.7rem); margin-bottom: 12px; }
 .seo-cta p { color: rgba(255,255,255,.78); max-width: 660px; margin: 0 auto 24px; line-height: 1.7; }
 @media (max-width: 760px) {
@@ -386,7 +394,7 @@ function pageShell({ title, description, canonical, schema, body }) {
 <html lang="es">
 ${head({ title, description, canonical, schema })}
 <body>
-<script src="../js/nav.js"></script>
+<script src="/js/nav.js?v=20260809-seo"></script>
 ${body}
 <script src="/js/pwa.js" defer></script>
 </body>
@@ -402,30 +410,29 @@ ${items.map((item, index) => item.url
 </nav>`;
 }
 
-function faqItems(subject, city) {
+function faqItems(subject) {
   return [
     ...subject.faq,
-    [`¿Las clases de ${subject.short} en ${city.name} pueden ser online?`, `Sí. Puedes solicitar clases online y, cuando haya disponibilidad local, también ${city.modality}.`],
+    [`¿Las clases de ${subject.short} pueden ser online?`, 'Sí. Puedes solicitar clases online y, cuando haya disponibilidad en tu zona, también presenciales.'],
     ['¿Cómo se elige el profesor?', 'ClasesDe10 revisa la materia, nivel, disponibilidad y contexto del alumno para proponer un profesor adecuado.'],
     ['¿Hay permanencia?', 'No. Puedes empezar sin permanencia y ajustar el ritmo de clases según la evolución del alumno.'],
   ];
 }
 
-function subjectCityPage(subject, city) {
-  const pathname = subjectUrl(subject, city);
+function subjectHubPage(subject) {
+  const pathname = subjectUrl(subject);
   const canonical = cleanUrl(pathname);
-  const title = `Clases particulares de ${subject.name} en ${city.name} | ClasesDe10`;
-  const description = `Profesor de ${subject.name} en ${city.name} para ${listNatural(subject.levels.slice(0, 3))}. Clases online o presenciales según disponibilidad, con perfiles verificados.`;
-  const serviceName = `Clases particulares de ${subject.name} en ${city.name}`;
-  const faqs = faqItems(subject, city);
+  const title = `Clases particulares de ${subject.name} | Profesores revisados`;
+  const description = `Encuentra profesor de ${subject.name} para ${listNatural(subject.levels.slice(0, 3))}. Clases online o presenciales según disponibilidad, sin permanencia.`;
+  const serviceName = `Clases particulares de ${subject.name}`;
+  const faqs = faqItems(subject);
   const graph = [
     {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: 'Inicio', item: `${DOMAIN}/` },
         { '@type': 'ListItem', position: 2, name: 'Clases particulares', item: cleanUrl('/clases-particulares') },
-        { '@type': 'ListItem', position: 3, name: city.name, item: cleanUrl(cityUrl(city)) },
-        { '@type': 'ListItem', position: 4, name: subject.name, item: canonical },
+        { '@type': 'ListItem', position: 3, name: subject.name, item: canonical },
       ],
     },
     {
@@ -435,8 +442,8 @@ function subjectCityPage(subject, city) {
       description,
       url: canonical,
       inLanguage: 'es-ES',
-      dateModified: TODAY,
-      isPartOf: { '@id': `${DOMAIN}/#website` },
+      dateModified: SEO_CONTENT_LASTMOD,
+      isPartOf: { '@id': WEBSITE_ID },
       about: { '@id': `${canonical}#service` },
     },
     {
@@ -444,22 +451,13 @@ function subjectCityPage(subject, city) {
       '@id': `${canonical}#service`,
       name: serviceName,
       description,
-      provider: { '@type': 'EducationalOrganization', name: 'ClasesDe10', url: DOMAIN },
-      areaServed: { '@type': 'City', name: city.name, addressRegion: city.region, addressCountry: 'ES' },
+      provider: { '@id': ORGANIZATION_ID },
+      areaServed: { '@type': 'Country', name: 'España' },
       serviceType: `Profesor particular de ${subject.name}`,
       audience: { '@type': 'Audience', audienceType: 'familias, estudiantes y adultos' },
     },
-    {
-      '@type': 'FAQPage',
-      mainEntity: faqs.map(([question, answer]) => ({
-        '@type': 'Question',
-        name: question,
-        acceptedAnswer: { '@type': 'Answer', text: answer },
-      })),
-    },
   ];
   const related = relatedSubjects(subject);
-  const cities = nearbyCities(city);
   return pageShell({
     title,
     description,
@@ -472,21 +470,20 @@ function subjectCityPage(subject, city) {
         ${breadcrumb([
           { name: 'Inicio', url: '/' },
           { name: 'Clases particulares', url: '/clases-particulares' },
-          { name: city.name, url: cityUrl(city) },
           { name: subject.name },
         ])}
-        <div class="seo-eyebrow">Profesores verificados · ${escapeHtml(city.modality)}</div>
-        <h1>Clases particulares de <em>${escapeHtml(subject.name)}</em> en ${escapeHtml(city.name)}</h1>
-        <p>${escapeHtml(description)} Diseñado para familias que necesitan avanzar sin perder semanas buscando profesor.</p>
+        <div class="seo-eyebrow">Perfiles revisados · presencial y online</div>
+        <h1>Clases particulares de <em>${escapeHtml(subject.name)}</em></h1>
+        <p>${escapeHtml(description)} Te ayudamos a encontrar un perfil que encaje con el nivel, el horario y el objetivo del alumno.</p>
         <div class="seo-actions">
-          <a class="seo-button primary" href="/pages/registro">Solicitar profesor</a>
+          <a class="seo-button primary" href="/para-padres#formulario">Pedir un profesor</a>
           <a class="seo-button secondary" href="/contacto">Hablar con ClasesDe10</a>
         </div>
       </div>
       <aside class="seo-proof" aria-label="Resumen del servicio">
-        <strong>Encaje recomendado para ${escapeHtml(city.name)}</strong>
-        <span>Demanda habitual: ${escapeHtml(city.intent)}.</span>
+        <strong>Un plan adaptado a ${escapeHtml(subject.short)}</strong>
         <span>Niveles: ${escapeHtml(listNatural(subject.levels.slice(0, 5)))}.</span>
+        <span>Dificultades habituales: ${escapeHtml(listNatural(subject.pains.slice(0, 3)))}.</span>
         <span>Objetivo: ${escapeHtml(listNatural(subject.outcomes.slice(0, 3)))}.</span>
       </aside>
     </div>
@@ -494,7 +491,7 @@ function subjectCityPage(subject, city) {
 
   <section class="seo-section">
     <div class="seo-section-inner">
-      <h2>Qué trabajamos en las clases de ${escapeHtml(subject.short)} en ${escapeHtml(city.name)}</h2>
+      <h2>Qué trabajamos en las clases de ${escapeHtml(subject.short)}</h2>
       <p>El profesor se adapta al punto de partida del alumno. La prioridad no es solo resolver ejercicios, sino crear un método que permita mejorar de forma constante.</p>
       <div class="seo-grid">
         ${subject.levels.map((level) => `<article class="seo-card"><strong>${escapeHtml(level)}</strong><span>Plan adaptado al temario, ritmo del centro y próximos exámenes.</span></article>`).join('\n        ')}
@@ -504,8 +501,8 @@ function subjectCityPage(subject, city) {
 
   <section class="seo-section">
     <div class="seo-section-inner">
-      <h2>Por qué estas clases convierten mejor que buscar a ciegas</h2>
-      <p>ClasesDe10 reduce fricción: recoge la necesidad, filtra perfiles y mantiene seguimiento para que la familia no tenga que coordinar todo desde cero.</p>
+      <h2>Cómo encontramos un profesor adecuado para cada caso</h2>
+      <p>Recogemos la necesidad, revisamos los perfiles disponibles y acompañamos el inicio para que la familia no tenga que coordinar todo desde cero.</p>
       <div class="seo-grid seo-steps">
         <article class="seo-card seo-step"><strong>Diagnóstico inicial</strong><span>Materia, nivel, disponibilidad, modalidad y urgencia.</span></article>
         <article class="seo-card seo-step"><strong>Selección del profesor</strong><span>Encaje por especialidad, experiencia, confianza y disponibilidad real.</span></article>
@@ -517,11 +514,11 @@ function subjectCityPage(subject, city) {
 
   <section class="seo-section">
     <div class="seo-section-inner">
-      <h2>También puedes necesitar</h2>
-      <p>Enlazado interno útil para comparar alternativas sin volver a Google.</p>
+      <h2>Materias relacionadas y ciudades disponibles</h2>
+      <p>Compara otras materias o consulta las opciones de tu ciudad antes de solicitar profesor.</p>
       <div class="seo-grid">
-        ${related.map((item) => `<a class="seo-card" href="${subjectUrl(item, city)}"><strong>${escapeHtml(item.name)} en ${escapeHtml(city.name)}</strong><span>${escapeHtml(listNatural(item.levels.slice(0, 3)))}</span></a>`).join('\n        ')}
-        ${cities.slice(0, 4).map((item) => `<a class="seo-card" href="${subjectUrl(subject, item)}"><strong>${escapeHtml(subject.name)} en ${escapeHtml(item.name)}</strong><span>${escapeHtml(item.modality)}</span></a>`).join('\n        ')}
+        ${related.map((item) => `<a class="seo-card" href="${subjectUrl(item)}"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(listNatural(item.levels.slice(0, 3)))}</span></a>`).join('\n        ')}
+        ${CITIES.slice(0, 6).map((item) => `<a class="seo-card" href="${cityUrl(item)}"><strong>Clases en ${escapeHtml(item.name)}</strong><span>${escapeHtml(item.modality)}</span></a>`).join('\n        ')}
       </div>
     </div>
   </section>
@@ -537,8 +534,8 @@ function subjectCityPage(subject, city) {
 
   <section class="seo-cta">
     <h2>Encuentra profesor de ${escapeHtml(subject.short)} sin perder tiempo</h2>
-    <p>Cuéntanos el caso y buscamos el perfil más adecuado para ${escapeHtml(city.name)}. Sin permanencia y con seguimiento.</p>
-    <a class="seo-button primary" href="/pages/registro">Solicitar profesor gratis</a>
+    <p>Cuéntanos el nivel, el horario y el objetivo. Buscamos el perfil más adecuado, sin permanencia y con seguimiento.</p>
+    <a class="seo-button primary" href="/para-padres#formulario">Pedir un profesor</a>
   </section>
 </main>`,
   });
@@ -547,8 +544,8 @@ function subjectCityPage(subject, city) {
 function cityHubPage(city) {
   const pathname = cityUrl(city);
   const canonical = cleanUrl(pathname);
-  const title = `Clases particulares en ${city.name} | Profesores verificados`;
-  const description = `Clases particulares en ${city.name} para Matemáticas, Inglés, ciencias, música, deporte y refuerzo escolar. Profesores verificados y modalidad online o presencial.`;
+  const title = `Clases particulares en ${city.name} | Profesores revisados`;
+  const description = `Clases particulares en ${city.name} de Matemáticas, Inglés, ciencias, música y refuerzo escolar. Perfiles revisados; online o presencial según disponibilidad.`;
   const graph = [
     {
       '@type': 'BreadcrumbList',
@@ -564,14 +561,15 @@ function cityHubPage(city) {
       description,
       url: canonical,
       inLanguage: 'es-ES',
-      dateModified: TODAY,
+      dateModified: SEO_CONTENT_LASTMOD,
+      isPartOf: { '@id': WEBSITE_ID },
       mainEntity: {
         '@type': 'ItemList',
         itemListElement: SUBJECTS.map((subject, index) => ({
           '@type': 'ListItem',
           position: index + 1,
-          name: `${subject.name} en ${city.name}`,
-          url: cleanUrl(subjectUrl(subject, city)),
+          name: subject.name,
+          url: cleanUrl(subjectUrl(subject)),
         })),
       },
     },
@@ -590,35 +588,35 @@ function cityHubPage(city) {
           { name: 'Clases particulares', url: '/clases-particulares' },
           { name: city.name },
         ])}
-        <div class="seo-eyebrow">Hub local · ${escapeHtml(city.region)}</div>
+        <div class="seo-eyebrow">${escapeHtml(city.region)} · ${escapeHtml(city.modality)}</div>
         <h1>Clases particulares en <em>${escapeHtml(city.name)}</em></h1>
-        <p>${escapeHtml(description)} Este hub agrupa las materias con mayor intención de búsqueda para familias y estudiantes.</p>
+        <p>${escapeHtml(description)} Elige una materia o cuéntanos directamente qué apoyo necesitas.</p>
         <div class="seo-actions">
-          <a class="seo-button primary" href="/pages/registro">Solicitar profesor</a>
+          <a class="seo-button primary" href="/para-padres#formulario">Pedir un profesor</a>
           <a class="seo-button secondary" href="/clases-particulares">Ver todas las ciudades</a>
         </div>
       </div>
-      <aside class="seo-proof">
-        <strong>SEO local sin contenido duplicado</strong>
-        <span>Ciudad: ${escapeHtml(city.name)}.</span>
-        <span>Contexto: ${escapeHtml(city.intent)}.</span>
-        <span>Modalidad: ${escapeHtml(city.modality)}.</span>
+      <aside class="seo-proof" aria-label="Información para elegir profesor">
+        <strong>Antes de elegir profesor</strong>
+        <span>Necesidades habituales: ${escapeHtml(city.intent)}.</span>
+        <span>Modalidad disponible: ${escapeHtml(city.modality)}.</span>
+        <span>Indica nivel, horario y objetivo para afinar la búsqueda.</span>
       </aside>
     </div>
   </section>
   <section class="seo-section">
     <div class="seo-section-inner">
       <h2>Materias disponibles en ${escapeHtml(city.name)}</h2>
-      <p>Elige una materia para ver una página específica con niveles, preguntas frecuentes y enlaces relacionados.</p>
+      <p>Elige una materia para consultar los niveles habituales, la forma de trabajo y las respuestas a las dudas más frecuentes.</p>
       <div class="seo-grid">
-        ${SUBJECTS.map((subject) => `<a class="seo-card" href="${subjectUrl(subject, city)}"><strong>${escapeHtml(subject.name)}</strong><span>${escapeHtml(listNatural(subject.levels.slice(0, 4)))}</span></a>`).join('\n        ')}
+        ${SUBJECTS.map((subject) => `<a class="seo-card" href="${subjectUrl(subject)}"><strong>${escapeHtml(subject.name)}</strong><span>${escapeHtml(listNatural(subject.levels.slice(0, 4)))}</span></a>`).join('\n        ')}
       </div>
     </div>
   </section>
   <section class="seo-section">
     <div class="seo-section-inner">
       <h2>Otras ciudades populares</h2>
-      <p>La arquitectura permite crecer ciudad a ciudad sin rehacer la web ni el sitemap a mano.</p>
+      <p>También puedes consultar profesores en otras zonas o elegir la modalidad online si necesitas mayor flexibilidad.</p>
       <div class="seo-grid">
         ${nearbyCities(city).map((item) => `<a class="seo-card" href="${cityUrl(item)}"><strong>Clases en ${escapeHtml(item.name)}</strong><span>${escapeHtml(item.region)}</span></a>`).join('\n        ')}
       </div>
@@ -627,7 +625,7 @@ function cityHubPage(city) {
   <section class="seo-cta">
     <h2>Cuéntanos qué profesor necesitas en ${escapeHtml(city.name)}</h2>
     <p>Materia, nivel, horario y modalidad. Nosotros filtramos perfiles para que no tengas que buscar desde cero.</p>
-    <a class="seo-button primary" href="/pages/registro">Solicitar profesor gratis</a>
+    <a class="seo-button primary" href="/para-padres#formulario">Pedir un profesor</a>
   </section>
 </main>`,
   });
@@ -635,7 +633,7 @@ function cityHubPage(city) {
 
 function nationalHubPage() {
   const canonical = cleanUrl('/clases-particulares');
-  const title = 'Clases particulares en España | Profesores verificados';
+  const title = 'Clases particulares en España | Profesores revisados';
   const description = 'Encuentra profesores particulares por ciudad y materia: Matemáticas, Inglés, ciencias, música, pádel, programación y refuerzo escolar.';
   const graph = [
     {
@@ -651,7 +649,8 @@ function nationalHubPage() {
       description,
       url: canonical,
       inLanguage: 'es-ES',
-      dateModified: TODAY,
+      dateModified: SEO_CONTENT_LASTMOD,
+      isPartOf: { '@id': WEBSITE_ID },
       mainEntity: {
         '@type': 'ItemList',
         itemListElement: CITIES.map((city, index) => ({
@@ -673,26 +672,26 @@ function nationalHubPage() {
     <div class="seo-hero-inner">
       <div>
         ${breadcrumb([{ name: 'Inicio', url: '/' }, { name: 'Clases particulares' }])}
-        <div class="seo-eyebrow">Arquitectura SEO nacional</div>
+        <div class="seo-eyebrow">Clases particulares en España</div>
         <h1>Clases particulares por <em>ciudad y materia</em></h1>
-        <p>${escapeHtml(description)} Cada página está generada con canónica limpia, datos estructurados, FAQs visibles y enlaces internos.</p>
+        <p>${escapeHtml(description)} Explora las opciones disponibles o cuéntanos tu caso para ayudarte a encontrar un perfil adecuado.</p>
         <div class="seo-actions">
-          <a class="seo-button primary" href="/pages/registro">Solicitar profesor</a>
+          <a class="seo-button primary" href="/para-padres#formulario">Pedir un profesor</a>
           <a class="seo-button secondary" href="/para-profesores">Soy profesor</a>
         </div>
       </div>
-      <aside class="seo-proof">
-        <strong>Preparado para escalar</strong>
-        <span>${CITIES.length} ciudades activas.</span>
-        <span>${SUBJECTS.length} materias y niveles.</span>
-        <span>${CITIES.length * SUBJECTS.length} landings específicas generadas automáticamente.</span>
+      <aside class="seo-proof" aria-label="Opciones de búsqueda">
+        <strong>Una búsqueda más sencilla</strong>
+        <span>${CITIES.length} ciudades para empezar.</span>
+        <span>${SUBJECTS.length} materias y niveles disponibles.</span>
+        <span>Clases presenciales y online según disponibilidad.</span>
       </aside>
     </div>
   </section>
   <section class="seo-section">
     <div class="seo-section-inner">
       <h2>Buscar por ciudad</h2>
-      <p>Hubs locales para orientar la búsqueda según zona, intención y modalidad.</p>
+      <p>Consulta las opciones de tu zona y elige entre modalidad presencial u online según disponibilidad.</p>
       <div class="seo-grid">
         ${CITIES.map((city) => `<a class="seo-card" href="${cityUrl(city)}"><strong>${escapeHtml(city.name)}</strong><span>${escapeHtml(city.region)} · ${escapeHtml(city.modality)}</span></a>`).join('\n        ')}
       </div>
@@ -701,16 +700,16 @@ function nationalHubPage() {
   <section class="seo-section">
     <div class="seo-section-inner">
       <h2>Materias populares</h2>
-      <p>Rutas internas hacia las combinaciones con más intención de contratación.</p>
+      <p>Empieza por la materia que necesitas y revisa los niveles, objetivos y modalidades habituales.</p>
       <div class="seo-grid">
-        ${SUBJECTS.map((subject) => `<a class="seo-card" href="${subjectUrl(subject, CITIES[0])}"><strong>${escapeHtml(subject.name)}</strong><span>${escapeHtml(listNatural(subject.levels.slice(0, 4)))}</span></a>`).join('\n        ')}
+        ${SUBJECTS.map((subject) => `<a class="seo-card" href="${subjectUrl(subject)}"><strong>${escapeHtml(subject.name)}</strong><span>${escapeHtml(listNatural(subject.levels.slice(0, 4)))}</span></a>`).join('\n        ')}
       </div>
     </div>
   </section>
   <section class="seo-cta">
     <h2>Encuentra profesor sin recorrer decenas de anuncios</h2>
     <p>ClasesDe10 centraliza la solicitud, filtra perfiles y reduce el tiempo hasta encontrar un profesor adecuado.</p>
-    <a class="seo-button primary" href="/pages/registro">Solicitar profesor gratis</a>
+    <a class="seo-button primary" href="/para-padres#formulario">Pedir un profesor</a>
   </section>
 </main>`,
   });
@@ -720,11 +719,11 @@ function sitemapEntries() {
   const seoEntries = [
     { path: '/clases-particulares', priority: '0.95', changefreq: 'weekly' },
     ...CITIES.map((city) => ({ path: cityUrl(city), priority: city.slug === 'madrid' ? '0.92' : '0.82', changefreq: 'weekly' })),
-    ...CITIES.flatMap((city) => SUBJECTS.map((subject) => ({
-      path: subjectUrl(subject, city),
-      priority: city.slug === 'madrid' && ['matematicas', 'ingles', 'bachillerato', 'selectividad'].includes(subject.slug) ? '0.94' : '0.78',
+    ...SUBJECTS.map((subject) => ({
+      path: subjectUrl(subject),
+      priority: ['matematicas', 'ingles', 'bachillerato', 'selectividad'].includes(subject.slug) ? '0.92' : '0.8',
       changefreq: 'weekly',
-    }))),
+    })),
   ];
   return [...CORE_PAGES.map(({ path: pathname, priority, changefreq }) => ({ path: pathname, priority, changefreq })), ...seoEntries];
 }
@@ -733,9 +732,7 @@ function writeSitemap() {
   const entries = sitemapEntries();
   const body = entries.map((entry) => `  <url>
     <loc>${cleanUrl(entry.path)}</loc>
-    <lastmod>${TODAY}</lastmod>
-    <changefreq>${entry.changefreq}</changefreq>
-    <priority>${entry.priority}</priority>
+    <lastmod>${SEO_CONTENT_LASTMOD}</lastmod>
   </url>`).join('\n');
   fs.writeFileSync(path.join(ROOT, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -748,12 +745,6 @@ ${body}
 function writeRobots() {
   fs.writeFileSync(path.join(ROOT, 'robots.txt'), `User-agent: *
 Allow: /
-Disallow: /pages/dashboard/
-Disallow: /pages/login
-Disallow: /pages/registro
-Disallow: /pages/reset-password
-Disallow: /offline
-Disallow: /offline.html
 Disallow: /supabase/
 Disallow: /firebase/
 Disallow: /functions/
@@ -773,16 +764,66 @@ Sitemap: ${DOMAIN}/sitemap.xml
 `, 'utf8');
 }
 
-function syncCoreCanonicals() {
+function normalizeInternalHtmlLinks(html) {
+  const cleanExtensions = html.replace(/href="([^"?#]+)\.html([?#][^"]*)?"/g, (match, pathname, suffix = '') => {
+    if (/^(?:https?:)?\/\//i.test(pathname)) return match;
+    const normalized = pathname.replace(/^\.\//, '').replace(/^\/+/, '');
+    const cleanPath = normalized === 'index' ? '/' : `/${normalized}`;
+    return `href="${cleanPath}${suffix}"`;
+  });
+  return cleanExtensions.replace(
+    /\/clases-particulares\/(matematicas|ingles|bachillerato|selectividad)-madrid\b/g,
+    '/clases-particulares/$1',
+  );
+}
+
+function normalizeCoreHtml(html) {
+  let normalized = normalizeInternalHtmlLinks(html).replace(
+    /<img\b([^>]*\bsrc="\/assets\/img\/logo-(192|512)\.png"[^>]*)>/gi,
+    (match, attributes, size) => /\bwidth=/i.test(attributes) && /\bheight=/i.test(attributes)
+      ? match
+      : `<img${attributes} width="${size}" height="${size}">`,
+  );
+  normalized = normalized
+    .replace(/(\.(?:sv-card|fi-item|ci-card|shortcuts)) h4/g, '$1 h3')
+    .replaceAll('<h4>', '<h3>')
+    .replaceAll('</h4>', '</h3>');
+  if (normalized.includes('<section class="steps-section">') && !normalized.includes('Tres pasos para empezar</h2>')) {
+    normalized = normalized.replace(
+      /<section class="steps-section">\s*<div class="section-inner">/,
+      '<section class="steps-section">\n  <div class="section-inner">\n    <h2 class="section-title">Tres pasos para empezar</h2>',
+    );
+  }
+  if (normalized.includes('<section class="contact-section">') && !normalized.includes('Elige cómo contactar con nosotros</h2>')) {
+    normalized = normalized.replace(
+      /<section class="contact-section">\s*<div class="section-inner">/,
+      '<section class="contact-section">\n  <div class="section-inner">\n    <h2 class="section-title">Elige cómo contactar con nosotros</h2>',
+    );
+  }
+  if (!normalized.includes('href="/sobre-nosotros"') && normalized.includes('<li><a href="/contacto">Formulario de contacto</a></li>')) {
+    normalized = normalized.replace(
+      '<li><a href="/contacto">Formulario de contacto</a></li>',
+      '<li><a href="/sobre-nosotros">Sobre nosotros</a></li>\n        <li><a href="/contacto">Formulario de contacto</a></li>',
+    );
+  }
+  return normalized;
+}
+
+function syncCoreSeoUrls() {
   for (const page of CORE_PAGES.filter((item) => item.path !== '/')) {
     const filePath = path.join(ROOT, page.file);
     if (!fs.existsSync(filePath)) continue;
     const clean = cleanUrl(page.path);
     const htmlUrl = `${clean}.html`;
     const current = fs.readFileSync(filePath, 'utf8');
-    const next = current.replaceAll(htmlUrl, clean);
+    const next = normalizeCoreHtml(current.replaceAll(htmlUrl, clean));
     if (next !== current) fs.writeFileSync(filePath, next, 'utf8');
   }
+
+  const homePath = path.join(ROOT, 'index.html');
+  const home = fs.readFileSync(homePath, 'utf8');
+  const normalizedHome = normalizeCoreHtml(home);
+  if (normalizedHome !== home) fs.writeFileSync(homePath, normalizedHome, 'utf8');
 }
 
 function cleanGeneratedHtml() {
@@ -798,11 +839,11 @@ function main() {
   fs.writeFileSync(path.join(__dirname, 'index.html'), nationalHubPage(), 'utf8');
   for (const city of CITIES) {
     fs.writeFileSync(cityFile(city), cityHubPage(city), 'utf8');
-    for (const subject of SUBJECTS) {
-      fs.writeFileSync(subjectFile(subject, city), subjectCityPage(subject, city), 'utf8');
-    }
   }
-  syncCoreCanonicals();
+  for (const subject of SUBJECTS) {
+    fs.writeFileSync(subjectFile(subject), subjectHubPage(subject), 'utf8');
+  }
+  syncCoreSeoUrls();
   writeRobots();
   const sitemapCount = writeSitemap();
   console.log(JSON.stringify({
@@ -810,7 +851,7 @@ function main() {
     engine: SEO_ENGINE_VERSION,
     cities: CITIES.length,
     subjects: SUBJECTS.length,
-    generatedPages: 1 + CITIES.length + (CITIES.length * SUBJECTS.length),
+    generatedPages: 1 + CITIES.length + SUBJECTS.length,
     sitemapUrls: sitemapCount,
   }, null, 2));
 }

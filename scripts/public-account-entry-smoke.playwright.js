@@ -1,8 +1,8 @@
 async (page) => {
   const baseUrl = page.url().replace(/^(https?:\/\/[^/]+).*/, '$1');
   const paths = [
-    { key: 'familias', path: '/para-padres.html', role: 'familia' },
-    { key: 'profesores', path: '/para-profesores.html', role: 'profesor' },
+    { key: 'familias', path: '/para-padres', role: 'familia' },
+    { key: 'profesores', path: '/para-profesores', role: 'profesor' },
   ];
   const result = {};
 
@@ -12,8 +12,8 @@ async (page) => {
     await page.locator('.contact-form-card').first().waitFor({ state: 'visible', timeout: 15000 });
 
     const text = await page.locator('body').textContent().catch(() => '');
-    const createLink = page.locator(`.contact-form-card a[href="pages/registro.html?rol=${item.role}"]`).first();
-    const loginLink = page.locator('.contact-form-card a[href="pages/login.html"]').first();
+    const createLink = page.locator(`.contact-form-card a[href="/pages/registro?rol=${item.role}"]`).first();
+    const loginLink = page.locator('.contact-form-card a[href="/pages/login"]').first();
 
     const itemResult = {
       formCount: await page.locator('form').count().catch(() => 0),
@@ -26,7 +26,7 @@ async (page) => {
       title: await page.title(),
     };
 
-    await page.goto(`${baseUrl}/pages/registro.html?rol=${item.role}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(`${baseUrl}/pages/registro?rol=${item.role}`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.locator('#form-registro').waitFor({ state: 'visible', timeout: 15000 });
     itemResult.registerSelectedRole = await page
       .locator('.rol-card.selected input[name="rol"]')

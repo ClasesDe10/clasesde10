@@ -3,8 +3,14 @@ import path from 'node:path';
 import process from 'node:process';
 import {
   buildNotificationDocument,
+  inferNotificationRole,
+  minimalUserNotificationCopy,
   notificationActionUrl,
   safeInternalActionUrl,
+  shouldCreateUserFacingNotification,
+  shouldDisplayNotification,
+  userFacingNotificationDedupeKey,
+  visibleNotificationsForRole,
 } from '../js/notification-engine.js';
 
 const root = process.cwd();
@@ -23,22 +29,30 @@ const [
   push,
   chat,
   serviceWorker,
-  functions,
   automationWorker,
   rules,
   indexes,
   css,
+  notificationCenter,
+  familyDashboard,
+  teacherDashboard,
+  studentDashboard,
+  adminDashboard,
 ] = await Promise.all([
   read('js/notification-engine.js'),
   read('js/notifications-provider.js'),
   read('js/push-notifications.js'),
   read('js/chat-widget.js'),
   read('service-worker.js'),
-  read('functions/index.js'),
   read('scripts/firebase-automation-worker.mjs'),
   read('firebase/firestore.rules'),
   read('firebase/firestore.indexes.json'),
   read('css/dashboard.css'),
+  read('js/notification-center.js'),
+  read('pages/dashboard/familia.html'),
+  read('pages/dashboard/profesor.html'),
+  read('pages/dashboard/alumno.html'),
+  read('pages/dashboard/admin.html'),
 ]);
 
 assert(engine.includes('NOTIFICATION_EVENTS'), 'Notification engine must define event constants.');
@@ -53,6 +67,9 @@ assert(engine.includes('chat_message'), 'Notification engine must include chat m
 assert(engine.includes('buildNotificationDocument'), 'Notification engine must build normalized documents.');
 assert(engine.includes('isNotificationEnabled'), 'Notification engine must expose settings checks.');
 assert(engine.includes('safeInternalActionUrl'), 'Notification engine must sanitize action URLs.');
+assert(engine.includes('shouldCreateUserFacingNotification'), 'Notification engine must centralize low-noise user notification policy.');
+assert(engine.includes('userFacingNotificationDedupeKey'), 'Notification engine must provide user-facing dedupe keys.');
+assert(engine.includes('minimalUserNotificationCopy'), 'Notification engine must simplify noisy user-facing copy.');
 assert(safeInternalActionUrl('/pages/dashboard/admin.html#pagos') === '/pages/dashboard/admin.html#pagos', 'Internal notification URLs must be preserved.');
 assert(safeInternalActionUrl('https://evil.example/phishing') === '/pages/login.html', 'External HTTPS notification URLs must be rejected.');
 assert(safeInternalActionUrl('//evil.example/phishing') === '/pages/login.html', 'Protocol-relative notification URLs must be rejected.');
@@ -67,6 +84,53 @@ assert(unsafeNotification.actionUrl === '/pages/login.html', 'Unsafe notificatio
 assert(unsafeNotification.payload.url === '/pages/login.html', 'Unsafe notification payload URL must be normalized.');
 assert(notificationActionUrl({ actionUrl: '/pages/dashboard/familia.html#chat' }) === '/pages/dashboard/familia.html#chat', 'Internal notificationActionUrl must be preserved.');
 assert(notificationActionUrl({ actionUrl: 'data:text/html,evil' }) === '/pages/login.html', 'Data URL notificationActionUrl must be rejected.');
+assert(inferNotificationRole({ key: 'weekly_payment_due_class_1_family' }) === 'familia', 'Notification policy must infer family role from dedupe keys.');
+assert(shouldCreateUserFacingNotification({ type: 'weekly_payment_due', role: 'familia' }) === true, 'Family payment due notifications must stay enabled.');
+assert(shouldCreateUserFacingNotification({ type: 'profile_updated', role: 'profesor' }) === false, 'Generic profile updates must not notify teachers.');
+assert(shouldCreateUserFacingNotification({
+  type: 'relationship_followup',
+  role: 'familia',
+  priority: 'low',
+  payload: { actionId: 'relationship_quality_check' },
+}) === false, 'Low-value relationship check-ins must not notify families.');
+assert(shouldCreateUserFacingNotification({
+  type: 'proactive_assist',
+  role: 'profesor',
+  priority: 'high',
+  payload: { category: 'profile' },
+}) === true, 'High-priority onboarding/profile blockers must still notify teachers.');
+const paymentKeyA = userFacingNotificationDedupeKey({
+  type: 'weekly_payment_due',
+  role: 'familia',
+  payload: { dueAt: '2026-07-05T20:00:00.000Z' },
+  key: 'weekly_payment_due_class_a_family',
+});
+const paymentKeyB = userFacingNotificationDedupeKey({
+  type: 'weekly_payment_due',
+  role: 'familia',
+  payload: { dueAt: '2026-07-05T20:00:00.000Z' },
+  key: 'weekly_payment_due_class_b_family',
+});
+assert(paymentKeyA === paymentKeyB, 'Family payment due notifications for the same due day must be grouped.');
+assert(/clases pendientes de justificar/i.test(minimalUserNotificationCopy({
+  title: 'Justificante pendiente',
+  body: 'Clase concreta',
+  type: 'weekly_payment_due',
+  role: 'familia',
+}).body), 'Grouped family payment notifications must use generic copy.');
+assert(shouldDisplayNotification({ type: 'chat_message', readAt: null }, 'familia') === false, 'Chat messages must stay out of the notification centre.');
+assert(shouldDisplayNotification({ type: 'class_incident', priority: 'critical', readAt: null }, 'profesor') === true, 'Critical incidents must stay visible.');
+assert(shouldDisplayNotification({
+  type: 'payment_verified',
+  priority: 'normal',
+  readAt: '2026-07-01T10:00:00.000Z',
+  createdAt: '2026-07-01T10:00:00.000Z',
+}, 'familia', Date.parse('2026-08-08T10:00:00.000Z')) === false, 'Old read confirmations must leave the visible inbox.');
+const visibleUserNotifications = visibleNotificationsForRole([
+  { id: 'chat', type: 'chat_message', readAt: null },
+  { id: 'payment', type: 'weekly_payment_due', priority: 'high', readAt: null },
+], 'familia');
+assert(visibleUserNotifications.length === 1 && visibleUserNotifications[0].id === 'payment', 'Visible inbox must contain actions, not chat noise.');
 
 assert(provider.includes('loadNotificationSettings'), 'Provider must load admin notification settings.');
 assert(provider.includes('saveNotificationSettings'), 'Provider must save admin notification settings.');
@@ -87,7 +151,10 @@ assert(chat.includes('dashboardSectionForNotification'), 'Chat widget must map n
 assert(chat.includes('notificationDisplayItems'), 'Chat widget must group duplicate notification cards.');
 assert(chat.includes('notificationSourceLabel'), 'Notification cards must label Admin vs Sistema source.');
 assert(chat.includes('chat-layout-notifications'), 'Notification view must hide chat list when opened from notifications.');
-assert(chat.includes('Activar avisos en este dispositivo'), 'Notification view must expose a clear PWA/mobile push activation action.');
+assert(chat.includes('notification-admin-tools'), 'Admin notification tools must stay available but collapsed.');
+assert(chat.includes('Activar avisos'), 'Notification view must expose a clear PWA/mobile push activation action.');
+assert(chat.includes('Marcar todo revisado'), 'Notification view must expose a simple bulk reviewed action.');
+assert(chat.includes('Arreglar incidencia'), 'Incident notifications must lead to a fix action.');
 assert(chat.includes('Marcar revisada'), 'Notification cards must use clear reviewed wording.');
 assert(!chat.includes('>Abrir</button>'), 'Notification cards must not render a generic open button.');
 assert(!chat.includes('>Leida</button>'), 'Notification cards must not render Leida as an action.');
@@ -96,16 +163,14 @@ assert(serviceWorker.includes('firebase-messaging-compat'), 'Service worker must
 assert(serviceWorker.includes('onBackgroundMessage'), 'Service worker must handle FCM background messages.');
 assert(serviceWorker.includes('notificationclick'), 'Service worker must handle notification clicks.');
 
-assert(functions.includes('sendPushOnNotificationCreated'), 'Functions must send push when notification documents are created.');
-assert(functions.includes('safeInternalActionUrl'), 'Functions must sanitize notification action URLs before push.');
-assert(functions.includes('notifyOnChatMessage'), 'Functions must create notifications for new chat messages.');
-assert(functions.includes('notifyOnDocumentCreated'), 'Functions must notify admins about pending documents.');
-assert(functions.includes('notifyOnIncidentCreated'), 'Functions must notify admins about incidents.');
-assert(functions.includes('notifyOnTeacherProfileUpdated'), 'Functions must notify admins about teacher profile updates.');
-assert(functions.includes('notifyOnFamilyProfileUpdated'), 'Functions must notify admins about family profile updates.');
-assert(functions.includes('assignment_created'), 'Functions must notify assignment creation.');
-
 assert(automationWorker.includes('buildNotificationDocument'), 'Automation worker must use the shared notification document contract.');
+assert(automationWorker.includes('shouldCreateUserFacingNotification'), 'Automation worker must suppress non-essential family/professor notifications.');
+assert(automationWorker.includes('userFacingNotificationDedupeKey'), 'Automation worker must coalesce repeated family payment notifications.');
+assert(automationWorker.includes('processPendingPushNotifications'), 'Automation worker must send push notifications without Cloud Functions.');
+assert(automationWorker.includes('sendEachForMulticast'), 'Automation worker must deliver web push through FCM.');
+assert(automationWorker.includes('safeInternalActionUrl'), 'Automation worker must sanitize notification action URLs before push.');
+assert(automationWorker.includes('processChatAutomationBackfill'), 'Automation worker must create chat notifications without deployed Functions.');
+assert(automationWorker.includes('processEntityAutomationBackfill'), 'Automation worker must create entity notifications without deployed Functions.');
 assert(automationWorker.includes('class_unmarked_after_24h'), 'Automation worker must keep 24h class unmarked notifications.');
 assert(automationWorker.includes('teacher_payout_pending'), 'Automation worker must keep teacher payout notifications.');
 assert(automationWorker.includes('PAYMENT_OVERDUE_ESCALATION_STEPS'), 'Automation worker must escalate unpaid family payments across days.');
@@ -122,5 +187,14 @@ assert(indexes.includes('"collectionGroup": "notificationTokens"'), 'Firestore i
 assert(css.includes('.notification-settings-form'), 'Dashboard CSS must style notification settings.');
 assert(css.includes('.notification-item.priority-critical'), 'Dashboard CSS must style critical notifications.');
 assert(css.includes('.chat-layout-notifications'), 'Dashboard CSS must isolate notifications from chat list.');
+assert(css.includes('.notification-center-shell'), 'Dashboard CSS must style the dedicated notification centre.');
+assert(notificationCenter.includes('Centro de avisos'), 'Dedicated notification centre must have a distinct identity.');
+assert(notificationCenter.includes('Los mensajes están en Chat'), 'Notification centre must explain the separation from chat.');
+assert(notificationCenter.includes('data-resolve-notification'), 'Visible notifications must expose a direct resolution action.');
+assert(notificationCenter.includes('visibleNotificationsForRole'), 'Notification centre must apply the low-noise policy.');
+[familyDashboard, teacherDashboard, studentDashboard, adminDashboard].forEach((dashboard, index) => {
+  assert(dashboard.includes('section-notificaciones'), `Dashboard ${index + 1} must have a dedicated notification section.`);
+  assert(dashboard.includes('notification-center.js?v=20260808-action-center'), `Dashboard ${index + 1} must load the notification centre.`);
+});
 
 console.log('Notification system validation passed.');

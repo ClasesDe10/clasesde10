@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crear contraseña — ClasesDe10</title>
+<meta name="description" content="Verifica tu correo y activa el acceso con contraseña en ClasesDe10.">
+<meta name="robots" content="noindex, nofollow">
+<link rel="canonical" href="https://clasesde10.com/pages/crear-contrasena.html">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ClasesDe10">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="/assets/img/logo-192.png">
+<link rel="icon" type="image/png" href="/assets/img/logo-192.png">
+<link rel="stylesheet" href="../css/dashboard.css?v=20260705-panel-pwa-mobile">
+<style>
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: calc(var(--app-vh, 1vh) * 100);
+  padding: 20px;
+  background: var(--navy);
+}
+.auth-card {
+  width: 100%;
+  max-width: 430px;
+  padding: 42px;
+  background: var(--white);
+  border-top: 3px solid var(--gold);
+  border-radius: 2px;
+}
+.auth-logo { text-align: center; margin-bottom: 28px; }
+.auth-logo img { width: 60px; height: 60px; border-radius: 2px; object-fit: cover; }
+.auth-logo-name {
+  margin-top: 9px;
+  color: var(--navy);
+  font-family: 'Playfair Display', serif;
+  font-size: 1.45rem;
+  font-weight: 900;
+}
+.auth-logo-name span { color: var(--gold-text); }
+h1 {
+  margin: 0 0 10px;
+  color: var(--navy);
+  font-family: 'Playfair Display', serif;
+  font-size: 1.45rem;
+}
+.lead { margin: 0 0 22px; color: var(--gray-mid); font-size: .9rem; line-height: 1.55; }
+.status {
+  margin-bottom: 18px;
+  padding: 11px 13px;
+  border: 1px solid rgba(15, 31, 61, .14);
+  border-radius: 2px;
+  background: #f7f8fa;
+  color: var(--navy);
+  font-size: .84rem;
+  line-height: 1.45;
+}
+.status.error { border-color: rgba(185, 28, 28, .24); background: #fff7f7; color: #991b1b; }
+.status.success { border-color: rgba(21, 128, 61, .24); background: #f5fbf7; color: #166534; }
+.form-control, .btn { border-radius: 2px; }
+.actions { display: grid; gap: 10px; }
+.text-link {
+  color: var(--navy);
+  font-size: .82rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+}
+.verified-email { font-weight: 700; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+@media (max-width: 520px) {
+  body { align-items: flex-start; padding: max(20px, env(safe-area-inset-top)) 12px 20px; }
+  .auth-card { max-width: 360px; padding: 28px 20px; }
+  .form-control { min-height: 44px; font-size: 16px; }
+  .btn { min-height: 44px; }
+}
+</style>
+</head>
+<body>
+<main class="auth-card">
+  <div class="auth-logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10">
+    <div class="auth-logo-name">Clases<span>De10</span></div>
+  </div>
+
+  <h1>Crea tu contraseña</h1>
+  <p class="lead">Este paso confirma que el correo es tuyo. Si te hemos preparado una cuenta de familia, después completarás los datos necesarios de tu perfil.</p>
+
+  <div class="status" id="status" role="status" aria-live="polite">Comprobando el enlace seguro…</div>
+
+  <form id="form-email" novalidate hidden>
+    <div class="form-group">
+      <label class="form-label" for="email">Confirma el correo que recibió el enlace</label>
+      <input class="form-control" type="email" id="email" name="email" autocomplete="email" maxlength="254" required>
+    </div>
+    <button class="btn btn-primary btn-lg" type="submit" style="width:100%;justify-content:center">Verificar correo</button>
+  </form>
+
+  <form id="form-password" novalidate hidden>
+    <p class="lead">Correo verificado: <span class="verified-email" id="verified-email"></span></p>
+    <div class="form-group">
+      <label class="form-label" for="password">Nueva contraseña</label>
+      <input class="form-control" type="password" id="password" name="password" autocomplete="new-password" minlength="8" maxlength="128" required>
+      <div class="form-hint">Mínimo 8 caracteres.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="password-confirm">Repite la contraseña</label>
+      <input class="form-control" type="password" id="password-confirm" name="password-confirm" autocomplete="new-password" minlength="8" maxlength="128" required>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary btn-lg" id="btn-save" type="submit" style="width:100%;justify-content:center">Guardar contraseña y entrar</button>
+    </div>
+  </form>
+
+  <div class="actions" id="fallback-actions" hidden>
+    <a class="text-link" href="/pages/login.html">Volver a iniciar sesión</a>
+  </div>
+</main>
+
+<script type="module">
+import {
+  completePasswordSetupLink,
+  getSession,
+  getPasswordSetupEmail,
+  getUsuarioActual,
+  isPasswordSetupLink,
+  redirectByRole,
+  setPasswordAfterEmailVerification,
+} from '../js/auth-provider.js?v=20260815-onboarding-gate';
+import { focusFirstInvalidField, validarEmail } from '../js/utils.js';
+
+const status = document.getElementById('status');
+const formEmail = document.getElementById('form-email');
+const formPassword = document.getElementById('form-password');
+const fallbackActions = document.getElementById('fallback-actions');
+const emailInput = document.getElementById('email');
+const passwordInput = document.getElementById('password');
+const passwordConfirmInput = document.getElementById('password-confirm');
+let verifiedUser = null;
+
+function setStatus(message, type = '') {
+  status.textContent = message;
+  status.className = `status${type ? ` ${type}` : ''}`;
+}
+
+function showFailure(message) {
+  setStatus(message, 'error');
+  formEmail.hidden = true;
+  formPassword.hidden = true;
+  fallbackActions.hidden = false;
+}
+
+async function verifyEmailLink(email) {
+  setStatus('Verificando tu correo…');
+  formEmail.hidden = true;
+  const { data, usuario, error } = await completePasswordSetupLink(email, window.location.href);
+  if (error) {
+    showFailure(error.message);
+    return;
+  }
+
+  verifiedUser = usuario;
+  document.getElementById('verified-email').textContent = data.user.email || email;
+  window.history.replaceState({}, document.title, '/pages/crear-contrasena.html');
+  setStatus('Correo verificado. Elige ahora tu contraseña.', 'success');
+  formPassword.hidden = false;
+  fallbackActions.hidden = true;
+  passwordInput.focus();
+}
+
+formEmail.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  emailInput.setCustomValidity('');
+  if (!formEmail.checkValidity()) {
+    focusFirstInvalidField(formEmail);
+    return;
+  }
+  const email = emailInput.value.trim();
+  if (!validarEmail(email)) {
+    emailInput.setCustomValidity('Introduce un correo válido.');
+    focusFirstInvalidField(formEmail);
+    return;
+  }
+  await verifyEmailLink(email);
+});
+
+formPassword.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  passwordConfirmInput.setCustomValidity('');
+  if (!formPassword.checkValidity()) {
+    focusFirstInvalidField(formPassword);
+    return;
+  }
+  if (passwordInput.value !== passwordConfirmInput.value) {
+    passwordConfirmInput.setCustomValidity('Las contraseñas no coinciden.');
+    focusFirstInvalidField(formPassword);
+    return;
+  }
+
+  const button = document.getElementById('btn-save');
+  button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
+  button.textContent = 'Guardando…';
+  const { usuario, error } = await setPasswordAfterEmailVerification(passwordInput.value);
+  if (error) {
+    setStatus(error.message, 'error');
+    button.disabled = false;
+    button.removeAttribute('aria-busy');
+    button.textContent = 'Guardar contraseña y entrar';
+    return;
+  }
+
+  const finalUser = usuario || verifiedUser;
+  const needsFamilyProfile = (finalUser?.rol || finalUser?.role) === 'familia'
+    && finalUser?.profileCompletionRequired;
+  setStatus(
+    needsFamilyProfile
+      ? 'Contraseña creada. Ahora completa los datos necesarios de tu perfil.'
+      : 'Contraseña creada. Tu acceso ya está preparado.',
+    'success',
+  );
+  formPassword.hidden = true;
+  window.setTimeout(() => {
+    if (needsFamilyProfile) {
+      window.location.href = '/pages/dashboard/familia.html?completar-perfil=1#perfil';
+    }
+    else if (finalUser?.rol || finalUser?.role) redirectByRole(finalUser.rol || finalUser.role);
+    else window.location.href = '/pages/login.html';
+  }, 700);
+});
+
+passwordInput.addEventListener('input', () => passwordConfirmInput.setCustomValidity(''));
+passwordConfirmInput.addEventListener('input', () => passwordConfirmInput.setCustomValidity(''));
+
+if (!isPasswordSetupLink(window.location.href)) {
+  const [session, usuario] = await Promise.all([getSession(), getUsuarioActual()]);
+  if (session?.user?.emailVerified && usuario?.passwordSetupRequired) {
+    verifiedUser = usuario;
+    document.getElementById('verified-email').textContent = session.user.email || usuario.email || '';
+    setStatus('Correo verificado. Elige tu contraseña para terminar de activar la cuenta.', 'success');
+    formPassword.hidden = false;
+    fallbackActions.hidden = true;
+    passwordInput.focus();
+  } else {
+    showFailure('Este enlace no es válido o ya no se puede utilizar. Solicita uno nuevo desde el inicio de sesión.');
+  }
+} else {
+  const storedEmail = getPasswordSetupEmail();
+  if (storedEmail) {
+    emailInput.value = storedEmail;
+    await verifyEmailLink(storedEmail);
+  } else {
+    setStatus('Para proteger tu cuenta, confirma el correo al que llegó este enlace.');
+    formEmail.hidden = false;
+    fallbackActions.hidden = false;
+    emailInput.focus();
+  }
+}
+</script>
+<script src="/js/pwa.js?v=20260809-account-linking" defer></script>
+</body>
+</html>

@@ -125,6 +125,18 @@ assert.equal(hourlyQuote.teacherAmount, 18);
 assert.equal(hourlyQuote.familyHourlyRate, 40);
 assert.equal(hourlyQuote.teacherHourlyRate, 24);
 
+const legacyShortFinancialPatch = buildClassFinancialPatch({
+  subject: 'Matematicas',
+  fecha: '2026-07-10',
+  hora_inicio: '17:30',
+  hora_fin: '18:03',
+  precio_total: 32,
+  importe_profesor: 24,
+}, teachers[0], { config });
+assert.equal(legacyShortFinancialPatch.familyAmount, 17.6);
+assert.equal(legacyShortFinancialPatch.teacherAmount, 13.2);
+assert.equal(legacyShortFinancialPatch.platformFee, 4.4);
+
 const hourlyReport = buildFinanceErpReport({
   classes: [{
     id: 'hourly-stale',

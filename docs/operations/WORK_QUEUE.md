@@ -1,0 +1,57 @@
+# Cola persistente de trabajo de ClasesDe10
+
+Este documento es el punto de reanudación de Codex para este proyecto. Debe leerse antes de dar por terminada una tarea larga y actualizarse después de cada hito material.
+
+## Objetivo activo
+
+Auditar y completar de forma autónoma toda la cola de solicitudes del hilo para `https://clasesde10.com`, desplegando y verificando cada cambio en producción.
+
+## Protocolo de reanudación
+
+1. Leer `AGENTS.md` y este archivo completo.
+2. Comprobar el objetivo duradero activo y el estado del repositorio.
+3. Reanudar el primer elemento que no esté `completado` y ejecutar la acción siguiente indicada.
+4. Después de código, pruebas, despliegue o verificación, actualizar este archivo antes de iniciar otra fase.
+5. No cerrar la cola hasta que todos los elementos estén completados con evidencia.
+
+## Estados permitidos
+
+- `pendiente`: todavía no auditado o iniciado.
+- `en curso`: trabajo activo con una acción siguiente concreta.
+- `por verificar`: implementado, pero falta confirmar producción.
+- `completado`: desplegado y verificado con evidencia.
+- `bloqueado`: solo para un impedimento externo real que no pueda resolverse autónomamente.
+
+## Inventario del hilo
+
+| ID | Solicitud | Estado | Evidencia / acción siguiente |
+|---|---|---|---|
+| Q01 | Instalar y usar Playwright | completado | Playwright `1.61.1` instalado; navegador y suites del proyecto operativos. |
+| Q02 | Registro, acceso, Google y finalización mínima de cuenta | completado | Alta/inicio reales en producción; onboarding mínimo; Google limitado a `userinfo.email` y `userinfo.profile`; datos temporales limpiados. |
+| Q03 | Producción permanente y manual de marca en PDF | completado | Directriz vigente; manual de 10 páginas renderizado, inspeccionado y publicado en `/docs/manuals/manual-identidad-visual-clasesde10.pdf`. |
+| Q04 | Eliminar rasgos visuales que hacen que la web parezca generada por IA | completado | Auditoría visual de 13 páginas base y smoke de los cuatro paneles: sin degradados, card-soup, radios/hover impropios ni desbordes. |
+| Q05 | Navegación pública mínima y botón Acceder destacado | completado | Auditoría de 6 plantillas y navegador global superada; producción verificada. |
+| Q06 | CTA adecuados en páginas para familias y profesores | completado | CTA y rol preseleccionado comprobados en producción para familia y profesor. |
+| Q07 | Eliminar textos internos de la web pública | completado | Auditoría de límites de copy en 14 archivos y rastreo productivo de 36 URLs superados. |
+| Q08 | Simplificar login y usar el logotipo real de Google | completado | UI y pruebas confirman dos accesos, un único enlace de contraseña olvidada, sin “Volver a la web” y logotipo oficial de Google. |
+| Q09 | Auditoría profesional completa de paneles y notificaciones accionables | completado | Smoke productivo de familia, profesor, alumno y admin; avisos separados del chat, acciones, calendario y responsive verificados. |
+| Q10 | Vinculación bidireccional Google y correo/contraseña | completado | UID original preservado; enlace de correo verificado; proveedores `google.com` y `password`; inicio con contraseña superado. |
+| Q11 | Profesionalizar perfiles de profesor y familia con modales útiles | completado | Edición, persistencia, campos, modales desktop/móvil y limpieza comprobados en producción. |
+| Q12 | Auditoría SEO y actualización integral | completado | Sitio estático sin WordPress: implementación SEO nativa equivalente; 36 URLs, canónicas, schemas, sitemap, noindex, redirecciones y Web Vitals superados. |
+| Q13 | Calendario del profesor, colores y estados/ciclos de cobro | completado | Paleta semántica de 5 colores, “Cobro pendiente/Cobrado/Fecha de cobro” y repetición del ciclo verificadas en producción. |
+| Q14 | Simplificar Mis clases del profesor y detalle en modal | completado | Lista compacta y detalle en modal verificados en escritorio y móvil dentro del smoke productivo de cobros/clases. |
+| Q15 | Autonomía permanente y ausencia de preguntas de permiso | completado | Directrices presentes en `AGENTS.md`. |
+| Q16 | Llamadas desde chat plenamente operativas | completado | Smoke productivo de WebRTC y fallback Firestore superado en ambos sentidos. |
+| Q17 | Chat profesional tipo WhatsApp: no leídos, visto, llamadas y vídeo | completado | Smoke productivo de mensajería, lectura, voz y vídeo superado. |
+| Q18 | Corregir Documentos y Disponibilidad | completado | Smokes productivos desktop/móvil, CRUD, subida/apertura y responsive superados. |
+| Q19 | Continuidad tras pérdida de red/interrupciones y finalización de toda la cola | completado | Objetivo duradero utilizado; protocolo y cola persistente en disco; smokes migrados de tokens temporales a ADC para reanudaciones fiables. |
+| Q20 | Alta asistida de familias, bandeja de formularios y revisión integral del contenido público | completado | Formulario mínimo, activación segura sin contraseña predecible, perfil obligatorio, avisos admin y contenido público/SEO desplegados; escritura anónima temporal y limpieza, reglas, 36 URLs, cabeceras y marcadores productivos verificados. |
+| Q21 | Producción obligatoria en todos los prompts y publicación de todo cambio acumulado local | en curso | Regla permanente añadida a `AGENTS.md`; siguiente paso: auditar el árbol completo, validar, publicar Firebase y sincronizar el código fuente/automatizaciones remotas. |
+
+## Último punto de control
+
+- Fecha: 2026-08-15.
+- Completado: Q01-Q19 reconciliados, implementados, desplegados y verificados en producción.
+- Completado: Q01-Q20 reconciliados, implementados, desplegados y verificados en producción.
+- En curso: Q21, reconciliación completa del repositorio local con Firebase y GitHub.
+- Acción siguiente: excluir artefactos temporales/secretos, ejecutar la validación integral, desplegar la versión completa y sincronizar la rama remota.

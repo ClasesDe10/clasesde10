@@ -12,15 +12,18 @@ import {
   buildPaymentValidationPayload,
   buildTeacherPayoutPayload,
   classEconomicState,
+  familyPaymentRecipient,
   isPaymentOverdue,
   isPaymentVerified,
   matchPaymentToClasses,
   normalizePaymentStatus,
   paymentFingerprint,
+  paymentStrongRelationKeys,
   paymentScheduleForClass,
   paymentScheduleLabel,
   paymentStatusForBadge,
   reviewPaymentWithAssistant,
+  samePaymentRelation,
   shouldAutoValidatePaymentReview,
   economicCalendarLegend,
   weeklyPaymentDueAtForClass,
@@ -43,6 +46,11 @@ const familyPayment = buildFamilyPaymentPayload({
 assert(familyPayment.paymentType === 'family_payment', 'Family payment payload must use family_payment type.');
 assert(familyPayment.gateway === 'manual', 'Manual proofs must use manual gateway.');
 assert(familyPayment.reconciliationStatus === 'pending_match', 'Unlinked family payments must wait for reconciliation.');
+assert(familyPayment.paymentRecipientPhone === '613016665', 'Family payments must go to the central ClasesDe10 Bizum phone.');
+assert(familyPayment.paymentRecipientName === 'Miguel G. G.', 'Family payments must name the platform recipient.');
+assert(familyPayment.platformCollectsPayment === true, 'Family payments must record that ClasesDe10 collects before teacher payout.');
+assert(familyPayment.fundsFlow === 'platform_collects_then_teacher_payout', 'Family payments must record the platform collection flow.');
+assert(familyPaymentRecipient().phone === '613016665', 'Payment recipient helper must expose the central Bizum phone.');
 assert(Boolean(paymentFingerprint(familyPayment)), 'Payments must have deterministic fingerprints.');
 
 const payout = buildTeacherPayoutPayload('teacher_1', {
@@ -65,6 +73,20 @@ const shortLegacyClassEconomic = classEconomicState({
 assert(shortLegacyClassEconomic.familyAmount === 17.6, 'Legacy hourly family amount must be prorated by real duration.');
 assert(shortLegacyClassEconomic.teacherAmount === 13.2, 'Legacy hourly teacher amount must be prorated by real duration.');
 assert(shortLegacyClassEconomic.platformFee === 4.4, 'Legacy hourly margin must be prorated by real duration.');
+
+const shortLegacyClassWithStaleMargin = classEconomicState({
+  id: 'legacy_short_class_stale_margin',
+  estado: 'confirmada',
+  fecha: '2026-07-10',
+  hora_inicio: '17:30',
+  hora_fin: '18:03',
+  precio_total: 32,
+  importe_profesor: 24,
+  comision_clasesde10: 8,
+  platformFee: 8,
+});
+assert(shortLegacyClassWithStaleMargin.platformFee === 4.4, 'Stored legacy margin must be recalculated from prorated class totals.');
+assert(shortLegacyClassWithStaleMargin.marginPct === 25, 'Stored legacy margin percent must remain consistent with prorated totals.');
 
 const gatewayUpdate = buildGatewayPaymentUpdate({
   gateway: 'stripe',
@@ -143,18 +165,63 @@ assert(
   scheduleIndex.get('teacher_student:teacher_1:student_1')?.id === weeklySchedule.id,
   'Weekly payment schedules must keep compatibility with underscore cache keys.',
 );
+assert(
+  paymentStrongRelationKeys(weeklySchedule).includes('teacher-student:teacher_1:student_1'),
+  'Payment relation keys must include teacher/student as a strong relation key.',
+);
+assert(
+  samePaymentRelation(
+    { assignmentId: 'assignment_1', teacherUid: 'teacher_1', studentId: 'student_1' },
+    { teacherUid: 'teacher_1', studentId: 'student_1' },
+  ),
+  'Payment carryover must match a scheduled relation even if only one side has assignmentId.',
+);
+assert(
+  !samePaymentRelation(
+    { assignmentId: 'assignment_1', teacherUid: 'teacher_1', studentId: 'student_1' },
+    { teacherUid: 'teacher_1', studentId: 'student_2' },
+  ),
+  'Payment carryover must not mix students from the same teacher.',
+);
 const confirmationGroups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, {
   nowMs: new Date('2026-06-22T12:00:00').getTime(),
 });
 assert(confirmationGroups.length === 1, 'Family payment confirmation must group unpaid classes by relation and due date.');
 assert(confirmationGroups[0].amount === 50 && confirmationGroups[0].classCount === 2, 'Family confirmation group must total linked class amounts.');
-const blockedGroups = buildFamilyPaymentConfirmationGroups(classes, [{ paymentType: 'family_payment', estado: 'pendiente', classIds: ['c1', 'c2'] }], scheduleIndex);
-assert(blockedGroups.length === 0, 'Open payment proofs must block duplicate family confirmation for the same classes.');
+assert(confirmationGroups[0].paymentPeriodStart && confirmationGroups[0].paymentPeriodEnd, 'Family confirmation groups must expose the payment period covered.');
+assert(confirmationGroups[0].currentPeriodClasses.length === 2, 'Family confirmation groups must classify classes from the current payment period.');
+assert(confirmationGroups[0].dueNow === false && confirmationGroups[0].upcoming === true, 'Future scheduled classes must be labelled as an upcoming payment.');
+assert(confirmationGroups[0].classes.every((item) => item.paymentBucket === 'upcoming'), 'Each class must expose its payment-window bucket.');
+assert(confirmationGroups[0].bizumPhone === '613016665', 'Family confirmation groups must use ClasesDe10 central Bizum phone.');
+assert(confirmationGroups[0].teacherPhone === '', 'Family confirmation groups must not expose the teacher real phone for payment.');
+const dueNowConfirmationGroups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, {
+  nowMs: new Date('2026-06-27T10:00:00').getTime(),
+});
+assert(dueNowConfirmationGroups[0].paymentWindow === 'due_now', 'A payment whose scheduled date has arrived must be labelled as due now.');
+assert(dueNowConfirmationGroups[0].classes.every((item) => item.paymentBucket === 'due'), 'Due-now groups must mark every selectable class as part of the current payment.');
+const blockedGroups = buildFamilyPaymentConfirmationGroups(classes, [{ paymentType: 'family_payment', estado: 'pendiente', documentId: 'doc_1', classIds: ['c1', 'c2'] }], scheduleIndex);
+assert(blockedGroups.length === 0, 'Open payment proofs with an uploaded file must block duplicate family confirmation for the same classes.');
+const orphanOpenPaymentGroups = buildFamilyPaymentConfirmationGroups(classes, [{ paymentType: 'family_payment', estado: 'vencido', classIds: ['c1', 'c2'] }], scheduleIndex);
+assert(orphanOpenPaymentGroups.length === 1, 'Expired payment records without a real proof must not hide unpaid classes from the next payment day.');
+const overdueConfirmationGroups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, {
+  nowMs: new Date('2026-07-01T12:00:00').getTime(),
+});
+assert(overdueConfirmationGroups[0].paymentWindow === 'overdue', 'Past payment windows must be labelled as overdue.');
+assert(overdueConfirmationGroups[0].classes.every((item) => item.paymentBucket === 'overdue'), 'Overdue groups must mark every selectable class as unpaid.');
+const orphanContextClasses = applyClassPaymentContext(classes, [{
+  id: 'pay_orphan',
+  paymentType: 'family_payment',
+  estado: 'vencido',
+  classIds: ['c1'],
+  created_at: '2026-06-28T10:00:00.000Z',
+}]);
+assert(!orphanContextClasses[0].linkedFamilyPaymentId, 'Expired payment records without a real proof must not render classes as in review.');
 const reviewContextClasses = applyClassPaymentContext(classes, [{
   id: 'pay_review',
   paymentType: 'family_payment',
   estado: 'pendiente',
   monto: 20,
+  documentId: 'doc_review',
   classIds: ['c1'],
   created_at: '2026-06-28T10:00:00.000Z',
 }]);
@@ -170,7 +237,12 @@ const payoutPendingClass = applyClassPaymentContext([{ ...classes[0], importe_pr
   created_at: '2026-06-28T10:00:00.000Z',
 }])[0];
 assert(classEconomicState(payoutPendingClass, weeklySchedule).state === 'payout_pending', 'Family paid classes must show pending teacher payout until liquidated.');
-assert(economicCalendarLegend().some((item) => item.className === 'dot-blue'), 'Economic calendar legend must include payment review.');
+const economicLegendClasses = new Map(economicCalendarLegend().map((item) => [item.label, item.className]));
+assert(economicLegendClasses.get('Falta importe') === 'dot-rose', 'Economic calendar legend must distinguish missing amounts.');
+assert(economicLegendClasses.get('En revision') === 'dot-blue', 'Economic calendar legend must include payment review.');
+assert(economicLegendClasses.get('Pendiente') === 'dot-amber', 'Economic calendar legend must distinguish pending items.');
+assert(economicLegendClasses.get('Liquidar profesor') === 'dot-indigo', 'Economic calendar legend must distinguish teacher payout actions.');
+assert(economicLegendClasses.get('Liquidada') === 'dot-emerald', 'Economic calendar legend must distinguish settled classes.');
 const confirmationPayload = buildFamilyClassPaymentConfirmationPayload(confirmationGroups[0], {
   familyUid: 'family_1',
   metodo: 'bizum',
@@ -179,6 +251,7 @@ const confirmationPayload = buildFamilyClassPaymentConfirmationPayload(confirmat
 assert(confirmationPayload.classIds.length === 2, 'Family confirmation payload must keep explicit class ids.');
 assert(confirmationPayload.reconciliationStatus === 'matched', 'Family confirmation payload must be reconciled from creation.');
 assert(confirmationPayload.verificationSource === 'family_dashboard_confirmation', 'Family confirmation payload must expose its source.');
+assert(confirmationPayload.paymentRecipientPhone === '613016665', 'Class-linked family payments must keep the central Bizum phone.');
 const automaticReview = reviewPaymentWithAssistant({
   id: 'pay_auto',
   paymentType: 'family_payment',

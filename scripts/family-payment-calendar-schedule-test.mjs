@@ -31,12 +31,28 @@ assert(
   'Family payment schedule markers must have deterministic ids per schedule day.',
 );
 assert(
-  familyDashboard.includes('if (groupKeys.has(key)) return null;'),
-  'Family calendar must not duplicate a schedule marker when a real payment group already exists.',
+  familyDashboard.includes('mergedPaymentGroupForScheduleDate(schedule, dateIso, groups)'),
+  'Family calendar must merge real payable classes into the scheduled payment day marker.',
 );
 assert(
-  familyDashboard.includes('scheduleOnly: true'),
-  'Schedule-only payment markers must be distinguishable from payable groups.',
+  familyDashboard.includes('samePaymentRelation(left, right)') && familyDashboard.includes('familyPaymentSameRelation(schedule, group)'),
+  'Family calendar must match carryover by strong relation keys, not only by one preferred relation id.',
+);
+assert(
+  familyDashboard.includes('overdueClasses') && familyDashboard.includes('currentPeriodClasses'),
+  'Family payment day markers must distinguish current-period classes from overdue carryover.',
+);
+assert(
+  familyDashboard.includes('scheduleOnly: amount <= 0'),
+  'Schedule-only payment markers must be distinguishable from payable groups after merging.',
+);
+assert(
+  familyDashboard.includes('previousPaymentScheduleDueAtForDate'),
+  'Family payment day markers must explain the period since the previous payment day.',
+);
+assert(
+  familyDashboard.includes('enviar-justificante-calendario'),
+  'Family payment day cards must expose a direct proof upload action.',
 );
 assert(
   familyDashboard.includes('hydratePaymentSchedulesForCalendar(identityResolver)'),

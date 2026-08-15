@@ -134,7 +134,7 @@ const plan = buildRelationshipFollowupPlan({
   adminEscalationHours: 48,
   adminEscalationDays: 14,
   userNotificationCooldownHours: 24,
-  maxUserNotifications: 40,
+  maxUserNotifications: 6,
 });
 
 const actions = new Map(plan.actions.map((item) => [item.actionId, item]));
@@ -152,8 +152,9 @@ assert.equal(actions.get('answer_schedule_proposal').recipients.length, 2);
 assert.equal(actions.get('admin_chat_pendiente').recipients.length, 0);
 assert.equal(actions.get('admin_chat_pendiente').createAdminTask, true);
 assert.equal(actions.get('review_repeated_cancellations').createAdminTask, true);
-assert.equal(actions.get('relationship_quality_check').recipients.length, 1);
+assert.equal(actions.get('relationship_quality_check').recipients.length, 0);
 assert.equal(plan.summary.userNotifications >= 4, true);
+assert.equal(plan.summary.userNotifications <= 6, true);
 assert.equal(plan.summary.adminTasks >= 1, true);
 assert.equal(plan.summary.qualityChecks >= 2, true);
 assert.equal(plan.summary.cancellationRisks, 1);

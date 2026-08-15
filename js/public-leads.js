@@ -28,6 +28,7 @@ function isLikelySpam(lead) {
 function cleanMetadata(metadata = {}) {
   const allowedKeys = [
     'alumno',
+    'account_mode',
     'anios',
     'canal',
     'consent_privacy',
@@ -103,6 +104,12 @@ export async function submitLead(lead) {
       user_agent: navigator.userAgent,
     }),
     estado: 'nuevo',
+    ...(clean(lead.accountStatus, 40) === 'pending_activation'
+      ? {
+          accountStatus: 'pending_activation',
+          activationRequestedAt: serverTimestamp(),
+        }
+      : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };

@@ -1,16 +1,25 @@
-name: Firebase automation and maintenance worker
+name: Firebase automation worker without Blaze
 
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: "critical keeps production alive; full also refreshes analytics, trust and scale snapshots"
+        type: choice
+        default: "critical"
+        options:
+          - critical
+          - full
+          - trust
       dry_run:
         description: "Run without writing to Firestore"
+        type: boolean
         required: false
-        default: "false"
-      mode:
-        description: "critical runs low-quota automations and maintenance; full also refreshes trust, analytics and scale snapshots"
+        default: false
+      limit:
+        description: "Maximum documents per batch"
         required: false
-        default: "critical"
+        default: "25"
   schedule:
     - cron: "*/10 * * * *"
     - cron: "17 3 * * *"
@@ -28,16 +37,43 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Install production dependencies
+        run: npm ci --omit=dev
+
+      - name: Verify Firebase credentials secret
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -z "$FIREBASE_SERVICE_ACCOUNT_BASE64" ]; then
+            echo "::error::Missing Firebase credentials. Add FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64 as a repository secret."
+            exit 1
+          fi
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then
+            node -e "const data = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON); if (!data.client_email || !data.private_key) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON must include client_email and private_key');"
+          fi
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -n "$FIREBASE_SERVICE_ACCOUNT_BASE64" ]; then
+            node -e "const data = JSON.parse(Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8')); if (!data.client_email || !data.private_key) throw new Error('FIREBASE_SERVICE_ACCOUNT_BASE64 must decode to a service account JSON');"
+          fi
+
+      - name: Syntax guard
+        run: |
+          node --check scripts/firebase-automation-worker.mjs
+          node --check functions/platform-automation-engine.js
+          node --check js/payment-engine.js
+          node --check js/calendar-engine.js
+          node --check js/notification-engine.js
+
+      - name: Free infrastructure guard
+        run: npm run audit:free-infrastructure
 
       - name: Run automation worker
         env:
@@ -47,29 +83,49 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-2.0-flash
           ALLOW_QUOTA_EXHAUSTED: "true"
-          SYSTEM_JOB_LIMIT: 15
-          AUTOMATION_LIMIT: 15
+          SYSTEM_JOB_LIMIT: 25
+          AUTOMATION_LIMIT: 25
           TRUST_CONTEXT_LIMIT: 400
           MATCHING_TEACHER_SCAN_LIMIT: 400
           MATCHING_USER_SCAN_LIMIT: 800
           MATCHING_ASSIGNMENT_SCAN_LIMIT: 1000
+          REQUESTED_MODE: ${{ github.event.inputs.mode }}
+          REQUESTED_DRY_RUN: ${{ github.event.inputs.dry_run }}
+          REQUESTED_LIMIT: ${{ github.event.inputs.limit }}
+          EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ] && [ -z "$FIREBASE_SERVICE_ACCOUNT_BASE64" ]; then
-            echo "::warning::Firebase automation skipped: configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_BASE64 as a repository secret."
-            exit 0
-          fi
-          MODE="${{ github.event.inputs.mode }}"
+          MODE="$REQUESTED_MODE"
           if [ -z "$MODE" ]; then
             MODE="critical"
           fi
-          if [ "${{ github.event.schedule }}" = "17 3 * * *" ]; then
+          if [ "$EVENT_SCHEDULE" = "17 3 * * *" ]; then
             MODE="full"
           fi
-          EXTRA_ARGS="--critical --limit=15"
-          if [ "$MODE" = "full" ]; then
-            EXTRA_ARGS="--limit=35"
+          LIMIT="$REQUESTED_LIMIT"
+          if [ -z "$LIMIT" ]; then
+            LIMIT="25"
           fi
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+          case "$MODE" in
+            critical)
+              EXTRA_ARGS="--critical --limit=$LIMIT"
+              ;;
+            full)
+              EXTRA_ARGS="--limit=$LIMIT"
+              ;;
+            trust)
+              EXTRA_ARGS="--trust-only --limit=$LIMIT"
+              ;;
+            *)
+              echo "::error::Unsupported automation mode: $MODE"
+              exit 1
+              ;;
+          esac
+          if [ "$MODE" = "full" ]; then
+            echo "Running full automation worker with limit=$LIMIT"
+          else
+            echo "Running $MODE automation worker with limit=$LIMIT"
+          fi
+          if [ "$REQUESTED_DRY_RUN" = "true" ]; then
             npm run automation:matching -- $EXTRA_ARGS --dry-run
           else
             npm run automation:matching -- $EXTRA_ARGS

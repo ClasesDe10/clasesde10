@@ -17,15 +17,19 @@
 <meta property="og:description" content="Contacta con ClasesDe10 por email o formulario.">
 <meta property="og:url" content="https://clasesde10.com/contacto">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Contacto — ClasesDe10">
 <meta name="twitter:description" content="Contacta con ClasesDe10 por email o formulario. Estamos aquí para ayudarte a encontrar tu profesor o tus alumnos.">
-<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta name="twitter:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20260808-editorial">
 <style>
 .contact-section { padding: 90px 0; background: var(--cream); }
 .contact-grid {
@@ -38,18 +42,12 @@
 .ci-intro { font-size: 1rem; line-height: 1.85; color: var(--text-body); }
 .ci-card {
   display: flex; gap: 18px; align-items: flex-start;
-  background: var(--white); border-radius: 16px; padding: 24px 22px;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-  transition: transform .2s, box-shadow .2s;
+  background: transparent; border-radius: 0; padding: 22px 0;
+  border: 0; border-top: 1px solid rgba(15,31,61,.18);
+  box-shadow: none;
 }
-.ci-card:hover { transform: translateY(-4px); box-shadow: 0 10px 32px rgba(0,0,0,0.09); }
-.ci-ico {
-  width: 48px; height: 48px; flex-shrink: 0;
-  background: var(--navy); border-radius: 12px;
-  display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
-}
-.ci-card h4 { font-weight: 700; color: var(--navy); font-size: .96rem; margin-bottom: 4px; }
+.ci-ico { display: none; }
+.ci-card h3 { font-weight: 700; color: var(--navy); font-size: .96rem; margin-bottom: 4px; }
 .ci-card p { font-size: .88rem; color: var(--gray-mid); line-height: 1.6; }
 .ci-card a { color: var(--navy); text-decoration: none; font-weight: 600; transition: color .2s; }
 .ci-card a:hover { color: var(--gold); }
@@ -58,24 +56,24 @@
 .ci-card a { overflow-wrap: anywhere; word-break: break-word; }
 
 .shortcuts { margin-top: 8px; }
-.shortcuts h4 { font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--navy); margin-bottom: 12px; }
+.shortcuts h3 { font-size: .8rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--navy); margin-bottom: 12px; }
 .shortcut-btns { display: flex; flex-direction: column; gap: 10px; }
 .shortcut-btn {
   display: flex; align-items: center; gap: 12px;
   background: var(--white); border: 1.5px solid rgba(0,0,0,0.08);
-  border-radius: 12px; padding: 14px 18px;
+  border-radius: 2px; padding: 14px 18px;
   text-decoration: none; color: var(--navy); font-weight: 600; font-size: .9rem;
-  transition: border-color .2s, transform .15s, box-shadow .2s;
+  transition: border-color .2s, color .2s;
 }
-.shortcut-btn:hover { border-color: var(--gold); transform: translateX(4px); box-shadow: 0 4px 16px rgba(232,160,48,0.15); }
-.shortcut-btn .sb-ico { font-size: 1.2rem; }
+.shortcut-btn:hover { border-color: var(--gold); color: var(--gold-text); }
+.shortcut-btn .sb-ico { display: none; }
 .shortcut-btn .sb-sub { font-size: .76rem; color: var(--gray-mid); font-weight: 400; display: block; }
 
 /* FORM SIDE */
 .contact-form-card {
-  background: var(--white); border-radius: 24px; padding: 48px 44px;
+  background: var(--white); border-radius: 2px; padding: 48px 44px;
   border: 1px solid rgba(0,0,0,0.07);
-  box-shadow: 0 6px 36px rgba(0,0,0,0.08);
+  box-shadow: none;
 }
 .cf-title {
   font-family: 'Playfair Display', serif;
@@ -89,7 +87,7 @@
 .cf-field input,
 .cf-field select,
 .cf-field textarea {
-  border: 1.5px solid rgba(0,0,0,0.1); border-radius: 8px;
+  border: 1.5px solid rgba(0,0,0,0.1); border-radius: 2px;
   padding: 12px 14px; font-size: .93rem; font-family: 'DM Sans', sans-serif;
   color: var(--text-dark); background: var(--cream);
   transition: border-color .2s, background .2s; outline: none;
@@ -99,30 +97,28 @@
 .cf-submit {
   background: var(--navy); color: var(--white);
   font-weight: 700; font-size: 1rem; padding: 16px;
-  border: none; border-radius: 10px; cursor: pointer;
-  transition: background .2s, transform .15s, box-shadow .2s;
+  border: none; border-radius: 2px; cursor: pointer;
+  transition: background .2s;
   margin-top: 4px;
-  box-shadow: 0 4px 16px rgba(15,31,61,0.2);
+  box-shadow: none;
 }
-.cf-submit:hover { background: var(--navy-light); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,31,61,0.3); }
+.cf-submit:hover { background: var(--navy-light); }
 .cf-note { font-size: .76rem; color: var(--gray-mid); text-align: center; }
 
 /* HOURS BANNER */
 .hours-banner {
   background: var(--white); border-top: 4px solid var(--gold);
-  border-radius: 0 0 16px 16px;
+  border-radius: 0;
   padding: 20px 24px;
   display: flex; align-items: center; gap: 14px;
   margin-top: -4px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  box-shadow: none;
 }
 .hb-dot {
-  width: 10px; height: 10px; border-radius: 50%;
+  width: 10px; height: 2px; border-radius: 0;
   background: var(--teal); flex-shrink: 0;
-  box-shadow: 0 0 0 4px rgba(29,122,107,0.2);
-  animation: pulse-green 2s infinite;
+  box-shadow: none;
 }
-@keyframes pulse-green { 0%,100%{box-shadow:0 0 0 4px rgba(29,122,107,0.2)} 50%{box-shadow:0 0 0 8px rgba(29,122,107,0.05)} }
 .hours-banner p { font-size: .88rem; color: var(--text-body); }
 .hours-banner strong { color: var(--navy); }
 
@@ -154,28 +150,25 @@
 <body>
 
 <nav id="mainNav">
-  <a href="index.html" class="nav-logo">
-    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
+  <a href="/" class="nav-logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo" width="192" height="192">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
-    <li><a href="como-funciona.html">Cómo funciona</a></li>
-    <li><a href="para-padres.html">Para familias</a></li>
-    <li><a href="para-profesores.html">Para profesores</a></li>
-    <li><a href="clases-particulares/">Clases</a></li>
-    <li><a href="sobre-nosotros.html">Nosotros</a></li>
-    <li><a href="contacto.html" class="nav-cta active">Contactar</a></li>
+    <li><a href="/como-funciona">Cómo funciona</a></li>
+    <li><a href="/para-padres">Para familias</a></li>
+    <li><a href="/para-profesores">Para profesores</a></li>
+    <li><a href="/contacto" class="active">Contacto</a></li>
+    <li><a href="/pages/login" class="nav-cta">Acceder</a></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
-  <a href="para-padres.html" data-mobile-close>Para familias</a>
-  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
-  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
-  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
-  <a href="pages/login.html" data-mobile-close>Acceder</a>
-  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
+  <a href="/como-funciona" data-mobile-close>Cómo funciona</a>
+  <a href="/para-padres" data-mobile-close>Para familias</a>
+  <a href="/para-profesores" data-mobile-close>Para profesores</a>
+  <a href="/contacto" data-mobile-close>Contacto</a>
+  <a href="/pages/login" class="m-cta" data-mobile-close>Acceder</a>
 </div>
 
 <header class="page-header">
@@ -186,6 +179,7 @@
 
 <section class="contact-section">
   <div class="section-inner">
+    <h2 class="section-title">Elige cómo contactar con nosotros</h2>
     <div class="contact-grid">
 
       <!-- INFO -->
@@ -195,7 +189,7 @@
         <div class="ci-card reveal">
           <div class="ci-ico">📧</div>
           <div>
-            <h4>Email</h4>
+            <h3>Email</h3>
             <p>Para consultas generales y seguimiento.<br><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></p>
           </div>
         </div>
@@ -203,27 +197,27 @@
         <div class="ci-card reveal">
           <div class="ci-ico">💬</div>
           <div>
-            <h4>Chat interno</h4>
-            <p>Si ya formas parte de ClasesDe10, usa el chat de tu panel para clases, horarios, pagos y seguimiento.<br><a href="pages/login.html">Entrar a mi cuenta</a></p>
+            <h3>Chat interno</h3>
+            <p>Si ya formas parte de ClasesDe10, usa el chat de tu panel para clases, horarios, pagos y seguimiento.<br><a href="/pages/login">Entrar a mi cuenta</a></p>
           </div>
         </div>
 
         <div class="ci-card reveal">
           <div class="ci-ico">📍</div>
           <div>
-            <h4>Ubicación</h4>
+            <h3>Ubicación</h3>
             <p>Madrid · Operamos en toda España para clases online. Clases presenciales principalmente en la Comunidad de Madrid.</p>
           </div>
         </div>
 
         <div class="shortcuts reveal">
-          <h4>¿Ya sabes lo que necesitas?</h4>
+          <h3>¿Ya sabes lo que necesitas?</h3>
           <div class="shortcut-btns">
-            <a href="para-padres.html#formulario" class="shortcut-btn">
+            <a href="/para-padres#formulario" class="shortcut-btn">
               <span class="sb-ico">👨‍👩‍👦</span>
               <span>Quiero un profesor para mi hijo/a<span class="sb-sub">Ir al formulario para familias</span></span>
             </a>
-            <a href="para-profesores.html#formulario" class="shortcut-btn">
+            <a href="/para-profesores#formulario" class="shortcut-btn">
               <span class="sb-ico">🎓</span>
               <span>Soy profesor y quiero alumnos<span class="sb-sub">Ir al formulario para docentes</span></span>
             </a>
@@ -232,7 +226,7 @@
 
         <div class="hours-banner reveal">
           <div class="hb-dot"></div>
-          <p><strong>Respondemos en menos de 48h</strong> en días laborables de lunes a viernes.</p>
+          <p><strong>Revisamos cada consulta en días laborables.</strong> Si buscas profesor para un alumno, el formulario breve de familias acelera la preparación del caso.</p>
         </div>
       </div>
 
@@ -288,7 +282,7 @@
           </div>
           <label class="cf-check" for="con-privacidad">
             <input id="con-privacidad" name="privacidad" type="checkbox" required>
-            <span>Acepto la <a href="privacidad.html" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para responderme.</span>
+            <span>Acepto la <a href="/privacidad" target="_blank" rel="noopener noreferrer">política de privacidad</a> y que ClasesDe10 use estos datos para responderme.</span>
           </label>
           <button class="cf-submit" id="submitBtn" type="submit">Enviar mensaje →</button>
           <p class="cf-note">🔐 Tus datos son confidenciales · Solo usados para responderte</p>
@@ -302,30 +296,31 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10" width="192" height="192">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
     <div class="footer-col">
-      <h4>Clases</h4>
+      <h3>Clases</h3>
       <ul>
-        <li><a href="clases-particulares/matematicas-madrid.html">Matemáticas</a></li>
-        <li><a href="clases-particulares/ingles-madrid.html">Inglés</a></li>
-        <li><a href="clases-particulares/bachillerato-madrid.html">Bachillerato</a></li>
-        <li><a href="clases-particulares/selectividad-madrid.html">Selectividad (EBAU)</a></li>
+        <li><a href="/clases-particulares/matematicas">Matemáticas</a></li>
+        <li><a href="/clases-particulares/ingles">Inglés</a></li>
+        <li><a href="/clases-particulares/bachillerato">Bachillerato</a></li>
+        <li><a href="/clases-particulares/selectividad">Selectividad (EBAU)</a></li>
         <li><a href="clases-particulares/">Ver todas →</a></li>
       </ul>
     </div>
     <div class="footer-col">
-      <h4>Contacto</h4>
+      <h3>Contacto</h3>
       <ul>
         <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
-        <li><a href="contacto.html">Formulario de contacto</a></li>
-        <li><a href="terminos.html">Términos de uso</a></li>
-        <li><a href="privacidad.html">Privacidad</a></li>
-        <li><a href="cookies.html">Cookies</a></li>
-        <li><a href="para-padres.html#formulario">Soy padre/madre</a></li>
-        <li><a href="para-profesores.html#formulario">Soy profesor/a</a></li>
+        <li><a href="/sobre-nosotros">Sobre nosotros</a></li>
+        <li><a href="/contacto">Formulario de contacto</a></li>
+        <li><a href="/terminos">Términos de uso</a></li>
+        <li><a href="/privacidad">Privacidad</a></li>
+        <li><a href="/cookies">Cookies</a></li>
+        <li><a href="/para-padres#formulario">Soy padre/madre</a></li>
+        <li><a href="/para-profesores#formulario">Soy profesor/a</a></li>
       </ul>
     </div>
   </div>

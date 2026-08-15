@@ -154,7 +154,7 @@ const plan = buildProactiveAssistPlan(dataset, {
   userNotificationCooldownHours: 72,
   adminCooldownHours: 24,
   adminEscalationHours: 48,
-  maxUserNotifications: 20,
+  maxUserNotifications: 6,
 });
 
 const signalIds = new Set(plan.signals.map((item) => item.signalId));
@@ -177,6 +177,7 @@ assert.equal(plan.summary.paymentReadiness, 1);
 assert.equal(plan.summary.readinessChecks, 1);
 assert.equal(plan.summary.supplyActivation, 1);
 assert.equal(plan.summary.userNotifications >= 6, true);
+assert.equal(plan.summary.userNotifications <= 6, true);
 assert.equal(plan.summary.adminTasks >= 6, true);
 assert.equal(plan.summary.opsAlerts >= 2, true);
 assert.equal(plan.signals[0].priorityScore >= plan.signals.at(-1).priorityScore, true, 'Signals must be sorted by urgency.');

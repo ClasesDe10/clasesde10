@@ -3,6 +3,7 @@ import {
   doc,
   getDocs,
   limit,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -33,6 +34,21 @@ function mapLead(id, data) {
 }
 
 export const leadsAdapter = {
+  watchNew(callback, onError = () => {}) {
+    const liveQuery = query(
+      collection(firebaseDb, COLLECTION),
+      where('estado', '==', 'nuevo'),
+      orderBy('createdAt', 'desc'),
+      limit(BADGE_COUNT_LIMIT),
+    );
+    return onSnapshot(liveQuery, (snap) => {
+      callback({
+        count: snap.size || 0,
+        items: snap.docs.map((item) => mapLead(item.id, item.data())),
+      });
+    }, onError);
+  },
+
   async listPublic({ tipo = '', estado = '', max = 100 } = {}) {
     try {
       const constraints = [];

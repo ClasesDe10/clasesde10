@@ -27,7 +27,7 @@ async (page) => {
       'Incidencias prioritarias',
       'Mapa de subsistemas',
       'Firebase',
-      'Cloud Functions',
+      'Worker de automatizacion',
       'Backups',
       'Inteligencia empresarial',
       'Prevision de cierre',

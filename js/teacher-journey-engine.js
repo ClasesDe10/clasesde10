@@ -1,4 +1,4 @@
-export const TEACHER_JOURNEY_ENGINE_VERSION = 'teacher-journey-2026-06-29';
+export const TEACHER_JOURNEY_ENGINE_VERSION = 'teacher-journey-2026-07-05';
 
 const ACTIVE_VERIFICATION = new Set(['verificado', 'verified', 'aprobado', 'approved', 'activo', 'active']);
 const PENDING_VERIFICATION = new Set(['pendiente', 'pending', 'revision', 'en_revision', 'pendiente_revision']);
@@ -126,6 +126,25 @@ function hasAvailability(input = {}) {
     || clean(first(profile.disponibilidad_resumen, profile.availabilitySummary), 40).length >= 8;
 }
 
+function hasPayoutPreference(input = {}) {
+  const profile = input.teacher || input.profile || {};
+  const frequency = lower(first(
+    profile.payoutFrequency,
+    profile.frecuencia_cobro_profesor,
+    profile.payoutCadence,
+    profile.cobro_frecuencia,
+    profile.paymentFrequency,
+  ), 40);
+  const anchorDate = clean(first(
+    profile.payoutAnchorDate,
+    profile.fecha_inicio_cobro_profesor,
+    profile.teacherPayoutAnchorDate,
+    profile.cobro_fecha_inicio,
+  ), 20).slice(0, 10);
+  return ['quincenal', 'mensual', 'biweekly', 'fortnightly', 'monthly', 'mes'].includes(frequency)
+    && /^\d{4}-\d{2}-\d{2}$/.test(anchorDate);
+}
+
 function relationshipPriority(relationship = {}) {
   const stage = clean(relationship.stage, 80);
   const priorities = {
@@ -190,8 +209,13 @@ function stageCopy(stage, context = {}) {
   const copy = {
     profile_needed: {
       title: 'Completa tu perfil profesional',
-      body: 'Antes de recibir buenos alumnos necesitamos una ficha completa: foto, estudios, zona, materias, niveles, disponibilidad y Bizum.',
+      body: 'Antes de recibir buenos alumnos necesitamos una ficha completa: foto, estudios, direccion/codigo postal, materias, niveles, disponibilidad, Bizum y dia de cobro.',
       primary: buildAction('complete_profile', 'Completar perfil', 'Abre tu perfil y termina los campos obligatorios.', 'perfil'),
+    },
+    payout_needed: {
+      title: 'Fija tu dia de cobro',
+      body: 'Elige en Ingresos si quieres cobrar cada 15 dias o una vez al mes. Este dato queda fijo al guardarlo para que el calendario marque tus cobros sin dudas.',
+      primary: buildAction('open_income', 'Configurar dia de cobro', 'Se guarda una vez y luego queda bloqueado.', 'ingresos'),
     },
     documents_needed: {
       title: 'Sube la documentacion necesaria',
@@ -205,13 +229,13 @@ function stageCopy(stage, context = {}) {
     },
     availability_needed: {
       title: 'Define tu disponibilidad real',
-      body: 'Para asignarte alumnos sin idas y vueltas necesitamos franjas claras. Esto reduce trabajo manual y mejora el matching.',
+      body: 'Indica franjas claras para que podamos proponerte alumnos compatibles con tu horario.',
       primary: buildAction('set_availability', 'Anadir disponibilidad', 'Indica dias y horas en los que puedes dar clase.', 'disponibilidad'),
     },
     waiting_students: {
       title: 'Listo para recibir alumnos',
       body: 'No tienes alumnos activos ahora mismo. Mantener perfil, documentos y disponibilidad al dia ayuda a que el equipo te asigne antes.',
-      primary: buildAction('open_profile', 'Revisar mi perfil', 'Comprueba que tus materias y zona siguen actualizadas.', 'perfil', 'secondary'),
+      primary: buildAction('open_profile', 'Revisar mi perfil', 'Comprueba que tus materias y disponibilidad siguen actualizadas.', 'perfil', 'secondary'),
     },
     schedule_needed: {
       title: 'Cierra el horario de la primera clase',
@@ -250,10 +274,14 @@ function stageCopy(stage, context = {}) {
 export function buildTeacherJourneyState(input = {}) {
   const relationships = toArray(input.relationships);
   const documents = toArray(input.documents || input.documentos);
+  const profileEvaluation = input.profileEvaluation || {};
+  const profileIssues = toArray(profileEvaluation.issues);
   const profilePercent = profilePercentFrom(input);
   const verificationStatus = verificationStatusOf(input);
   const profileBlocked = PROFILE_BLOCKED.has(verificationStatus);
-  const profileReady = profilePercent >= 85 && !profileBlocked;
+  const profileCoreReady = profilePercent >= 85 && !profileBlocked && profileIssues.filter((issue) => clean(issue, 80) !== 'payout').length === 0;
+  const payoutReady = hasPayoutPreference(input);
+  const profileReady = profileCoreReady && payoutReady;
   const documentReady = documents.some(hasUsefulDocument) || documents.some(hasVerifiedDocument);
   const verified = ACTIVE_VERIFICATION.has(verificationStatus);
   const verificationPending = PENDING_VERIFICATION.has(verificationStatus) || (profileReady && !verified);
@@ -266,7 +294,8 @@ export function buildTeacherJourneyState(input = {}) {
   else if (hasStage(relationships, PAYMENT_STAGES)) stage = 'income_pending';
   else if (hasStage(relationships, SCHEDULE_STAGES)) stage = 'schedule_needed';
   else if (hasStage(relationships, CLASS_READY_STAGES) || hasSchedule(relationships)) stage = 'class_scheduled';
-  else if (!profileReady) stage = 'profile_needed';
+  else if (!profileCoreReady) stage = 'profile_needed';
+  else if (!payoutReady) stage = 'payout_needed';
   else if (!documentReady) stage = 'documents_needed';
   else if (verificationPending && !verified) stage = 'verification_pending';
   else if (!availabilityReady) stage = 'availability_needed';
@@ -274,7 +303,8 @@ export function buildTeacherJourneyState(input = {}) {
 
   const copy = stageCopy(stage, { relationship: primaryRelationship });
   const secondaryActions = [];
-  if (stage !== 'profile_needed' && !profileReady) secondaryActions.push(buildAction('complete_profile', 'Completar perfil', 'Mejora asignaciones futuras.', 'perfil', 'secondary'));
+  if (stage !== 'profile_needed' && !profileCoreReady) secondaryActions.push(buildAction('complete_profile', 'Completar perfil', 'Mejora asignaciones futuras.', 'perfil', 'secondary'));
+  if (stage !== 'payout_needed' && !payoutReady) secondaryActions.push(buildAction('open_income', 'Dia de cobro', 'Fija cuando quieres cobrar.', 'ingresos', 'secondary'));
   if (stage !== 'documents_needed' && !documentReady) secondaryActions.push(buildAction('upload_documents', 'Documentos', 'Sube validaciones.', 'documentos', 'secondary'));
   if (stage !== 'availability_needed' && !availabilityReady) secondaryActions.push(buildAction('set_availability', 'Disponibilidad', 'Actualiza franjas reales.', 'disponibilidad', 'secondary'));
   if (relationships.length && stage !== 'schedule_needed' && stage !== 'incident_open') secondaryActions.push(buildAction('open_chat', 'Chat', 'Mensajes y horarios.', 'chat', 'secondary'));
@@ -283,9 +313,10 @@ export function buildTeacherJourneyState(input = {}) {
 
   const checklist = [
     checklistItem('account', 'Cuenta creada', true),
-    checklistItem('profile', 'Perfil profesional completo', profileReady, 'complete_profile'),
+    checklistItem('profile', 'Perfil profesional completo', profileCoreReady, 'complete_profile'),
+    checklistItem('payout', 'Dia de cobro fijo', payoutReady, 'open_income'),
     checklistItem('documents', 'Documentacion subida', documentReady, 'upload_documents'),
-    checklistItem('verification', 'Validacion administrativa', verified, documentReady ? 'upload_documents' : 'upload_documents'),
+    checklistItem('verification', 'Verificación del perfil', verified, documentReady ? 'upload_documents' : 'upload_documents'),
     checklistItem('availability', 'Disponibilidad real definida', availabilityReady, 'set_availability'),
     checklistItem('students', 'Alumno asignado', hasAssignedStudent(relationships), 'open_chat'),
     checklistItem('schedule', 'Primera clase programada', hasSchedule(relationships), 'open_calendar'),
@@ -306,6 +337,7 @@ export function buildTeacherJourneyState(input = {}) {
     context: {
       relationships: relationships.length,
       profilePercent,
+      payoutReady,
       verificationStatus,
       documents: documents.length,
       availabilityReady,

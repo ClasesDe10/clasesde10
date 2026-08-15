@@ -6,6 +6,10 @@
  */
 
 export {
+  completeGoogleAccount,
+  completePasswordSetupLink,
+  getGoogleAccountCompletion,
+  getPasswordSetupEmail,
   getSession,
   getUsuarioActual,
   login,
@@ -14,6 +18,10 @@ export {
   onAuthChange,
   redirectByRole,
   register,
+  requestAssistedFamilyActivation,
+  requestPasswordSetupLink,
   requireAuth,
   resetPassword,
-} from './auth.js?v=20260630-admin-switch';
+  isPasswordSetupLink,
+  setPasswordAfterEmailVerification,
+} from './auth.js?v=20260815-onboarding-gate';

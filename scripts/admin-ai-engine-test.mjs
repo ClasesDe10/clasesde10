@@ -31,6 +31,9 @@ const sample = {
   payments: [
     { id: 'p1', familyUid: 'f_pending', status: 'vencido', amount: 70, dueAt: '2026-06-20T10:00:00Z' },
   ],
+  documents: [
+    { id: 'd1', userUid: 't_slow', status: 'pendiente_revision', tipo: 'Documento de identidad', createdAt: '2026-06-26T10:00:00Z' },
+  ],
   requests: [
     { id: 'r1', familyUid: 'f_pending', status: 'nueva', materia: 'Quimica', ciudad: 'Madrid', createdAt: '2026-06-27T10:00:00Z' },
     { id: 'r2', familyUid: 'f_ok', status: 'nueva', materia: 'Quimica', ciudad: 'Madrid', createdAt: '2026-06-26T10:00:00Z' },
@@ -111,6 +114,33 @@ assert(automations.rows.length >= 3, 'Automation answer must include actionable 
 assert(automations.sourceCollections.includes('internalAiInsights'), 'Automation answer must use internal AI insights as a source.');
 assert(automations.rows.some((item) => item.label === 'Chat largo que conviene resumir'), 'Automation answer must surface internal AI priorities first.');
 
+const priorities = answerAdminQuestion('Que deberia revisar hoy?', sample, { now });
+assert(priorities.intent === 'today_priorities', 'Broad daily priority intent failed.');
+assert(/Prioridades/i.test(priorities.title), 'Daily priority answer must have an executive title.');
+assert(priorities.rows.some((item) => item.section === 'calendario' || item.section === 'incidencias'), 'Daily priority answer must route to actionable admin sections.');
+
+const vague = answerAdminQuestion('Que esta funcionando peor ahora mismo?', sample, { now });
+assert(vague.intent === 'solution_finder', 'Vague operational problem must resolve to solution finder.');
+assert(vague.rows.length >= 3, 'Vague operational answer must produce several priorities.');
+
+const paymentSolution = answerAdminQuestion('Una familia tiene un justificante rechazado, que hago?', sample, { now });
+assert(paymentSolution.intent === 'solution_finder', 'Payment incident must resolve to solution finder.');
+assert(/Mejor solucion/i.test(paymentSolution.title), 'Solution finder must have a concrete solution title.');
+assert(paymentSolution.rows.some((item) => item.label === 'Mejor solucion concreta'), 'Solution finder must include a concrete solution row.');
+assert(/justificante/i.test(`${paymentSolution.summary} ${paymentSolution.rows.map((item) => item.detail).join(' ')}`), 'Payment solution must mention the receipt flow.');
+
+const permissionSolution = answerAdminQuestion('Sale missing or insufficient permissions al guardar disponibilidad, que solucion aplico?', sample, { now });
+assert(permissionSolution.intent === 'solution_finder', 'Permission incident must resolve to solution finder.');
+assert(permissionSolution.rows.some((item) => /rol|perfil|userUid|owner|regla/i.test(item.detail)), 'Permission solution must explain the role/profile/rules checks.');
+
+const business = answerAdminQuestion('Como va el negocio?', sample, { now });
+assert(business.intent === 'business_health', 'Broad business health intent failed.');
+assert(business.rows.some((item) => item.section === 'finanzas'), 'Business health answer must link to finance.');
+
+const trust = answerAdminQuestion('Como estamos de confianza y calidad?', sample, { now });
+assert(trust.intent === 'trust_quality', 'Broad trust/quality intent failed.');
+assert(trust.rows.some((item) => item.section === 'documentos'), 'Trust answer must include document review signals.');
+
 console.log(JSON.stringify({
   ok: true,
   version: ADMIN_AI_VERSION,
@@ -125,5 +155,11 @@ console.log(JSON.stringify({
     cities.intent,
     subjects.intent,
     automations.intent,
+    priorities.intent,
+    vague.intent,
+    paymentSolution.intent,
+    permissionSolution.intent,
+    business.intent,
+    trust.intent,
   ],
 }, null, 2));

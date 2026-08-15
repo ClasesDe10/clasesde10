@@ -1,7 +1,8 @@
 async (page) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => {
-    document.querySelector('[data-section="clases"]')?.click();
+    window.location.hash = '#clases';
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
   });
   await page.waitForFunction(() => {
     const section = document.querySelector('#section-clases');

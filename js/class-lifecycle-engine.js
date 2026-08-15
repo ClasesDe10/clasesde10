@@ -19,8 +19,8 @@ import {
 import {
   PAID_PAYMENT_STATUSES,
   OPEN_PAYMENT_STATUSES,
+  classPaymentAmount,
   normalizePaymentStatus,
-  paymentAmount,
 } from './payment-engine.js';
 
 export const CLASS_LIFECYCLE_VERSION = 'class_lifecycle_v2';
@@ -319,11 +319,14 @@ export function deriveLifecycleTargetState(classData = {}, options = {}) {
     return 'clase_programada';
   }
 
-  if (operationalStatus === 'pagada' && attendance === 'pendiente') {
+  // `pagada` is a legacy terminal attendance/payment marker. Older records do
+  // not always contain the newer two-party confirmation fields, so payment
+  // reconciliation must take precedence instead of reopening attendance.
+  if (operationalStatus === 'pagada') {
     return paymentTargetState(classData, current);
   }
 
-  if (operationalStatus === 'realizada' || operationalStatus === 'pagada') {
+  if (operationalStatus === 'realizada') {
     if (attendance !== 'confirmada_por_ambas_partes') return 'pendiente_confirmacion';
     return paymentTargetState(classData, current);
   }
@@ -454,7 +457,7 @@ export function buildClassLifecycleTransition(classId, classData = {}, options =
     attendanceStatus: getClassAttendanceSummary(classData),
     familyPaymentStatus: normalizePaymentStatus(classData.familyPaymentStatus || classData.estado_pago_familia || classData.paymentStatus || classData.estado_pago),
     teacherPaymentStatus: normalizePaymentStatus(classData.teacherPaymentStatus || classData.estado_pago_profesor),
-    amount: paymentAmount({ amount: classData.precio_total ?? classData.amount ?? classData.familyAmount }),
+    amount: classPaymentAmount(classData),
     created_at: nowIso,
   };
 

@@ -37,11 +37,15 @@ async (page) => {
   await page.locator('button.sidebar-link[data-section="perfil"]').click().catch(() => {});
   await page.waitForTimeout(500);
   await page.evaluate(() => {
-    if (document.querySelector('#niveles-check input[data-nivel]')) return;
+    if (document.querySelector('#section-perfil')?.offsetParent) return;
     document.querySelectorAll('.dash-section').forEach((section) => { section.style.display = 'none'; });
     document.getElementById('section-perfil').style.display = '';
   });
-  await page.locator('#niveles-check input[data-nivel]').first().waitFor({ state: 'attached', timeout: 30000 });
+  await page.locator('#teacher-profile-overview').waitFor({ state: 'visible', timeout: 30000 });
+  if (await page.locator('#form-perfil').isVisible()) throw new Error('Professor profile form should stay hidden until Editar perfil is selected.');
+  await page.locator('#btn-editar-perfil-profesor').click();
+  await page.locator('#modal-perfil-profesor').waitFor({ state: 'visible', timeout: 30000 });
+  await page.locator('#teaching-scope-builder input[data-scope-subject]').first().waitFor({ state: 'attached', timeout: 30000 });
 
   for (const [selector, value] of [
     ['#p-nombre', 'Profesor Smoke'],
@@ -50,7 +54,6 @@ async (page) => {
     ['#p-direccion', 'Calle Profesor 10'],
     ['#p-ciudad', 'Madrid'],
     ['#p-cp', '28020'],
-    ['#p-zona', 'Madrid centro'],
     ['#p-estudio-exacto', 'Grado en Matematicas'],
     ['#p-colegio', 'Colegio El Prado'],
     ['#p-centro-estudios', 'Universidad Complutense de Madrid'],
@@ -66,16 +69,16 @@ async (page) => {
 
   await page.locator('#p-foto-file').setInputFiles('assets/img/logo-192.png');
   await page.waitForFunction(() => Boolean(document.querySelector('#p-foto-preview img')), null, { timeout: 30000 });
-  await page.locator('#p-nivel').selectOption({ label: 'Grado universitario' });
   await page.locator('#p-coche').selectOption('si');
   await page.locator('#p-bizum').check();
-  for (const item of ['Matematicas', 'Padel']) {
-    await page.locator('#nueva-materia').fill(item);
-    await page.locator('#btn-add-materia').click();
-  }
-  for (const nivel of ['ESO', 'Deporte']) await page.locator(`input[data-nivel="${nivel}"]`).check();
+  await page.locator('input[data-scope-subject="estudio"][value="Matematicas"]').check();
+  await page.locator('input[data-scope-level="estudio"][value="ESO"]').check();
+  await page.locator('input[data-scope-toggle="deporte"]').check();
+  await page.locator('input[data-scope-subject="deporte"][value="Padel"]').check();
+  await page.locator('input[data-scope-level="deporte"][value="Iniciacion"]').check();
   await page.locator('#form-perfil button[type="submit"]').click();
   await page.waitForTimeout(1800);
+  if (await page.locator('#modal-perfil-profesor').isVisible()) throw new Error('Professor profile dialog did not close after saving.');
 
   const result = await page.evaluate(async () => {
     const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
@@ -89,10 +92,12 @@ async (page) => {
   const t = result.teacher || {};
   if (result.user?.telefono !== '611222333') throw new Error('Professor user phone was not saved.');
   if (!String(t.foto_url || '').startsWith('data:image/jpeg')) throw new Error('Professor file photo was not saved.');
-  if (t.estudio_exacto !== 'Grado en Matematicas' || t.acepta_bizum !== true || t.tiene_coche !== true || t.perfil_completo !== true) throw new Error('Professor core profile was not saved.');
+  if (t.estudio_exacto !== 'Grado en Matematicas' || t.acepta_bizum !== true || t.tiene_coche !== true) throw new Error('Professor core profile was not saved.');
+  if (t.perfil_completo !== false) throw new Error('Professor profile should remain pending until payout day and validation steps are complete.');
   if (t.colegio !== 'Colegio El Prado') throw new Error('Professor school was not saved separately.');
   if (t.centro_estudios !== 'Universidad Complutense de Madrid') throw new Error('Professor higher education center was not saved.');
   if (!Array.isArray(t.materias) || !t.materias.includes('Padel')) throw new Error('Professor activities were not saved.');
+  if (!t.ambitos_ensenanza?.deporte?.subjects?.includes('Padel')) throw new Error('Professor sport scope was not saved.');
   if (!Array.isArray(t.especialidades) || !t.especialidades.includes('EVAU')) throw new Error('Professor specialties were not saved.');
   if (!Array.isArray(t.idiomas) || !t.idiomas.includes('Ingles')) throw new Error('Professor languages were not saved.');
 
@@ -103,6 +108,7 @@ async (page) => {
       materias: t.materias,
       perfil_completo: t.perfil_completo,
       colegio: t.colegio,
+      ambitos_ensenanza: t.ambitos_ensenanza,
     },
   };
 }

@@ -155,6 +155,61 @@ function itemMatchesAnyId(item = {}, ids, fields) {
   return fields.some((field) => ids.has(cleanTrustText(item[field], 180)));
 }
 
+function roleMatchesPenalty(value, role = 'teacher') {
+  const normalized = normalize(value);
+  if (!normalized) return true;
+  const aliases = role === 'family'
+    ? new Set(['familia', 'family', 'parent', 'padre', 'madre'])
+    : new Set(['profesor', 'teacher']);
+  return aliases.has(normalized);
+}
+
+function trustPenaltyEventsFrom(item = {}) {
+  const raw = item.trustPenaltyEvents || item.responsibilityPenaltyEvents || item.notificationPenaltyEvents;
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw.filter((entry) => entry && typeof entry === 'object');
+  if (typeof raw === 'object') return Object.values(raw).filter((entry) => entry && typeof entry === 'object');
+  return [];
+}
+
+function trustPenaltyEventsFor(profile, context = {}, role = 'teacher') {
+  const ids = idsFor(profile, role);
+  const fields = role === 'family'
+    ? ['familyUid', 'familia_id', 'parentUid', 'ownerUid', 'userUid', 'usuario_id', 'appliedToUid']
+    : ['teacherUid', 'profesor_id', 'ownerUid', 'userUid', 'usuario_id', 'appliedToUid'];
+  const sourceItems = [
+    ...(context.classes || []),
+    ...(context.payments || []),
+    ...(context.incidents || []),
+  ];
+  const events = [];
+
+  for (const item of sourceItems) {
+    for (const event of trustPenaltyEventsFrom(item)) {
+      if (!roleMatchesPenalty(first(event.appliedToRole, event.role, event.targetRole), role)) continue;
+      const uid = cleanTrustText(first(
+        event.appliedToUid,
+        event.userUid,
+        event.ownerUid,
+        role === 'family' ? event.familyUid : event.teacherUid,
+        role === 'family' ? event.familia_id : event.profesor_id,
+      ), 180);
+      const matchesUid = uid ? ids.has(uid) : itemMatchesAnyId(item, ids, fields);
+      if (!matchesUid && !itemMatchesAnyId(event, ids, fields)) continue;
+
+      const rawPoints = numberOrNull(first(event.points, event.scoreDelta, event.delta, event.responsibilityPoints));
+      if (rawPoints === null || rawPoints === 0) continue;
+      const points = rawPoints > 0 ? -rawPoints : rawPoints;
+      events.push({ ...event, points, sourceItemId: item.id || item.classId || item.paymentId || '' });
+    }
+  }
+
+  return {
+    events,
+    points: round(events.reduce((sum, event) => sum + event.points, 0), 1),
+  };
+}
+
 function classStatus(item = {}) {
   return normalize(first(item.status, item.estado, item.lifecycleStatus, item.classStatus));
 }
@@ -486,6 +541,7 @@ function teacherOperationalMetrics(profile, context, now) {
   const punctuality = punctualitySummary(completed);
   const regularity = regularitySummary(completed, now);
   const incidents = incidentsFor(profile, context, 'teacher');
+  const trustPenalties = trustPenaltyEventsFor(profile, context, 'teacher');
   const paid = payments.filter((item) => PAID_PAYMENT_STATUSES.has(paymentStatus(item)));
   const pendingPayments = payments.filter((item) => PENDING_PAYMENT_STATUSES.has(paymentStatus(item)));
   const activeAssignments = assignments.filter((item) => item.active !== false && item.activa !== false);
@@ -535,6 +591,8 @@ function teacherOperationalMetrics(profile, context, now) {
     totalIncidents: incidents.incidents.length,
     criticalIncidents: incidents.critical.length,
     claims: incidents.claims.length,
+    trustPenaltyPoints: trustPenalties.points,
+    trustPenaltyEvents: trustPenalties.events.length,
     lastActivityAt,
     firstActivityAt,
     inactiveDays: daysSince(lastActivityAt, now),
@@ -551,6 +609,7 @@ function familyOperationalMetrics(profile, context, now) {
   const requests = (context.requests || []).filter((item) => itemMatchesAnyId(item, ids, ['familyUid', 'familia_id', 'userUid', 'usuario_id']));
   const assignments = (context.assignments || []).filter((item) => itemMatchesAnyId(item, ids, ['familyUid', 'familia_id', 'userUid']));
   const incidents = incidentsFor(profile, context, 'family');
+  const trustPenalties = trustPenaltyEventsFor(profile, context, 'family');
   const schedules = paymentScheduleIndex(context);
   const paid = payments.filter((item) => PAID_PAYMENT_STATUSES.has(paymentStatus(item)));
   const pendingPayments = payments.filter((item) => PENDING_PAYMENT_STATUSES.has(paymentStatus(item)));
@@ -609,6 +668,8 @@ function familyOperationalMetrics(profile, context, now) {
     totalIncidents: incidents.incidents.length,
     criticalIncidents: incidents.critical.length,
     claims: incidents.claims.length,
+    trustPenaltyPoints: trustPenalties.points,
+    trustPenaltyEvents: trustPenalties.events.length,
     lastActivityAt,
     firstActivityAt,
     inactiveDays: daysSince(lastActivityAt, now),
@@ -722,13 +783,13 @@ function buildTeacherEvidence(flags, docs, metrics, review, completion, hasPhoto
 
 function buildTeacherNextActions(flags, docs, metrics, completion, availability) {
   return [
-    !flags.adminVerified ? trustAction('admin_review', 'Completar revisión interna antes de nuevas asignaciones', 'documentos', 'high', 'El admin debe validar que el perfil y los documentos son consistentes.', false) : null,
+    !flags.adminVerified ? trustAction('admin_review', 'Perfil pendiente de revisión', 'documentos', 'high', 'El equipo debe revisar el perfil y los documentos antes de nuevas asignaciones.', false) : null,
     !docs.identityUploaded ? trustAction('upload_identity', 'Subir DNI / documento de identidad', 'documentos', 'high', 'Aumenta confianza y evita asignaciones sin identidad contrastada.') : null,
-    docs.identityUploaded && !docs.identityVerified ? trustAction('review_identity', 'Validar identidad subida', 'documentos', 'high', 'El documento ya está recibido y requiere revisión del admin.', false) : null,
+    docs.identityUploaded && !docs.identityVerified ? trustAction('review_identity', 'Validar identidad subida', 'documentos', 'high', 'El documento ya está recibido y pendiente de revisión.', false) : null,
     !docs.academicUploaded ? trustAction('upload_academic', 'Subir notas, expediente o formación principal', 'documentos', 'high', 'Las familias necesitan evidencia académica verificable.') : null,
     docs.academicUploaded && !docs.academicVerified ? trustAction('review_academic', 'Validar expediente académico', 'documentos', 'normal', 'Documento académico pendiente de revisión.', false) : null,
     completion < 90 ? trustAction('complete_profile', 'Completar perfil profesional', 'perfil', 'normal', 'Foto, colegio, estudios, materias, niveles, movilidad y presentación reducen dudas.') : null,
-    !availability ? trustAction('set_availability', 'Marcar disponibilidad real', 'disponibilidad', 'normal', 'Sin disponibilidad, el matching no puede proponer horarios fiables.') : null,
+    !availability ? trustAction('set_availability', 'Marcar disponibilidad real', 'disponibilidad', 'normal', 'Indica tu disponibilidad para recibir propuestas compatibles con tu horario.') : null,
     metrics.openIncidents > 0 ? trustAction('resolve_incidents', 'Resolver incidencias abiertas', 'incidencias', 'high', 'Las incidencias abiertas frenan confianza y asignaciones.', false) : null,
   ].filter(Boolean);
 }
@@ -750,13 +811,13 @@ function buildFamilyEvidence(flags, docs, metrics, completion, hasContact, hasAd
 function buildFamilyNextActions(flags, docs, metrics, completion, hasContact, hasAddress) {
   return [
     !hasContact ? trustAction('complete_contact', 'Añadir teléfono o email operativo', 'perfil', 'high', 'Sin contacto fiable no se puede resolver una incidencia rápido.') : null,
-    !hasAddress ? trustAction('complete_location', 'Completar dirección y código postal', 'perfil', 'high', 'La ubicación mejora el matching presencial y evita errores de zona.') : null,
+    !hasAddress ? trustAction('complete_location', 'Completar dirección y código postal', 'perfil', 'high', 'La ubicación ayuda a encontrar clases presenciales compatibles con tu zona.') : null,
     metrics.activeStudents < 1 ? trustAction('add_student', 'Añadir al menos un alumno', 'alumnos', 'normal', 'Sin alumno activo no se puede asignar profesor.') : null,
-    metrics.overdueClassPayments > 0 ? trustAction('settle_overdue', 'Resolver justificantes vencidos', 'pagos', 'high', 'Los vencimientos reducen confianza y generan aviso al admin.') : null,
+    metrics.overdueClassPayments > 0 ? trustAction('settle_overdue', 'Resolver justificantes vencidos', 'pagos', 'high', 'Los vencimientos reducen la confianza y requieren revisión del equipo.') : null,
     metrics.pendingPayments > 0 ? trustAction('review_payments', 'Revisar justificantes pendientes', 'pagos', 'normal', 'Mantener los justificantes al día evita bloqueos.') : null,
     docs.identityUploaded && !docs.identityVerified ? trustAction('review_optional_identity', 'Validar documento del tutor', 'documentos', 'normal', 'Documento opcional recibido, pendiente de revisión.', false) : null,
     completion < 85 ? trustAction('complete_family_profile', 'Completar perfil familiar', 'perfil', 'normal', 'Preferencias, zona y contacto alternativo reducen fricción.') : null,
-    !flags.adminVerified ? trustAction('admin_review', 'Revisión interna de la familia', 'familias', 'normal', 'Confirmar datos básicos antes de escalar volumen.', false) : null,
+    !flags.adminVerified ? trustAction('admin_review', 'Perfil pendiente de revisión', 'familias', 'normal', 'Confirmar los datos básicos antes de continuar.', false) : null,
     metrics.openIncidents > 0 ? trustAction('resolve_incidents', 'Resolver incidencias abiertas', 'incidencias', 'high', 'Las incidencias abiertas deben cerrarse con historial.', false) : null,
   ].filter(Boolean);
 }
@@ -813,6 +874,7 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
     ? 0.58
     : metrics.regularityRate;
   const acceptance = metrics.acceptanceRate === null || metrics.acceptanceRate === undefined ? 0.62 : metrics.acceptanceRate;
+  const trustPenaltyImpact = Math.max(-8, Number(metrics.trustPenaltyPoints || 0));
   const verificationPoints = (flags.adminVerified ? 5 : 0)
     + (docs.identityVerified ? 5 : docs.identityUploaded ? 2 : 0)
     + (docs.academicVerified ? 4 : docs.academicUploaded ? 2 : 0)
@@ -825,7 +887,7 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
   const components = [
     scoreComponent('verification', 'Verificacion objetiva', verificationPoints, 18, `${docs.verifiedCount} documento(s) validados`),
     scoreComponent('profile', 'Perfil profesional', completion * 0.12 + (availability ? 2 : 0) + (hasPhoto ? 1 : 0), 15, `${round(completion)}% completado`),
-    scoreComponent('reliability', 'Fiabilidad de clases', reliability * 21 - Math.min(5, metrics.openIncidents * 2) - Math.min(3, metrics.claims), 21, `${metrics.completedClasses} realizadas de ${metrics.evaluatedClasses} evaluadas`),
+    scoreComponent('reliability', 'Fiabilidad de clases', reliability * 21 - Math.min(5, metrics.openIncidents * 2) - Math.min(3, metrics.claims) + trustPenaltyImpact, 21, `${metrics.completedClasses} realizadas de ${metrics.evaluatedClasses} evaluadas`),
     scoreComponent('response', 'Respuesta y aceptacion', responseRatio(metrics.averageResponseHours) * 7 + acceptance * 5, 12, metrics.averageResponseHours === null || metrics.averageResponseHours === undefined ? 'Sin historico suficiente' : `${round(metrics.averageResponseHours, 1)}h respuesta media`),
     scoreComponent('track_record', 'Historial real', Math.min(5, metrics.completedClasses / 4) + Math.min(4, metrics.completedHours / 12) + Math.min(3, metrics.activeStudents * 1.5) + regularity * 4, 16, `${metrics.completedHours}h impartidas, ${metrics.activeStudents} alumno(s) activos`),
     scoreComponent('punctuality', 'Puntualidad y compromiso', punctuality * 7 + recentActivityRatio(metrics.inactiveDays) * 3, 10, metrics.punctualitySamples ? `${round((metrics.punctualityRate ?? 0) * 100)}% puntual` : 'Sin check-ins suficientes'),
@@ -870,6 +932,7 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
     completion < 85 ? 'Perfil incompleto para generar confianza publica.' : '',
     metrics.evaluatedClasses < 3 ? 'Historico operativo insuficiente: se aplica puntuacion neutra.' : '',
     metrics.openIncidents > 0 ? `${metrics.openIncidents} incidencia(s) abierta(s).` : '',
+    metrics.trustPenaltyEvents > 0 ? `${metrics.trustPenaltyEvents} aviso(s) de responsabilidad con penalizacion.` : '',
     metrics.inactiveDays !== null && metrics.inactiveDays > 45 ? 'Actividad reciente baja.' : '',
     (metrics.cancellationRate ?? 0) > 0.2 && metrics.evaluatedClasses >= 5 ? 'Tasa de cancelacion alta.' : '',
   ].filter(Boolean);
@@ -933,6 +996,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
       totalIncidents: metrics.totalIncidents,
       criticalIncidents: metrics.criticalIncidents,
       claims: metrics.claims,
+      trustPenaltyPoints: metrics.trustPenaltyPoints,
+      trustPenaltyEvents: metrics.trustPenaltyEvents,
       inactiveDays: metrics.inactiveDays,
       tenureDays: metrics.tenureDays,
       experienceYears: years,
@@ -969,6 +1034,8 @@ export function buildTeacherTrustProfile(profile = {}, context = {}) {
       riskFlags,
       pendingPayments: metrics.pendingPayments,
       openIncidents: metrics.openIncidents,
+      trustPenaltyPoints: metrics.trustPenaltyPoints,
+      trustPenaltyEvents: metrics.trustPenaltyEvents,
       pendingDocuments: docs.pendingCount,
     },
     visibility: buildTrustVisibility('profesor'),
@@ -989,12 +1056,13 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
   const hasAddress = hasText(first(profile.direccion, profile.address), 5) && hasText(first(profile.codigo_postal, profile.postalCode), 5);
   const paymentReliability = metrics.adjustedPaymentReliability ?? 0.72;
   const classReliability = (metrics.adjustedCompletionRate ?? 0.75) * 0.72 + (1 - (metrics.adjustedCancellationRate ?? 0.08)) * 0.28;
+  const trustPenaltyImpact = Math.max(-10, Number(metrics.trustPenaltyPoints || 0));
 
   const components = [
     scoreComponent('profile', 'Perfil familiar', completion * 0.17 + (hasContact ? 2 : 0) + (hasAddress ? 1 : 0), 20, `${round(completion)}% completado`),
     scoreComponent('contact', 'Contacto y ubicacion', (hasContact ? 6 : 0) + (hasAddress ? 6 : 0) + (flags.adminVerified ? 2 : 0) + (docs.identityVerified ? 2 : docs.identityUploaded ? 1 : 0), 16, docs.identityUploaded ? `${docs.verifiedCount} documento(s) opcional(es) validados` : 'Documentos no requeridos'),
     scoreComponent('students', 'Alumnos y solicitudes', Math.min(8, metrics.activeStudents * 6) + Math.min(4, metrics.requests.length * 1.2), 12, `${metrics.activeStudents} alumno(s), ${metrics.requests.length} solicitud(es)`),
-    scoreComponent('payment', 'Fiabilidad de pagos', paymentReliability * 22 - Math.min(7, metrics.pendingPayments * 2) - Math.min(8, (metrics.overdueClassPayments || 0) * 4), 22, `${metrics.paidPayments} pago(s) validados`),
+    scoreComponent('payment', 'Fiabilidad de pagos', paymentReliability * 22 - Math.min(7, metrics.pendingPayments * 2) - Math.min(8, (metrics.overdueClassPayments || 0) * 4) + trustPenaltyImpact, 22, `${metrics.paidPayments} pago(s) validados`),
     scoreComponent('class_history', 'Compromiso con clases', classReliability * 16 - Math.min(5, metrics.openIncidents * 2), 16, `${metrics.completedClasses} clase(s) realizadas`),
     scoreComponent('activity', 'Actividad y antiguedad', recentActivityRatio(metrics.inactiveDays) * 6 + Math.min(4, (metrics.tenureDays || 0) / 45), 10, metrics.inactiveDays === null || metrics.inactiveDays === undefined ? 'Actividad no registrada' : `Activo hace ${metrics.inactiveDays} dia(s)`),
     scoreComponent('safety', 'Incidencias y calidad', 4 - Math.min(4, metrics.criticalIncidents * 2 + metrics.claims), 4, `${metrics.openIncidents} incidencia(s) abiertas`, 'admin'),
@@ -1027,6 +1095,7 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
     metrics.overdueClassPayments > 0 ? `${metrics.overdueClassPayments} clase(s) con justificante vencido.` : '',
     metrics.pendingPayments > 0 ? `${metrics.pendingPayments} justificante(s) pendiente(s).` : '',
     metrics.openIncidents > 0 ? `${metrics.openIncidents} incidencia(s) abierta(s).` : '',
+    metrics.trustPenaltyEvents > 0 ? `${metrics.trustPenaltyEvents} aviso(s) de responsabilidad con penalizacion.` : '',
     completion < 80 ? 'Perfil familiar incompleto.' : '',
   ].filter(Boolean);
   const evidenceList = buildFamilyEvidence(flags, docs, metrics, completion, hasContact, hasAddress);
@@ -1078,6 +1147,8 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
       totalIncidents: metrics.totalIncidents,
       criticalIncidents: metrics.criticalIncidents,
       claims: metrics.claims,
+      trustPenaltyPoints: metrics.trustPenaltyPoints,
+      trustPenaltyEvents: metrics.trustPenaltyEvents,
       inactiveDays: metrics.inactiveDays,
       tenureDays: metrics.tenureDays,
       verifiedDocuments: docs.verifiedCount,
@@ -1105,6 +1176,8 @@ export function buildFamilyTrustProfile(profile = {}, context = {}) {
       pendingPayments: metrics.pendingPayments,
       overdueClassPayments: metrics.overdueClassPayments,
       openIncidents: metrics.openIncidents,
+      trustPenaltyPoints: metrics.trustPenaltyPoints,
+      trustPenaltyEvents: metrics.trustPenaltyEvents,
       pendingDocuments: docs.pendingCount,
     },
     visibility: buildTrustVisibility('familia'),

@@ -70,7 +70,9 @@ function auditPwaSeo() {
   if (!manifest.icons?.some((icon) => icon.sizes === '512x512')) fail('PWA manifest missing 512x512 icon.');
   const sitemap = readText('sitemap.xml');
   const urls = [...sitemap.matchAll(/<loc>/g)].length;
-  if (urls < 150) fail(`SEO sitemap unexpectedly small: ${urls} URLs.`);
+  // The SEO architecture deliberately consolidates thin subject × city pages
+  // into 36 authoritative routes and redirects the retired combinations.
+  if (urls < 36) fail(`SEO sitemap unexpectedly small: ${urls} URLs.`);
   if (!exists('robots.txt')) fail('robots.txt missing.');
 }
 
@@ -146,9 +148,9 @@ function auditProductSurface() {
 
 function auditKnownExternalBlocks() {
   const config = readText('firebase.json');
-  if (!config.includes('"functions"')) warn('Cloud Functions config missing.');
-  const functionsPackage = exists('functions/package.json');
-  if (!functionsPackage) warn('Functions package missing; backend deploy may be incomplete.');
+  if (config.includes('"functions"')) fail('firebase.json must not deploy Cloud Functions in the zero-cost architecture.');
+  const automationEnginesPackage = exists('functions/package.json');
+  if (!automationEnginesPackage) fail('Shared automation engines package missing.');
 }
 
 auditHosting();

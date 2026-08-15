@@ -1,11 +1,12 @@
 import {
   INCIDENT_CATEGORIES,
   buildIncidentCreatePayload,
+  buildIncidentResolutionGuide,
   buildIncidentStats,
   buildIncidentUpdatePatch,
   incidentPriorityMeta,
   normalizeIncident,
-} from './incident-engine.js?v=20260628-incidents';
+} from './incident-engine.js?v=20260707-guided-incidents';
 
 const instances = new WeakMap();
 
@@ -49,6 +50,7 @@ export async function initAdminIncidents({
   }
 
   let incidents = [];
+  let activeGuide = null;
 
   function ensureFilters() {
     const categorySelect = field('filtro-inc-categoria');
@@ -111,16 +113,14 @@ export async function initAdminIncidents({
     const grid = field('incidents-summary-grid');
     if (!grid) return;
     grid.innerHTML = [
-      { label: 'Abiertas', value: stats.open, danger: stats.open > 0 },
-      { label: 'Criticas', value: stats.critical, danger: stats.critical > 0 },
-      { label: 'SLA vencido', value: stats.overdue, danger: stats.overdue > 0 },
-      { label: 'Resueltas', value: stats.resolved, danger: false },
-      { label: 'Media resolucion', value: stats.avgResolutionMinutes ? `${Math.round(stats.avgResolutionMinutes / 60)}h` : '-', danger: false },
+      { label: 'Por resolver', value: stats.open, tone: stats.open > 0 ? 'warning' : 'success', hint: stats.open > 0 ? 'requiere decision' : 'al dia' },
+      { label: 'Urgentes', value: stats.critical, tone: stats.critical > 0 ? 'danger' : 'success', hint: stats.critical > 0 ? 'prioridad maxima' : 'sin urgencias' },
+      { label: 'Fuera de plazo', value: stats.overdue, tone: stats.overdue > 0 ? 'danger' : 'success', hint: stats.overdue > 0 ? 'resolver primero' : 'SLA controlado' },
     ].map((item) => `
       <div class="stat-card">
         <div class="stat-card-label">${sanitize(item.label)}</div>
         <div class="stat-card-value">${safeText(sanitize, item.value)}</div>
-        <div class="stat-card-change ${item.danger ? 'negative' : 'positive'}">${item.danger ? 'requiere atencion' : 'controlado'}</div>
+        <div class="stat-card-change ${item.tone === 'danger' || item.tone === 'warning' ? 'negative' : 'positive'}">${sanitize(item.hint)}</div>
       </div>
     `).join('');
   }
@@ -128,14 +128,13 @@ export async function initAdminIncidents({
   function renderPatterns(stats) {
     const target = field('incidents-patterns');
     if (!target) return;
-    const patterns = stats.patterns || [];
-    target.innerHTML = patterns.length
-      ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">${patterns.slice(0, 6).map((item) => `
-        <div style="border:1px solid rgba(15,31,61,.08);border-radius:8px;padding:12px;background:#fff">
-          <div style="font-weight:900;color:var(--navy)">${sanitize(optionLabel(item.category))} / ${sanitize(optionLabel(item.source))}</div>
-          <div style="color:var(--gray-mid);font-size:.82rem">${safeText(sanitize, item.count)} total - ${safeText(sanitize, item.open)} abiertas - ${safeText(sanitize, item.overdue)} SLA vencido</div>
-        </div>`).join('')}</div>`
-      : '<div class="empty-state"><div class="empty-title">Sin patrones todavia</div><div class="empty-desc">Apareceran cuando haya volumen suficiente de tickets.</div></div>';
+    const card = field('incidents-patterns-card');
+    if (card) card.style.display = 'none';
+    target.innerHTML = '';
+  }
+
+  function rowGuide(item = {}) {
+    return buildIncidentResolutionGuide(item, { config: platformConfig });
   }
 
   function render() {
@@ -147,24 +146,39 @@ export async function initAdminIncidents({
     const filtered = incidents.filter((item) => matches(item, activeFilters));
     const tbody = field('tbody-incidencias');
     if (!tbody) return;
+    const tableHead = tbody.closest('table')?.querySelector('thead');
+    if (tableHead) {
+      tableHead.innerHTML = `<tr>
+        <th>Prioridad</th>
+        <th>Problema</th>
+        <th>Motivo probable</th>
+        <th>Accion recomendada</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>`;
+    }
     if (!filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin incidencias con estos filtros.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin incidencias con estos filtros.</td></tr>';
     } else {
-      tbody.innerHTML = filtered.map((item) => `<tr>
-        <td><strong>${sanitize(item.ticketId)}</strong><br><span style="font-size:.75rem;color:var(--gray-mid)">${sanitize(item.id || '')}</span></td>
-        <td>${crmDateShort(item.createdAt)}</td>
-        <td>${crmBadge(optionLabel(item.categoria))}</td>
-        <td style="max-width:300px">
-          <strong>${sanitize(item.titulo)}</strong>
-          <div style="font-size:.8rem;color:var(--gray-mid);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${sanitize(item.descripcion)}">${sanitize(item.descripcion)}</div>
-        </td>
-        <td>${relatedSummary(item)}</td>
+      tbody.innerHTML = filtered.map((item) => {
+        const guide = rowGuide(item);
+        const cause = item.rootCause || guide.suggestedCause || guide.possibleCauses?.[0] || 'Pendiente de revisar contexto.';
+        const action = item.actionTaken || guide.suggestedAction || guide.suggestedActions?.[0] || 'Abrir y seguir la guia.';
+        return `<tr class="incident-simple-row ${item.isOverdue ? 'is-overdue' : ''}">
         <td>${crmBadge(item.prioridad)}</td>
-        <td>${slaBadge(item)}<br><span style="font-size:.75rem;color:var(--gray-mid)">${crmDateShort(item.slaDueAt)}</span></td>
-        <td>${sanitize(item.assignedAdminEmail || 'Sin responsable')}</td>
+        <td style="max-width:340px">
+          <strong>${sanitize(item.titulo)}</strong>
+          <div class="incident-simple-meta">${sanitize(item.ticketId)} · ${sanitize(crmDateShort(item.createdAt))} · ${sanitize(optionLabel(item.categoria))}</div>
+          <div class="incident-simple-desc" title="${sanitize(item.descripcion)}">${sanitize(item.descripcion || 'Sin descripcion')}</div>
+        </td>
+        <td class="incident-simple-text">${sanitize(cause)}</td>
+        <td class="incident-simple-text">${sanitize(action)}</td>
         <td>${crmBadge(item.estado)}</td>
-        <td><button class="btn btn-ghost btn-sm" data-action="gestionar-inc" data-inc-id="${sanitize(item.id)}">Gestionar</button></td>
-      </tr>`).join('');
+        <td>
+          <button class="btn btn-primary btn-sm" data-action="gestionar-inc" data-incident-fix-button="true" data-inc-id="${sanitize(item.id)}">Arreglar</button>
+        </td>
+      </tr>`;
+      }).join('');
     }
     const count = field('incidents-count');
     if (count) count.textContent = `${filtered.length} de ${incidents.length} tickets`;
@@ -194,6 +208,89 @@ export async function initAdminIncidents({
       : '<div style="color:var(--gray-mid)">Sin historial todavia.</div>';
   }
 
+  function renderList(items = [], className = '') {
+    return items.length
+      ? `<ul class="${className}">${items.map((item) => `<li>${sanitize(item)}</li>`).join('')}</ul>`
+      : '<div class="incident-guide-empty">Pendiente de completar con mas contexto.</div>';
+  }
+
+  function renderGuide(item = {}) {
+    activeGuide = buildIncidentResolutionGuide(item, { config: platformConfig });
+    return `
+      <div class="incident-guide">
+        <div class="incident-guide-head">
+          <div>
+            <span class="incident-guide-kicker">Guia rapida</span>
+            <h3>${sanitize(activeGuide.title)}</h3>
+            <p>Problema, motivo probable y siguiente accion clara para resolver sin ruido.</p>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" data-incident-guide-action="apply-plan">Arreglar con este plan</button>
+        </div>
+        <div class="incident-guide-grid">
+          <section class="incident-guide-block">
+            <h4>Posibles motivos</h4>
+            ${renderList(activeGuide.possibleCauses)}
+            <button type="button" class="btn btn-outline btn-sm" data-incident-guide-action="apply-cause">Usar causa probable</button>
+          </section>
+          <section class="incident-guide-block">
+            <h4>Comprobacion minima</h4>
+            ${renderList(activeGuide.checks)}
+          </section>
+          <section class="incident-guide-block incident-guide-block-primary">
+            <h4>Que hago ahora</h4>
+            ${renderList(activeGuide.suggestedActions)}
+            <div class="incident-guide-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-incident-guide-action="apply-plan">Usar plan</button>
+              <button type="button" class="btn btn-outline btn-sm" data-incident-guide-action="set-next-status">Pasar a siguiente estado</button>
+            </div>
+          </section>
+          <section class="incident-guide-block">
+            <h4>Resultado esperado</h4>
+            <p>${sanitize(activeGuide.suggestedResolution)}</p>
+            <div class="incident-guide-actions">
+              <button type="button" class="btn btn-outline btn-sm" data-incident-guide-action="apply-resolution">Rellenar resolucion</button>
+              <button type="button" class="btn btn-success btn-sm" data-incident-guide-action="resolve-now">Marcar resuelta</button>
+            </div>
+          </section>
+        </div>
+        <div class="incident-guide-footer">
+          <strong>Mensaje cordial sugerido</strong>
+          <span>${sanitize(activeGuide.userMessage)}</span>
+          <button type="button" class="btn btn-ghost btn-sm" data-incident-guide-action="apply-message">Usar mensaje</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function applyGuideAction(action) {
+    if (!activeGuide) return;
+    if (action === 'apply-cause') {
+      field('inc-causa').value = activeGuide.suggestedCause || '';
+    }
+    if (action === 'apply-plan') {
+      field('inc-accion').value = activeGuide.suggestedAction || '';
+      field('inc-mensaje').value = activeGuide.internalNote || '';
+    }
+    if (action === 'apply-resolution') {
+      field('inc-resolucion').value = activeGuide.suggestedResolution || '';
+    }
+    if (action === 'apply-message') {
+      field('inc-mensaje').value = activeGuide.userMessage || '';
+    }
+    if (action === 'set-next-status') {
+      field('inc-estado').value = activeGuide.nextStatus || field('inc-estado').value;
+    }
+    if (action === 'assign-me') {
+      field('inc-responsable-email').value = usuario.email || '';
+    }
+    if (action === 'resolve-now') {
+      field('inc-estado').value = 'resuelta';
+      if (!field('inc-causa').value) field('inc-causa').value = activeGuide.suggestedCause || '';
+      if (!field('inc-accion').value) field('inc-accion').value = activeGuide.suggestedAction || '';
+      if (!field('inc-resolucion').value) field('inc-resolucion').value = activeGuide.suggestedResolution || '';
+    }
+  }
+
   function openIncident(source) {
     ensureFilters();
     const incidentId = source?.incId || source?.id || source?.incidenciaId || '';
@@ -210,10 +307,13 @@ export async function initAdminIncidents({
     field('inc-ticket-meta').innerHTML = `
       <div class="stat-card"><div class="stat-card-label">Ticket</div><div class="stat-card-value" style="font-size:1rem">${sanitize(item.ticketId)}</div></div>
       <div class="stat-card"><div class="stat-card-label">SLA</div><div class="stat-card-value" style="font-size:1rem">${sanitize(crmDateShort(item.slaDueAt))}</div></div>
-      <div class="stat-card"><div class="stat-card-label">Origen</div><div class="stat-card-value" style="font-size:1rem">${sanitize(item.source || 'manual')}</div></div>`;
+      <div class="stat-card"><div class="stat-card-label">Origen</div><div class="stat-card-value" style="font-size:1rem">${sanitize(item.source || 'manual')}</div></div>
+      <button type="button" class="btn btn-outline btn-sm incident-assign-btn" data-incident-guide-action="assign-me">Asignarmela</button>`;
     field('inc-desc').innerHTML = existing
       ? `<strong>${sanitize(item.titulo)}</strong><br>${sanitize(item.descripcion || 'Sin descripcion')}`
       : '<input class="form-control" id="inc-new-title" placeholder="Titulo de la incidencia" style="margin-bottom:8px"><textarea class="form-control" id="inc-new-description" rows="3" placeholder="Descripcion detallada"></textarea>';
+    const guideTarget = field('inc-ai-guide');
+    if (guideTarget) guideTarget.innerHTML = renderGuide(item);
     field('inc-categoria').value = item.categoria;
     field('inc-estado').value = item.estado;
     field('inc-prioridad').value = item.prioridad;
@@ -326,6 +426,12 @@ export async function initAdminIncidents({
     event.preventDefault();
     event.stopImmediatePropagation();
     openIncident({ incId: button.dataset.incId });
+  }, true);
+  field('modal-incidencia')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-incident-guide-action]');
+    if (!button) return;
+    event.preventDefault();
+    applyGuideAction(button.dataset.incidentGuideAction);
   }, true);
   field('btn-guardar-inc')?.addEventListener('click', saveIncident, true);
 

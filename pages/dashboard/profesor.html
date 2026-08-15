@@ -9,8 +9,8 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260706-calendar-fit">
-<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260706-calendar-indicators">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-calendar-semantics">
+<link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
 <meta name="mobile-web-app-capable" content="yes">
@@ -60,6 +60,10 @@
       <button class="sidebar-link" data-section="chat">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5m-9 5l3.4-3.4A8 8 0 104 12v7z"/></svg>
         Chat
+      </button>
+      <button class="sidebar-link" data-section="notificaciones">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-12 0v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0a3 3 0 11-6 0"/></svg>
+        Avisos
       </button>
       <div class="sidebar-section-title">Mi cuenta</div>
       <button class="sidebar-link" data-section="perfil">
@@ -161,8 +165,8 @@
                 <div class="empty-icon" aria-hidden="true">📅</div>
                 <div class="empty-title">Selecciona un día</div>
                 <div class="empty-desc">Verás aquí tus clases y acciones pendientes de ese día.</div>
+                </div>
               </div>
-            </div>
           </div>
         </div>
       </section>
@@ -171,13 +175,13 @@
       <section id="section-clases" class="dash-section" style="display:none">
         <div class="class-flow-helper">
           <div>
-            <strong>Horario semanal y clases puntuales</strong>
-            <p>El horario normal debe quedar como clase semanal fija. Usa una clase puntual solo para recuperaciones, cambios o sesiones extra.</p>
+            <strong>Gestiona tus clases</strong>
+            <p>Consulta el detalle de cada clase o propone una sesión extra.</p>
           </div>
-          <button class="btn btn-primary btn-sm" type="button" data-action="abrir-planificador-puntual">+ Clase puntual</button>
+          <button class="btn btn-primary btn-sm" type="button" data-action="abrir-planificador-puntual">Nueva clase puntual</button>
         </div>
         <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
-          <select class="form-control" id="filtro-cl-estado" style="width:160px">
+          <select class="form-control" id="filtro-cl-estado" style="width:180px" aria-label="Filtrar clases por estado">
             <option value="">Todos los estados</option>
             <option value="pendiente">Pendiente</option>
             <option value="confirmada">Confirmada</option>
@@ -187,17 +191,21 @@
             <option value="reprogramada">Reprogramada</option>
             <option value="pagada">Pagada</option>
           </select>
-          <input type="month" class="form-control" id="filtro-cl-mes" style="width:160px">
+          <input type="month" class="form-control" id="filtro-cl-mes" style="width:180px" aria-label="Filtrar clases por mes">
         </div>
-        <div class="card">
+        <div class="card teacher-classes-card">
+          <div class="card-header teacher-classes-header">
+            <span class="card-title">Clases</span>
+            <span class="teacher-classes-count" id="teacher-classes-count">—</span>
+          </div>
           <div class="table-wrapper">
-            <table>
+            <table class="responsive-card-table teacher-classes-table">
               <thead>
                 <tr>
-                  <th>Fecha</th><th>Hora</th><th>Alumno</th><th>Materia</th><th>Duración</th><th>Ingreso</th><th>Estado</th><th>Seguimiento</th><th>Acción</th>
+                  <th>Cuándo</th><th>Alumno</th><th>Estado</th><th>Acción</th>
                 </tr>
               </thead>
-              <tbody id="tbody-mis-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
+              <tbody id="tbody-mis-clases"><tr><td colspan="4" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -214,7 +222,7 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Alumno</th><th>Curso y colegio</th><th>Zona</th><th>Notas / objetivo</th><th>Clases mes</th><th>Accion</th></tr>
+                <tr><th>Alumno</th><th>Curso y colegio</th><th>Zona</th><th>Notas / horario</th><th>Clases mes</th><th>Accion</th></tr>
               </thead>
               <tbody id="tbody-mis-alumnos"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
@@ -239,33 +247,48 @@
           </div>
           <div class="stat-card">
             <div class="stat-card-value" id="ing-pago-quincenal">Configurar</div>
-            <div class="stat-card-label">Proximo cobro</div>
+            <div class="stat-card-label">Próximo cobro</div>
           </div>
         </div>
         <div class="card income-payout-card" style="margin-bottom:20px">
           <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-            <span class="card-title">Dia de cobro</span>
+            <span class="card-title">Día de cobro</span>
             <span class="badge badge-warning" id="ing-cobro-lock-badge">Pendiente</span>
           </div>
           <div class="card-body">
             <div id="ing-cobro-status" class="income-payout-status"></div>
-            <form id="form-dia-cobro-profesor" class="income-payout-form" method="post" novalidate>
-              <div class="form-group">
-                <label class="form-label" for="ing-cobro-frecuencia">Frecuencia de cobro</label>
-                <select class="form-control" id="ing-cobro-frecuencia">
-                  <option value="">Seleccionar...</option>
-                  <option value="quincenal">Cada 15 dias</option>
-                  <option value="mensual">Una vez al mes</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="ing-cobro-fecha-inicio">Primer dia de cobro</label>
-                <input class="form-control" type="date" id="ing-cobro-fecha-inicio">
-                <div class="form-hint">El calendario repetira esta fecha segun la frecuencia elegida.</div>
-              </div>
-              <button class="btn btn-primary" type="submit" id="btn-guardar-dia-cobro-profesor">Guardar dia de cobro</button>
-            </form>
+            <button class="btn btn-primary btn-sm" type="button" id="btn-configurar-dia-cobro">Configurar día de cobro</button>
             <div class="income-payout-lock-note">Una vez guardado no se puede cambiar desde el panel. Si te equivocas, contacta con ClasesDe10 para revisarlo.</div>
+            <div class="modal-overlay" id="modal-dia-cobro-profesor">
+              <form id="form-dia-cobro-profesor" class="modal action-form-modal" method="post" novalidate aria-labelledby="modal-dia-cobro-title">
+                <div class="modal-header">
+                  <div>
+                    <span class="modal-title" id="modal-dia-cobro-title">Configurar día de cobro</span>
+                    <p class="modal-subtitle">Elige la frecuencia y la primera fecha. Después quedará fijado.</p>
+                  </div>
+                  <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+                </div>
+                <div class="modal-body">
+                  <div class="form-group">
+                    <label class="form-label" for="ing-cobro-frecuencia">Frecuencia de cobro</label>
+                    <select class="form-control" id="ing-cobro-frecuencia">
+                      <option value="">Seleccionar...</option>
+                      <option value="quincenal">Cada 15 días</option>
+                      <option value="mensual">Una vez al mes</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="ing-cobro-fecha-inicio">Primer día de cobro</label>
+                    <input class="form-control" type="date" id="ing-cobro-fecha-inicio">
+                    <div class="form-hint">El calendario repetirá esta fecha según la frecuencia elegida.</div>
+                  </div>
+                </div>
+                <div class="modal-footer">
+                  <button class="btn btn-ghost" type="button" data-close-modal="modal-dia-cobro-profesor">Cancelar</button>
+                  <button class="btn btn-primary" type="submit" id="btn-guardar-dia-cobro-profesor">Guardar día de cobro</button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
         <div class="card" style="margin-bottom:20px">
@@ -278,7 +301,7 @@
               <span class="alert-icon">i</span>
               <div class="alert-body">
                 <div class="alert-title">Cobro ordinario configurable</div>
-                Configura en Ingresos si prefieres cobrar cada 15 dias o una vez al mes. El calendario senalara cada fecha prevista; usa esta opcion solo si necesitas pedir un Bizum fuera de ese ciclo.
+                Configura en Ingresos si prefieres cobrar cada 15 días o una vez al mes. El calendario señalará cada fecha prevista; usa esta opción solo si necesitas pedir un Bizum fuera de ese ciclo.
               </div>
             </div>
             <div class="table-wrapper">
@@ -414,19 +437,59 @@
         <div id="chat-profesor"></div>
       </section>
 
+      <section id="section-notificaciones" class="dash-section" style="display:none">
+        <div id="notification-center-profesor"></div>
+      </section>
+
       <section id="section-perfil" class="dash-section" style="display:none">
+        <div class="profile-page-shell">
+          <header class="profile-page-header">
+            <div class="profile-page-identity">
+              <div class="profile-page-avatar" id="teacher-profile-avatar" aria-hidden="true"></div>
+              <div>
+                <span class="profile-page-eyebrow">Perfil profesional</span>
+                <h2 id="teacher-profile-name">Tu perfil de profesor</h2>
+                <p id="teacher-profile-caption">La informacion que usamos para presentarte a familias compatibles.</p>
+              </div>
+            </div>
+            <button class="btn btn-primary" type="button" id="btn-editar-perfil-profesor">Editar perfil</button>
+          </header>
+          <div class="profile-page-grid">
+            <div class="profile-overview" id="teacher-profile-overview" aria-live="polite">
+              <div class="profile-overview-loading">Cargando tus datos...</div>
+            </div>
+            <aside class="profile-quality-card">
+              <div class="profile-quality-heading">Estado del perfil</div>
+              <div id="perfil-calidad-resumen">
+                <div class="profile-overview-loading">Calculando estado...</div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <div class="modal-overlay profile-editor-overlay" id="modal-perfil-profesor">
+          <div class="modal profile-editor-modal" aria-labelledby="modal-perfil-profesor-title">
+            <div class="modal-header">
+              <div>
+                <span class="modal-title" id="modal-perfil-profesor-title">Editar perfil profesional</span>
+                <p class="modal-subtitle">Todos tus datos siguen aqui, agrupados para revisarlos con calma.</p>
+              </div>
+              <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+            </div>
+            <div class="modal-body">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-          <div class="card" style="grid-column:1/-1">
+          <div class="card profile-editor-quality-duplicate" style="grid-column:1/-1">
             <div class="card-header"><span class="card-title">Calidad del perfil</span></div>
             <div class="card-body" id="perfil-calidad-panel">
               <div style="color:var(--gray-mid);font-size:.875rem">Calculando estado del perfil...</div>
             </div>
           </div>
 
-          <div class="card">
+          <div class="card profile-editor-form-card">
             <div class="card-header"><span class="card-title">Datos personales</span></div>
             <div class="card-body">
     <form id="form-perfil" method="post" novalidate>
+                <h3 class="profile-form-section-title">Datos personales</h3>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Nombre</label>
@@ -447,6 +510,7 @@
                   <div class="form-hint">Sube una foto clara. Se comprimira automaticamente antes de guardarla.</div>
                   <div id="p-foto-preview" style="margin-top:10px;width:96px;height:96px;border-radius:12px;background:var(--gray-soft);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--gray-mid);font-size:.78rem">Sin foto</div>
                 </div>
+                <h3 class="profile-form-section-title">Ubicacion</h3>
                 <div class="form-group">
                   <label class="form-label">Calle y numero</label>
                   <input class="form-control" type="text" id="p-direccion" placeholder="Calle, numero, piso">
@@ -459,37 +523,22 @@
                   <div class="form-group">
                     <label class="form-label">Codigo postal</label>
                     <input class="form-control" type="text" id="p-cp" placeholder="28000">
-                  </div>
-                  <div class="form-group">
-                    <label class="form-label">Zona/barrio</label>
-                    <input class="form-control" type="text" id="p-zona" placeholder="Chamberi, Retiro, online...">
+                    <div class="form-hint">La cercania se calcula con direccion y codigo postal; no hace falta indicar barrio.</div>
                   </div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Tipo de formacion principal</label>
-                  <select class="form-control" id="p-nivel">
-                    <option value="">Seleccionar…</option>
-                    <option>Bachillerato</option>
-                    <option>Grado universitario</option>
-                    <option>Máster</option>
-                    <option>Doctorado</option>
-                    <option>Conservatorio / escuela de musica</option>
-                    <option>Entrenador / monitor deportivo</option>
-                    <option>Otros</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label">Estudio exacto / titulacion</label>
-                  <input class="form-control" type="text" id="p-estudio-exacto" placeholder="Ej: Grado en Fisica, TAFAD, Conservatorio profesional de piano">
-                </div>
+                <h3 class="profile-form-section-title">Formacion</h3>
                 <div class="form-group">
                   <label class="form-label">Colegio donde estudiaste</label>
                   <input class="form-control" type="text" id="p-colegio" placeholder="Ej: Colegio El Prado, IES Ramiro de Maeztu">
-                  <div class="form-hint">Dato obligatorio: ayuda a valorar contexto academico y confianza del perfil.</div>
+                  <div class="form-hint">Nos ayuda a validar contexto academico y confianza del perfil.</div>
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Universidad o centro superior donde estudias / estudiaste</label>
-                  <input class="form-control" type="text" id="p-centro-estudios" placeholder="Ej: Universidad Complutense, UPM, Conservatorio profesional, Federacion Madrilena de Padel">
+                  <label class="form-label">Universidad o centro superior donde estudias o estudiaste</label>
+                  <input class="form-control" type="text" id="p-centro-estudios" placeholder="Ej: Universidad Complutense, UPM, conservatorio profesional, federacion deportiva">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Grado, carrera o titulacion que estudias o estudiaste</label>
+                  <input class="form-control" type="text" id="p-estudio-exacto" placeholder="Ej: Ingenieria Aeroespacial en la UPM, Grado en Fisica, conservatorio profesional de piano">
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -501,6 +550,7 @@
                     <input class="form-control" type="number" id="p-nota-universidad" min="0" max="10" step="0.01" placeholder="0-10">
                   </div>
                 </div>
+                <h3 class="profile-form-section-title">Presentacion profesional</h3>
                 <div class="form-group">
                   <label class="form-label">Biografía / Presentación</label>
                   <textarea class="form-control" id="p-bio" rows="4" placeholder="Cuéntanos sobre ti, tu experiencia y metodología…"></textarea>
@@ -508,7 +558,7 @@
                 <div class="form-group">
                   <label class="form-label">Especialidades concretas</label>
                   <textarea class="form-control" id="p-especialidades" rows="3" placeholder="Ej: EVAU, TDAH, alto rendimiento, padel iniciacion, guitarra clasica, piano moderno..."></textarea>
-                  <div class="form-hint">Separalas por comas o por lineas. Ayudan al matching y al admin a entender mejor tu perfil.</div>
+                  <div class="form-hint">Sepáralas por comas o por líneas para presentar mejor tu perfil a las familias.</div>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -520,6 +570,7 @@
                     <input class="form-control" type="text" id="p-certificaciones" placeholder="Monitor, C1, conservatorio, oposiciones...">
                   </div>
                 </div>
+                <h3 class="profile-form-section-title">Experiencia y cobros</h3>
                 <div class="form-row">
                   <div class="form-group">
                     <label class="form-label">Anios de experiencia</label>
@@ -550,6 +601,7 @@
                   </div>
                   <button class="btn btn-ghost btn-sm" type="button" data-section="ingresos">Ir a ingresos</button>
                 </div>
+                <h3 class="profile-form-section-title">Disponibilidad</h3>
                 <div class="form-group">
                   <label class="form-label">Disponibilidad resumida</label>
                   <textarea class="form-control" id="p-disponibilidad" rows="3" placeholder="Lunes a jueves tardes, sabados manana, online..."></textarea>
@@ -561,27 +613,31 @@
 
           <div>
             <div class="card" style="margin-bottom:20px">
-              <div class="card-header"><span class="card-title">Materias y actividades que imparto</span></div>
+              <div class="card-header"><span class="card-title">Que clases puedes dar</span></div>
               <div class="card-body">
-                <div id="materias-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px"></div>
-                <div style="display:flex;gap:8px">
-                  <input class="form-control" type="text" id="nueva-materia" placeholder="Ej: Matematicas, padel, guitarra, piano...">
-                  <button class="btn btn-primary btn-sm" id="btn-add-materia">+</button>
+                <div class="form-hint" style="margin-bottom:12px">
+                  Elige una o varias areas. Dentro de cada una marca materias, deportes o instrumentos y despues los cursos o niveles que cubres.
                 </div>
+                <div class="teaching-scope-builder" id="teaching-scope-builder"></div>
               </div>
             </div>
 
             <div class="card">
-              <div class="card-header"><span class="card-title">Etapas y niveles que cubro</span></div>
+              <div class="card-header"><span class="card-title">Resumen de seleccion</span></div>
               <div class="card-body">
-                <div class="form-hint" style="margin-bottom:12px">
-                  Marca etapas escolares y, si impartes actividades como padel, musica, idiomas o adultos,
-                  indica tambien el nivel real: iniciacion, intermedio o avanzado.
+                <div class="profile-selection-summary">
+                  <strong>Materias, deportes e instrumentos</strong>
+                  <div id="materias-tags" class="profile-selection-tags"></div>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:10px" id="niveles-check">
+                <div class="profile-selection-summary" style="margin-top:14px">
+                  <strong>Cursos y niveles</strong>
+                  <div class="profile-selection-tags" id="niveles-tags"></div>
+                </div>
                   <!-- Generados dinámicamente -->
                 </div>
               </div>
+            </div>
+          </div>
             </div>
           </div>
         </div>
@@ -589,6 +645,24 @@
 
       <!-- ══ DOCUMENTOS ══ -->
       <section id="section-documentos" class="dash-section" style="display:none">
+        <div class="section-action-header">
+          <div>
+            <span class="profile-page-eyebrow">Documentacion</span>
+            <h2>Documentos de validacion</h2>
+            <p>Consulta el estado de lo que ya has enviado. Sube algo nuevo solo cuando sea necesario.</p>
+          </div>
+          <button class="btn btn-primary" type="button" id="btn-subir-documento-profesor">Subir documento</button>
+        </div>
+        <div class="modal-overlay profile-editor-overlay" id="modal-documento-profesor">
+          <div class="modal action-form-modal" aria-labelledby="modal-documento-profesor-title">
+            <div class="modal-header">
+              <div>
+                <span class="modal-title" id="modal-documento-profesor-title">Subir documento</span>
+                <p class="modal-subtitle">Selecciona el tipo y adjunta el archivo correspondiente.</p>
+              </div>
+              <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+            </div>
+            <div class="modal-body profile-editor-content">
         <div class="card" style="margin-bottom:20px">
           <div class="card-header"><span class="card-title">Subir documento</span></div>
           <div class="card-body">
@@ -626,6 +700,9 @@
             </div>
           </div>
         </div>
+            </div>
+          </div>
+        </div>
 
         <div class="card">
           <div class="card-header"><span class="card-title">Mis documentos</span></div>
@@ -639,23 +716,77 @@
       </section>
 
       <!-- ══ DISPONIBILIDAD ══ -->
-      <section id="section-disponibilidad" class="dash-section" style="display:none">
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Mi disponibilidad horaria</span>
+      <section id="section-disponibilidad" class="dash-section teacher-availability-section" style="display:none">
+        <div class="teacher-availability-shell">
+          <div class="teacher-availability-hero">
+            <div>
+              <span>Disponibilidad</span>
+              <h2>Franjas en las que puedes dar clase</h2>
+              <p>Marca los horarios reales en los que normalmente puedes aceptar alumnos. Esto ayuda a evitar propuestas imposibles y mensajes innecesarios.</p>
+            </div>
             <button class="btn btn-primary btn-sm" id="btn-add-disponibilidad">+ Añadir franja</button>
           </div>
-          <div class="card-body">
-            <div class="alert alert-info">
+          <div class="teacher-availability-panel">
+            <div class="teacher-availability-help">
               <span class="alert-icon">ℹ</span>
               <div class="alert-body">Indica tus franjas horarias disponibles para que ClasesDe10 pueda asignarte alumnos.</div>
             </div>
-            <div id="tabla-disponibilidad" style="margin-top:16px"></div>
+            <div class="teacher-availability-summary" id="teacher-availability-summary"></div>
+            <div id="tabla-disponibilidad"></div>
           </div>
         </div>
       </section>
 
     </div>
+  </div>
+</div>
+
+<!-- MODAL: CLASE PUNTUAL -->
+<div class="modal-overlay" id="modal-clase-puntual">
+  <div class="modal one-off-class-modal">
+    <div class="modal-header">
+      <span class="modal-title">Proponer clase puntual</span>
+      <button class="modal-close">x</button>
+    </div>
+    <form id="form-clase-puntual">
+      <div class="modal-body">
+        <div class="one-off-class-note">
+          <strong>Clase extra o recuperacion</strong>
+          <span>Elige alumno, fecha y hora. La familia podra aceptarla para que aparezca en el calendario.</span>
+        </div>
+        <label class="form-label" for="puntual-relacion">Alumno</label>
+        <select class="form-control" id="puntual-relacion" required>
+          <option value="">Cargando alumnos...</option>
+        </select>
+        <div class="one-off-class-grid">
+          <label>
+            <span class="form-label">Fecha</span>
+            <input class="form-control" type="date" id="puntual-fecha" required>
+          </label>
+          <label>
+            <span class="form-label">Inicio</span>
+            <input class="form-control" type="time" id="puntual-inicio" step="60" required>
+          </label>
+          <label>
+            <span class="form-label">Fin</span>
+            <input class="form-control" type="time" id="puntual-fin" step="60" required>
+          </label>
+        </div>
+        <label class="form-label" for="puntual-modalidad">Modalidad</label>
+        <select class="form-control" id="puntual-modalidad">
+          <option value="por_acordar">Modalidad por acordar</option>
+          <option value="online">Online</option>
+          <option value="presencial">Presencial</option>
+        </select>
+        <label class="form-label" for="puntual-notas">Nota opcional</label>
+        <textarea class="form-control" id="puntual-notas" rows="2" maxlength="300" placeholder="Ej: recuperacion, contenido o lugar."></textarea>
+        <div class="one-off-class-summary" id="puntual-resumen">Selecciona un alumno y revisa fecha y hora.</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" type="button" data-close-modal="modal-clase-puntual">Cancelar</button>
+        <button class="btn btn-primary" type="submit" id="btn-guardar-clase-puntual">Enviar propuesta</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -672,6 +803,24 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-alumno-detalle">Cerrar</button>
       <button class="btn btn-primary" data-section="chat" data-close-modal="modal-alumno-detalle">Abrir chat</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE DE CLASE -->
+<div class="modal-overlay" id="modal-clase-detalle-profesor">
+  <div class="modal teacher-class-detail-modal" role="dialog" aria-modal="true" aria-labelledby="teacher-class-detail-title">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title" id="teacher-class-detail-title">Detalle de la clase</span>
+        <p class="modal-subtitle" id="teacher-class-detail-subtitle"></p>
+      </div>
+      <button class="modal-close" type="button" aria-label="Cerrar">x</button>
+    </div>
+    <div class="modal-body" id="teacher-class-detail-body"></div>
+    <div class="modal-footer teacher-class-detail-footer">
+      <button class="btn btn-ghost" type="button" data-close-modal="modal-clase-detalle-profesor">Cerrar</button>
+      <div id="teacher-class-detail-actions"></div>
     </div>
   </div>
 </div>
@@ -714,14 +863,18 @@
 
 <!-- MODAL: NUEVA FRANJA DISPONIBILIDAD -->
 <div class="modal-overlay" id="modal-disponibilidad">
-  <div class="modal" style="max-width:400px">
+  <div class="modal teacher-availability-modal">
     <div class="modal-header">
       <span class="modal-title">Añadir disponibilidad</span>
       <button class="modal-close">✕</button>
     </div>
     <div class="modal-body">
+      <div class="teacher-availability-note">
+        <strong>Franjas reales</strong>
+        <span>Marca solo horas en las que normalmente puedes aceptar clases. Las familias podrán pedir excepciones, pero verán el aviso.</span>
+      </div>
       <div class="form-group">
-        <label class="form-label">Día de la semana</label>
+        <label class="form-label" for="disp-dia">Día de la semana</label>
         <select class="form-control" id="disp-dia">
           <option value="0">Lunes</option><option value="1">Martes</option>
           <option value="2">Miércoles</option><option value="3">Jueves</option>
@@ -729,16 +882,17 @@
           <option value="6">Domingo</option>
         </select>
       </div>
-      <div class="form-row">
+      <div class="teacher-availability-time-grid">
         <div class="form-group">
-          <label class="form-label">Desde</label>
-          <input class="form-control" type="time" id="disp-inicio" value="09:00">
+          <label class="form-label" for="disp-inicio">Desde</label>
+          <input class="form-control" type="time" id="disp-inicio" value="09:00" step="60">
         </div>
         <div class="form-group">
-          <label class="form-label">Hasta</label>
-          <input class="form-control" type="time" id="disp-fin" value="14:00">
+          <label class="form-label" for="disp-fin">Hasta</label>
+          <input class="form-control" type="time" id="disp-fin" value="14:00" step="60">
         </div>
       </div>
+      <div class="teacher-availability-preview" id="disp-preview">Lunes 09:00-14:00</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-disponibilidad">Cancelar</button>
@@ -748,9 +902,9 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260701-incident-write';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260630-admin-switch';
-import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260627-domain-auth';
+import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-onboarding-gate';
+import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260815-document-open';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
 import {
   evaluateTeacherProfileProfessional,
@@ -759,20 +913,34 @@ import {
   toProfileList,
   validatePhone,
   validatePostalCode,
-} from '../../js/profile-engine.js?v=20260705-payout-day-lock';
+} from '../../js/profile-engine.js?v=20260808-copy-cleanup';
 import {
+  buildParticipantClassIncidentCreatePayload,
   buildTeacherAttendancePayload,
+  classAttendanceCalendarVisual,
   classAttendanceReminderState,
   classAttendanceState,
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260704-prorated-duration';
-import { buildTeacherPayoutPayload, classEconomicState } from '../../js/payment-engine.js?v=20260706-calendar-names';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260706-safe-call-request-v3';
+} from '../../js/calendar-engine.js?v=20260815-calendar-semantics';
+import { buildTeacherPayoutPayload } from '../../js/payment-engine.js?v=20260710-calendar-polish2';
+import {
+  addLocalDays,
+  isoDateLocal,
+  nextTeacherPayoutDate,
+  normalizePayoutFrequency,
+  normalizeTeacherPayoutPreference,
+  parseIsoLocalDate,
+  payoutDatesForMonth,
+  previousPayoutDateFor,
+  teacherPayoutFrequencyLabel,
+} from '../../js/teacher-payout-schedule.js?v=20260809-teacher-calendar';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260815-chat-r6';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260808-action-center';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
-import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260705-payout-day-lock';
+import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260808-copy-cleanup';
 import { renderTeacherJourneyPanel } from '../../js/teacher-journey-ui.js?v=20260629-teacher-journey';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
 import {
@@ -783,15 +951,33 @@ import {
 import { buildIcsCalendar } from '../../js/calendar-sync.js?v=20260705-person-names';
 import {
   ensureRecurringClassOccurrencesForRange,
+  loadAcceptedRecurringScheduleSeeds,
   loadParticipantClasses,
-} from '../../js/recurring-class-sync.js?v=20260706-recurring-calendar-sync';
-import { collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+  missingRecurringOccurrences,
+} from '../../js/recurring-class-sync.js?v=20260706-recurring-chat-seeds';
+import {
+  buildOneOffScheduleProposal,
+  oneOffAddLocalDays,
+  oneOffDateBounds,
+  oneOffDefaultDraft,
+  oneOffProposalMessage,
+  validateOneOffClassDraft,
+} from '../../js/one-off-class-planner.js?v=20260707-classes-panel-v1';
+import {
+  buildAcceptedOneOffClassPayload,
+  buildBusySlotPayloadsForOneOffClass,
+  isPendingOneOffScheduleProposal,
+  oneOffClassId,
+  oneOffProposalToClassRow,
+} from '../../js/one-off-proposal-actions.js?v=20260707-visible-one-off-v1';
+import { addDoc, collection as firestoreCollection, doc as firestoreDoc, getDoc, getDocs, query as firestoreQuery, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import {
-  showToast, initModals, initSidebar, formatFechaCorta, formatHora,
-  formatEuros, badgeEstado, getIniciales, debounce, sanitize, fechaHoy, nombreMes, initNotificacionesBadge
-} from '../../js/utils.js';
-import { Calendario } from '../../js/calendario.js?v=20260706-calendar-indicators';
+  showToast, initModals, initSidebar, openModal, closeModal, confirmAction, promptAction,
+  formatFechaCorta, formatHora, formatEuros, badgeEstado, getIniciales, debounce, sanitize,
+  fechaHoy, nombreMes, initNotificacionesBadge
+} from '../../js/utils.js?v=20260809-profile-dialogs-2';
+import { Calendario } from '../../js/calendario.js?v=20260815-calendar-semantics';
 
 const usuario = await requireAuth(['profesor']);
 if (!usuario) throw new Error('No autorizado');
@@ -854,9 +1040,11 @@ if (perfil) {
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
 const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Mis clases',
-                  alumnos:'Mis alumnos', ingresos:'Ingresos', chat:'Chat', perfil:'Mi perfil',
+                  alumnos:'Mis alumnos', ingresos:'Ingresos', chat:'Chat', notificaciones:'Centro de avisos', perfil:'Mi perfil',
                   documentos:'Documentos', disponibilidad:'Disponibilidad' };
 let chatInicializado = false;
+let oneOffPlannerChatsCache = [];
+let oneOffProposalRowsById = new Map();
 let clasesBizumPendientes = [];
 let incomeInsightsModel = null;
 let alumnosProfesorCache = new Map();
@@ -977,122 +1165,15 @@ function studentDisplayName(clase = {}) {
   return personDisplayName('Alumno', clase.studentId || clase.alumno_id, clase.studentDisplayName, clase.alumno_nombre, clase.studentName, studentNamePartsFromClass(clase).full);
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-function normalizePayoutFrequency(value) {
-  const raw = String(value || '').trim().toLowerCase();
-  if (['mensual', 'monthly', 'mes', 'monthly_payout'].includes(raw)) return 'mensual';
-  if (['quincenal', 'biweekly', 'fortnightly', 'cada_15_dias', '15dias', '15_dias'].includes(raw)) return 'quincenal';
-  return '';
-}
-
-function parseIsoLocalDate(value) {
-  const raw = String(value || '').slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  const [year, month, day] = raw.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isoDateLocal(date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
-function addLocalDays(date, days) {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
-}
-
-function daysInMonth(year, monthIndex) {
-  return new Date(year, monthIndex + 1, 0).getDate();
-}
-
-function normalizeTeacherPayoutPreference(source = {}) {
-  const frequency = normalizePayoutFrequency(
-    source.payoutFrequency
-    ?? source.frecuencia_cobro_profesor
-    ?? source.payoutCadence
-    ?? source.cobro_frecuencia
-    ?? source.paymentFrequency
+function teacherSelfDisplayName() {
+  return personDisplayName(
+    'Profesor',
+    profesorId,
+    normalizeDisplayName([usuario.nombre, usuario.apellidos].filter(Boolean).join(' ')),
+    normalizeDisplayName([perfil?.nombre, perfil?.apellidos].filter(Boolean).join(' ')),
+    usuario.email,
+    perfil?.email,
   );
-  const rawAnchor = String(
-    source.payoutAnchorDate
-    ?? source.fecha_inicio_cobro_profesor
-    ?? source.teacherPayoutAnchorDate
-    ?? source.cobro_fecha_inicio
-    ?? ''
-  ).slice(0, 10);
-  const fallbackDay = Number(
-    source.payoutDayOfMonth
-    ?? source.dia_cobro_profesor
-    ?? source.paymentDayOfMonth
-    ?? source.cobro_dia
-    ?? 0
-  );
-  const fallbackAnchor = rawAnchor || (
-    Number.isInteger(fallbackDay) && fallbackDay >= 1 && fallbackDay <= 31
-      ? `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(fallbackDay).padStart(2, '0')}`
-      : ''
-  );
-  const anchor = parseIsoLocalDate(fallbackAnchor);
-  return {
-    frequency: frequency || (anchor ? 'quincenal' : ''),
-    anchorDate: anchor ? isoDateLocal(anchor) : '',
-    dayOfMonth: anchor ? anchor.getDate() : null,
-    configured: Boolean((frequency || anchor) && anchor),
-  };
-}
-
-function teacherPayoutFrequencyLabel(frequency) {
-  return frequency === 'mensual' ? 'Cobro mensual' : 'Cobro cada 15 dias';
-}
-
-function payoutDatesForMonth(preference, year, monthIndex) {
-  if (!preference?.configured) return [];
-  const anchor = parseIsoLocalDate(preference.anchorDate);
-  if (!anchor) return [];
-  const monthStart = new Date(year, monthIndex, 1);
-  const monthEnd = new Date(year, monthIndex, daysInMonth(year, monthIndex));
-
-  if (preference.frequency === 'mensual') {
-    const day = Math.min(preference.dayOfMonth || anchor.getDate(), daysInMonth(year, monthIndex));
-    const target = new Date(year, monthIndex, day);
-    return target >= anchor && target <= monthEnd ? [target] : [];
-  }
-
-  let cursor = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-  if (cursor < monthStart) {
-    const diffDays = Math.floor((monthStart.getTime() - cursor.getTime()) / DAY_MS);
-    cursor = addLocalDays(cursor, Math.floor(diffDays / 15) * 15);
-    while (cursor < monthStart) cursor = addLocalDays(cursor, 15);
-  }
-  const dates = [];
-  while (cursor <= monthEnd) {
-    if (cursor >= anchor) dates.push(cursor);
-    cursor = addLocalDays(cursor, 15);
-  }
-  return dates;
-}
-
-function previousPayoutDateFor(preference, payoutDate) {
-  if (preference.frequency === 'mensual') {
-    const prevMonth = new Date(payoutDate.getFullYear(), payoutDate.getMonth() - 1, 1);
-    const day = Math.min(preference.dayOfMonth || payoutDate.getDate(), daysInMonth(prevMonth.getFullYear(), prevMonth.getMonth()));
-    return new Date(prevMonth.getFullYear(), prevMonth.getMonth(), day);
-  }
-  return addLocalDays(payoutDate, -15);
-}
-
-function nextTeacherPayoutDate(preference, fromDate = new Date()) {
-  if (!preference?.configured) return null;
-  const today = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
-  for (let offset = 0; offset < 18; offset += 1) {
-    const cursor = new Date(today.getFullYear(), today.getMonth() + offset, 1);
-    const next = payoutDatesForMonth(preference, cursor.getFullYear(), cursor.getMonth())
-      .find((date) => date >= today);
-    if (next) return next;
-  }
-  return null;
 }
 
 function teacherPayoutSummaryLabel(profile = perfil) {
@@ -1115,11 +1196,11 @@ function teacherPayoutPersistenceFields(preference = {}) {
 }
 
 function teacherPayoutDetailLabel(preference = normalizeTeacherPayoutPreference(perfil || {})) {
-  if (!preference.configured) return 'Sin dia de cobro configurado';
+  if (!preference.configured) return 'Sin día de cobro configurado';
   const next = nextTeacherPayoutDate(preference);
   const frequency = teacherPayoutFrequencyLabel(preference.frequency).toLowerCase();
   const anchor = formatFechaCorta(preference.anchorDate);
-  const nextText = next ? ` Proximo cobro previsto: ${formatFechaCorta(isoDateLocal(next))}.` : '';
+  const nextText = next ? ` Próximo cobro previsto: ${formatFechaCorta(isoDateLocal(next))}.` : '';
   return `${frequency}, desde ${anchor}.${nextText}`;
 }
 
@@ -1129,6 +1210,7 @@ function syncTeacherPayoutSettings() {
   const frequencyInput = document.getElementById('ing-cobro-frecuencia');
   const anchorInput = document.getElementById('ing-cobro-fecha-inicio');
   const submitButton = document.getElementById('btn-guardar-dia-cobro-profesor');
+  const openButton = document.getElementById('btn-configurar-dia-cobro');
   const statusBox = document.getElementById('ing-cobro-status');
   const lockBadge = document.getElementById('ing-cobro-lock-badge');
   const profileReminder = document.getElementById('perfil-cobro-reminder');
@@ -1145,14 +1227,18 @@ function syncTeacherPayoutSettings() {
   }
   if (submitButton) {
     submitButton.disabled = locked;
-    submitButton.textContent = locked ? 'Dia de cobro bloqueado' : 'Guardar dia de cobro';
+    submitButton.textContent = locked ? 'Día de cobro bloqueado' : 'Guardar día de cobro';
+  }
+  if (openButton) {
+    openButton.hidden = locked;
+    openButton.disabled = locked;
   }
   if (statusBox) {
     statusBox.classList.toggle('is-locked', locked);
     statusBox.classList.toggle('is-pending', !locked);
     statusBox.innerHTML = locked
-      ? `<strong>Dia de cobro guardado</strong><span>${sanitize(teacherPayoutDetailLabel(preference))}</span>`
-      : '<strong>Falta fijar tu dia de cobro</strong><span>Elige una frecuencia y el primer dia. Este dato se usa para marcar tus cobros en el calendario y no se podra cambiar desde el panel.</span>';
+      ? `<strong>Día de cobro guardado</strong><span>${sanitize(teacherPayoutDetailLabel(preference))}</span>`
+      : '<strong>Falta fijar tu día de cobro</strong><span>Elige una frecuencia y el primer día. Este dato marca tus cobros en el calendario y no se podrá cambiar desde el panel.</span>';
   }
   if (lockBadge) {
     lockBadge.className = locked ? 'badge badge-success' : 'badge badge-warning';
@@ -1164,7 +1250,7 @@ function syncTeacherPayoutSettings() {
   if (profileText) {
     profileText.textContent = locked
       ? teacherPayoutDetailLabel(preference)
-      : 'Configuralo en Ingresos. Una vez guardado no se puede cambiar desde el panel.';
+      : 'Configúralo en Ingresos. Una vez guardado no se puede cambiar desde el panel.';
   }
   if (stat) stat.textContent = teacherPayoutSummaryLabel(perfil);
 }
@@ -1173,7 +1259,7 @@ async function guardarDiaCobroProfesor(event) {
   event?.preventDefault();
   const currentPreference = normalizeTeacherPayoutPreference(perfil || {});
   if (currentPreference.configured) {
-    showToast('Dia de cobro fijo', 'Ya esta guardado. Si necesitas cambiarlo, contacta con ClasesDe10.', 'warning');
+    showToast('Día de cobro fijo', 'Ya está guardado. Si necesitas cambiarlo, contacta con ClasesDe10.', 'warning');
     syncTeacherPayoutSettings();
     return;
   }
@@ -1182,7 +1268,7 @@ async function guardarDiaCobroProfesor(event) {
   const anchorDate = document.getElementById('ing-cobro-fecha-inicio')?.value || '';
   const preference = normalizeTeacherPayoutPreference({ payoutFrequency: frequency, payoutAnchorDate: anchorDate });
   if (!preference.configured) {
-    showToast('Falta el dia de cobro', 'Elige frecuencia y primer dia de cobro antes de guardar.', 'warning');
+    showToast('Falta el día de cobro', 'Elige la frecuencia y el primer día de cobro antes de guardar.', 'warning');
     return;
   }
 
@@ -1216,15 +1302,18 @@ async function guardarDiaCobroProfesor(event) {
     perfil = { ...perfil, ...payoutFields, payout_locked_at: timestampIso };
     syncTeacherPayoutSettings();
     renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual());
+    renderQualityPanel('perfil-calidad-resumen', evaluarPerfilActual());
+    renderTeacherProfileOverview();
     await cargarInicio();
     if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
-    showToast('Dia de cobro guardado', 'Queda fijado para tus proximos cobros.', 'success');
+    closeModal('modal-dia-cobro-profesor');
+    showToast('Día de cobro guardado', 'Queda fijado para tus próximos cobros.', 'success');
   } catch (error) {
     if (button) {
       button.disabled = false;
       button.textContent = previousText;
     }
-    showToast('Error', error.message || 'No se pudo guardar el dia de cobro.', 'error');
+    showToast('Error', error.message || 'No se pudo guardar el día de cobro.', 'error');
   }
 }
 
@@ -1259,11 +1348,11 @@ function buildTeacherPayoutCalendarEvents(year, monthIndex, classes = []) {
     return {
       id: `teacher-payout-${payoutDateIso}`,
       calendarEventType: 'teacher_payout_day',
-      calendarTitle: 'ClasesDe10 - Cobro previsto',
+      calendarTitle: 'ClasesDe10 - Fecha de cobro',
       calendarDescription: [
         `Periodo: ${formatFechaCorta(periodStartIso)} - ${formatFechaCorta(payoutDateIso)}`,
         `Importe previsto: ${formatEuros(payoutAmount)}`,
-        `${periodClasses.length} clase(s) pendientes de liquidar`,
+        `${periodClasses.length} clase(s) pendientes de cobro`,
       ].join('\n'),
       fecha: payoutDateIso,
       date: payoutDateIso,
@@ -1292,7 +1381,7 @@ function renderTeacherPayoutCalendarCard(event) {
       <em>${sanitize(formatEuros(importeProfesorClase(clase)))}</em>
     </div>`).join('');
   const extra = classes.length > 6
-    ? `<div class="calendar-payout-more">+${classes.length - 6} clase(s) mas en este periodo</div>`
+    ? `<div class="calendar-payout-more">+${classes.length - 6} clase(s) más en este periodo</div>`
     : '';
   return `
     <div class="clase-item calendar-payout-item" style="padding:12px 16px">
@@ -1301,14 +1390,14 @@ function renderTeacherPayoutCalendarCard(event) {
         <div class="clase-time-fin">${sanitize(formatFechaCorta(event.payoutDate))}</div>
       </div>
       <div class="clase-info">
-        <div class="clase-nombre">${sanitize(event.payoutFrequencyLabel)}</div>
+        <div class="clase-nombre">Fecha de cobro · ${sanitize(event.payoutFrequencyLabel)}</div>
         <div class="clase-materia">Periodo ${sanitize(formatFechaCorta(event.periodStart))} - ${sanitize(formatFechaCorta(event.periodEnd))}</div>
         <div class="calendar-payout-summary">
-          <span class="badge badge-navy">${classes.length} clase(s)</span>
+          <span class="badge badge-warning">${classes.length ? 'Cobro pendiente' : 'Sin importe pendiente'}</span>
           <strong>${sanitize(formatEuros(total))}</strong>
         </div>
         <div class="calendar-payout-detail">
-          ${rows || '<div class="calendar-payout-empty">No hay clases pendientes de liquidar en este periodo.</div>'}
+          ${rows || '<div class="calendar-payout-empty">No hay importes pendientes de cobro en este periodo.</div>'}
           ${extra}
         </div>
       </div>
@@ -1324,12 +1413,15 @@ function renderTeacherAttendanceSummary(clase) {
   const badgeClass = state.tone === 'success' ? 'badge-success'
     : state.tone === 'warning' ? 'badge-warning'
     : state.tone === 'danger' ? 'badge-danger'
+    : state.tone === 'neutral' ? 'badge-gray'
     : 'badge-info';
   const notes = clase.notas_profesor || clase.notasProfesor || '';
+  const compactText = teacherAttendanceCompactText(state);
+  const repeatsBadge = String(compactText || '').trim().toLocaleLowerCase('es') === String(state.label || '').trim().toLocaleLowerCase('es');
   return `
     <div class="calendar-status-line">
       <span class="badge ${badgeClass}">${sanitize(state.label)}</span>
-      <span>${sanitize(teacherAttendanceCompactText(state))}</span>
+      ${repeatsBadge ? '' : `<span>${sanitize(compactText)}</span>`}
       ${notes ? `<small>${sanitize(notes)}</small>` : ''}
     </div>
   `;
@@ -1338,7 +1430,7 @@ function renderTeacherAttendanceSummary(clase) {
 function teacherAttendanceCompactText(state = {}) {
   if (state.key === 'confirmed_by_both') return 'Asistencia confirmada';
   if (state.key === 'pending_family') return 'Falta confirmar familia';
-  if (state.key === 'pending_teacher') return 'Falta registrar profesor';
+  if (state.key === 'pending_teacher') return state.teacherNextStep || 'Marca ahora si se dio o no';
   if (state.key === 'incident') return 'Incidencia abierta';
   if (state.key === 'cancelled') return 'Clase cancelada';
   if (state.key === 'scheduled') return 'Pendiente de realizar';
@@ -1346,9 +1438,15 @@ function teacherAttendanceCompactText(state = {}) {
 }
 
 function teacherAttendanceSelectValue(clase = {}) {
-  const teacher = String(clase.teacherConfirmationStatus || clase.teacherAttendanceStatus || '').toLowerCase();
+  const teacher = String(
+    clase.teacherConfirmationStatus
+    || clase.teacherAttendanceStatus
+    || clase.confirmacion_profesor
+    || '',
+  ).toLowerCase();
   if (teacher === 'realizada') return 'realizada';
   if (['no_realizada', 'cancelada', 'incidencia'].includes(teacher)) return 'no_realizada';
+  if (['realizada', 'pagada'].includes(classStatusForBadge(clase))) return 'realizada';
   return 'pendiente';
 }
 
@@ -1376,10 +1474,9 @@ function renderTeacherAttendanceSelect(clase, state = classAttendanceState(clase
       ? 'Resultado registrado'
       : '';
   const disabled = lockedReason ? 'disabled' : '';
-  const lockedHint = state.key === 'confirmed_by_both' ? '' : lockedReason;
   return `
     <label class="calendar-attendance-select">
-      <span>Resultado</span>
+      <span>¿Se ha dado?</span>
       <select class="form-control"
               data-action="actualizar-asistencia-calendario"
               data-id="${sanitize(clase.id)}"
@@ -1389,27 +1486,114 @@ function renderTeacherAttendanceSelect(clase, state = classAttendanceState(clase
         <option value="realizada" ${current === 'realizada' ? 'selected' : ''}>Se ha dado</option>
         <option value="no_realizada" ${current === 'no_realizada' ? 'selected' : ''}>No se ha dado</option>
       </select>
-      ${lockedHint ? `<small>${sanitize(lockedHint)}</small>` : ''}
     </label>
   `;
 }
 
-function teacherEconomicCompactText(economic = {}) {
-  const labels = {
-    settled: 'Pagada y liquidada',
-    payout_pending: 'Familia pagada; falta liquidar profesor',
-    in_review: 'Justificante en revision',
-    pending: 'No pagada',
-    overdue: 'No pagada, fuera de plazo',
-    rejected: 'Justificante rechazado',
-    cancelled: 'Sin cobro activo',
-    missing_amount: 'Falta importe de familia',
-    missing_teacher_amount: 'Falta importe del profesor',
-  };
-  return labels[economic.state] || economic.label || 'Pago pendiente';
+function teacherPayoutStatus(clase = {}) {
+  return String(
+    clase.teacherPaymentStatus
+    || clase.estado_pago_profesor
+    || clase.teacherPayoutStatus
+    || clase.payoutStatus
+    || '',
+  ).toLowerCase();
 }
 
-function renderTeacherEconomicStatus(clase = {}, economic = classEconomicState(clase)) {
+function teacherFinancialState(clase = {}) {
+  const classStatus = String(clase.estado || clase.status || '').toLowerCase();
+  const status = teacherPayoutStatus(clase);
+  const teacherAmount = importeProfesorClase(clase);
+  const preference = normalizeTeacherPayoutPreference(perfil || {});
+  const classDate = parseIsoLocalDate(classDateIso(clase));
+  const expectedPayout = classDate ? nextTeacherPayoutDate(preference, classDate) : null;
+  const expectedPayoutLabel = expectedPayout
+    ? `Previsto para el ${formatFechaCorta(isoDateLocal(expectedPayout))}`
+    : 'Configura tu día de cobro en Ingresos';
+  if (['cancelada', 'cancelado', 'no_realizada'].includes(classStatus)) {
+    return {
+      state: 'cancelled',
+      label: 'Esta clase no genera ningún cobro',
+      badge: 'Cancelada',
+      dotClass: 'dot-red',
+      tone: 'gray',
+      calendarClass: 'economic-cancelled',
+    };
+  }
+  if (teacherAmount <= 0) {
+    return {
+      state: 'missing_teacher_amount',
+      label: 'Falta importe del profesor',
+      badge: 'Sin importe',
+      dotClass: 'dot-rose',
+      tone: 'danger',
+      calendarClass: 'economic-missing_teacher_amount',
+    };
+  }
+  if (['pagado', 'paid', 'validado', 'liquidado', 'cobrado', 'settled', 'succeeded'].includes(status) || clase.teacherPayoutPaidAt) {
+    return {
+      state: 'settled',
+      label: 'Cobro recibido',
+      badge: 'Cobrado',
+      dotClass: 'dot-emerald',
+      tone: 'success',
+      calendarClass: 'economic-settled',
+    };
+  }
+  if (status === 'requiere_accion') {
+    return {
+      state: 'payout_attention',
+      label: 'Revisa los datos de este cobro',
+      badge: 'Revisar cobro',
+      dotClass: 'dot-red',
+      tone: 'danger',
+      calendarClass: 'economic-missing_teacher_amount',
+    };
+  }
+  if (['solicitado', 'procesando'].includes(status)) {
+    return {
+      state: 'payout_requested',
+      label: 'ClasesDe10 está tramitando este cobro',
+      badge: 'Cobro en proceso',
+      dotClass: 'dot-amber',
+      tone: 'warning',
+      calendarClass: 'economic-payout_pending',
+    };
+  }
+  if (['realizada', 'completada', 'completed'].includes(classStatus)) {
+    return {
+      state: 'payout_pending',
+      label: expectedPayoutLabel,
+      badge: 'Cobro pendiente',
+      dotClass: 'dot-amber',
+      tone: 'warning',
+      calendarClass: 'economic-payout_pending',
+    };
+  }
+  return {
+    state: 'pending',
+    label: 'El cobro se activa al registrar la clase como realizada',
+    badge: 'Programada',
+    dotClass: 'dot-navy',
+    tone: 'navy',
+    calendarClass: 'economic-pending',
+  };
+}
+
+function teacherEconomicCompactText(economic = {}) {
+  const labels = {
+    settled: 'Cobro recibido',
+    payout_requested: 'ClasesDe10 está tramitando este cobro',
+    payout_pending: economic.label || 'Pendiente de incluir en tu próximo cobro',
+    payout_attention: 'Revisa los datos de este cobro',
+    pending: 'El cobro se activa al registrar la clase como realizada',
+    cancelled: 'Esta clase no genera ningún cobro',
+    missing_teacher_amount: 'Falta importe del profesor',
+  };
+  return labels[economic.state] || economic.label || 'Cobro pendiente';
+}
+
+function renderTeacherEconomicStatus(clase = {}, economic = teacherFinancialState(clase)) {
   const economicBadge = {
     success: 'badge-success',
     warning: 'badge-warning',
@@ -1446,11 +1630,24 @@ function renderTeacherClassAction(clase) {
 
 function irA(sec, options = {}) {
   if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
-  document.querySelectorAll('.dash-section').forEach(s => s.style.display = 'none');
-  document.getElementById(`section-${sec}`).style.display = '';
+  document.querySelectorAll('.dash-section').forEach((s) => {
+    s.style.display = 'none';
+    s.classList.remove('dashboard-anchor-offset');
+  });
+  const targetSection = document.getElementById(`section-${sec}`);
+  targetSection.style.display = '';
+  if (options.fromHash) targetSection.classList.add('dashboard-anchor-offset');
   document.querySelectorAll('.sidebar-link').forEach(l => l.classList.toggle('active', l.dataset.section === sec));
   document.getElementById('topbar-title').textContent = TITULOS[sec] || sec;
   if (!options.fromHash && window.location.hash !== `#${sec}`) history.replaceState(null, '', `#${sec}`);
+  const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  if (!options.fromHash) {
+    requestAnimationFrame(() => {
+      resetScroll();
+      setTimeout(resetScroll, 0);
+      setTimeout(resetScroll, 80);
+    });
+  }
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarMisClases,
                     alumnos: cargarMisAlumnos, ingresos: cargarIngresos, chat: cargarChat,
                     perfil: cargarPerfil, documentos: cargarDocumentos, disponibilidad: cargarDisponibilidad };
@@ -1468,33 +1665,32 @@ document.addEventListener('click', (e) => {
   const sectionTrigger = e.target.closest('[data-section]');
   if (!sectionTrigger) return;
   e.preventDefault();
+  const openOverlay = sectionTrigger.closest('.modal-overlay.open');
+  if (openOverlay?.id) closeModal(openOverlay.id);
   irA(sectionTrigger.dataset.section);
 });
 initSidebar();
+['modal-perfil-profesor', 'modal-documento-profesor', 'modal-dia-cobro-profesor'].forEach((id) => {
+  const overlay = document.getElementById(id);
+  if (overlay?.parentElement !== document.body) document.body.appendChild(overlay);
+});
 initModals();
 initNotificacionesBadge(usuario.uid || usuario.id, db);
+initNotificationCenter({
+  container: document.getElementById('notification-center-profesor'),
+  usuario,
+  role: 'profesor',
+  showToast,
+  navigateSection: (section) => { irA(section); return true; },
+});
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (!btn) return;
-  document.getElementById(btn.dataset.closeModal)?.classList.remove('open');
-  document.body.style.overflow = '';
+  closeModal(btn.dataset.closeModal);
 });
 document.getElementById('btn-logout').addEventListener('click', logout);
 function abrirPanelNotificaciones() {
-  irA('chat');
-  let intentos = 0;
-  const abrir = () => {
-    const tab = document.querySelector('[data-chat-tab="notificaciones"]');
-    if (tab) {
-      tab.click();
-      return;
-    }
-    if (intentos < 20) {
-      intentos += 1;
-      setTimeout(abrir, 100);
-    }
-  };
-  abrir();
+  irA('notificaciones');
 }
 document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
 
@@ -1502,11 +1698,14 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action="abrir-planificador-puntual"]');
   if (!btn) return;
   e.preventDefault();
-  irA('chat');
-  setTimeout(() => {
-    window.dispatchEvent(new CustomEvent('cd10:open-chat-planner', { detail: { kind: 'one_off' } }));
-  }, 220);
+  abrirModalClasePuntualProfesor();
 });
+
+['puntual-relacion', 'puntual-fecha', 'puntual-inicio', 'puntual-fin', 'puntual-modalidad'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('input', updateTeacherOneOffSummary);
+  document.getElementById(id)?.addEventListener('change', updateTeacherOneOffSummary);
+});
+document.getElementById('form-clase-puntual')?.addEventListener('submit', guardarClasePuntualProfesor);
 
 function handleTeacherJourneyAction(action) {
   const normalized = String(action || '').trim();
@@ -1554,6 +1753,423 @@ async function cargarChatsUsuarioActual() {
   }
 }
 
+function teacherOneOffOwnerUid() {
+  return usuario.uid || usuario.firebase_uid || usuario.id;
+}
+
+function setTeacherActionBusy(button, label = 'Procesando...') {
+  if (!button || button.dataset.busy === 'true') return false;
+  button.dataset.busy = 'true';
+  button.dataset.originalText = button.textContent || '';
+  button.disabled = true;
+  button.textContent = label;
+  return true;
+}
+
+function clearTeacherActionBusy(button) {
+  if (!button) return;
+  button.disabled = false;
+  button.textContent = button.dataset.originalText || button.textContent || '';
+  delete button.dataset.busy;
+  delete button.dataset.originalText;
+}
+
+function teacherOneOffStudentName(chat = {}) {
+  return personDisplayName(
+    'Alumno',
+    chat.studentId || chat.alumno_id,
+    chat.studentDisplayName,
+    chat.alumno_nombre,
+    chat.studentName,
+  );
+}
+
+function teacherOneOffFamilyName(chat = {}) {
+  return personDisplayName(
+    'Familia',
+    chat.familyUid || chat.familia_id,
+    chat.familyName,
+    chat.familia_nombre,
+    chat.familyEmail,
+  );
+}
+
+function teacherOneOffRelationLabel(chat = {}) {
+  const student = teacherOneOffStudentName(chat);
+  const family = teacherOneOffFamilyName(chat);
+  const subject = String(chat.materia || chat.subject || '').trim();
+  return `${student}${family ? ` - ${family}` : ''}${subject ? ` - ${subject}` : ''}`;
+}
+
+function normalizeTeacherOneOffChatRows(chats = []) {
+  const seen = new Set();
+  return (chats || [])
+    .filter((chat) => chat && chat.id && chat.status !== 'archivado' && chat.relationshipStatus !== 'archived')
+    .filter((chat) => (chat.studentId || chat.alumno_id) && (chat.familyUid || chat.familia_id))
+    .filter((chat) => {
+      const key = String(chat.id || chat.assignmentId || chat.asignacion_id);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => teacherOneOffRelationLabel(a).localeCompare(teacherOneOffRelationLabel(b), 'es'));
+}
+
+function syncTeacherOneOffDateBounds() {
+  const bounds = oneOffDateBounds(new Date(), 548);
+  const dateInput = document.getElementById('puntual-fecha');
+  if (!dateInput) return;
+  dateInput.min = bounds.min;
+  dateInput.max = bounds.max;
+}
+
+function selectedTeacherOneOffChat() {
+  const id = document.getElementById('puntual-relacion')?.value || '';
+  return oneOffPlannerChatsCache.find((chat) => String(chat.id) === String(id)) || null;
+}
+
+function updateTeacherOneOffSummary() {
+  const summary = document.getElementById('puntual-resumen');
+  if (!summary) return;
+  const chat = selectedTeacherOneOffChat();
+  const validation = validateOneOffClassDraft({
+    date: document.getElementById('puntual-fecha')?.value,
+    start: document.getElementById('puntual-inicio')?.value,
+    end: document.getElementById('puntual-fin')?.value,
+  });
+  if (!chat) {
+    summary.textContent = 'Selecciona un alumno asignado para proponer la clase puntual.';
+    return;
+  }
+  if (!validation.valid) {
+    summary.textContent = validation.message;
+    return;
+  }
+  summary.textContent = `${teacherOneOffRelationLabel(chat)}. Duracion: ${validation.durationMinutes} min.`;
+}
+
+async function abrirModalClasePuntualProfesor() {
+  const modal = document.getElementById('modal-clase-puntual');
+  const select = document.getElementById('puntual-relacion');
+  if (!modal || !select) return;
+  syncTeacherOneOffDateBounds();
+  const draft = oneOffDefaultDraft(oneOffAddLocalDays(new Date(), 0));
+  document.getElementById('puntual-fecha').value = draft.date;
+  document.getElementById('puntual-inicio').value = draft.start;
+  document.getElementById('puntual-fin').value = draft.end;
+  document.getElementById('puntual-modalidad').value = draft.modality;
+  document.getElementById('puntual-notas').value = '';
+  select.innerHTML = '<option value="">Cargando alumnos...</option>';
+  modal.classList.add('open');
+  try {
+    oneOffPlannerChatsCache = normalizeTeacherOneOffChatRows(await cargarChatsUsuarioActual());
+    if (!oneOffPlannerChatsCache.length) {
+      select.innerHTML = '<option value="">No hay alumnos asignados todavia</option>';
+      updateTeacherOneOffSummary();
+      showToast('Sin alumnos asignados', 'Cuando tengas una relacion activa podras proponer clases puntuales desde aqui.', 'info');
+      return;
+    }
+    select.innerHTML = oneOffPlannerChatsCache
+      .map((chat) => `<option value="${sanitize(chat.id)}">${sanitize(teacherOneOffRelationLabel(chat))}</option>`)
+      .join('');
+    updateTeacherOneOffSummary();
+    setTimeout(() => document.getElementById('puntual-fecha')?.focus(), 50);
+  } catch (error) {
+    select.innerHTML = '<option value="">No se pudieron cargar alumnos</option>';
+    updateTeacherOneOffSummary();
+    showToast('No se pudo cargar', error.message || 'Revisa permisos de relaciones.', 'error');
+  }
+}
+
+async function addTeacherOneOffSystemMessage(chat = {}, proposal = {}) {
+  const body = oneOffProposalMessage(proposal, teacherSelfDisplayName());
+  const chatRef = firestoreDoc(firebaseDb, 'chats', chat.id);
+  await addDoc(firestoreCollection(chatRef, 'mensajes'), {
+    senderUid: teacherOneOffOwnerUid(),
+    senderRole: 'profesor',
+    senderName: teacherSelfDisplayName(),
+    body,
+    createdAt: serverTimestamp(),
+    readBy: { [teacherOneOffOwnerUid()]: true },
+  });
+  await updateDoc(chatRef, {
+    lastMessage: body.slice(0, 180),
+    lastMessageAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function guardarClasePuntualProfesor(event) {
+  event.preventDefault();
+  const button = document.getElementById('btn-guardar-clase-puntual');
+  if (!setTeacherActionBusy(button, 'Enviando...')) return;
+  const chat = selectedTeacherOneOffChat();
+  try {
+    if (!chat) {
+      showToast('Falta alumno', 'Elige el alumno para la clase puntual.', 'warning');
+      return;
+    }
+    const { validation, proposal } = buildOneOffScheduleProposal(chat, {
+      date: document.getElementById('puntual-fecha').value,
+      start: document.getElementById('puntual-inicio').value,
+      end: document.getElementById('puntual-fin').value,
+      modality: document.getElementById('puntual-modalidad').value,
+      notes: document.getElementById('puntual-notas').value,
+    }, {
+      currentUid: teacherOneOffOwnerUid(),
+      role: 'profesor',
+      serverTimestamp,
+    });
+    if (!validation.valid) {
+      showToast('Revisa la clase', validation.message, 'warning');
+      return;
+    }
+    const chatRef = firestoreDoc(firebaseDb, 'chats', chat.id);
+    await addDoc(firestoreCollection(chatRef, 'programaciones'), proposal);
+    await updateDoc(chatRef, {
+      schedulingStatus: 'horario_propuesto',
+      relationshipStage: 'horario_propuesto',
+      relationshipStatus: 'active',
+      lastRelationshipEvent: 'one_off_class_proposed_from_classes',
+      relationshipUpdatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await addTeacherOneOffSystemMessage(chat, proposal).catch((error) => {
+      console.warn('No se pudo anadir aviso de clase puntual al chat', error);
+    });
+    document.getElementById('modal-clase-puntual').classList.remove('open');
+    await Promise.allSettled([cargarMisClases(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
+    showToast('Clase puntual propuesta', 'La familia podra aceptarla y entonces aparecera en el calendario.', 'success');
+  } catch (error) {
+    showToast('No se pudo enviar', error.message || 'Revisa permisos del chat.', 'error');
+  } finally {
+    clearTeacherActionBusy(button);
+  }
+}
+
+function isOneOffProposalRow(row = {}) {
+  return row.isOneOffProposal === true || row.calendarEventType === 'one_off_proposal';
+}
+
+function rememberOneOffProposalRows(rows = []) {
+  rows.filter(isOneOffProposalRow).forEach((row) => oneOffProposalRowsById.set(String(row.id), row));
+}
+
+async function cargarPropuestasPuntualesProfesor(chats = []) {
+  const relationChats = normalizeTeacherOneOffChatRows(chats);
+  const nestedRows = await Promise.all(relationChats.map(async (chat) => {
+    try {
+      const snap = await getDocs(firestoreCollection(firebaseDb, 'chats', chat.id, 'programaciones'));
+      return snap.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter(isPendingOneOffScheduleProposal)
+        .map((proposal) => oneOffProposalToClassRow(chat, proposal, {
+          familyName: teacherOneOffFamilyName(chat),
+          teacherName: teacherSelfDisplayName(),
+          studentName: teacherOneOffStudentName(chat),
+        }));
+    } catch (error) {
+      if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron cargar propuestas puntuales del profesor', error);
+      return [];
+    }
+  }));
+  const rows = nestedRows.flat();
+  rememberOneOffProposalRows(rows);
+  return rows;
+}
+
+function currentTeacherCanRespondOneOff(row = {}) {
+  return isOneOffProposalRow(row)
+    && row.proposedByRole !== 'profesor'
+    && row.proposedByUid !== ownerUid();
+}
+
+function oneOffProposalStatusText(row = {}) {
+  if (currentTeacherCanRespondOneOff(row)) return 'Pendiente de tu respuesta';
+  return 'Esperando respuesta de la familia';
+}
+
+function oneOffProposalBadge() {
+  return '<span class="badge badge-warning">Propuesta pendiente</span>';
+}
+
+function renderTeacherOneOffProposalActions(row = {}) {
+  if (!currentTeacherCanRespondOneOff(row)) return '<span class="muted">Esperando respuesta</span>';
+  return `
+    <div class="class-action-stack">
+      <button class="btn btn-success btn-sm" type="button" data-action="aceptar-propuesta-puntual-profesor" data-id="${sanitize(row.id)}">Aceptar</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-action="rechazar-propuesta-puntual-profesor" data-id="${sanitize(row.id)}">Rechazar</button>
+    </div>
+  `;
+}
+
+function renderTeacherOneOffProposalStatus(row = {}) {
+  return `
+    <div class="calendar-status-line">
+      ${oneOffProposalBadge()}
+      <span>${sanitize(oneOffProposalStatusText(row))}</span>
+    </div>
+  `;
+}
+
+function renderTeacherOneOffCalendarCard(row = {}) {
+  const alumnoNombre = studentDisplayName(row);
+  const importe = importeProfesorClase(row);
+  return `
+    <div class="clase-item calendar-class-item calendar-simple-class economic-pending" style="padding:10px 16px">
+      <div class="clase-time">
+        <div class="clase-time-hora">${formatHora(row.hora_inicio || '')}</div>
+        <div class="clase-time-fin">${formatHora(row.hora_fin || '')}</div>
+      </div>
+      <div class="clase-info">
+        <div class="calendar-simple-title">
+          <strong>${sanitize(alumnoNombre)}</strong>
+          <span>${sanitize(teacherSelfDisplayName())}</span>
+        </div>
+        <div class="calendar-class-meta calendar-simple-meta">
+          <span>Clase puntual propuesta</span>
+          <span>${sanitize(row.duracion_minutos || row.durationMinutes || 60)} min</span>
+          ${importe > 0 ? `<span>Cobras ${sanitize(formatEuros(importe))}</span>` : ''}
+        </div>
+        ${renderTeacherOneOffProposalStatus(row)}
+        ${renderTeacherOneOffProposalActions(row)}
+      </div>
+    </div>`;
+}
+
+async function addTeacherOneOffResponseSystemMessage(row = {}, accepted = false, reason = '') {
+  const chatRef = firestoreDoc(firebaseDb, 'chats', row.assignmentId);
+  const body = accepted
+    ? `Clase puntual aceptada: ${formatFechaCorta(row.fecha)} de ${formatHora(row.hora_inicio)} a ${formatHora(row.hora_fin)}.`
+    : `Clase puntual rechazada: ${formatFechaCorta(row.fecha)} de ${formatHora(row.hora_inicio)} a ${formatHora(row.hora_fin)}.${reason ? ` Motivo: ${reason}` : ''}`;
+  await addDoc(firestoreCollection(chatRef, 'mensajes'), {
+    senderUid: ownerUid(),
+    senderRole: 'profesor',
+    senderName: teacherSelfDisplayName(),
+    body,
+    createdAt: serverTimestamp(),
+    readBy: { [ownerUid()]: true },
+  });
+  await updateDoc(chatRef, {
+    lastMessage: body.slice(0, 180),
+    lastMessageAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+async function responderPropuestaPuntualProfesor(button, accepted) {
+  const id = button.dataset.id;
+  const row = oneOffProposalRowsById.get(String(id)) || calendarClassById.get(String(id));
+  if (!row || !row.assignmentId || !row.proposalId) {
+    showToast('Propuesta no disponible', 'Recarga la pagina y vuelve a intentarlo.', 'warning');
+    return;
+  }
+  if (!currentTeacherCanRespondOneOff(row)) {
+    showToast('Esperando a la familia', 'Esta propuesta la has enviado tu. Debe aceptarla la familia.', 'info');
+    return;
+  }
+  let reason = '';
+  if (!accepted) {
+    const typed = await promptAction({
+      title: 'Rechazar propuesta puntual',
+      message: 'Puedes explicar brevemente el motivo para que la familia sepa como ajustar la propuesta.',
+      label: 'Motivo (opcional)',
+      confirmText: 'Rechazar propuesta',
+      tone: 'danger',
+    });
+    if (typed === null) return;
+    reason = typed.trim().slice(0, 300);
+  }
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = accepted ? 'Aceptando...' : 'Rechazando...';
+  try {
+    const chatRef = firestoreDoc(firebaseDb, 'chats', row.assignmentId);
+    const proposalRef = firestoreDoc(firebaseDb, 'chats', row.assignmentId, 'programaciones', row.proposalId);
+    const [chatSnap, proposalSnap] = await Promise.all([getDoc(chatRef), getDoc(proposalRef)]);
+    if (!chatSnap.exists() || !proposalSnap.exists()) throw new Error('La propuesta ya no existe.');
+    const chat = { id: chatSnap.id, ...chatSnap.data() };
+    const proposal = { id: proposalSnap.id, ...proposalSnap.data() };
+    if (!isPendingOneOffScheduleProposal(proposal)) {
+      showToast('Propuesta ya respondida', 'Actualizamos la vista para que veas el estado real.', 'info');
+      await Promise.allSettled([cargarMisClases(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
+      return;
+    }
+    const batch = writeBatch(firebaseDb);
+    let classId = '';
+    if (accepted) {
+      classId = oneOffClassId(chat.id, proposal.id);
+      const payload = buildAcceptedOneOffClassPayload(chat, proposal, {
+        classId,
+        currentUid: ownerUid(),
+        currentRole: 'profesor',
+        serverTimestamp,
+        teacherProfile: perfil || {},
+        familyName: teacherOneOffFamilyName(chat),
+        teacherName: teacherSelfDisplayName(),
+        studentName: teacherOneOffStudentName(chat),
+      });
+      batch.set(firestoreDoc(firebaseDb, 'clases', classId), payload);
+      batch.update(proposalRef, {
+        status: 'aceptada',
+        classId,
+        classIds: [classId],
+        classCount: 1,
+        respondedByUid: ownerUid(),
+        respondedByRole: 'profesor',
+        respondedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(chatRef, {
+        schedulingStatus: 'clase_programada',
+        relationshipStage: 'clase_programada',
+        relationshipStatus: 'active',
+        activeClassId: classId,
+        lastRelationshipEvent: 'one_off_class_accepted_from_classes',
+        relationshipUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      const busySlots = buildBusySlotPayloadsForOneOffClass(classId, payload, {
+        currentUid: ownerUid(),
+        currentRole: 'profesor',
+        serverTimestamp,
+      });
+      await Promise.allSettled(busySlots.map((slot) => setDoc(firestoreDoc(firebaseDb, 'busySlots', slot.id), slot.payload)));
+      await addTeacherOneOffResponseSystemMessage(row, true).catch((error) => {
+        console.warn('No se pudo anadir mensaje de aceptacion puntual', error);
+      });
+      showToast('Clase creada', 'Ya aparece en el calendario de familia y profesor.', 'success');
+    } else {
+      batch.update(proposalRef, {
+        status: 'rechazada',
+        rejectionReason: reason,
+        respondedByUid: ownerUid(),
+        respondedByRole: 'profesor',
+        respondedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(chatRef, {
+        schedulingStatus: 'horario_rechazado',
+        lastRelationshipEvent: 'one_off_class_rejected_from_classes',
+        relationshipUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      await addTeacherOneOffResponseSystemMessage(row, false, reason).catch((error) => {
+        console.warn('No se pudo anadir mensaje de rechazo puntual', error);
+      });
+      showToast('Propuesta rechazada', 'La familia lo vera en el chat.', 'success');
+    }
+    await Promise.allSettled([cargarInicio(), cargarMisClases(), cargarBizumProfesor(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
+  } catch (error) {
+    showToast('No se pudo responder', error.message || 'Revisa permisos o conexion.', 'error');
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 async function cargarFirestoreWhere(nombreColeccion, campo, operador, valor) {
   if (valor === undefined || valor === null || valor === '') return [];
   try {
@@ -1597,10 +2213,17 @@ async function asegurarClasesRecurrentesProfesor(rows = [], options = {}) {
       rangeEnd: options.hasta,
       currentUid: ownerUid(),
       currentRole: 'profesor',
+      recurrenceSeeds: options.recurrenceSeeds || [],
     });
   } catch (error) {
     if (!isExpectedPermissionFallback(error)) console.warn('No se pudieron actualizar las clases recurrentes del profesor', error);
-    return [];
+    return missingRecurringOccurrences(rows, options.desde, options.hasta, {
+      currentUid: ownerUid(),
+      currentRole: 'profesor',
+      bufferDays: 35,
+      maxWrites: 80,
+      recurrenceSeeds: options.recurrenceSeeds || [],
+    });
   }
 }
 
@@ -1725,18 +2348,35 @@ async function cargarClasesProfesor(options = {}) {
     cargarFirestoreWhere('clases', 'teacherUid', '==', id),
     cargarFirestoreWhere('clases', 'profesor_id', '==', id),
   ]);
-  const [{ data: legacy }, byParticipant, ...direct] = await Promise.all([
+  const [{ data: legacy }, byParticipant, chatsRelacion, ...direct] = await Promise.all([
     db.from('clases').select('*, alumnos(nombre,apellidos)').eq('profesor_id', profesorId).limit(options.limit || 220),
     cargarClasesParticipanteProfesor(),
+    cargarChatsUsuarioActual(),
     ...directQueries,
   ]);
   let rows = mergeById([...(legacy || []), ...byParticipant, ...direct.flat()])
     .map(normalizeTeacherClassRow)
     .filter((clase) => ids.includes(String(clase.teacherUid || clase.profesor_id || '')));
-  const extendedRows = await asegurarClasesRecurrentesProfesor(rows, options);
+  const recurrenceSeeds = await loadAcceptedRecurringScheduleSeeds({
+    firebaseDb,
+    firestoreCollection,
+    getDocs,
+    chats: chatsRelacion || [],
+    classes: rows,
+  });
+  const extendedRows = await asegurarClasesRecurrentesProfesor(rows, {
+    ...options,
+    recurrenceSeeds,
+  });
   if (extendedRows.length) {
     rows = mergeById([...rows, ...extendedRows])
       .map(normalizeTeacherClassRow)
+      .filter((clase) => ids.includes(String(clase.teacherUid || clase.profesor_id || '')));
+  }
+  const pendingOneOffRows = await cargarPropuestasPuntualesProfesor(chatsRelacion || []);
+  if (pendingOneOffRows.length) {
+    rows = mergeById([...rows, ...pendingOneOffRows])
+      .map((clase) => (isOneOffProposalRow(clase) ? clase : normalizeTeacherClassRow(clase)))
       .filter((clase) => ids.includes(String(clase.teacherUid || clase.profesor_id || '')));
   }
   if (options.desde) rows = rows.filter((clase) => String(clase.fecha || clase.date || '') >= options.desde);
@@ -1785,9 +2425,12 @@ async function cargarInicio() {
   if (!profesorId) return;
   const hoy = fechaHoy();
   const mesInicio = hoy.substring(0,7) + '-01';
+  const now = new Date(`${hoy}T00:00:00`);
+  const rangoInicio = isoDateLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const rangoFin = isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 6, 0));
 
   const [clasesProfesor, { data: alumnos }, { data: pagosRelacion }, { data: documentosRelacion }, { data: disponibilidadRelacion }, chatsRelacion] = await Promise.all([
-    cargarClasesProfesor({ limit: 260 }),
+    cargarClasesProfesor({ desde: rangoInicio, hasta: rangoFin, limit: 500 }),
     db.from('asignaciones').select('*').eq('profesor_id', profesorId).eq('activa', true),
     cargarFirestoreWhere('pagos', 'teacherUid', '==', profesorFirestoreId),
     cargarFirestoreWhere('documentos', 'ownerUid', '==', ownerUid()),
@@ -1890,12 +2533,52 @@ async function cargarInicio() {
 let cal;
 let calendarClassById = new Map();
 let calendarExportItems = [];
+let calendarLoadSequence = 0;
 const FULL_CALENDAR_EXPORT_PAST_MONTHS = 1;
 const FULL_CALENDAR_EXPORT_FUTURE_MONTHS = 12;
 
 function teacherCalendarDayLabel(item = {}, items = []) {
   if (isTeacherPayoutCalendarEvent(item)) return 'Cobro';
-  return formatHora(item.hora_inicio || item.startTime || '') || `${items.length || 1} evento`;
+  if (isOneOffProposalRow(item)) return 'Propuesta';
+  const visual = teacherCalendarClassVisual(item);
+  if (visual.key === 'scheduled') {
+    return formatHora(item.hora_inicio || item.startTime || '') || 'Clase';
+  }
+  return visual.calendarLabel || `${items.length || 1} evento`;
+}
+
+function calendarDotPriority(dotClass = '') {
+  return {
+    'dot-red': 105,
+    'dot-rose': 105,
+    'dot-amber': 70,
+    'dot-blue': 55,
+    'dot-navy': 50,
+    'dot-purple': 45,
+    'dot-emerald': 30,
+    'dot-gray': 10,
+  }[dotClass] || 20;
+}
+
+function teacherCalendarClassVisual(clase = {}) {
+  const attendance = classAttendanceCalendarVisual(clase);
+  if (['incident', 'pending_teacher', 'cancelled'].includes(attendance.key)) return attendance;
+
+  const economic = teacherFinancialState(clase);
+  const economicPriority = calendarDotPriority(economic.dotClass);
+  if (economicPriority <= attendance.priority) return attendance;
+  return {
+    ...attendance,
+    dotClass: economic.dotClass,
+    cardClass: economic.calendarClass,
+    calendarLabel: economic.state === 'settled' ? 'Cobrado'
+      : economic.state === 'payout_requested' ? 'Cobro en proceso'
+      : economic.state === 'payout_pending' ? 'Cobro pendiente'
+      : economic.state === 'missing_teacher_amount' ? 'Revisar importe'
+      : economic.state === 'payout_attention' ? 'Revisar cobro'
+      : 'Clase',
+    priority: economicPriority,
+  };
 }
 
 function downloadCalendarItems(items = [], filename = 'clasesde10.ics', calendarName = 'ClasesDe10', emptyMessage = 'No hay eventos para exportar.') {
@@ -2004,13 +2687,21 @@ async function iniciarCalendario() {
       contenedor: document.getElementById('calendario-wrapper'),
       dayIndicatorMode: 'summary',
       daySummaryLabel: teacherCalendarDayLabel,
-      classDotClass: (clase) => isTeacherPayoutCalendarEvent(clase) ? 'dot-purple' : classEconomicState(clase).dotClass,
+      classDotClass: (clase) => isTeacherPayoutCalendarEvent(clase)
+        ? 'dot-purple'
+        : isOneOffProposalRow(clase)
+        ? 'dot-purple'
+        : teacherCalendarClassVisual(clase).dotClass,
+      classIndicatorPriority: (clase) => isTeacherPayoutCalendarEvent(clase) || isOneOffProposalRow(clase)
+        ? 45
+        : teacherCalendarClassVisual(clase).priority,
       legendItems: [
-        { className: 'dot-gold', label: 'Familia pendiente' },
-        { className: 'dot-navy', label: 'Por cobrar' },
-        { className: 'dot-teal', label: 'Cobrado' },
-        { className: 'dot-red', label: 'Incidencia' },
-        { className: 'dot-purple', label: 'Cobro programado' },
+        { className: 'dot-red', label: 'Revisar ahora' },
+        { className: 'dot-amber', label: 'Acción pendiente' },
+        { className: 'dot-blue', label: 'Programada o en curso' },
+        { className: 'dot-emerald', label: 'Finalizada o cobrada' },
+        { className: 'dot-gray', label: 'Cancelada' },
+        { className: 'dot-purple', label: 'Cobro o propuesta' },
       ],
       onDiaClick: (fecha, clases) => {
         const payoutEvents = clases.filter(isTeacherPayoutCalendarEvent);
@@ -2029,30 +2720,31 @@ async function iniciarCalendario() {
         }
         const payoutHtml = payoutEvents.map(renderTeacherPayoutCalendarCard).join('');
         const classHtml = classItems.map(c => {
+          if (isOneOffProposalRow(c)) return renderTeacherOneOffCalendarCard(c);
           const importe = importeProfesorClase(c);
-          const economic = classEconomicState(c);
+          const economic = teacherFinancialState(c);
           const attendance = classAttendanceState(c);
+          const visual = teacherCalendarClassVisual(c);
           const alumnoNombre = studentDisplayName(c);
+          const profesorNombre = teacherSelfDisplayName();
           return `
-          <div class="clase-item calendar-class-item ${sanitize(economic.calendarClass)}" style="padding:10px 16px">
+          <div class="clase-item calendar-class-item calendar-simple-class ${sanitize(visual.cardClass)}" style="padding:10px 16px">
             <div class="clase-time">
               <div class="clase-time-hora">${formatHora(c.hora_inicio||'')}</div>
               <div class="clase-time-fin">${formatHora(c.hora_fin||'')}</div>
             </div>
             <div class="clase-info">
-              <div class="clase-nombre">${sanitize(alumnoNombre)}</div>
-              <div class="clase-materia">${sanitize(c.materia||'')}</div>
-              <div class="calendar-class-meta">
+              <div class="calendar-simple-title">
+                <strong>${sanitize(alumnoNombre)}</strong>
+                <span>${sanitize(profesorNombre)}</span>
+              </div>
+              <div class="calendar-class-meta calendar-simple-meta">
                 <span>Hora ${formatHora(c.hora_inicio||'')} - ${formatHora(c.hora_fin||'')}</span>
-                <span>Cobra profe ${importe > 0 ? formatEuros(importe) : '-'}</span>
+                <span>Cobras ${importe > 0 ? formatEuros(importe) : '-'}</span>
               </div>
-              <div class="calendar-status-stack">
-                ${renderTeacherAttendanceSummary(c)}
-                ${renderTeacherEconomicStatus(c, economic)}
-              </div>
-              ${renderTeacherAttendanceReminder(c)}
+              ${renderTeacherAttendanceSummary(c)}
+              ${economic.state !== 'pending' && economic.state !== 'cancelled' ? renderTeacherEconomicStatus(c, economic) : ''}
               ${renderTeacherAttendanceSelect(c, attendance)}
-              <div class="calendar-class-actions">${renderCalendarCancelAction(c)}</div>
             </div>
           </div>`;
         }).join('');
@@ -2066,10 +2758,12 @@ async function iniciarCalendario() {
 
 async function cargarClasesCalendario(anio, mes) {
   anio = anio ?? cal.anio; mes = mes ?? cal.mes;
+  const loadSequence = ++calendarLoadSequence;
   const desde = `${anio}-${String(mes+1).padStart(2,'0')}-01`;
   const hasta = isoDateLocal(new Date(anio, mes + 1, 0));
   const desdeCalculo = isoDateLocal(new Date(anio, mes - 1, 1));
   const data = await cargarClasesProfesor({ desde: desdeCalculo, hasta, limit: 800 });
+  if (loadSequence !== calendarLoadSequence || cal?.anio !== anio || cal?.mes !== mes) return;
   const clasesMes = data.filter((clase) => {
     const dateIso = classDateIso(clase);
     return dateIso >= desde && dateIso <= hasta;
@@ -2081,23 +2775,107 @@ async function cargarClasesCalendario(anio, mes) {
 }
 
 // ── MIS CLASES ───────────────────────────────────────────────────
+let teacherClassDetailCache = new Map();
+
+function sortTeacherClassesForList(classes = []) {
+  const today = fechaHoy();
+  return [...classes].sort((a, b) => {
+    const dateA = classDateIso(a);
+    const dateB = classDateIso(b);
+    const upcomingA = dateA >= today;
+    const upcomingB = dateB >= today;
+    if (upcomingA !== upcomingB) return upcomingA ? -1 : 1;
+    if (dateA !== dateB) return upcomingA ? dateA.localeCompare(dateB) : dateB.localeCompare(dateA);
+    return String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || ''));
+  });
+}
+
+function teacherClassDetailBody(clase = {}) {
+  const isProposal = isOneOffProposalRow(clase);
+  const amount = importeProfesorClase(clase);
+  const status = isProposal ? oneOffProposalBadge() : badgeEstado(classStatusForBadge(clase));
+  const followUp = isProposal ? renderTeacherOneOffProposalStatus(clase) : renderTeacherAttendanceSummary(clase);
+  const financial = isProposal
+    ? `<div class="calendar-status-line"><span class="badge badge-info">Por confirmar</span><span>El cobro se activa cuando la propuesta se convierte en clase.</span></div>`
+    : renderTeacherEconomicStatus(clase);
+  return `
+    <div class="teacher-class-detail-status">${status}</div>
+    <div class="teacher-class-detail-grid">
+      <div class="teacher-class-detail-field">
+        <span>Alumno</span>
+        <strong>${sanitize(studentDisplayName(clase))}</strong>
+      </div>
+      <div class="teacher-class-detail-field">
+        <span>Materia</span>
+        <strong>${sanitize(clase.materia || clase.subject || 'Sin indicar')}</strong>
+      </div>
+      <div class="teacher-class-detail-field">
+        <span>Duración</span>
+        <strong>${sanitize(String(duracionClaseProfesor(clase)))} min</strong>
+      </div>
+      <div class="teacher-class-detail-field">
+        <span>Ingreso</span>
+        <strong>${amount > 0 ? sanitize(formatEuros(amount)) : 'Por confirmar'}</strong>
+      </div>
+    </div>
+    <section class="teacher-class-detail-section">
+      <h3>Seguimiento</h3>
+      ${followUp}
+    </section>
+    <section class="teacher-class-detail-section">
+      <h3>Cobro</h3>
+      ${financial}
+    </section>`;
+}
+
+function abrirDetalleClaseProfesor(cacheId) {
+  const clase = teacherClassDetailCache.get(String(cacheId));
+  if (!clase) {
+    showToast('Clase no disponible', 'Recarga la lista e inténtalo de nuevo.', 'warning');
+    return;
+  }
+  const isProposal = isOneOffProposalRow(clase);
+  document.getElementById('teacher-class-detail-title').textContent = isProposal ? 'Propuesta de clase puntual' : 'Detalle de la clase';
+  document.getElementById('teacher-class-detail-subtitle').textContent = `${formatFechaCorta(classDateIso(clase))} · ${formatHora(clase.hora_inicio || clase.startTime || '')}–${formatHora(clase.hora_fin || clase.endTime || '')}`;
+  document.getElementById('teacher-class-detail-body').innerHTML = teacherClassDetailBody(clase);
+  document.getElementById('teacher-class-detail-actions').innerHTML = isProposal
+    ? renderTeacherOneOffProposalActions(clase)
+    : renderTeacherClassAction(clase);
+  openModal('modal-clase-detalle-profesor');
+}
+
 async function cargarMisClases() {
   if (!profesorId) return;
   const estado = document.getElementById('filtro-cl-estado').value;
   const mes    = document.getElementById('filtro-cl-mes').value;
+  const now = new Date();
+  const desdeFiltro = mes ? `${mes}-01` : isoDateLocal(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  const hastaFiltro = mes
+    ? isoDateLocal(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0))
+    : isoDateLocal(new Date(now.getFullYear(), now.getMonth() + 12, 0));
 
   const data = await cargarClasesProfesor({
     estado: estado && estado !== 'confirmada' ? estado : '',
-    desde: mes ? `${mes}-01` : '',
-    hasta: mes ? `${mes}-31` : '',
+    desde: desdeFiltro,
+    hasta: hastaFiltro,
     limit: 260,
   });
-  const clases = estado === 'confirmada'
+  const clasesFiltradas = estado === 'confirmada'
     ? data.filter((clase) => classStatusForBadge(clase) === 'confirmada')
+    : estado
+    ? data.filter((clase) => (
+        isOneOffProposalRow(clase)
+          ? estado === 'pendiente'
+          : classStatusForBadge(clase) === estado || clase.estado === estado || clase.status === estado
+      ))
     : data;
+  const clases = sortTeacherClassesForList(clasesFiltradas);
   const tbody = document.getElementById('tbody-mis-clases');
+  const count = document.getElementById('teacher-classes-count');
+  if (count) count.textContent = `${clases.length} ${clases.length === 1 ? 'clase' : 'clases'}`;
+  teacherClassDetailCache = new Map();
   if (!clases.length) {
-    tbody.innerHTML = renderTableEmptyState(9, {
+    tbody.innerHTML = renderTableEmptyState(4, {
       icon: '📅',
       title: 'No hay clases con estos filtros',
       description: 'Si tienes una familia asignada, coordinad el horario desde el chat. Si no, mantén perfil y disponibilidad completos para recibir alumnos.',
@@ -2109,18 +2887,27 @@ async function cargarMisClases() {
     return;
   }
 
-  tbody.innerHTML = clases.map(c => {
+  tbody.innerHTML = clases.map((c, index) => {
     const alumnoNombre = studentDisplayName(c);
+    const isProposal = isOneOffProposalRow(c);
+    const estadoHtml = isProposal ? oneOffProposalBadge() : badgeEstado(classStatusForBadge(c));
+    const cacheId = `teacher-class-${index}`;
+    teacherClassDetailCache.set(cacheId, c);
     return `<tr>
-    <td>${formatFechaCorta(c.fecha)}</td>
-    <td>${formatHora(c.hora_inicio)}–${formatHora(c.hora_fin)}</td>
-    <td>${sanitize(alumnoNombre)}</td>
-    <td>${sanitize(c.materia)}</td>
-    <td>${c.duracion_minutos} min</td>
-    <td><strong>${importeProfesorClase(c) > 0 ? formatEuros(importeProfesorClase(c)) : '—'}</strong></td>
-    <td>${badgeEstado(classStatusForBadge(c))}</td>
-    <td>${renderTeacherAttendanceSummary(c)}</td>
-    <td>${renderTeacherClassAction(c)}</td>
+    <td data-label="Cuándo">
+      <div class="teacher-class-list-primary">
+        <strong>${sanitize(formatFechaCorta(classDateIso(c)))}</strong>
+        <span>${sanitize(formatHora(c.hora_inicio || c.startTime || ''))}–${sanitize(formatHora(c.hora_fin || c.endTime || ''))}</span>
+      </div>
+    </td>
+    <td data-label="Alumno">
+      <div class="teacher-class-list-primary">
+        <strong>${sanitize(alumnoNombre)}</strong>
+        <span>${sanitize(c.materia || c.subject || 'Materia sin indicar')}</span>
+      </div>
+    </td>
+    <td data-label="Estado">${estadoHtml}</td>
+    <td data-label="Acción"><button class="btn btn-ghost btn-sm" type="button" data-action="ver-detalle-clase-profesor" data-class-cache-id="${cacheId}">Ver detalle</button></td>
   </tr>`;
   }).join('');
 }
@@ -2146,6 +2933,28 @@ document.getElementById('rc-estado').addEventListener('change', (e) => {
   if (label) label.textContent = e.target.value === 'reprogramada' ? 'Motivo de reprogramacion' : 'Motivo por el que no se dio';
 });
 
+async function crearIncidenciaAsistenciaProfesor(classId, classData = {}, notes = '') {
+  if (!classId) return;
+  const incidentPayload = {
+    ...buildParticipantClassIncidentCreatePayload(
+      classId,
+      {
+        ...classData,
+        teacherUid: classData.teacherUid || classData.profesor_id || profesorFirestoreId,
+        profesor_id: classData.profesor_id || classData.teacherUid || profesorFirestoreId,
+      },
+      'teacher_update',
+      notes || 'Clase marcada como no dada por el profesor.',
+      { uid: usuario.uid || usuario.id, email: usuario.email || '' },
+    ),
+    createdAt: serverTimestamp(),
+    created_at: new Date().toISOString(),
+  };
+  await addDoc(firestoreCollection(firebaseDb, 'incidencias'), incidentPayload).catch((error) => {
+    console.warn('No se pudo crear incidencia de asistencia del profesor', error);
+  });
+}
+
 document.getElementById('btn-confirmar-registro').addEventListener('click', async () => {
   const id     = document.getElementById('rc-clase-id').value;
   const estado = document.getElementById('rc-estado').value;
@@ -2162,7 +2971,13 @@ document.getElementById('btn-confirmar-registro').addEventListener('click', asyn
   try {
     btn.disabled = true;
     btn.textContent = 'Guardando...';
-    await updateDoc(firestoreDoc(firebaseDb, 'clases', id), payload);
+    const claseRef = firestoreDoc(firebaseDb, 'clases', id);
+    const claseSnap = await getDoc(claseRef).catch(() => null);
+    const claseActual = claseSnap?.exists() ? { id: claseSnap.id, ...claseSnap.data() } : {};
+    await updateDoc(claseRef, payload);
+    if (estado === 'cancelada') {
+      await crearIncidenciaAsistenciaProfesor(id, claseActual, motivo || notas || 'Clase marcada como no dada por el profesor.');
+    }
   } catch (error) {
     showToast('Error', error.message, 'error');
     btn.disabled = false;
@@ -2190,9 +3005,12 @@ async function cargarMisAlumnos() {
   const alumnos = mergeAssignedStudentRows([
     ...(data || []).map(normalizeLegacyAssignedStudent),
     ...(firestoreRows || []),
+    ...buildAssignedStudentsFromClasses(clasesMes),
   ]).map((item) => ({
     ...item,
     clasesMes: countMonthlyClassesForStudent(clasesMes, item),
+    horarioSemanal: recurringSchedulesForStudent(clasesMes, item),
+    proximaClase: nextClassForStudent(clasesMes, item),
   }));
   alumnosProfesorCache = new Map(alumnos.map((item) => [item.cacheId, item]));
   renderTeacherStudentsSummary(alumnos);
@@ -2229,7 +3047,7 @@ async function cargarMisAlumnos() {
         <span>${sanitize(alumno.codigoPostal || alumno.direccion || 'Direccion no indicada')}</span>
       </div>
     </td>
-    <td><div class="student-note-snippet">${sanitize(shortStudentNote(alumno))}</div></td>
+    <td>${renderStudentScheduleCell(alumno)}</td>
     <td><strong>${sanitize(String(alumno.clasesMes || 0))}</strong></td>
     <td><button class="btn btn-ghost btn-sm" data-action="ver-alumno-profesor" data-student-cache-id="${sanitize(alumno.cacheId)}">Ver ficha</button></td>
   </tr>`).join('');
@@ -2341,6 +3159,33 @@ function normalizeAssignedStudent({ assignmentId = '', studentId = '', familyUid
   };
 }
 
+function buildAssignedStudentsFromClasses(clases = []) {
+  return (clases || [])
+    .filter((clase) => clase?.studentId || clase?.alumno_id || studentNamePartsFromClass(clase).full)
+    .map((clase) => {
+      const parts = studentNamePartsFromClass(clase);
+      return normalizeAssignedStudent({
+        assignmentId: firstText(clase.assignmentId, clase.asignacion_id, clase.classSeriesId, clase.seriesId, clase.id, clase.calendarUid),
+        studentId: firstText(clase.studentId, clase.alumno_id),
+        familyUid: firstText(clase.familyUid, clase.familia_id),
+        materia: firstText(clase.materia, clase.subject),
+        notasAsignacion: firstText(clase.observaciones, clase.notes),
+        assignedAt: firstText(clase.createdAt, clase.created_at, clase.fecha, clase.date),
+        student: {
+          id: firstText(clase.studentId, clase.alumno_id),
+          nombre: parts.first,
+          apellidos: parts.last,
+          displayName: parts.full,
+          studentName: parts.full,
+        },
+        family: {
+          nombre: clase.familyName || clase.familia_nombre,
+        },
+        source: 'class',
+      });
+    });
+}
+
 function mergeAssignedStudentRows(rows = []) {
   const map = new Map();
   rows.filter(Boolean).forEach((row) => {
@@ -2374,13 +3219,72 @@ async function cargarClasesMesProfesor() {
 }
 
 function countMonthlyClassesForStudent(clases = [], alumno = {}) {
+  return (clases || []).filter((clase) => classBelongsToStudent(clase, alumno)).length;
+}
+
+function classBelongsToStudent(clase = {}, alumno = {}) {
   const targetId = String(alumno.studentId || '').toLowerCase();
-  const targetName = normalizePlain(alumno.nombreCompleto);
-  return (clases || []).filter((clase) => {
-    const classStudentId = String(clase.studentId || clase.alumno_id || '').toLowerCase();
-    if (targetId && classStudentId && targetId === classStudentId) return true;
-    return normalizePlain(clase.alumno_nombre || clase.studentName) === targetName;
-  }).length;
+  const classStudentId = String(clase.studentId || clase.alumno_id || '').toLowerCase();
+  if (targetId && classStudentId && targetId === classStudentId) return true;
+  const targetName = normalizePlain(alumno.nombreCompleto || alumno.displayName);
+  const className = normalizePlain(clase.alumno_nombre || clase.studentName || studentNamePartsFromClass(clase).full);
+  return Boolean(targetName && className && targetName === className);
+}
+
+function isRecurringClassRow(clase = {}) {
+  return Boolean(
+    clase.isRecurring === true
+    || clase.recurrence?.frequency === 'weekly'
+    || clase.scheduleKind === 'weekly_recurring'
+    || clase.kind === 'weekly_recurring'
+    || clase.classSeriesId
+    || clase.seriesId
+  );
+}
+
+function weekdayNameFromIso(dateIso = '') {
+  const normalized = String(dateIso || '').slice(0, 10);
+  const date = new Date(`${normalized}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return '';
+  return ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'][date.getDay()] || '';
+}
+
+function recurringScheduleLabel(clase = {}) {
+  const direct = firstText(clase.recurrenceLabel);
+  if (direct) return direct.replace(/^Todos los\s+/i, '');
+  const day = weekdayNameFromIso(clase.fecha || clase.date);
+  const start = firstText(clase.hora_inicio, clase.startTime);
+  const end = firstText(clase.hora_fin, clase.endTime);
+  return compactText([day, start && end ? `${start}-${end}` : start], ' ');
+}
+
+function recurringSchedulesForStudent(clases = [], alumno = {}) {
+  const labels = (clases || [])
+    .filter((clase) => classBelongsToStudent(clase, alumno) && isRecurringClassRow(clase))
+    .map(recurringScheduleLabel)
+    .filter(Boolean);
+  return [...new Set(labels)].slice(0, 3);
+}
+
+function nextClassForStudent(clases = [], alumno = {}) {
+  const today = fechaHoy();
+  return (clases || [])
+    .filter((clase) => classBelongsToStudent(clase, alumno))
+    .filter((clase) => String(clase.fecha || clase.date || '') >= today)
+    .sort((a, b) => String(a.fecha || a.date || '').localeCompare(String(b.fecha || b.date || '')) || String(a.hora_inicio || a.startTime || '').localeCompare(String(b.hora_inicio || b.startTime || '')))[0] || null;
+}
+
+function renderStudentScheduleCell(alumno = {}) {
+  const notes = shortStudentNote(alumno);
+  const schedule = alumno.horarioSemanal || [];
+  const next = alumno.proximaClase
+    ? `${formatFechaCorta(alumno.proximaClase.fecha || alumno.proximaClase.date)} ${firstText(alumno.proximaClase.hora_inicio, alumno.proximaClase.startTime)}`
+    : '';
+  return `<div class="student-note-snippet">
+    <span>${sanitize(notes)}</span>
+    ${schedule.length ? `<div class="student-schedule-list">${schedule.map((item) => `<span>${sanitize(item)}</span>`).join('')}</div>` : ''}
+    ${next ? `<small>Proxima clase: ${sanitize(next)}</small>` : ''}
+  </div>`;
 }
 
 function renderTeacherStudentsSummary(alumnos = []) {
@@ -2476,11 +3380,10 @@ function renderStudentDetail(alumno = {}) {
         studentDetailRow('Materia', alumno.materia),
         studentDetailRow('Clases este mes', String(alumno.clasesMes || 0)),
         studentDetailRow('Asignado desde', assignedAt),
-        studentDetailRow('Origen datos', alumno.source === 'firestore' ? 'Firebase' : 'Legacy'),
       ])}
       <section class="student-detail-panel student-detail-notes">
         <h4>Notas utiles para preparar clase</h4>
-        ${studentDetailRow('Objetivo / admin', alumno.notasAsignacion, 'Sin notas de asignacion')}
+        ${studentDetailRow('Objetivo de la asignación', alumno.notasAsignacion, 'Sin notas de asignación')}
         ${studentDetailRow('Alumno', alumno.notasAlumno, 'Sin notas academicas registradas')}
         ${studentDetailRow('Familia', alumno.notasFamilia, 'Sin observaciones de familia')}
       </section>
@@ -2554,6 +3457,9 @@ async function cargarIngresos() {
 }
 
 document.getElementById('form-dia-cobro-profesor')?.addEventListener('submit', guardarDiaCobroProfesor);
+document.getElementById('btn-configurar-dia-cobro')?.addEventListener('click', () => {
+  openModal('modal-dia-cobro-profesor');
+});
 
 function attendanceDoneValue(value) {
   return ['realizada', 'dada', 'completed', 'done', 'confirmada_por_ambas_partes', 'confirmed_by_both']
@@ -2753,7 +3659,7 @@ function renderIncomeKpis(items, model, filters) {
   ].join(' / ');
   box.innerHTML = [
     incomeMiniKpi('Ingreso filtrado', formatEuros(total), activeLabel),
-    incomeMiniKpi('Por cobrar', formatEuros(pending), pending ? 'pendiente de liquidar' : 'todo al dia'),
+    incomeMiniKpi('Por cobrar', formatEuros(pending), pending ? 'cobro pendiente' : 'todo al día'),
     incomeMiniKpi('Clases', String(items.length), `${incomeHoursLabel(items.reduce((sum, item) => sum + item.minutes, 0))} impartidas`),
     incomeMiniKpi('Media por clase', formatEuros(average), bestStudent ? `mejor alumno: ${bestStudent.label}` : `${model.items.length} clases historicas`),
   ].join('');
@@ -3012,7 +3918,11 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
 
   const total = clasesBizumPendientes.reduce((sum, clase) => sum + importeProfesorClase(clase), 0);
   const classIds = clasesBizumPendientes.map((clase) => String(clase.id));
-  const confirmed = window.confirm(`Solicitar Bizum excepcional por ${formatEuros(total)} para ${classIds.length} clase(s)?`);
+  const confirmed = await confirmAction({
+    title: 'Solicitar Bizum excepcional',
+    message: `Vas a solicitar ${formatEuros(total)} por ${classIds.length} clase(s). El cobro ordinario seguira usando tu frecuencia configurada.`,
+    confirmText: 'Enviar solicitud',
+  });
   if (!confirmed) return;
 
   const { error } = await db.from('pagos').insert(buildTeacherPayoutPayload(profesorFirestoreId, {
@@ -3031,14 +3941,47 @@ document.getElementById('btn-solicitar-bizum')?.addEventListener('click', async 
     return;
   }
 
-  showToast('Solicitud enviada', 'El admin recibira la solicitud excepcional y marcara las clases como pagadas cuando la tramite.', 'success');
+  showToast('Solicitud enviada', 'El equipo revisará la solicitud y actualizará las clases cuando la tramite.', 'success');
   await cargarBizumProfesor();
 });
 
-const NIVELES_LISTA = ['Primaria','ESO','Bachillerato','Selectividad','Universidad','Adultos','Iniciacion','Intermedio','Avanzado','Musica','Deporte'];
+const TEACHING_SCOPE_CONFIG = [
+  {
+    id: 'estudio',
+    label: 'Estudio y materias',
+    description: 'Asignaturas escolares, universitarias, idiomas academicos y apoyo.',
+    subjectTitle: 'Materias',
+    levelTitle: 'Cursos',
+    customPlaceholder: 'Anadir otra materia',
+    subjects: ['Matematicas', 'Fisica', 'Quimica', 'Lengua', 'Ingles', 'Frances', 'Historia', 'Economia', 'Biologia', 'Dibujo tecnico', 'Tecnologia', 'Programacion', 'Apoyo escolar'],
+    levels: ['Primaria', 'ESO', 'Bachillerato', 'Selectividad', 'Universidad', 'Adultos'],
+  },
+  {
+    id: 'deporte',
+    label: 'Deporte',
+    description: 'Padel, tenis, futbol, fitness u otras actividades deportivas.',
+    subjectTitle: 'Deportes',
+    levelTitle: 'Nivel real',
+    customPlaceholder: 'Anadir otro deporte',
+    subjects: ['Padel', 'Tenis', 'Futbol', 'Baloncesto', 'Natacion', 'Atletismo', 'Fitness', 'Yoga', 'Pilates', 'Danza'],
+    levels: ['Iniciacion', 'Intermedio', 'Avanzado', 'Adultos'],
+  },
+  {
+    id: 'instrumentos',
+    label: 'Instrumentos y musica',
+    description: 'Instrumentos, canto, lenguaje musical y preparacion musical.',
+    subjectTitle: 'Instrumentos',
+    levelTitle: 'Nivel real',
+    customPlaceholder: 'Anadir otro instrumento',
+    subjects: ['Piano', 'Guitarra', 'Violin', 'Bateria', 'Canto', 'Flauta', 'Saxofon', 'Clarinete', 'Ukelele', 'Lenguaje musical'],
+    levels: ['Iniciacion', 'Intermedio', 'Avanzado', 'Musica', 'Adultos'],
+  },
+];
+const NIVELES_LISTA = [...new Set(TEACHING_SCOPE_CONFIG.flatMap((scope) => scope.levels))];
 const NIVELES_NORMALIZADOS = new Map(NIVELES_LISTA.map((nivel) => [normalizeNivelKey(nivel), nivel]));
 let materiasActuales = [];
 let nivelesActuales  = [];
+let teachingScopeState = {};
 let fotoPerfilDataUrl = '';
 let documentosPerfilCache = [];
 
@@ -3061,6 +4004,154 @@ function normalizeTeacherLevels(values) {
     seen.add(canonical);
   }
   return result;
+}
+
+function normalizeTeachingSubject(value = '') {
+  return toProfileList([value])[0] || '';
+}
+
+function uniqueProfileItems(values = []) {
+  const result = [];
+  const seen = new Set();
+  for (const value of toProfileList(values)) {
+    const key = normalizeNivelKey(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function emptyTeachingScopeState() {
+  return Object.fromEntries(TEACHING_SCOPE_CONFIG.map((scope) => [scope.id, {
+    enabled: false,
+    subjects: [],
+    levels: [],
+  }]));
+}
+
+function asScopeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function readTeachingScopesFromProfile(profile = {}) {
+  const raw = profile.ambitos_ensenanza || profile.teachingScopes || {};
+  const state = emptyTeachingScopeState();
+  let hasStructured = false;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    TEACHING_SCOPE_CONFIG.forEach((scope) => {
+      const item = raw[scope.id] || {};
+      const subjects = uniqueProfileItems(asScopeArray(item.subjects || item.materias || item.subambitos));
+      const levels = normalizeTeacherLevels(asScopeArray(item.levels || item.niveles || item.cursos));
+      if (item.enabled === true || subjects.length || levels.length) {
+        state[scope.id] = {
+          enabled: true,
+          subjects,
+          levels,
+        };
+        hasStructured = true;
+      }
+    });
+  }
+  if (hasStructured) return state;
+
+  const flatSubjects = uniqueProfileItems(profile.materias || profile.subjects || []);
+  const flatLevels = normalizeTeacherLevels(profile.niveles_educativos || profile.levels || []);
+  const assignedSubjects = new Set();
+  TEACHING_SCOPE_CONFIG.forEach((scope) => {
+    const scopeSubjectKeys = new Set(scope.subjects.map(normalizeNivelKey));
+    const subjects = flatSubjects.filter((subject) => scopeSubjectKeys.has(normalizeNivelKey(subject)));
+    subjects.forEach((subject) => assignedSubjects.add(normalizeNivelKey(subject)));
+    const levels = flatLevels.filter((level) => scope.levels.some((item) => normalizeNivelKey(item) === normalizeNivelKey(level)));
+    if (subjects.length || levels.length) {
+      state[scope.id] = { enabled: true, subjects, levels };
+    }
+  });
+  const customSubjects = flatSubjects.filter((subject) => !assignedSubjects.has(normalizeNivelKey(subject)));
+  if (customSubjects.length) {
+    state.estudio.enabled = true;
+    state.estudio.subjects = uniqueProfileItems([...(state.estudio.subjects || []), ...customSubjects]);
+  }
+  if (!Object.values(state).some((scope) => scope.enabled)) state.estudio.enabled = true;
+  return state;
+}
+
+function syncTeachingSelectionsFromState() {
+  const subjects = [];
+  const levels = [];
+  TEACHING_SCOPE_CONFIG.forEach((scope) => {
+    const item = teachingScopeState[scope.id] || {};
+    if (!item.enabled) return;
+    subjects.push(...(item.subjects || []));
+    levels.push(...(item.levels || []));
+  });
+  materiasActuales = uniqueProfileItems(subjects);
+  nivelesActuales = normalizeTeacherLevels(levels);
+}
+
+function buildTeachingScopesPayload() {
+  const payload = {};
+  TEACHING_SCOPE_CONFIG.forEach((scope) => {
+    const item = teachingScopeState[scope.id] || {};
+    payload[scope.id] = {
+      enabled: Boolean(item.enabled),
+      subjects: uniqueProfileItems(item.subjects || []),
+      levels: normalizeTeacherLevels(item.levels || []),
+    };
+  });
+  return payload;
+}
+
+function scopeSubjectOptions(scope, selected = []) {
+  return uniqueProfileItems([...scope.subjects, ...selected.filter((item) => !scope.subjects.some((subject) => normalizeNivelKey(subject) === normalizeNivelKey(item)))]);
+}
+
+function renderTeachingScopes() {
+  syncTeachingSelectionsFromState();
+  const box = document.getElementById('teaching-scope-builder');
+  if (!box) return;
+  box.innerHTML = TEACHING_SCOPE_CONFIG.map((scope) => {
+    const state = teachingScopeState[scope.id] || { enabled: false, subjects: [], levels: [] };
+    const subjects = scopeSubjectOptions(scope, state.subjects || []);
+    const subjectHtml = subjects.map((subject) => `
+      <label class="teaching-chip">
+        <input type="checkbox" data-scope-subject="${sanitize(scope.id)}" value="${sanitize(subject)}" ${state.subjects?.some((item) => normalizeNivelKey(item) === normalizeNivelKey(subject)) ? 'checked' : ''}>
+        <span>${sanitize(subject)}</span>
+      </label>`).join('');
+    const levelHtml = scope.levels.map((level) => `
+      <label class="teaching-chip">
+        <input type="checkbox" data-scope-level="${sanitize(scope.id)}" value="${sanitize(level)}" ${state.levels?.some((item) => normalizeNivelKey(item) === normalizeNivelKey(level)) ? 'checked' : ''}>
+        <span>${sanitize(level)}</span>
+      </label>`).join('');
+    return `
+      <section class="teaching-scope-card ${state.enabled ? 'is-active' : ''}" data-teaching-scope="${sanitize(scope.id)}">
+        <div class="teaching-scope-head">
+          <label class="teaching-scope-toggle">
+            <input type="checkbox" data-scope-toggle="${sanitize(scope.id)}" ${state.enabled ? 'checked' : ''}>
+            <span><strong>${sanitize(scope.label)}</strong><span>${sanitize(scope.description)}</span></span>
+          </label>
+          <div class="teaching-scope-actions">
+            <button class="btn btn-ghost btn-sm" type="button" data-scope-select-all="${sanitize(scope.id)}">Marcar todo</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-scope-clear="${sanitize(scope.id)}">Limpiar</button>
+          </div>
+        </div>
+        <div class="teaching-scope-body">
+          <div class="teaching-scope-section">
+            <div class="teaching-scope-section-title">${sanitize(scope.subjectTitle)}</div>
+            <div class="teaching-chip-grid">${subjectHtml}</div>
+            <div class="teaching-scope-custom">
+              <input class="form-control" type="text" data-scope-custom-input="${sanitize(scope.id)}" placeholder="${sanitize(scope.customPlaceholder || 'Anadir otra opcion')}">
+              <button class="btn btn-primary btn-sm" type="button" data-scope-add-custom="${sanitize(scope.id)}">Anadir</button>
+            </div>
+          </div>
+          <div class="teaching-scope-section">
+            <div class="teaching-scope-section-title">${sanitize(scope.levelTitle)}</div>
+            <div class="teaching-chip-grid">${levelHtml}</div>
+          </div>
+        </div>
+      </section>`;
+  }).join('');
+  renderTeachingSelectionSummary();
 }
 
 function ownerUid() {
@@ -3206,13 +4297,96 @@ async function cargarChat() {
     role: 'profesor',
     profileId: profesorId,
     showToast,
+    showNotifications: false,
   });
+}
+
+function teacherOverviewValue(value, fallback = 'Sin completar') {
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ') || fallback;
+  if (value === 0) return '0';
+  return String(value || '').trim() || fallback;
+}
+
+function renderTeacherProfileOverview() {
+  const overview = document.getElementById('teacher-profile-overview');
+  const avatar = document.getElementById('teacher-profile-avatar');
+  const name = `${usuario.nombre || perfil.nombre || ''} ${usuario.apellidos || perfil.apellidos || ''}`.trim() || 'Tu perfil de profesor';
+  const photoUrl = perfil.foto_url || perfil.photoUrl || '';
+  const phone = usuario.telefono || perfil.telefono || '';
+  const cityLine = [perfil.direccion || perfil.address, perfil.codigo_postal || perfil.postalCode, perfil.ciudad].filter(Boolean).join(' · ');
+  const carDeclared = perfil.tiene_coche === true || perfil.hasCar === true || perfil.carAvailable === true
+    ? 'Disponible'
+    : (perfil.tiene_coche === false || perfil.hasCar === false || perfil.carAvailable === false ? 'No disponible' : 'Sin completar');
+  const gradeLine = [
+    perfil.nota_bachillerato ?? perfil.bachilleratoGrade ?? '',
+    perfil.nota_media_universidad ?? perfil.universityAverageGrade ?? '',
+  ].filter((value) => value !== '').join(' · ');
+  const subjects = materiasActuales.length ? materiasActuales : (perfil.materias || perfil.subjects || []);
+  const levels = nivelesActuales.length ? nivelesActuales : (perfil.niveles_educativos || perfil.levels || []);
+  const experienceRaw = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
+  const experienceLabel = experienceRaw !== '' && Number.isFinite(Number(experienceRaw)) ? `${Number(experienceRaw)} anos` : '';
+
+  document.getElementById('teacher-profile-name').textContent = name;
+  document.getElementById('teacher-profile-caption').textContent = perfil.bio
+    ? perfil.bio.slice(0, 150)
+    : 'Completa tu presentacion para que las familias entiendan de un vistazo como trabajas.';
+  if (avatar) {
+    avatar.replaceChildren();
+    if (photoUrl) {
+      const image = document.createElement('img');
+      image.src = photoUrl;
+      image.alt = '';
+      avatar.appendChild(image);
+    } else {
+      avatar.textContent = getIniciales(usuario.nombre || perfil.nombre, usuario.apellidos || perfil.apellidos);
+    }
+  }
+  if (!overview) return;
+
+  const row = (label, value) => `<div class="profile-summary-row"><dt>${sanitize(label)}</dt><dd>${sanitize(teacherOverviewValue(value))}</dd></div>`;
+  overview.innerHTML = `
+    <section class="profile-summary-section">
+      <h3>Contacto y ubicacion</h3>
+      <dl>
+        ${row('Correo', usuario.email || perfil.email)}
+        ${row('Telefono', phone)}
+        ${row('Direccion', cityLine)}
+        ${row('Coche', carDeclared)}
+      </dl>
+    </section>
+    <section class="profile-summary-section">
+      <h3>Formacion</h3>
+      <dl>
+        ${row('Colegio', perfil.colegio || perfil.schoolName || perfil.school)}
+        ${row('Centro superior', perfil.centro_estudios || perfil.studyCenter || perfil.universidad || perfil.universityName)}
+        ${row('Titulacion', perfil.estudio_exacto || perfil.exactStudy || perfil.titulacion)}
+        ${row('Notas medias', gradeLine)}
+      </dl>
+    </section>
+    <section class="profile-summary-section">
+      <h3>Clases y experiencia</h3>
+      <dl>
+        ${row('Materias y actividades', subjects)}
+        ${row('Cursos y niveles', levels)}
+        ${row('Experiencia', experienceLabel)}
+        ${row('Disponibilidad', perfil.disponibilidad_resumen || perfil.availabilitySummary)}
+      </dl>
+    </section>
+    <section class="profile-summary-section">
+      <h3>Detalles profesionales</h3>
+      <dl>
+        ${row('Especialidades', perfil.especialidades || perfil.specialties)}
+        ${row('Idiomas', perfil.idiomas || perfil.languages)}
+        ${row('Certificaciones', perfil.certificaciones || perfil.certifications)}
+        ${row('Bizum', perfil.acepta_bizum === true || perfil.hasBizum === true ? 'Disponible' : 'Sin completar')}
+      </dl>
+    </section>`;
 }
 
 async function cargarPerfil() {
   await cargarDocumentosPerfilCache();
-  materiasActuales = toProfileList(perfil.materias || perfil.subjects || []);
-  nivelesActuales  = normalizeTeacherLevels(perfil.niveles_educativos || perfil.levels || []);
+  teachingScopeState = readTeachingScopesFromProfile(perfil);
+  syncTeachingSelectionsFromState();
 
   document.getElementById('p-nombre').value      = usuario.nombre || perfil.nombre || '';
   document.getElementById('p-apellidos').value   = usuario.apellidos || perfil.apellidos || '';
@@ -3221,8 +4395,6 @@ async function cargarPerfil() {
   document.getElementById('p-direccion').value   = perfil.direccion || perfil.address || '';
   document.getElementById('p-ciudad').value      = perfil.ciudad || 'Madrid';
   document.getElementById('p-cp').value          = perfil.codigo_postal || perfil.postalCode || '';
-  document.getElementById('p-zona').value        = perfil.zona || perfil.zone || '';
-  document.getElementById('p-nivel').value       = perfil.nivel_estudios || '';
   document.getElementById('p-estudio-exacto').value = perfil.estudio_exacto || perfil.exactStudy || perfil.titulacion || '';
   document.getElementById('p-colegio').value = perfil.colegio || perfil.schoolName || perfil.school || perfil.colegio_nombre || '';
   document.getElementById('p-centro-estudios').value = perfil.centro_estudios || perfil.studyCenter || perfil.universidad || perfil.universityName || perfil.colegio_estudios || '';
@@ -3242,20 +4414,24 @@ async function cargarPerfil() {
       ? 'no'
       : '';
 
-  renderMaterias();
+  renderTeachingScopes();
   renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual({
     materias: materiasActuales,
     niveles_educativos: nivelesActuales,
   }));
-
-  document.getElementById('niveles-check').innerHTML = NIVELES_LISTA.map(n => `
-    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-      <input type="checkbox" value="${sanitize(n)}" ${nivelesActuales.includes(n) ? 'checked' : ''}
-             data-nivel="${sanitize(n)}"
-             style="width:18px;height:18px;accent-color:var(--navy)">
-      <span style="font-size:.875rem">${sanitize(n)}</span>
-    </label>`).join('');
+  renderQualityPanel('perfil-calidad-resumen', evaluarPerfilActual({
+    materias: materiasActuales,
+    niveles_educativos: nivelesActuales,
+  }));
+  renderTeacherProfileOverview();
 }
+
+document.getElementById('btn-editar-perfil-profesor')?.addEventListener('click', () => {
+  openModal('modal-perfil-profesor');
+});
+document.getElementById('perfil-calidad-resumen')?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-section="perfil"]')) openModal('modal-perfil-profesor');
+});
 
 document.getElementById('p-foto-file')?.addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
@@ -3286,6 +4462,43 @@ window.eliminarMateria = (m) => {
   renderMaterias();
 };
 
+function renderTeachingSelectionSummary() {
+  const materiasBox = document.getElementById('materias-tags');
+  const nivelesBox = document.getElementById('niveles-tags');
+  if (materiasBox) {
+    materiasBox.innerHTML = materiasActuales.length ? materiasActuales.map((materia) => `
+      <span class="profile-selection-tag">
+        ${sanitize(materia)}
+        <button type="button" data-action="eliminar-materia" data-materia="${sanitize(materia)}">x</button>
+      </span>`).join('') : '<span class="muted">Sin subambitos seleccionados.</span>';
+  }
+  if (nivelesBox) {
+    nivelesBox.innerHTML = nivelesActuales.length ? nivelesActuales.map((nivel) => `
+      <span class="profile-selection-tag">
+        ${sanitize(nivel)}
+        <button type="button" data-action="eliminar-nivel" data-nivel="${sanitize(nivel)}">x</button>
+      </span>`).join('') : '<span class="muted">Sin cursos o niveles seleccionados.</span>';
+  }
+}
+
+window.eliminarMateria = (materia) => {
+  TEACHING_SCOPE_CONFIG.forEach((scope) => {
+    const state = teachingScopeState[scope.id];
+    if (!state) return;
+    state.subjects = (state.subjects || []).filter((item) => normalizeNivelKey(item) !== normalizeNivelKey(materia));
+  });
+  renderTeachingScopes();
+};
+
+window.eliminarNivel = (nivel) => {
+  TEACHING_SCOPE_CONFIG.forEach((scope) => {
+    const state = teachingScopeState[scope.id];
+    if (!state) return;
+    state.levels = (state.levels || []).filter((item) => normalizeNivelKey(item) !== normalizeNivelKey(nivel));
+  });
+  renderTeachingScopes();
+};
+
 async function cancelarClaseDesdeCalendario(btn) {
   const id = btn.dataset.id;
   const clase = calendarClassById.get(String(id));
@@ -3293,9 +4506,16 @@ async function cancelarClaseDesdeCalendario(btn) {
     showToast('Clase no disponible', 'Recarga el calendario e intentalo otra vez.', 'warning');
     return;
   }
-  const confirmada = window.confirm(`¿Cancelar esta clase? Se avisara a la familia y se registraran ${CLASS_CANCELLATION_PENALTY_POINTS} puntos de responsabilidad en tu historial.`);
-  if (!confirmada) return;
-  const motivo = window.prompt('Motivo breve de la cancelacion', 'Cancelada por el profesor desde el calendario') || 'Cancelada por el profesor desde el calendario';
+  const motivo = await promptAction({
+    title: 'Cancelar clase',
+    message: `Se avisara a la familia y se registraran ${CLASS_CANCELLATION_PENALTY_POINTS} puntos de responsabilidad en tu historial.`,
+    label: 'Motivo de la cancelacion',
+    initialValue: 'Cancelada por el profesor desde el calendario',
+    required: true,
+    confirmText: 'Cancelar clase',
+    tone: 'danger',
+  });
+  if (motivo === null) return;
   const originalText = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Cancelando...';
@@ -3347,7 +4567,13 @@ async function actualizarAsistenciaDesdeCalendario(select) {
 
   let motivo = '';
   if (estado === 'no_realizada') {
-    motivo = window.prompt('Cuentanos brevemente por que no se dio la clase:') || '';
+    motivo = await promptAction({
+      title: 'Clase no realizada',
+      message: 'Indica que ocurrio para que la familia y el equipo puedan resolverlo.',
+      label: 'Motivo',
+      required: true,
+      confirmText: 'Guardar resultado',
+    }) || '';
     if (!motivo.trim()) {
       select.value = previous;
       showToast('Falta el motivo', 'Indica por que no se dio para avisar y revisarlo.', 'warning');
@@ -3359,7 +4585,11 @@ async function actualizarAsistenciaDesdeCalendario(select) {
   try {
     select.disabled = true;
     const payload = buildTeacherAttendancePayload(estado, '', motivo.trim(), usuario.uid || usuario.id);
-    await updateDoc(firestoreDoc(firebaseDb, 'clases', id), payload);
+    const claseRef = firestoreDoc(firebaseDb, 'clases', id);
+    await updateDoc(claseRef, payload);
+    if (estado === 'no_realizada') {
+      await crearIncidenciaAsistenciaProfesor(id, clase, motivo.trim() || 'Clase marcada como no dada por el profesor.');
+    }
     showToast(
       'Resultado guardado',
       estado === 'realizada' ? 'La familia ya puede confirmar la clase.' : 'Hemos registrado que la clase no se dio.',
@@ -3383,6 +4613,26 @@ document.addEventListener('change', async (e) => {
 });
 
 document.addEventListener('click', async (e) => {
+  const classDetail = e.target.closest('[data-action="ver-detalle-clase-profesor"]');
+  if (classDetail) {
+    abrirDetalleClaseProfesor(classDetail.dataset.classCacheId);
+    return;
+  }
+
+  const acceptOneOff = e.target.closest('[data-action="aceptar-propuesta-puntual-profesor"]');
+  if (acceptOneOff) {
+    closeModal('modal-clase-detalle-profesor');
+    await responderPropuestaPuntualProfesor(acceptOneOff, true);
+    return;
+  }
+
+  const rejectOneOff = e.target.closest('[data-action="rechazar-propuesta-puntual-profesor"]');
+  if (rejectOneOff) {
+    closeModal('modal-clase-detalle-profesor');
+    await responderPropuestaPuntualProfesor(rejectOneOff, false);
+    return;
+  }
+
   const exportCalendarBtn = e.target.closest('[data-action="exportar-calendario-mes"]');
   if (exportCalendarBtn) {
     downloadCalendarMonth('clasesde10-profesor', 'ClasesDe10 Profesor');
@@ -3403,6 +4653,7 @@ document.addEventListener('click', async (e) => {
 
   const registrarBtn = e.target.closest('[data-action="registrar-clase"]');
   if (registrarBtn) {
+    closeModal('modal-clase-detalle-profesor');
     window.abrirRegistro(
       registrarBtn.dataset.id,
       registrarBtn.dataset.alumno,
@@ -3418,26 +4669,94 @@ document.addEventListener('click', async (e) => {
     return;
   }
 
+  const eliminarNivelBtn = e.target.closest('[data-action="eliminar-nivel"]');
+  if (eliminarNivelBtn) {
+    window.eliminarNivel(eliminarNivelBtn.dataset.nivel);
+    return;
+  }
+
   const eliminarDisponibilidadBtn = e.target.closest('[data-action="eliminar-disponibilidad"]');
   if (eliminarDisponibilidadBtn) {
-    window.eliminarDisponibilidad(eliminarDisponibilidadBtn.dataset.id);
+    window.eliminarDisponibilidad(eliminarDisponibilidadBtn.dataset.id, eliminarDisponibilidadBtn);
+    return;
   }
 });
 
-document.getElementById('niveles-check').addEventListener('change', (e) => {
-  const input = e.target.closest('input[type="checkbox"][data-nivel]');
-  if (!input) return;
-  toggleNivel(input.dataset.nivel, input.checked);
+document.getElementById('teaching-scope-builder')?.addEventListener('change', (e) => {
+  const scopeToggle = e.target.closest('input[data-scope-toggle]');
+  if (scopeToggle) {
+    const scopeId = scopeToggle.dataset.scopeToggle;
+    teachingScopeState[scopeId] = teachingScopeState[scopeId] || { enabled: false, subjects: [], levels: [] };
+    teachingScopeState[scopeId].enabled = scopeToggle.checked;
+    renderTeachingScopes();
+    return;
+  }
+  const subjectInput = e.target.closest('input[data-scope-subject]');
+  if (subjectInput) {
+    const scopeId = subjectInput.dataset.scopeSubject;
+    const subject = normalizeTeachingSubject(subjectInput.value);
+    teachingScopeState[scopeId] = teachingScopeState[scopeId] || { enabled: true, subjects: [], levels: [] };
+    teachingScopeState[scopeId].enabled = true;
+    teachingScopeState[scopeId].subjects = subjectInput.checked
+      ? uniqueProfileItems([...(teachingScopeState[scopeId].subjects || []), subject])
+      : (teachingScopeState[scopeId].subjects || []).filter((item) => normalizeNivelKey(item) !== normalizeNivelKey(subject));
+    renderTeachingScopes();
+    return;
+  }
+  const levelInput = e.target.closest('input[data-scope-level]');
+  if (levelInput) {
+    const scopeId = levelInput.dataset.scopeLevel;
+    const level = NIVELES_NORMALIZADOS.get(normalizeNivelKey(levelInput.value)) || levelInput.value;
+    teachingScopeState[scopeId] = teachingScopeState[scopeId] || { enabled: true, subjects: [], levels: [] };
+    teachingScopeState[scopeId].enabled = true;
+    teachingScopeState[scopeId].levels = levelInput.checked
+      ? normalizeTeacherLevels([...(teachingScopeState[scopeId].levels || []), level])
+      : (teachingScopeState[scopeId].levels || []).filter((item) => normalizeNivelKey(item) !== normalizeNivelKey(level));
+    renderTeachingScopes();
+  }
 });
 
-document.getElementById('btn-add-materia').addEventListener('click', () => {
-  const val = document.getElementById('nueva-materia').value.trim();
-  const normalized = toProfileList([val])[0];
-  if (normalized && !materiasActuales.some((item) => item.toLowerCase() === normalized.toLowerCase())) {
-    materiasActuales.push(normalized);
-    renderMaterias();
-    document.getElementById('nueva-materia').value = '';
+document.getElementById('teaching-scope-builder')?.addEventListener('click', (e) => {
+  const selectAll = e.target.closest('[data-scope-select-all]');
+  if (selectAll) {
+    const scopeId = selectAll.dataset.scopeSelectAll;
+    const scope = TEACHING_SCOPE_CONFIG.find((item) => item.id === scopeId);
+    if (!scope) return;
+    teachingScopeState[scopeId] = {
+      enabled: true,
+      subjects: uniqueProfileItems(scope.subjects),
+      levels: normalizeTeacherLevels(scope.levels),
+    };
+    renderTeachingScopes();
+    return;
   }
+  const clear = e.target.closest('[data-scope-clear]');
+  if (clear) {
+    const scopeId = clear.dataset.scopeClear;
+    teachingScopeState[scopeId] = { enabled: false, subjects: [], levels: [] };
+    renderTeachingScopes();
+    return;
+  }
+  const addCustom = e.target.closest('[data-scope-add-custom]');
+  if (addCustom) {
+    const scopeId = addCustom.dataset.scopeAddCustom;
+    const input = document.querySelector(`[data-scope-custom-input="${scopeId}"]`);
+    const subject = normalizeTeachingSubject(input?.value || '');
+    if (!subject) return;
+    teachingScopeState[scopeId] = teachingScopeState[scopeId] || { enabled: true, subjects: [], levels: [] };
+    teachingScopeState[scopeId].enabled = true;
+    teachingScopeState[scopeId].subjects = uniqueProfileItems([...(teachingScopeState[scopeId].subjects || []), subject]);
+    if (input) input.value = '';
+    renderTeachingScopes();
+  }
+});
+
+document.getElementById('teaching-scope-builder')?.addEventListener('keydown', (e) => {
+  const customInput = e.target.closest('[data-scope-custom-input]');
+  if (!customInput || e.key !== 'Enter') return;
+  e.preventDefault();
+  const scopeId = customInput.dataset.scopeCustomInput;
+  document.querySelector(`[data-scope-add-custom="${scopeId}"]`)?.click();
 });
 
 document.getElementById('form-perfil').addEventListener('submit', async (e) => {
@@ -3449,8 +4768,6 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const direccion = document.getElementById('p-direccion').value.trim();
   const ciudad = document.getElementById('p-ciudad').value.trim();
   const codigoPostal = document.getElementById('p-cp').value.trim();
-  const zona = document.getElementById('p-zona').value.trim();
-  const tipoFormacion = document.getElementById('p-nivel').value.trim();
   const estudioExacto = document.getElementById('p-estudio-exacto').value.trim();
   const colegioEstudios = document.getElementById('p-colegio').value.trim();
   const centroEstudios = document.getElementById('p-centro-estudios').value.trim();
@@ -3470,14 +4787,16 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const phoneCheck = validatePhone(telefono);
   const postalCheck = validatePostalCode(codigoPostal);
   const notasValidas = isValidGrade(notaBachillerato) && isValidGrade(notaUniversidad);
-  materiasActuales = toProfileList(materiasActuales);
+  syncTeachingSelectionsFromState();
+  const teachingScopesPayload = buildTeachingScopesPayload();
+  materiasActuales = uniqueProfileItems(materiasActuales);
   nivelesActuales = normalizeTeacherLevels(nivelesActuales);
 
-  if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid || !zona ||
-      !tipoFormacion || !estudioExacto || !colegioEstudios || !centroEstudios || !notasValidas ||
+  if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid ||
+      !estudioExacto || !colegioEstudios || !centroEstudios || !notasValidas ||
       !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum || !movilidadDeclarada ||
       !Number.isFinite(experiencia) || experiencia < 0 || experiencia > 60) {
-    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, CP de 5 digitos, zona, estudio exacto, colegio, universidad/centro superior, notas, materias/actividades, niveles, disponibilidad, movilidad, Bizum y presentacion.', 'warning');
+    showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, ciudad, CP de 5 digitos, colegio, universidad/centro superior, grado o titulacion, notas, materias/actividades, niveles, disponibilidad, movilidad, Bizum y presentacion.', 'warning');
     return;
   }
 
@@ -3495,10 +4814,6 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     city: ciudad,
     codigo_postal: codigoPostal,
     postalCode: codigoPostal,
-    zona,
-    zone: zona,
-    nivel_estudios: tipoFormacion,
-    studyLevel: tipoFormacion,
     estudio_exacto: estudioExacto,
     exactStudy: estudioExacto,
     colegio: colegioEstudios,
@@ -3519,6 +4834,8 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     subjects: materiasActuales,
     niveles_educativos: nivelesActuales,
     levels: nivelesActuales,
+    ambitos_ensenanza: teachingScopesPayload,
+    teachingScopes: teachingScopesPayload,
     especialidades,
     specialties: especialidades,
     idiomas,
@@ -3543,8 +4860,6 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     direccion,
     ciudad,
     codigo_postal: codigoPostal,
-    zona,
-    nivel_estudios: tipoFormacion,
     estudio_exacto: estudioExacto,
     colegio: colegioEstudios,
     centro_estudios: centroEstudios,
@@ -3555,6 +4870,8 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     disponibilidad_resumen: disponibilidad,
     materias: materiasActuales,
     niveles_educativos: nivelesActuales,
+    ambitos_ensenanza: teachingScopesPayload,
+    teachingScopes: teachingScopesPayload,
     especialidades,
     idiomas,
     certificaciones,
@@ -3593,7 +4910,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
 
     await setDoc(firestoreDoc(firebaseDb, 'profesores', profesorFirestoreId), profesorPayload, { merge: true });
   } catch (error) {
-    showToast('Error', error.message || 'No se pudo guardar el perfil en Firebase.', 'error');
+    showToast('Error', error.message || 'No se pudo guardar el perfil.', 'error');
     return;
   }
 
@@ -3609,10 +4926,6 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
       city:              ciudad,
       codigo_postal:     codigoPostal,
       postalCode:        codigoPostal,
-      zona,
-      zone:              zona,
-      nivel_estudios:    tipoFormacion,
-      studyLevel:        tipoFormacion,
       estudio_exacto:    estudioExacto,
       exactStudy:        estudioExacto,
       colegio:           colegioEstudios,
@@ -3654,10 +4967,16 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     console.warn('No se pudo sincronizar perfil legacy', error);
   }
 
+  Object.assign(usuario, { nombre, apellidos, telefono });
   perfil = { ...perfil, ...profesorPayload };
+  document.getElementById('user-nombre').textContent = `${nombre} ${apellidos}`.trim();
+  document.getElementById('user-avatar').textContent = getIniciales(nombre, apellidos);
   document.getElementById('ing-pago-quincenal').textContent = teacherPayoutSummaryLabel(perfil);
   if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
   renderQualityPanel('perfil-calidad-panel', evaluation);
+  renderQualityPanel('perfil-calidad-resumen', evaluation);
+  renderTeacherProfileOverview();
+  closeModal('modal-perfil-profesor');
   showToast('Guardado', 'Perfil actualizado correctamente.', 'success');
 });
 
@@ -3665,6 +4984,8 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
 async function cargarDocumentos() {
   const data = await cargarDocumentosPerfilCache();
   renderQualityPanel('perfil-calidad-panel', evaluarPerfilActual());
+  renderQualityPanel('perfil-calidad-resumen', evaluarPerfilActual());
+  renderTeacherProfileOverview();
   const tbody = document.getElementById('tbody-mis-docs');
   if (!data?.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--gray-mid)">Sin documentos subidos.</td></tr>'; return; }
   tbody.innerHTML = data.map(d => `<tr>
@@ -3751,19 +5072,167 @@ document.getElementById('btn-subir-doc').addEventListener('click', async () => {
   showToast('Subido', 'Documento enviado para revisión.', 'success');
   docFile.value = '';
   uploadZone.querySelector('.upload-zone-title').textContent = 'Arrastra o selecciona tu documento';
-  cargarDocumentos();
+  closeModal('modal-documento-profesor');
+  await cargarDocumentos();
+});
+
+document.getElementById('btn-subir-documento-profesor')?.addEventListener('click', () => {
+  openModal('modal-documento-profesor');
 });
 
 // ── DISPONIBILIDAD ───────────────────────────────────────────────
 const DIAS_SEMANA = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
 
+function teacherAvailabilityIds() {
+  return profesorClassIds();
+}
+
+function teacherAvailabilityMinutes(value = '') {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return NaN;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return NaN;
+  return hours * 60 + minutes;
+}
+
+function normalizeTeacherAvailabilityRow(row = {}) {
+  const day = Number(row.dia_semana ?? row.dayIndex ?? row.weekday);
+  const start = String(row.hora_inicio || row.startTime || '').slice(0, 5);
+  const end = String(row.hora_fin || row.endTime || '').slice(0, 5);
+  return {
+    ...row,
+    dia_semana: day,
+    dayIndex: day,
+    hora_inicio: start,
+    startTime: start,
+    hora_fin: end,
+    endTime: end,
+  };
+}
+
+function teacherAvailabilityKey(row = {}) {
+  const normalized = normalizeTeacherAvailabilityRow(row);
+  return `${normalized.dia_semana}|${normalized.hora_inicio}|${normalized.hora_fin}`;
+}
+
+function teacherAvailabilityIsValid(row = {}) {
+  const normalized = normalizeTeacherAvailabilityRow(row);
+  const start = teacherAvailabilityMinutes(normalized.hora_inicio);
+  const end = teacherAvailabilityMinutes(normalized.hora_fin);
+  return Number.isInteger(normalized.dia_semana)
+    && normalized.dia_semana >= 0
+    && normalized.dia_semana <= 6
+    && Number.isFinite(start)
+    && Number.isFinite(end)
+    && end > start;
+}
+
+function teacherAvailabilityPreviewText() {
+  const day = Number(document.getElementById('disp-dia')?.value || 0);
+  const start = document.getElementById('disp-inicio')?.value || '';
+  const end = document.getElementById('disp-fin')?.value || '';
+  return Number.isInteger(day) && DIAS_SEMANA[day] && start && end
+    ? `${DIAS_SEMANA[day]} ${formatHora(start)}-${formatHora(end)}`
+    : 'Completa día y horas.';
+}
+
+function updateTeacherAvailabilityPreview() {
+  const preview = document.getElementById('disp-preview');
+  if (!preview) return;
+  preview.textContent = teacherAvailabilityPreviewText();
+}
+
+function openTeacherAvailabilityModal() {
+  document.getElementById('disp-dia').value = '0';
+  document.getElementById('disp-inicio').value = '09:00';
+  document.getElementById('disp-fin').value = '14:00';
+  updateTeacherAvailabilityPreview();
+  document.getElementById('modal-disponibilidad').classList.add('open');
+  setTimeout(() => document.getElementById('disp-dia')?.focus(), 50);
+}
+
+async function cargarDisponibilidadProfesorRows() {
+  const ids = teacherAvailabilityIds();
+  const rows = mergeById((await Promise.all(ids.flatMap((id) => [
+    cargarFirestoreWhere('disponibilidad', 'teacherUid', '==', id),
+    cargarFirestoreWhere('disponibilidad', 'profesor_id', '==', id),
+  ]))).flat())
+    .map(normalizeTeacherAvailabilityRow)
+    .filter(teacherAvailabilityIsValid)
+    .filter((row) => row.active !== false && row.activo !== false && !['inactiva', 'inactive', 'archivada', 'archived'].includes(String(row.status || row.estado || '').toLowerCase()));
+
+  const bySlot = new Map();
+  rows.forEach((row) => {
+    const key = teacherAvailabilityKey(row);
+    if (!bySlot.has(key)) bySlot.set(key, row);
+  });
+  return Array.from(bySlot.values())
+    .sort((a, b) => (a.dia_semana - b.dia_semana) || teacherAvailabilityMinutes(a.hora_inicio) - teacherAvailabilityMinutes(b.hora_inicio));
+}
+
+function renderTeacherAvailabilityRows(rows = []) {
+  return `
+    <div class="teacher-availability-list">
+      ${rows.map((row) => `
+        <article class="teacher-availability-card">
+          <div class="teacher-availability-day">${sanitize(DIAS_SEMANA[row.dia_semana] || 'Día')}</div>
+          <div class="teacher-availability-hours">
+            <strong>${sanitize(formatHora(row.hora_inicio))} - ${sanitize(formatHora(row.hora_fin))}</strong>
+            <span>${sanitize(row.source === 'teacher_dashboard_availability' ? 'Añadida desde tu panel' : 'Franja disponible')}</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="eliminar-disponibilidad" data-id="${sanitize(row.id)}">Eliminar</button>
+        </article>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderTeacherAvailabilitySummary(rows = []) {
+  const container = document.getElementById('teacher-availability-summary');
+  if (!container) return;
+  if (!rows.length) {
+    container.innerHTML = '';
+    return;
+  }
+  const uniqueDays = new Set(rows.map((row) => row.dia_semana)).size;
+  const totalMinutes = rows.reduce((sum, row) => {
+    const start = teacherAvailabilityMinutes(row.hora_inicio);
+    const end = teacherAvailabilityMinutes(row.hora_fin);
+    return Number.isFinite(start) && Number.isFinite(end) && end > start ? sum + (end - start) : sum;
+  }, 0);
+  const hours = Math.round((totalMinutes / 60) * 10) / 10;
+  container.innerHTML = `
+    <div class="teacher-availability-summary-item">
+      <strong>${sanitize(String(rows.length))}</strong>
+      <span>franja${rows.length === 1 ? '' : 's'} guardada${rows.length === 1 ? '' : 's'}</span>
+    </div>
+    <div class="teacher-availability-summary-item">
+      <strong>${sanitize(String(uniqueDays))}</strong>
+      <span>dia${uniqueDays === 1 ? '' : 's'} con disponibilidad</span>
+    </div>
+    <div class="teacher-availability-summary-item">
+      <strong>${sanitize(String(hours))} h</strong>
+      <span>disponibles por semana</span>
+    </div>
+  `;
+}
+
 async function cargarDisponibilidad() {
   if (!profesorId) return;
-  const { data } = await db.from('disponibilidad').select('*').eq('profesor_id', profesorId).order('dia_semana');
   const cont = document.getElementById('tabla-disponibilidad');
-  if (!data?.length) {
+  renderTeacherAvailabilitySummary([]);
+  cont.innerHTML = renderEmptyState({
+    icon: '...',
+    title: 'Cargando disponibilidad',
+    description: 'Estamos leyendo tus franjas guardadas.',
+    compact: true,
+  });
+  const data = await cargarDisponibilidadProfesorRows();
+  renderTeacherAvailabilitySummary(data);
+  if (!data.length) {
     cont.innerHTML = renderEmptyState({
-      icon: '⏱',
+      icon: 'Horario',
       title: 'Añade tu primera franja',
       description: 'La disponibilidad ayuda a asignarte familias compatibles y reduce mensajes para cerrar horario.',
       actions: [emptyAction('Añadir franja', { 'data-action': 'abrir-modal-disponibilidad' }, 'primary')],
@@ -3771,47 +5240,90 @@ async function cargarDisponibilidad() {
     });
     return;
   }
-  cont.innerHTML = '<div style="display:flex;flex-direction:column;gap:8px">' +
-    data.map(d => `
-      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--gray-soft);border-radius:var(--radius-sm);padding:12px 16px">
-        <strong style="width:80px">${DIAS_SEMANA[d.dia_semana]}</strong>
-        <span>${formatHora(d.hora_inicio)} — ${formatHora(d.hora_fin)}</span>
-        <button class="btn btn-ghost btn-sm" data-action="eliminar-disponibilidad" data-id="${sanitize(d.id)}">Eliminar</button>
-      </div>`).join('') + '</div>';
+  cont.innerHTML = renderTeacherAvailabilityRows(data);
 }
 
 document.getElementById('btn-add-disponibilidad').addEventListener('click', () => {
-  document.getElementById('modal-disponibilidad').classList.add('open');
+  openTeacherAvailabilityModal();
 });
 
 document.addEventListener('click', (event) => {
   if (!event.target.closest('[data-action="abrir-modal-disponibilidad"]')) return;
-  document.getElementById('modal-disponibilidad').classList.add('open');
+  openTeacherAvailabilityModal();
 });
 
 document.getElementById('btn-guardar-disponibilidad').addEventListener('click', async () => {
+  const button = document.getElementById('btn-guardar-disponibilidad');
+  if (!setTeacherActionBusy(button, 'Guardando...')) return;
   const dia   = parseInt(document.getElementById('disp-dia').value);
   const ini   = document.getElementById('disp-inicio').value;
   const fin   = document.getElementById('disp-fin').value;
-  if (!ini || !fin || fin <= ini) { showToast('Error','Horario no válido.','warning'); return; }
-
-  const { error } = await db.from('disponibilidad').insert({ profesor_id: profesorId, dia_semana: dia, hora_inicio: ini, hora_fin: fin });
-  if (error) { showToast('Error', error.message, 'error'); return; }
-  document.getElementById('modal-disponibilidad').classList.remove('open');
-  showToast('Añadido', 'Disponibilidad guardada.', 'success');
-  cargarDisponibilidad();
+  try {
+    const draft = { dia_semana: dia, hora_inicio: ini, hora_fin: fin };
+    if (!teacherAvailabilityIsValid(draft)) {
+      showToast('Horario no válido', 'Revisa día, hora de inicio y hora de fin.', 'warning');
+      return;
+    }
+    const existing = await cargarDisponibilidadProfesorRows();
+    if (existing.some((row) => teacherAvailabilityKey(row) === teacherAvailabilityKey(draft))) {
+      showToast('Franja ya guardada', 'Ese día y horario ya aparecen en tu disponibilidad.', 'info');
+      return;
+    }
+    const teacherUid = profesorFirestoreId || usuario.uid || profesorId;
+    const legacyTeacherId = profesorId || teacherUid;
+    const payload = {
+      teacherUid,
+      profesor_id: legacyTeacherId,
+      dia_semana: dia,
+      hora_inicio: ini,
+      hora_fin: fin,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await addDoc(firestoreCollection(firebaseDb, 'disponibilidad'), payload);
+    document.getElementById('modal-disponibilidad').classList.remove('open');
+    showToast('Añadido', 'Disponibilidad guardada.', 'success');
+    await cargarDisponibilidad();
+  } catch (error) {
+    showToast('No se pudo guardar', error.message || 'Revisa permisos de disponibilidad.', 'error');
+  } finally {
+    clearTeacherActionBusy(button);
+  }
 });
 
-window.eliminarDisponibilidad = async (id) => {
-  if (!confirm('¿Eliminar esta franja?')) return;
-  await db.from('disponibilidad').delete().eq('id', id);
-  cargarDisponibilidad();
+['disp-dia', 'disp-inicio', 'disp-fin'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('input', updateTeacherAvailabilityPreview);
+  document.getElementById(id)?.addEventListener('change', updateTeacherAvailabilityPreview);
+});
+
+window.eliminarDisponibilidad = async (id, button = null) => {
+  const confirmed = await confirmAction({
+    title: 'Eliminar franja',
+    message: 'Esta franja dejara de mostrarse como disponible para nuevas clases.',
+    confirmText: 'Eliminar franja',
+    tone: 'danger',
+  });
+  if (!confirmed) return;
+  if (!id) return;
+  if (!setTeacherActionBusy(button, 'Eliminando...')) return;
+  try {
+    const { error } = await db.from('disponibilidad').delete().eq('id', id);
+    if (error) {
+      showToast('No se pudo eliminar', error.message || 'Revisa permisos de disponibilidad.', 'error');
+      return;
+    }
+    showToast('Franja eliminada', 'Disponibilidad actualizada.', 'success');
+    await cargarDisponibilidad();
+  } finally {
+    clearTeacherActionBusy(button);
+  }
 };
 
 // ── INIT ─────────────────────────────────────────────────────────
 syncTeacherPayoutSettings();
+cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
 irA(sectionFromHash(), { fromHash: true });
 </script>
-<script src="/js/pwa.js?v=20260705-panel-pwa-mobile" defer></script>
+<script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
 </body>
 </html>

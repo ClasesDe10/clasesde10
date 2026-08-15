@@ -9,7 +9,6 @@ import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebase
 import { getAnalytics, isSupported as isAnalyticsSupported } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-analytics.js';
 import { getAuth } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
-import { getFunctions } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-functions.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
 
 export const firebaseConfig = {
@@ -26,7 +25,6 @@ export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseC
 export const firebaseAuth = getAuth(firebaseApp);
 export const firebaseDb = getFirestore(firebaseApp);
 export const firebaseStorage = getStorage(firebaseApp);
-export const firebaseFunctions = getFunctions(firebaseApp);
 
 let analyticsPromise;
 
@@ -45,6 +43,5 @@ export default {
   auth: firebaseAuth,
   db: firebaseDb,
   storage: firebaseStorage,
-  functions: firebaseFunctions,
   getAnalytics: getFirebaseAnalytics,
 };

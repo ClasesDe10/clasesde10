@@ -20,7 +20,7 @@ import {
   ADMIN_AI_EXAMPLES,
   ADMIN_AI_VERSION,
   answerAdminQuestion,
-} from './admin-ai-engine.js?v=20260628-admin-ai';
+} from './admin-ai-engine.js?v=20260717-solution-admin-ai';
 import { filterAfterClassReset } from './class-reset.js';
 
 const DATA_CACHE_MS = 60 * 1000;
@@ -169,7 +169,7 @@ function renderEmpty() {
   return `<div class="admin-ai-empty">
     <div class="empty-state">
       <div class="empty-title">Asistente operativo listo</div>
-      <div class="empty-desc">Pregunta por pagos, profesores, familias, incidencias, ciudades, asignaturas o automatizaciones.</div>
+      <div class="empty-desc">Describe que ha pasado y te devolvera diagnostico, mejor solucion, pasos y comprobacion final.</div>
     </div>
   </div>`;
 }
@@ -235,13 +235,14 @@ function renderShell(container) {
       <div>
         <div class="control-eyebrow">IA exclusiva del administrador</div>
         <h2>Asistente de operaciones ClasesDe10</h2>
-        <p>Analiza datos reales de usuarios, clases, pagos, incidencias, mensajes, matching y reputacion con respuestas verificables.</p>
+        <p>Cuentale que ha pasado y te devuelve diagnostico, mejor solucion, pasos, comprobacion final y cuando escalar.</p>
       </div>
       <div class="control-live"><span></span> Modo estructurado gratuito</div>
     </div>
 
     <form class="admin-ai-form" data-admin-ai-form>
-      <textarea class="form-control" rows="3" data-admin-ai-input placeholder="Pregunta algo operativo..."></textarea>
+      <textarea class="form-control" rows="3" data-admin-ai-input placeholder="Ej: Una familia tiene un justificante rechazado, que hago? Una clase no aparece, como lo arreglo?"></textarea>
+      <div class="admin-ai-prompt-help">No hace falta formularlo perfecto: describe lo que ha pasado y la IA buscara la solucion operativa mas concreta posible.</div>
       <div class="admin-ai-form-actions">
         <button type="submit" class="btn btn-primary">Analizar</button>
         <button type="button" class="btn btn-outline" data-admin-ai-refresh>Actualizar datos</button>

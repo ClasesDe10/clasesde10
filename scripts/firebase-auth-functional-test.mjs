@@ -8,14 +8,16 @@
  */
 
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import process from 'node:process';
+import { applicationDefault, deleteApp, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 
 const firebaseClientSource = fs.readFileSync('js/firebase-client.js', 'utf8');
 const apiKey = firebaseClientSource.match(/apiKey:\s*'([^']+)'/)?.[1];
 const projectId = firebaseClientSource.match(/projectId:\s*'([^']+)'/)?.[1] || 'clasesde10-50add';
 const adminEmail = 'contacto.clasesde10@gmail.com';
+const adminApp = initializeApp({ credential: applicationDefault(), projectId }, `auth-functional-${Date.now()}`);
+const adminAuth = getAuth(adminApp);
 
 function fail(message) {
   console.error(`ERROR: ${message}`);
@@ -36,38 +38,13 @@ async function identity(method, payload) {
   return body;
 }
 
-function readFirebaseCliToken() {
-  const configPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
-  if (!fs.existsSync(configPath)) return null;
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  const token = config?.tokens?.access_token;
-  const expiresAt = Number(config?.tokens?.expires_at || 0);
-  if (!token || (expiresAt && Date.now() >= expiresAt)) return null;
-  return token;
-}
-
-async function lookupAdminWithCliToken() {
-  const token = readFirebaseCliToken();
-  if (!token) return { available: false, user: null, error: 'Firebase CLI OAuth token unavailable.' };
-
-  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:query`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ maxResults: 1000 }),
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    return { available: false, user: null, error: body?.error?.message || JSON.stringify(body) };
+async function lookupAdminWithAdminSdk() {
+  try {
+    const user = await adminAuth.getUserByEmail(adminEmail);
+    return { available: true, user, error: null };
+  } catch (error) {
+    return { available: true, user: null, error: error.message };
   }
-
-  return {
-    available: true,
-    user: body?.userInfo?.find((user) => user.email === adminEmail) || null,
-    error: null,
-  };
 }
 
 if (!apiKey) fail('Firebase apiKey not found in js/firebase-client.js.');
@@ -97,7 +74,7 @@ try {
     idToken: signIn.idToken,
   });
 
-  const adminLookup = await lookupAdminWithCliToken();
+  const adminLookup = await lookupAdminWithAdminSdk();
   const adminUser = adminLookup.user;
 
   const adminPassword = process.env.FIREBASE_ADMIN_TEST_PASSWORD;
@@ -122,7 +99,7 @@ try {
     admin: {
       email: adminEmail,
       exists: Boolean(adminUser),
-      uid: adminUser?.localId || null,
+      uid: adminUser?.uid || null,
       disabled: adminUser?.disabled || false,
       lookupAvailable: adminLookup.available,
       lookupError: adminLookup.error,
@@ -140,4 +117,5 @@ try {
       console.error(`WARNING: could not delete temporary Firebase Auth user ${tempEmail}: ${error.message}`);
     }
   }
+  await deleteApp(adminApp).catch(() => {});
 }

@@ -124,7 +124,7 @@ assert.equal(report.expiringSoon.length, 1);
 assert.equal(report.expired.length, 1);
 assert.ok(report.risks.some((risk) => risk.type === 'expired'));
 
-const csvRows = documentRowsForCsv([verifiedDoc]);
+const csvRows = documentRowsForCsv([{ ...verifiedDoc, expiresAt: '2099-07-15T00:00:00.000Z' }]);
 assert.equal(csvRows[0].tipo, 'dni');
 assert.equal(csvRows[0].estado, 'validado');
 

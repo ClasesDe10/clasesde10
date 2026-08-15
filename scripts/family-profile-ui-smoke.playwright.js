@@ -50,10 +50,14 @@ async (page) => {
   await page.locator('button.sidebar-link[data-section="perfil"]').click().catch(() => {});
   await page.waitForTimeout(300);
   await page.evaluate(() => {
-    if (document.querySelector('#form-perfil')?.offsetParent) return;
+    if (document.querySelector('#section-perfil')?.offsetParent) return;
     document.querySelectorAll('.dash-section').forEach((section) => { section.style.display = 'none'; });
     document.getElementById('section-perfil').style.display = '';
   });
+  await page.locator('#family-profile-overview').waitFor({ state: 'visible', timeout: 30000 });
+  if (await page.locator('#form-perfil').isVisible()) throw new Error('Family profile form should stay hidden until Editar perfil is selected.');
+  await page.locator('#btn-editar-perfil-familia').click();
+  await page.locator('#modal-perfil-familia').waitFor({ state: 'visible', timeout: 30000 });
   await page.locator('#form-perfil').waitFor({ state: 'visible', timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('#form-perfil')?.dataset.loaded === 'true', null, { timeout: 30000 }).catch(() => {});
 
@@ -86,6 +90,7 @@ async (page) => {
   await page.locator('#p-notas').fill(expected.notas);
   await page.locator('#form-perfil button[type="submit"]').click();
   await page.waitForTimeout(1500);
+  if (await page.locator('#modal-perfil-familia').isVisible()) throw new Error('Family profile dialog did not close after saving.');
 
   const result = await page.evaluate(async () => {
     const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');

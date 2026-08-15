@@ -8,7 +8,7 @@
 
 import { collectionScalePolicy, scalePartitionKeys } from './scale-engine.js';
 
-export const DATA_SCHEMA_VERSION = 'data-schema-2026-06-29-scale';
+export const DATA_SCHEMA_VERSION = 'data-schema-2026-08-15-assisted-onboarding';
 
 export const DATA_COLLECTIONS = Object.freeze({
   users: 'users',
@@ -66,7 +66,11 @@ export const FIELD_ALIAS_GROUPS = Object.freeze({
 });
 
 export const CANONICAL_FIELDS = Object.freeze({
-  users: ['email', 'nombre', 'apellidos', 'displayName', 'telefono', 'role', 'active', 'createdAt', 'updatedAt'],
+  users: [
+    'email', 'nombre', 'apellidos', 'displayName', 'telefono', 'role', 'active',
+    'onboardingSource', 'assistedLeadId', 'passwordSetupRequired', 'passwordSetupCompletedAt',
+    'profileCompletionRequired', 'profileCompletedAt', 'createdAt', 'updatedAt',
+  ],
   profesores: [
     'userUid', 'email', 'nombre', 'apellidos', 'displayName', 'telefono', 'photoUrl',
     'address', 'city', 'postalCode', 'zone', 'subjects', 'levels', 'specialties',
@@ -75,7 +79,11 @@ export const CANONICAL_FIELDS = Object.freeze({
     'hasBizum', 'hasCar', 'profileComplete', 'profileCompletionPercent', 'verificationStatus',
     'status', 'active', 'createdAt', 'updatedAt',
   ],
-  familias: ['userUid', 'email', 'nombre', 'apellidos', 'displayName', 'telefono', 'address', 'city', 'postalCode', 'zone', 'status', 'active', 'createdAt', 'updatedAt'],
+  familias: [
+    'userUid', 'email', 'nombre', 'apellidos', 'displayName', 'telefono',
+    'address', 'city', 'postalCode', 'zone', 'status', 'active',
+    'onboardingSource', 'assistedLeadId', 'createdAt', 'updatedAt',
+  ],
   alumnos: ['familyUid', 'studentUid', 'nombre', 'apellidos', 'displayName', 'level', 'course', 'school', 'birthDate', 'active', 'createdAt', 'updatedAt'],
   solicitudes: [
     'familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference',

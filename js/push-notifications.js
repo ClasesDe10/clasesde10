@@ -1,8 +1,8 @@
 /**
  * ClasesDe10 - Web Push / FCM registration.
  *
- * Stores one token per browser/device in Firestore. Cloud Functions use those
- * tokens to send push notifications when a notification document is created.
+ * Stores one token per browser/device in Firestore. The GitHub Actions worker
+ * uses those tokens to send push notifications for pending notification docs.
  */
 
 import {

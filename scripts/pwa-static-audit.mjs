@@ -5,6 +5,16 @@ import process from 'node:process';
 
 const root = process.cwd();
 const failures = [];
+const ignoredHtmlDirs = new Set([
+  '.git',
+  'node_modules',
+  'output',
+  '.firebase',
+  '.netlify',
+  '.tools',
+  'tmp',
+  'twa-build',
+]);
 
 function fail(message, detail = '') {
   failures.push(detail ? `${message}: ${detail}` : message);
@@ -21,7 +31,7 @@ function walkHtml(dir = root) {
     const fullPath = path.join(dir, entry.name);
     const relative = path.relative(root, fullPath);
     if (entry.isDirectory()) {
-      if (['.git', 'node_modules', 'output', '.firebase', '.netlify'].includes(entry.name)) continue;
+      if (ignoredHtmlDirs.has(entry.name)) continue;
       files.push(...walkHtml(fullPath));
     } else if (entry.isFile() && entry.name.endsWith('.html')) {
       files.push(relative);
@@ -41,12 +51,19 @@ function pngSize(filePath) {
 }
 
 const manifest = JSON.parse(readText('manifest.json'));
-if (manifest.name !== 'ClasesDe10') fail('manifest name must be ClasesDe10');
+if (manifest.name !== 'ClasesDe10 Panel') fail('manifest name must be ClasesDe10 Panel');
 if (!manifest.short_name) fail('manifest short_name missing');
 if (manifest.scope !== '/') fail('manifest scope must be /', manifest.scope);
 if (!manifest.start_url) fail('manifest start_url missing');
+if (manifest.id !== '/pages/login.html') fail('manifest id must identify the panel/login app', manifest.id);
+if (!String(manifest.start_url).startsWith('/pages/login.html')) {
+  fail('manifest start_url must open the login/panel, not the public website', manifest.start_url);
+}
 if (manifest.display !== 'standalone') fail('manifest display must be standalone', manifest.display);
 if (!Array.isArray(manifest.icons) || manifest.icons.length < 2) fail('manifest must include 192 and 512 icons');
+if (!Array.isArray(manifest.shortcuts) || manifest.shortcuts.some((item) => !String(item.url || '').startsWith('/pages/login.html'))) {
+  fail('manifest shortcuts must stay inside the panel/login flow');
+}
 
 for (const size of [192, 512]) {
   const icon = manifest.icons?.find((item) => item.sizes === `${size}x${size}`);
@@ -83,6 +100,7 @@ const pwa = readText('js/pwa.js');
 for (const expected of ['--app-vh', '--keyboard-inset', 'visualViewport', 'cd10:pwa-status']) {
   if (!pwa.includes(expected)) fail('pwa.js missing mobile/PWA runtime support', expected);
 }
+if (!pwa.includes('isPanelInstallPath')) fail('pwa.js must gate install prompts to login/dashboard paths');
 
 const publicCss = readText('css/style.css');
 const dashboardCss = readText('css/dashboard.css');

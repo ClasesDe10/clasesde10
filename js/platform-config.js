@@ -8,7 +8,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js?v=20260627-domain-auth';
 
-export const PLATFORM_CONFIG_VERSION = 'platform-config-2026-06-28';
+export const PLATFORM_CONFIG_VERSION = 'platform-config-2026-07-06-platform-payments';
 export const PLATFORM_CONFIG_DOC_ID = 'platform';
 export const PLATFORM_CONFIG_COLLECTION = 'configuracion';
 export const PLATFORM_CONFIG_HISTORY_COLLECTION = 'platformConfigHistory';
@@ -27,11 +27,11 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
   },
   payments: {
     defaultPaymentDueDays: 7,
-    overdueGraceHours: 24,
+    overdueGraceHours: 48,
     paymentReminderHours: 48,
     bizumEnabled: true,
-    bizumReceiverName: 'ClasesDe10',
-    bizumPhone: '',
+    bizumReceiverName: 'Miguel G. G.',
+    bizumPhone: '613016665',
     teacherPayoutRequiresBizum: true,
     autoMarkClassPaidOnVerifiedPayment: true,
     stripeEnabled: false,
@@ -67,7 +67,7 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
     staleIncidentReviewMinutes: 60,
     profileVerificationReviewMinutes: 1440,
     teacherReactivationMinutes: 10080,
-    classConfirmationGraceMinutes: 60,
+    classConfirmationGraceMinutes: 1440,
     requestStaleHours: 24,
     documentStaleHours: 48,
     incidentStaleHours: 24,
@@ -206,7 +206,7 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
     adminEscalationDays: 14,
     userNotificationCooldownHours: 24,
     adminCooldownHours: 24,
-    maxUserNotifications: 40,
+    maxUserNotifications: 6,
     autoCreateAdminTasks: true,
   },
   proactiveAssist: {
@@ -228,7 +228,7 @@ export const PLATFORM_CONFIG_DEFAULTS = Object.freeze({
     userNotificationCooldownHours: 72,
     adminCooldownHours: 24,
     adminEscalationHours: 48,
-    maxUserNotifications: 30,
+    maxUserNotifications: 6,
     autoCreateAdminTasks: true,
   },
   profiles: {
@@ -323,14 +323,14 @@ export const PLATFORM_CONFIG_SECTIONS = Object.freeze([
   {
     id: 'payments',
     title: 'Pagos, Bizum y Stripe',
-    description: 'Vencimientos, conciliacion, Bizum, payouts y pasarelas futuras.',
+    description: 'Las familias pagan a ClasesDe10; despues la plataforma liquida a cada profesor.',
     fields: [
       field('payments.defaultPaymentDueDays', 'Dias para pagar por defecto', 'number', { min: 0, max: 60, step: 1 }),
-      field('payments.overdueGraceHours', 'Margen antes de vencido (h)', 'number', { min: 0, max: 168, step: 1 }),
+      field('payments.overdueGraceHours', 'Margen antes de vencido (h)', 'number', { min: 48, max: 168, step: 1 }),
       field('payments.paymentReminderHours', 'Recordatorio antes de vencimiento (h)', 'number', { min: 1, max: 336, step: 1 }),
       field('payments.bizumEnabled', 'Bizum activo', 'boolean'),
-      field('payments.bizumReceiverName', 'Nombre receptor Bizum', 'text', { max: 120 }),
-      field('payments.bizumPhone', 'Telefono Bizum operativo', 'text', { max: 40 }),
+      field('payments.bizumReceiverName', 'Nombre receptor Bizum familias', 'text', { max: 120 }),
+      field('payments.bizumPhone', 'Telefono Bizum familias', 'text', { max: 40 }),
       field('payments.teacherPayoutRequiresBizum', 'Exigir Bizum a profesores', 'boolean'),
       field('payments.autoMarkClassPaidOnVerifiedPayment', 'Marcar clase pagada al validar pago', 'boolean'),
       field('payments.stripeEnabled', 'Stripe activo', 'boolean'),
@@ -526,7 +526,7 @@ export const PLATFORM_CONFIG_SECTIONS = Object.freeze([
       field('followup.adminEscalationDays', 'Escalar continuidad al admin tras (dias)', 'number', { min: 1, max: 365, step: 1 }),
       field('followup.userNotificationCooldownHours', 'Cooldown avisos a usuarios (h)', 'number', { min: 1, max: 720, step: 1 }),
       field('followup.adminCooldownHours', 'Cooldown tareas admin (h)', 'number', { min: 1, max: 720, step: 1 }),
-      field('followup.maxUserNotifications', 'Maximo avisos por barrido', 'number', { min: 0, max: 500, step: 1 }),
+      field('followup.maxUserNotifications', 'Maximo avisos por barrido', 'number', { min: 0, max: 50, step: 1 }),
       field('followup.autoCreateAdminTasks', 'Crear tareas admin automaticamente', 'boolean'),
     ],
   },
@@ -553,7 +553,7 @@ export const PLATFORM_CONFIG_SECTIONS = Object.freeze([
       field('proactiveAssist.userNotificationCooldownHours', 'Cooldown avisos usuario (h)', 'number', { min: 1, max: 1440, step: 1 }),
       field('proactiveAssist.adminCooldownHours', 'Cooldown alertas admin (h)', 'number', { min: 1, max: 1440, step: 1 }),
       field('proactiveAssist.adminEscalationHours', 'Escalar al admin tras (h)', 'number', { min: 1, max: 1440, step: 1 }),
-      field('proactiveAssist.maxUserNotifications', 'Maximo avisos por barrido', 'number', { min: 0, max: 500, step: 1 }),
+      field('proactiveAssist.maxUserNotifications', 'Maximo avisos por barrido', 'number', { min: 0, max: 50, step: 1 }),
       field('proactiveAssist.autoCreateAdminTasks', 'Crear tareas admin automaticamente', 'boolean'),
     ],
   },

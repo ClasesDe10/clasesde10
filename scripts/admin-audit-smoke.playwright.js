@@ -1,5 +1,10 @@
 async (page) => {
-  await page.locator('[data-section="auditoria"]').click();
+  await page.evaluate(() => {
+    const link = document.querySelector('.sidebar-link[data-section="auditoria"]');
+    const group = link?.closest('details');
+    if (group) group.open = true;
+    link?.click();
+  });
 
   await page.waitForFunction(() => {
     const root = document.querySelector('#section-auditoria');

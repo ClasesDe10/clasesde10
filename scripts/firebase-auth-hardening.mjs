@@ -2,9 +2,9 @@
 /**
  * Harden Firebase Auth provider configuration for ClasesDe10.
  *
- * Keeps Email/Password enabled and disables Phone Auth, which is not used by
- * the product flows. Google Sign-In is handled by Firebase's Google provider
- * configuration and verified through the runtime login flow.
+ * Keeps Email/Password and passwordless email links enabled, and disables Phone
+ * Auth, which is not used by the product flows. Google Sign-In is handled by
+ * Firebase's Google provider configuration and verified through the runtime.
  */
 
 import fs from 'node:fs';
@@ -62,7 +62,7 @@ async function main() {
       signIn: {
         email: {
           enabled: true,
-          passwordRequired: true,
+          passwordRequired: false,
         },
         phoneNumber: {
           enabled: false,
@@ -81,8 +81,8 @@ async function main() {
   const authorizedDomains = new Set(after.body?.authorizedDomains || []);
   const missingDomains = [...REQUIRED_AUTH_DOMAINS].filter((domain) => !authorizedDomains.has(domain));
 
-  if (!signIn.email?.enabled || !signIn.email?.passwordRequired) {
-    console.error('Email/Password is not enabled after hardening.');
+  if (!signIn.email?.enabled || signIn.email?.passwordRequired === true) {
+    console.error('Email/Password and email-link sign-in are not enabled after hardening.');
     process.exit(1);
   }
   if (signIn.phoneNumber?.enabled === true) {
@@ -97,6 +97,7 @@ async function main() {
   console.log(JSON.stringify({
     ok: true,
     emailPassword: 'enabled',
+    emailLink: 'enabled',
     phoneAuth: 'disabled',
     removedExtraAuthorizedDomains: [...authorizedDomains].filter((domain) => !REQUIRED_AUTH_DOMAINS.has(domain)),
     authorizedDomains: [...authorizedDomains].sort(),

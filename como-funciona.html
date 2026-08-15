@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cómo funciona — ClasesDe10</title>
-<meta name="description" content="Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.">
+<meta name="description" content="Descubre el proceso real de ClasesDe10: cuenta familiar, solicitud, selección de profesor, chat, calendario, clases, avisos y pagos.">
 <link rel="canonical" href="https://clasesde10.com/como-funciona">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0f1f3d">
@@ -14,18 +14,22 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <meta property="og:title" content="Cómo funciona — ClasesDe10">
-<meta property="og:description" content="Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.">
+<meta property="og:description" content="Cuenta, solicitud, selección de profesor, chat, calendario, clases, avisos y pagos en un proceso acompañado.">
 <meta property="og:url" content="https://clasesde10.com/como-funciona">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta property="og:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <meta property="og:site_name" content="ClasesDe10">
 <meta property="og:locale" content="es_ES">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Cómo funciona — ClasesDe10">
-<meta name="twitter:description" content="Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.">
-<meta name="twitter:image" content="https://clasesde10.com/assets/img/logo-512.png">
+<meta name="twitter:description" content="Cuenta, solicitud, selección de profesor, chat, calendario, clases, avisos y pagos en un proceso acompañado.">
+<meta name="twitter:image" content="https://clasesde10.com/assets/img/social-share.png">
+<meta name="twitter:image:alt" content="ClasesDe10, profesores particulares para cada alumno">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20260808-editorial">
 <style>
 .steps-section { padding: 40px 0; background: var(--cream); }
 .steps-list { display: flex; flex-direction: column; gap: 0; margin-top: 24px; }
@@ -37,27 +41,25 @@
 .step-row:not(:last-child)::after {
   content: '';
   position: absolute; left: 39px; top: 80px; bottom: -32px;
-  width: 2px; background: linear-gradient(to bottom, var(--gold), rgba(232,160,48,0.1));
+  width: 1px; background: rgba(15,31,61,.2);
 }
 .step-row + .step-row { margin-top: 32px; }
 
 .step-circle {
   width: 80px; height: 80px; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--navy), var(--navy-light));
-  border-radius: 50%;
+  background: var(--navy);
+  border-radius: 2px;
   display: flex; align-items: center; justify-content: center;
   font-size: 1.6rem;
-  box-shadow: 0 8px 24px rgba(15,31,61,0.25);
+  box-shadow: none;
   position: relative; z-index: 1;
 }
 .step-body {
-  background: var(--white); border-radius: 20px; padding: 36px 40px;
-  border: 1px solid rgba(0,0,0,0.06);
-  box-shadow: 0 2px 14px rgba(0,0,0,0.05);
+  background: transparent; border-radius: 0; padding: 8px 0 36px;
+  border: 0; border-bottom: 1px solid rgba(15,31,61,.18);
+  box-shadow: none;
   margin-bottom: 32px;
-  transition: transform .25s, box-shadow .25s;
 }
-.step-body:hover { transform: translateX(6px); box-shadow: 0 8px 32px rgba(0,0,0,0.1); }
 .step-num-label {
   font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
   color: var(--gold); margin-bottom: 6px;
@@ -69,8 +71,8 @@
 .step-body p { font-size: .97rem; line-height: 1.8; color: var(--text-body); }
 .step-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .step-tag {
-  font-size: .76rem; padding: 5px 12px; border-radius: 100px;
-  background: var(--gray-soft); color: var(--text-body); font-weight: 500;
+  font-size: .76rem; padding: 2px 10px; border-radius: 0;
+  border-left: 2px solid var(--gold); background: transparent; color: var(--text-body); font-weight: 500;
 }
 .step-detail-list {
   margin-top: 16px; list-style: none;
@@ -86,7 +88,7 @@
 .faq-section { padding: 90px 0; background: var(--white); }
 .faq-list { margin-top: 56px; display: flex; flex-direction: column; gap: 12px; }
 .faq-item {
-  border: 1px solid rgba(0,0,0,0.08); border-radius: 14px;
+  border: 0; border-bottom: 1px solid rgba(15,31,61,.18); border-radius: 0;
   overflow: hidden;
 }
 .faq-q {
@@ -110,17 +112,11 @@
 /* CTA bottom */
 .cta-bottom {
   padding: 90px 0;
-  background: linear-gradient(135deg, var(--navy) 0%, #0d2952 100%);
+  background: var(--navy);
   text-align: center;
   position: relative; overflow: hidden;
 }
-.cta-bottom::before {
-  content: '';
-  position: absolute; top: -200px; right: -200px;
-  width: 500px; height: 500px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(232,160,48,0.1) 0%, transparent 70%);
-  pointer-events: none;
-}
+.cta-bottom::before { display: none; }
 .cta-bottom h2 {
   font-family: 'Playfair Display', serif;
   font-size: clamp(1.8rem, 3.5vw, 2.8rem);
@@ -137,46 +133,44 @@
   .step-body { padding: 24px 22px; }
 }
 </style>
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Cómo funciona","item":"https://clasesde10.com/como-funciona"}]},{"@type":"WebPage","name":"Cómo funciona — ClasesDe10","description":"Descubre cómo ClasesDe10 conecta familias con profesores en tres pasos sencillos, sin registros complicados ni costes.","url":"https://clasesde10.com/como-funciona","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Inicio","item":"https://clasesde10.com/"},{"@type":"ListItem","position":2,"name":"Cómo funciona","item":"https://clasesde10.com/como-funciona"}]},{"@type":"WebPage","name":"Cómo funciona — ClasesDe10","description":"Proceso de ClasesDe10: cuenta familiar, solicitud, selección de profesor, chat, calendario, clases, avisos y pagos.","url":"https://clasesde10.com/como-funciona","inLanguage":"es-ES","publisher":{"@type":"Organization","name":"ClasesDe10","url":"https://clasesde10.com","logo":"https://clasesde10.com/assets/img/logo-512.png"}}]}</script>
 </head>
 <body>
 
 <nav id="mainNav">
-  <a href="index.html" class="nav-logo">
-    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo">
+  <a href="/" class="nav-logo">
+    <img src="/assets/img/logo-192.png" alt="ClasesDe10 logo" width="192" height="192">
     <span class="nav-logo-text">Clases<span>De10</span></span>
   </a>
   <ul class="nav-links">
-    <li><a href="como-funciona.html" class="active">Cómo funciona</a></li>
-    <li><a href="para-padres.html">Para familias</a></li>
-    <li><a href="para-profesores.html">Para profesores</a></li>
-    <li><a href="clases-particulares/">Clases</a></li>
-    <li><a href="sobre-nosotros.html">Nosotros</a></li>
-    <li><a href="pages/login.html">Acceder</a></li>
-    <li><a href="contacto.html" class="nav-cta">Contactar</a></li>
+    <li><a href="/como-funciona" class="active">Cómo funciona</a></li>
+    <li><a href="/para-padres">Para familias</a></li>
+    <li><a href="/para-profesores">Para profesores</a></li>
+    <li><a href="/contacto">Contacto</a></li>
+    <li><a href="/pages/login" class="nav-cta">Acceder</a></li>
   </ul>
   <button class="hamburger" id="hamburger" aria-label="Menú"><span></span><span></span><span></span></button>
 </nav>
 <div class="mobile-menu" id="mobileMenu">
-  <a href="como-funciona.html" data-mobile-close>Cómo funciona</a>
-  <a href="para-padres.html" data-mobile-close>Para familias</a>
-  <a href="para-profesores.html" data-mobile-close>Para profesores</a>
-  <a href="clases-particulares/" data-mobile-close>Clases particulares</a>
-  <a href="sobre-nosotros.html" data-mobile-close>Nosotros</a>
-  <a href="pages/login.html" data-mobile-close>Acceder</a>
-  <a href="contacto.html" class="m-cta" data-mobile-close>Contactar ahora</a>
+  <a href="/como-funciona" data-mobile-close>Cómo funciona</a>
+  <a href="/para-padres" data-mobile-close>Para familias</a>
+  <a href="/para-profesores" data-mobile-close>Para profesores</a>
+  <a href="/contacto" data-mobile-close>Contacto</a>
+  <a href="/pages/login" class="m-cta" data-mobile-close>Acceder</a>
 </div>
 
 <!-- HEADER -->
 <header class="page-header">
-  <span class="section-label">Proceso sencillo</span>
+  <span class="section-label">El proceso completo</span>
   <h1>¿Cómo funciona <em>ClasesDe10</em>?</h1>
-  <p>Sin registros complicados, sin cuotas ocultas. Solo tres pasos para conectar familias y profesores de verdad.</p>
+  <p>No somos un tablón de anuncios. Recogemos la necesidad, revisamos el encaje y dejamos la relación organizada en una cuenta con chat, calendario, clases, avisos y pagos.</p>
 </header>
 
 <!-- STEPS -->
 <section class="steps-section">
   <div class="section-inner">
+    <h2 class="section-title">Tres pasos para empezar</h2>
+    <h2 class="section-title">De la solicitud a las clases, sin perder información</h2>
     <div class="steps-list">
 
       <div class="step-row reveal">
@@ -185,17 +179,17 @@
         </div>
         <div class="step-body">
           <div class="step-num-label">Paso 01</div>
-          <h3>Elige tu perfil y rellena el formulario</h3>
-          <p>Accede al formulario que corresponde a tu rol. Si eres padre o madre, cuéntanos qué asignatura, nivel y disponibilidad necesitas. Si eres profesor, preséntate y dinos en qué materias destacas.</p>
+          <h3>Entra con tu cuenta o pide ayuda</h3>
+          <p>Las familias pueden crear su cuenta directamente. Si prefieren ayuda, dejan nombre del tutor y del alumno, necesidad, teléfono y correo; reciben un enlace seguro para activar la cuenta y elegir su contraseña.</p>
           <ul class="step-detail-list">
-            <li>Formulario específico según si eres familia o docente</li>
-            <li>Sin crear cuenta ni contraseña</li>
-            <li>Tarda menos de 2 minutos</li>
+            <li>Un mismo acceso para iniciar sesión o crear cuenta</li>
+            <li>Alta asistida para quien no quiera hacerlo solo</li>
+            <li>Correo verificado y contraseña elegida por el usuario</li>
           </ul>
           <div class="step-tags">
-            <span class="step-tag">Sin registro</span>
-            <span class="step-tag">Gratuito</span>
-            <span class="step-tag">2 minutos</span>
+            <span class="step-tag">Acceso seguro</span>
+            <span class="step-tag">Ayuda humana</span>
+            <span class="step-tag">Sin permanencia</span>
           </div>
         </div>
       </div>
@@ -206,17 +200,17 @@
         </div>
         <div class="step-body">
           <div class="step-num-label">Paso 02</div>
-          <h3>Buscamos la coincidencia perfecta</h3>
-          <p>Una vez recibimos tu solicitud, nuestro equipo analiza el perfil y busca la mejor coincidencia. Para familias, proponemos un profesor adecuado. Para profesores, os conectamos con una familia real que os está buscando.</p>
+          <h3>Completamos el contexto y buscamos encaje</h3>
+          <p>La familia añade al alumno y concreta materia, nivel, modalidad, zona y disponibilidad. El equipo revisa la solicitud y compara perfiles de profesores completos y revisados antes de proponer una asignación.</p>
           <ul class="step-detail-list">
-            <li>Respuesta garantizada en menos de 48 horas</li>
-            <li>Todos tus datos están protegidos y nunca se publican</li>
-            <li>Selección personalizada, no un algoritmo frío</li>
+            <li>El sistema ayuda a ordenar y priorizar candidatos</li>
+            <li>La decisión final conserva revisión operativa</li>
+            <li>La disponibilidad presencial depende de la zona</li>
           </ul>
           <div class="step-tags">
-            <span class="step-tag">Máx. 48h</span>
+            <span class="step-tag">Solicitud completa</span>
             <span class="step-tag">Datos protegidos</span>
-            <span class="step-tag">Selección humana</span>
+            <span class="step-tag">Encaje revisado</span>
           </div>
         </div>
       </div>
@@ -227,18 +221,39 @@
         </div>
         <div class="step-body">
           <div class="step-num-label">Paso 03</div>
-          <h3>Contacto directo y a empezar</h3>
-          <p>Recibirás un correo o mensaje de WhatsApp con los datos para contactar directamente con el profesor o la familia. A partir de ahí, tú decides todo.</p>
+          <h3>Propuesta, chat y primera clase</h3>
+          <p>Cuando hay un profesor adecuado, la relación se abre dentro de la plataforma. Familia y profesor hablan por el chat, pueden llamar o hacer videollamada y proponen un horario que, al aceptarse, pasa al calendario.</p>
           <ul class="step-detail-list">
-            <li>Horarios: acordáis lo que mejor os venga</li>
-            <li>Modalidad: presencial en casa, biblioteca, academia u online</li>
-            <li>Duración y frecuencia: completamente flexible</li>
-            <li>Sin intermediarios en las clases ni comisiones</li>
+            <li>Mensajes con enviados, entregados, leídos y no leídos</li>
+            <li>Llamadas y videollamadas desde la conversación</li>
+            <li>Clases puntuales o recurrentes con aceptación de horario</li>
+            <li>Avisos y cambios visibles para ambas partes</li>
           </ul>
           <div class="step-tags">
-            <span class="step-tag">Online / Presencial</span>
-            <span class="step-tag">Tú decides</span>
-            <span class="step-tag">Sin comisiones</span>
+            <span class="step-tag">Chat</span>
+            <span class="step-tag">Calendario</span>
+            <span class="step-tag">Voz y vídeo</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-row reveal">
+        <div style="display:flex;flex-direction:column;align-items:center;padding-top:0">
+          <div class="step-circle">✓</div>
+        </div>
+        <div class="step-body">
+          <div class="step-num-label">Paso 04</div>
+          <h3>Confirmamos lo ocurrido y mantenemos las cuentas claras</h3>
+          <p>Después de cada clase, profesor y familia pueden confirmar si se ha dado o comunicar una incidencia. Las clases pasadas sin revisar se señalan para evitar dudas y los pagos indican qué clases incluye cada justificante.</p>
+          <ul class="step-detail-list">
+            <li>Estados claros: programada, por revisar, confirmada o con incidencia</li>
+            <li>Justificantes vinculados a las clases que se están pagando</li>
+            <li>Avisos de pagos pendientes y cobros del profesor</li>
+          </ul>
+          <div class="step-tags">
+            <span class="step-tag">Seguimiento</span>
+            <span class="step-tag">Pagos trazables</span>
+            <span class="step-tag">Avisos útiles</span>
           </div>
         </div>
       </div>
@@ -255,23 +270,23 @@
     <div class="faq-list">
       <div class="faq-item reveal">
         <button class="faq-q" data-faq-toggle aria-expanded="false">¿Tiene algún coste para las familias? <span>+</span></button>
-        <div class="faq-a">No. El servicio de búsqueda y conexión con un profesor es completamente gratuito para las familias. El precio de las clases lo acuerdan directamente familia y profesor.</div>
+        <div class="faq-a">Crear la cuenta y enviar la solicitud no tiene coste ni permanencia. Antes de confirmar una asignación, ClasesDe10 informa de las condiciones económicas aplicables a las clases.</div>
       </div>
       <div class="faq-item reveal">
         <button class="faq-q" data-faq-toggle aria-expanded="false">¿Cómo verificáis a los profesores? <span>+</span></button>
-        <div class="faq-a">Cada profesor que se registra pasa por una revisión de su perfil, formación y experiencia. Solo incluimos en nuestra red a docentes que han demostrado su cualificación y compromiso con la enseñanza.</div>
+        <div class="faq-a">El profesor completa formación, materias, niveles, zona, disponibilidad y la documentación que corresponda. El equipo revisa el perfil antes de utilizarlo en una asignación.</div>
       </div>
       <div class="faq-item reveal">
         <button class="faq-q" data-faq-toggle aria-expanded="false">¿En qué zonas operáis? <span>+</span></button>
-        <div class="faq-a">Principalmente en Madrid para clases presenciales, pero para clases online trabajamos con familias y profesores de toda España.</div>
+        <div class="faq-a">La cobertura presencial depende de la disponibilidad real de profesores en cada zona. Para clases online podemos atender solicitudes de toda España.</div>
       </div>
       <div class="faq-item reveal">
         <button class="faq-q" data-faq-toggle aria-expanded="false">¿Qué pasa si el profesor no encaja? <span>+</span></button>
-        <div class="faq-a">Escríbenos y buscamos otra opción. Nuestro objetivo es que la conexión funcione de verdad, así que no te dejamos sin solución.</div>
+        <div class="faq-a">La familia puede comunicarlo desde el chat o al equipo. Revisamos el caso, la disponibilidad y las alternativas antes de proponer un cambio.</div>
       </div>
       <div class="faq-item reveal">
         <button class="faq-q" data-faq-toggle aria-expanded="false">¿Cuánto tiempo tarda en llegar una respuesta? <span>+</span></button>
-        <div class="faq-a">Garantizamos respuesta en un máximo de 48 horas laborables desde que recibimos tu formulario. Habitualmente es bastante más rápido.</div>
+        <div class="faq-a">El equipo revisa cada solicitud lo antes posible. El tiempo depende de la materia, el nivel, la zona, la modalidad y la disponibilidad real de profesores compatibles.</div>
       </div>
     </div>
   </div>
@@ -281,10 +296,10 @@
 <section class="cta-bottom">
   <div class="section-inner">
     <h2>¿Todo claro? <em>Empieza ahora.</em></h2>
-    <p>Es gratuito, rápido y sin compromisos. Rellena el formulario según tu perfil.</p>
+    <p>Crea tu cuenta o, si eres familia, déjanos el formulario breve y te ayudamos a activarla.</p>
     <div class="cta-btns">
-      <a href="para-padres.html" class="btn-primary">👨‍👩‍👦 Soy padre / madre</a>
-      <a href="para-profesores.html" class="btn-ghost">🎓 Soy profesor/a</a>
+      <a href="/para-padres" class="btn-primary">👨‍👩‍👦 Soy padre / madre</a>
+      <a href="/para-profesores" class="btn-ghost">🎓 Soy profesor/a</a>
     </div>
   </div>
 </section>
@@ -292,28 +307,29 @@
 <footer>
   <div class="footer-inner">
     <div class="footer-brand">
-      <img src="/assets/img/logo-192.png" alt="ClasesDe10">
+      <img src="/assets/img/logo-192.png" alt="ClasesDe10" width="192" height="192">
       <div class="fb-name">Clases<span>De10</span></div>
       <p>Conectamos familias con profesores particulares en Madrid y toda España.</p>
     </div>
     <div class="footer-col">
-      <h4>Clases</h4>
+      <h3>Clases</h3>
       <ul>
-        <li><a href="clases-particulares/matematicas-madrid.html">Matemáticas</a></li>
-        <li><a href="clases-particulares/ingles-madrid.html">Inglés</a></li>
-        <li><a href="clases-particulares/bachillerato-madrid.html">Bachillerato</a></li>
-        <li><a href="clases-particulares/selectividad-madrid.html">Selectividad (EBAU)</a></li>
+        <li><a href="/clases-particulares/matematicas">Matemáticas</a></li>
+        <li><a href="/clases-particulares/ingles">Inglés</a></li>
+        <li><a href="/clases-particulares/bachillerato">Bachillerato</a></li>
+        <li><a href="/clases-particulares/selectividad">Selectividad (EBAU)</a></li>
         <li><a href="clases-particulares/">Ver todas →</a></li>
       </ul>
     </div>
     <div class="footer-col">
-      <h4>Contacto</h4>
+      <h3>Contacto</h3>
       <ul>
         <li><a href="mailto:contacto.clasesde10@gmail.com">contacto.clasesde10@gmail.com</a></li>
-        <li><a href="contacto.html">Formulario de contacto</a></li>
-        <li><a href="terminos.html">Términos de uso</a></li>
-        <li><a href="privacidad.html">Privacidad</a></li>
-        <li><a href="cookies.html">Cookies</a></li>
+        <li><a href="/sobre-nosotros">Sobre nosotros</a></li>
+        <li><a href="/contacto">Formulario de contacto</a></li>
+        <li><a href="/terminos">Términos de uso</a></li>
+        <li><a href="/privacidad">Privacidad</a></li>
+        <li><a href="/cookies">Cookies</a></li>
       </ul>
     </div>
   </div>

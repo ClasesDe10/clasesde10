@@ -9,7 +9,7 @@
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
-} from './trust-engine.js';
+} from './trust-engine.js?v=20260808-copy-cleanup';
 import { normalizeDocumentRecord } from './document-center-engine.js';
 
 const VERIFIED_DOCUMENT_STATUSES = new Set(['validado', 'verificado', 'aprobado', 'approved', 'verified']);
@@ -84,6 +84,24 @@ function booleanKnown(value) {
   if (value === true || value === false) return true;
   const text = cleanText(value, 40).toLowerCase();
   return ['si', 'no', 'true', 'false', '1', '0'].includes(text);
+}
+
+function hasTeacherPayoutPreference(profile = {}) {
+  const frequency = cleanText(firstValue(profile, [
+    'payoutFrequency',
+    'frecuencia_cobro_profesor',
+    'payoutCadence',
+    'cobro_frecuencia',
+    'paymentFrequency',
+  ]), 40).toLowerCase();
+  const anchorDate = cleanText(firstValue(profile, [
+    'payoutAnchorDate',
+    'fecha_inicio_cobro_profesor',
+    'teacherPayoutAnchorDate',
+    'cobro_fecha_inicio',
+  ]), 20).slice(0, 10);
+  const validFrequency = ['quincenal', 'mensual', 'biweekly', 'fortnightly', 'monthly', 'mes'].includes(frequency);
+  return validFrequency && /^\d{4}-\d{2}-\d{2}$/.test(anchorDate);
 }
 
 function documentStatus(doc) {
@@ -162,8 +180,8 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     { key: 'nombre', label: 'Nombre y apellidos completos', weight: 6, required: true, complete: hasText(profile.nombre, 2) && hasText(profile.apellidos, 2) },
     { key: 'telefono', label: 'Telefono valido', weight: 7, required: true, complete: phone.valid },
     { key: 'foto', label: 'Foto de perfil clara', weight: 7, required: true, complete: hasText(firstValue(profile, ['foto_url', 'photoUrl']), 20) },
-    { key: 'direccion', label: 'Direccion, ciudad y zona', weight: 8, required: true, complete: hasText(firstValue(profile, ['direccion', 'address']), 5) && hasText(firstValue(profile, ['ciudad', 'city']), 2) && postalCode.valid && hasText(firstValue(profile, ['zona', 'zone']), 2) },
-    { key: 'formacion', label: 'Formacion principal, estudio exacto, colegio y universidad/centro', weight: 10, required: true, complete: hasText(firstValue(profile, ['nivel_estudios', 'studyLevel']), 2) && hasText(firstValue(profile, ['estudio_exacto', 'exactStudy', 'titulacion']), 4) && hasText(schoolName, 4) && hasText(studyCenter, 4) },
+    { key: 'direccion', label: 'Direccion, ciudad y codigo postal', weight: 8, required: true, complete: hasText(firstValue(profile, ['direccion', 'address']), 5) && hasText(firstValue(profile, ['ciudad', 'city']), 2) && postalCode.valid },
+    { key: 'formacion', label: 'Colegio, universidad/centro y grado o titulacion', weight: 10, required: true, complete: hasText(firstValue(profile, ['estudio_exacto', 'exactStudy', 'titulacion']), 4) && hasText(schoolName, 4) && hasText(studyCenter, 4) },
     { key: 'notas', label: 'Notas academicas dentro de 0-10', weight: 7, required: true, complete: isValidGrade(firstValue(profile, ['nota_bachillerato', 'bachilleratoGrade'])) && isValidGrade(firstValue(profile, ['nota_media_universidad', 'universityAverageGrade'])) },
     { key: 'bio', label: 'Presentacion profesional de al menos 40 caracteres', weight: 8, required: true, complete: hasText(profile.bio, 40) },
     { key: 'experiencia', label: 'Anios de experiencia validos', weight: 5, required: true, complete: Number(firstValue(profile, ['experiencia_anios', 'experienceYears'])) >= 0 },
@@ -171,6 +189,7 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
     { key: 'niveles', label: 'Niveles compatibles', weight: 7, required: true, complete: levels.length > 0 },
     { key: 'disponibilidad', label: 'Disponibilidad real', weight: 7, required: true, complete: hasAvailability },
     { key: 'bizum', label: 'Bizum confirmado', weight: 4, required: true, complete: profile.acepta_bizum === true || profile.hasBizum === true },
+    { key: 'payout', label: 'Dia de cobro definido', weight: 4, required: true, complete: hasTeacherPayoutPreference(profile) },
     { key: 'movilidad', label: 'Movilidad presencial declarada', weight: 3, required: false, complete: carKnown },
     { key: 'especialidades', label: 'Especialidades concretas', weight: 4, required: false, complete: specialties.length > 0 },
     { key: 'idiomas', label: 'Idiomas de atencion', weight: 3, required: false, complete: languages.length > 0 },
@@ -234,13 +253,14 @@ export function evaluateTeacherProfileProfessional(profile = {}, docs = [], stat
       universityAverageGrade: parseGrade(firstValue(profile, ['nota_media_universidad', 'universityAverageGrade'])),
     },
     indicators: [
-      trustIndicator('Identidad documentada', identityDoc, identityVerified ? 'Validada por admin' : identityDoc ? 'Pendiente de validacion' : 'Sin documento'),
-      trustIndicator('Expediente academico', academicDoc, academicVerified ? 'Validado por admin' : academicDoc ? 'Pendiente de validacion' : 'Sin notas/expediente'),
-      trustIndicator('Idiomas certificados', languageDoc, languageVerified ? 'Validado por admin' : languageDoc ? 'Pendiente de validacion' : 'Sin certificado'),
+      trustIndicator('Identidad documentada', identityDoc, identityVerified ? 'Validada por el equipo' : identityDoc ? 'Pendiente de validación' : 'Sin documento'),
+      trustIndicator('Expediente académico', academicDoc, academicVerified ? 'Validado por el equipo' : academicDoc ? 'Pendiente de validación' : 'Sin notas o expediente'),
+      trustIndicator('Idiomas certificados', languageDoc, languageVerified ? 'Validado por el equipo' : languageDoc ? 'Pendiente de validación' : 'Sin certificado'),
       trustIndicator('Referencias', referenceDoc, referenceDoc ? 'Subida para revision' : 'Sin referencia'),
       trustIndicator('Foto y contacto', hasText(firstValue(profile, ['foto_url', 'photoUrl']), 20) && phone.valid),
       trustIndicator('Movilidad declarada', carKnown, carKnown ? 'Coche/transporte indicado' : 'Sin declarar'),
-      trustIndicator('Perfil completo para matching', summary.complete),
+      trustIndicator('Dia de cobro definido', hasTeacherPayoutPreference(profile), hasTeacherPayoutPreference(profile) ? 'Fijo' : 'Pendiente'),
+      trustIndicator('Perfil completo', summary.complete),
       trustIndicator('Especializacion visible', specialties.length > 0 || certifications.length > 0),
       trustIndicator('Historial operativo', Number(trustProfile.metrics.completedClasses || 0) > 0, `${trustProfile.metrics.completedClasses || 0} clase(s)`),
       trustIndicator('Baja cancelacion', (trustProfile.metrics.cancellationRate ?? 0) <= 0.1, `${Math.round((trustProfile.metrics.cancellationRate ?? 0) * 100)}%`),
@@ -261,7 +281,7 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
     { key: 'nombre', label: 'Nombre y apellidos completos', weight: 9, required: true, complete: hasText(profile.nombre, 2) && hasText(profile.apellidos, 2) },
     { key: 'telefono', label: 'Telefono valido', weight: 10, required: true, complete: phone.valid },
     { key: 'direccion', label: 'Direccion, ciudad y codigo postal', weight: 14, required: true, complete: hasText(firstValue(profile, ['direccion', 'address']), 5) && hasText(firstValue(profile, ['ciudad', 'city']), 2) && postalCode.valid },
-    { key: 'zona', label: 'Zona/barrio para matching presencial', weight: 8, required: true, complete: hasText(firstValue(profile, ['zona', 'zone']), 2) },
+    { key: 'zona', label: 'Zona/barrio para clases presenciales', weight: 8, required: true, complete: hasText(firstValue(profile, ['zona', 'zone']), 2) },
     { key: 'contacto', label: 'Canal preferido de contacto', weight: 7, required: true, complete: hasText(firstValue(profile, ['contacto_preferido', 'preferredContact']), 3) },
     { key: 'emergencia', label: 'Contacto alternativo o de emergencia', weight: 8, required: false, complete: hasText(firstValue(profile, ['emergencyContactName', 'contacto_emergencia_nombre']), 2) && validatePhone(firstValue(profile, ['emergencyContactPhone', 'contacto_emergencia_telefono'])).valid },
     { key: 'alumnos', label: 'Al menos un alumno activo', weight: 12, required: false, complete: hasStudent },
@@ -312,9 +332,9 @@ export function evaluateFamilyProfileProfessional(profile = {}, students = [], d
     },
     indicators: [
       trustIndicator('Contacto operativo', phone.valid),
-      trustIndicator('Direccion para matching', postalCode.valid && hasText(firstValue(profile, ['zona', 'zone']), 2)),
+      trustIndicator('Dirección para clases presenciales', postalCode.valid && hasText(firstValue(profile, ['zona', 'zone']), 2)),
       trustIndicator('Alumno registrado', hasStudent),
-      ...(identityDoc ? [trustIndicator('Documento opcional', identityVerified, identityVerified ? 'Validado por admin' : 'Pendiente de validacion')] : []),
+      ...(identityDoc ? [trustIndicator('Documento opcional', identityVerified, identityVerified ? 'Validado por el equipo' : 'Pendiente de validación')] : []),
       trustIndicator('Preferencias claras', hasText(firstValue(profile, ['notas_perfil', 'profileNotes']), 20)),
       trustIndicator('Pagos sin incidencias', !trustProfile.metrics.pendingPayments, trustProfile.metrics.pendingPayments ? `${trustProfile.metrics.pendingPayments} pendiente(s)` : 'Al dia'),
     ],

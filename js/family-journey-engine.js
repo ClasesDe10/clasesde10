@@ -237,7 +237,7 @@ function stageCopy(stage, context = {}) {
     },
     waiting_assignment: {
       title: 'Solicitud recibida',
-      body: 'El equipo esta revisando el matching. Cuando haya profesor asignado, veras el chat, el calendario y los siguientes pasos aqui.',
+      body: 'Estamos buscando un profesor compatible. Cuando esté asignado, verás aquí el chat, el calendario y los siguientes pasos.',
       primary: buildAction('open_requests', 'Ver solicitud', 'Comprueba el estado sin perder el hilo.', 'solicitudes', 'secondary'),
     },
     chat_needed: {

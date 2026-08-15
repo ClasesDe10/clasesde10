@@ -1,6 +1,8 @@
 async (page) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.locator('[data-section="calendario"]').first().click();
+  await page.waitForFunction(() => window.__cd10AdminReady && typeof window.cd10AdminGoTo === 'function', null, { timeout: 20000 });
+  await page.evaluate(() => window.cd10AdminGoTo('calendario'));
+  await page.waitForFunction(() => document.querySelector('#topbar-title')?.textContent?.includes('Calendario'), null, { timeout: 15000 });
   await page.waitForFunction(() => {
     const section = document.querySelector('#section-calendario');
     const calendar = document.querySelector('#calendario-wrapper .calendar-wrapper');
@@ -8,8 +10,18 @@ async (page) => {
   }, null, { timeout: 20000 });
 
   const legend = await page.locator('.calendar-legend').textContent().catch(() => '');
-  if (!/En revision/i.test(legend) || !/Liquidar profesor/i.test(legend) || !/Liquidada/i.test(legend)) {
+  for (const label of ['Falta importe', 'Vencida/incidencia', 'En revision', 'Pendiente', 'Liquidar profesor', 'Liquidada', 'Dia pago familia', 'Cobro profesor']) {
+    if (!legend.includes(label)) {
+      throw new Error(`Economic calendar legend is missing "${label}": ${legend}`);
+    }
+  }
+  const legendClassCount = await page.locator('.calendar-legend .calendar-legend-item').count();
+  if (legendClassCount < 8) {
     throw new Error(`Economic calendar legend is incomplete: ${legend}`);
+  }
+  const commandBar = await page.locator('.admin-calendar-command-bar').textContent().catch(() => '');
+  if (!/Detalle clases/i.test(commandBar) || !/Detalle pagos/i.test(commandBar)) {
+    throw new Error(`Admin calendar command bar is incomplete: ${commandBar.slice(0, 220)}`);
   }
   const monthKpis = await page.locator('#admin-calendar-month-summary .admin-calendar-kpi').count();
   const monthSummary = await page.locator('#admin-calendar-month-summary').textContent().catch(() => '');
@@ -41,11 +53,14 @@ async (page) => {
       throw new Error(`Economic day summary did not render: ${detailText.slice(0, 220)}`);
     }
   }
+  const screenshotPath = 'output/playwright/admin-calendar-economic-polish.png';
+  await page.screenshot({ path: screenshotPath, scale: 'css' });
 
   return {
     section: await page.locator('#topbar-title').textContent().catch(() => ''),
     legend,
     clickedDate,
     kpis,
+    screenshotPath,
   };
 }

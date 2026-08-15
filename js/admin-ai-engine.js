@@ -5,18 +5,17 @@
  * structured platform data instead of inventing with a generic LLM.
  */
 
-export const ADMIN_AI_VERSION = 'admin_ai_ops_v1';
+export const ADMIN_AI_VERSION = 'admin_ai_ops_v3_solution_finder';
 
 export const ADMIN_AI_EXAMPLES = [
+  'Ha pasado algo raro con un pago: cual es la mejor solucion?',
+  'Una familia tiene un justificante rechazado, que hago?',
+  'Una clase no aparece en el calendario, como lo arreglo?',
+  'Sale missing or insufficient permissions, que solucion aplico?',
+  'Que deberia revisar hoy?',
+  'Como va el negocio?',
   'Que profesores llevan mas de un mes sin recibir alumnos?',
   'Que familias tienen pagos pendientes?',
-  'Que profesores tienen peor tasa de respuesta?',
-  'Que incidencias se repiten mas?',
-  'Hazme un resumen de esta semana',
-  'Que usuarios podrian abandonar?',
-  'Que profesores deberia destacar?',
-  'Que ciudades estan creciendo mas?',
-  'Que asignaturas necesitan mas profesores?',
   'Que procesos pueden automatizarse?',
 ];
 
@@ -27,6 +26,8 @@ const VERIFIED_STATUSES = new Set(['verificado', 'verified', 'activo', 'active',
 const PAYMENT_PENDING_STATUSES = new Set(['pendiente', 'pending', 'solicitado', 'procesando', 'vencido', 'overdue', 'needs_review', 'requiere_accion']);
 const PAYMENT_DONE_STATUSES = new Set(['pagado', 'paid', 'validado', 'validated', 'succeeded', 'completado']);
 const INCIDENT_OPEN_STATUSES = new Set(['abierta', 'open', 'pendiente', 'pending', 'en_proceso', 'review', 'en_revision']);
+const DOCUMENT_REVIEW_STATUSES = new Set(['', 'pendiente', 'pending', 'pendiente_revision', 'pending_review', 'en_revision', 'revision', 'revisar', 'subido', 'uploaded', 'nuevo', 'new']);
+const DOCUMENT_CLOSED_STATUSES = new Set(['validado', 'verificado', 'verified', 'aprobado', 'approved', 'rechazado', 'rejected', 'no_valido', 'invalid', 'caducado', 'expired']);
 
 function clean(value, max = 4000) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -177,6 +178,24 @@ function isTeacherPayout(item = {}) {
 
 function isOpenIncident(item = {}) {
   return INCIDENT_OPEN_STATUSES.has(statusOf(item));
+}
+
+function isPendingDocumentReview(item = {}) {
+  const status = statusOf(item);
+  if (DOCUMENT_CLOSED_STATUSES.has(status)) return false;
+  if (DOCUMENT_REVIEW_STATUSES.has(status)) return true;
+  return /pendiente|pending|revision|review|subido|uploaded|nuevo/.test(status);
+}
+
+function isUnassignedRequest(item = {}) {
+  return ['nueva', 'nuevo', 'pendiente', 'open', ''].includes(statusOf(item))
+    && !first(item.assignedTeacherUid, item.profesor_asignado_id, item.teacherUid, item.profesor_id);
+}
+
+function isClassNeedingClosure(item = {}) {
+  if (isCompletedClass(item) || isCancelledClass(item)) return false;
+  const age = daysSince(classDate(item));
+  return age !== null && age > 1;
 }
 
 function idFrom(item = {}, fields = []) {
@@ -549,6 +568,9 @@ export function buildAdminAiContext(rawData = {}, options = {}) {
   const subjectDemand = buildSubjectDemand(data, teacherStats);
   const cityGrowth = buildCityGrowth(data, now);
   const incidentGroups = buildIncidentGroups(data);
+  const pendingDocuments = data.documents.filter(isPendingDocumentReview);
+  const unassignedRequests = data.requests.filter(isUnassignedRequest);
+  const classesNeedingClosure = data.classes.filter(isClassNeedingClosure);
   const weekStart = startOfWeek(now);
   const weekClasses = data.classes.filter((item) => inRange(classDate(item), weekStart, now));
   const weekPayments = data.payments.filter((item) => inRange(createdAt(item), weekStart, now));
@@ -579,7 +601,13 @@ export function buildAdminAiContext(rawData = {}, options = {}) {
       incidents: weekIncidents,
       openIncidents: data.incidents.filter(isOpenIncident),
       revenue: weekRevenue,
+      pendingDocuments,
+      unassignedRequests,
+      classesNeedingClosure,
     },
+    pendingDocuments,
+    unassignedRequests,
+    classesNeedingClosure,
   };
 }
 
@@ -595,6 +623,10 @@ function detectIntent(question) {
   if (/(ciudad|zona|localidad|creciendo|crecen|crecimiento)/.test(q)) return 'city_growth';
   if (/(asignatura|materia|profesores|oferta|demanda)/.test(q) && /(necesita|faltan|mas|demanda)/.test(q)) return 'subject_supply_gap';
   if (/(automat|proceso|ahorrar|manual|operacion)/.test(q)) return 'automation_opportunities';
+  if (/(negocio|empresa|dinero|finanza|ingreso|factura|facturacion|margen|rentab|caja|economia|como va|estamos bien)/.test(q)) return 'business_health';
+  if (/(confianza|calidad|perfil|documento|verificacion|verificado|profesional|real|fiable|seguridad|reputacion)/.test(q)) return 'trust_quality';
+  if (solutionQuestionLooksLikeIncident(question)) return 'solution_finder';
+  if (/(prioridad|prioridades|urgente|importante|revisar|mirar|atencion|preocupa|raro|mal|peor|bloque|que hago|por donde empiezo|hoy|ahora|que pasa|que esta pasando|diagnostico|situacion)/.test(q)) return 'today_priorities';
   return 'general_health';
 }
 
@@ -627,6 +659,10 @@ function inferSources(intent) {
     city_growth: ['familias', 'solicitudes', 'leadsPublicos', 'clases'],
     subject_supply_gap: ['solicitudes', 'profesores', 'solicitudMatches'],
     automation_opportunities: ['pagos', 'solicitudes', 'documentos', 'incidencias', 'clases', 'automationEvents', 'internalAiInsights'],
+    solution_finder: ['clases', 'pagos', 'incidencias', 'documentos', 'solicitudes', 'profesores', 'familias', 'chats'],
+    today_priorities: ['pagos', 'incidencias', 'solicitudes', 'documentos', 'clases', 'profesores', 'chats'],
+    business_health: ['clases', 'pagos', 'solicitudes', 'familias', 'profesores', 'leadsPublicos'],
+    trust_quality: ['profesores', 'familias', 'documentos', 'pagos', 'incidencias', 'chats'],
     general_health: ['clases', 'pagos', 'solicitudes', 'profesores', 'familias', 'internalAiInsights'],
   };
   return base[intent] || base.general_health;
@@ -860,10 +896,403 @@ function answerAutomationOpportunities(context) {
   );
 }
 
+function solutionQuestionLooksLikeIncident(question) {
+  const q = normalize(question);
+  return /(solucion|resolver|resuelv|arregl|que hago|como lo hago|como arreglo|como soluciono|ha pasado|pasa que|fall|error|no funciona|funcionando peor|va mal|esta mal|se ve mal|no aparece|no deja|bloque|raro|problema|incidencia|conflicto|missing|permission|permiso|insufficient)/.test(q);
+}
+
+function solutionSignals(context) {
+  const pendingFamilyAmount = context.familyStats.reduce((sum, item) => sum + item.pendingAmount, 0);
+  return {
+    pendingFamilies: context.familyStats.filter((item) => item.pendingPayments.length).length,
+    overdueFamilies: context.familyStats.filter((item) => item.overduePayments.length).length,
+    pendingFamilyAmount,
+    openIncidents: context.incidentGroups.reduce((sum, item) => sum + item.open, 0),
+    criticalIncidents: context.incidentGroups.reduce((sum, item) => sum + item.critical, 0),
+    unassignedRequests: context.unassignedRequests.length,
+    pendingDocuments: context.pendingDocuments.length,
+    classesNeedingClosure: context.classesNeedingClosure.length,
+    slowTeachers: context.teacherStats.filter((item) => item.active && item.responseHours > 24).length,
+    inactiveTeachers: context.teacherStats.filter((item) => item.active && (item.noNewStudentDays === null || item.noNewStudentDays > 30)).length,
+  };
+}
+
+function solutionPlaybookForQuestion(question, context) {
+  const q = normalize(question);
+  const signals = solutionSignals(context);
+  const includes = (...patterns) => patterns.some((pattern) => pattern.test(q));
+  if (includes(/permission|permiso|insufficient|missing|no autorizado|no tienes permiso|rules|reglas/)) {
+    return {
+      key: 'permissions',
+      title: 'Permisos o reglas bloqueando una accion',
+      section: 'configuracion',
+      risk: 'Puede ser un fallo de reglas, rol incorrecto o usuario con perfil incompleto.',
+      diagnosis: 'Primero hay que distinguir si la accion deberia estar permitida para ese rol. Si si, el problema suele estar en userUid/profileUid, rol duplicado o regla de Firestore/Storage demasiado estricta.',
+      solution: 'Validar rol y perfil del usuario, reproducir con esa cuenta, localizar coleccion/escritura exacta y ajustar reglas o payload para que use el owner correcto.',
+      steps: [
+        'Reproducir la accion con la cuenta afectada y anotar pantalla, coleccion y boton exacto.',
+        'Comprobar users/{uid}: role/rol, active y que exista perfil en familias/profesores segun corresponda.',
+        'Revisar que el documento que se escribe lleva familyUid/teacherUid/userUid correcto, no un id generico ni vacio.',
+        'Si el dato es correcto y falla, ajustar regla de seguridad o ruta de escritura; si el dato es incorrecto, corregir el payload.',
+      ],
+      verify: 'Repetir la misma accion con la misma cuenta y confirmar que no sale el toast de permisos.',
+      fallback: 'Si afecta a pagos, clases o documentos reales, crear incidencia tecnica y resolver antes de pedir al usuario que reintente.',
+    };
+  }
+  if (includes(/justificante|bizum|pago|impago|cobro|pagad|rechazad|validar|dinero|deuda/)) {
+    return {
+      key: 'payments',
+      title: 'Pago, impago o justificante',
+      section: 'calendario',
+      risk: `${signals.pendingFamilies} familia(s) con pagos pendientes; ${signals.overdueFamilies} vencida(s); ${formatEuros(signals.pendingFamilyAmount)} pendiente.`,
+      diagnosis: 'El problema suele ser una de estas tres cosas: justificante rechazado, pago sin asociar al dia de pago correcto o clases pendientes arrastradas al siguiente vencimiento.',
+      solution: 'Dejar un unico flujo: dia de pago -> justificante -> clases cubiertas -> validacion admin. Si se rechaza, reabrir subida y pedir justificante valido con motivo claro.',
+      steps: [
+        'Abrir el calendario del admin en el dia de pago de la familia y revisar las clases incluidas desde el vencimiento anterior.',
+        'Si el justificante existe pero no es valido, marcarlo como rechazado con motivo concreto y reabrir subida para la familia.',
+        'Si falta asociacion, enlazar el pago a las clases correctas o moverlo a revision manual.',
+        'Si hay impago acumulado, incluirlo en el siguiente dia de pago con desglose de fechas e importe.',
+      ],
+      verify: 'La familia debe ver posibilidad de subir justificante; el admin debe ver el justificante en el dia de pago; el profesor no debe ver estados de justificante.',
+      fallback: 'Si supera dos semanas o varios avisos, mandar aviso cordial de continuidad del profesor antes de pausar nuevas clases.',
+    };
+  }
+  if (includes(/calendario|clase|recurrente|semanal|asistencia|no dada|dada|horario|fecha|no aparece|aparece/)) {
+    return {
+      key: 'classes_calendar',
+      title: 'Clase, recurrencia o calendario',
+      section: 'calendario',
+      risk: `${signals.classesNeedingClosure} clase(s) antiguas sin cierre claro.`,
+      diagnosis: 'Si una clase no aparece, casi siempre falta sincronizar la recurrencia, la relacion profesor-familia, o la fecha/hora quedo fuera del rango que carga el calendario.',
+      solution: 'Normalizar la clase como evento unico con teacherUid, familyUid, studentId, fecha, inicio, fin, precio proporcional y estado; despues regenerar o sincronizar recurrencias.',
+      steps: [
+        'Comprobar que la relacion profesor-familia-alumno esta activa y sin ids genericos.',
+        'Verificar fecha, hora_inicio, hora_fin, teacherUid, familyUid y studentId en la clase.',
+        'Si viene de una recurrencia, regenerar instancias semanales futuras desde la regla aceptada.',
+        'Si una parte marca dada y otra no dada, abrir incidencia de asistencia para que admin decida antes de mover pagos.',
+      ],
+      verify: 'Debe aparecer en calendario de familia y profesor con hora, alumno, profesor y datos minimos de pago/asistencia.',
+      fallback: 'Si no se puede reconstruir con seguridad, archivar la instancia defectuosa y crear una nueva desde calendario.',
+    };
+  }
+  if (includes(/chat|mensaje|llamada|audio|foto|archivo|adjuntar|telefono|videollamada/)) {
+    return {
+      key: 'chat_calls',
+      title: 'Chat, adjuntos o llamadas',
+      section: 'chats',
+      risk: 'Puede afectar confianza porque familia y profesor no coordinan bien si el chat falla.',
+      diagnosis: 'El origen suele ser chat sin participantes correctos, asignacion no enlazada o permisos de microfono/archivo.',
+      solution: 'Reenlazar chat a la relacion activa, asegurar participantUids correctos y mantener llamada por canal interno/WebRTC sin exponer telefonos reales.',
+      steps: [
+        'Abrir la conversacion y comprobar familyUid, teacherUid, studentId y participantUids.',
+        'Si falta profesor/familia, reconstruir el chat desde la asignacion activa.',
+        'Para llamada, usar sala interna y permiso de microfono; nunca telefonos reales de usuarios.',
+        'Si falla adjunto/audio, comprobar storagePath, permisos de Storage y tamano/tipo de archivo.',
+      ],
+      verify: 'Ambas partes ven el mismo chat, pueden enviar mensaje y el boton de llamada abre la llamada interna esperada.',
+      fallback: 'Si la llamada no conecta, dejar mensaje automatico con siguiente hora propuesta y crear incidencia tecnica.',
+    };
+  }
+  if (includes(/disponibilidad|franja|horario profesor|no puedo anadir|no deja anadir/)) {
+    return {
+      key: 'availability',
+      title: 'Disponibilidad del profesor',
+      section: 'profesores',
+      risk: 'Sin disponibilidad fiable, el matching y las clases puntuales se vuelven confusos.',
+      diagnosis: 'Suele fallar por formato de horas, solape/duplicado, perfil de profesor no enlazado o permisos de escritura.',
+      solution: 'Guardar franjas simples con dia, inicio, fin y teacherUid correcto; validar que fin sea posterior a inicio y no duplicar.',
+      steps: [
+        'Comprobar que el usuario tiene perfil de profesor y teacherUid estable.',
+        'Validar dia_semana, hora_inicio y hora_fin antes de guardar.',
+        'Evitar duplicados exactos y mostrar error claro si la franja ya existe.',
+        'Probar despues desde ordenador y movil para confirmar que no hay bloqueo visual.',
+      ],
+      verify: 'La franja nueva aparece inmediatamente en Disponibilidad y el chat/clases puntuales la reconocen.',
+      fallback: 'Si falla por reglas, aplicar el playbook de permisos con la coleccion disponibilidad.',
+    };
+  }
+  if (includes(/solicitud|matching|asignar|profesor adecuado|sin profesor|candidato|proponer profesor/)) {
+    return {
+      key: 'matching',
+      title: 'Solicitud o matching sin cerrar',
+      section: 'solicitudes',
+      risk: `${signals.unassignedRequests} solicitud(es) sin profesor cerrado.`,
+      diagnosis: 'Puede faltar disponibilidad, materia compatible, distancia correcta, perfil verificado o decision admin.',
+      solution: 'Comparar candidatos por compatibilidad real y dejar siguiente paso: asignar, pedir mas datos o ampliar busqueda.',
+      steps: [
+        'Abrir solicitud y revisar materia, nivel, modalidad, ubicacion y disponibilidad.',
+        'Ordenar profesores por distancia, materia, nivel, confianza, respuesta y disponibilidad.',
+        'Si no hay candidato fuerte, ampliar criterios o pedir dato que falta a la familia.',
+        'Si hay candidato fuerte, asignarlo y crear chat/calendario con siguiente paso claro.',
+      ],
+      verify: 'Familia y profesor deben ver chat y propuesta; admin debe ver solicitud con estado cerrado o siguiente accion definida.',
+      fallback: 'Si el matching automatico no decide, crear tarea manual con los tres mejores candidatos y motivo de descarte.',
+    };
+  }
+  if (includes(/documento|dni|titulo|certificado|revision|verificacion|perfil real|confianza/)) {
+    return {
+      key: 'documents',
+      title: 'Documento o verificacion de confianza',
+      section: 'documentos',
+      risk: `${signals.pendingDocuments} documento(s) pendiente(s) de revision.`,
+      diagnosis: 'Normalmente falta revisar el archivo, enlazarlo al usuario correcto o pedir una version legible/valida.',
+      solution: 'Revisar documento desde admin, validar si es correcto o rechazar con motivo concreto y solicitud de nueva subida.',
+      steps: [
+        'Abrir Documentos y localizar el usuario/documento pendiente.',
+        'Comprobar legibilidad, tipo de documento, fecha y que pertenece al usuario correcto.',
+        'Validar si cumple; si no, rechazar con motivo claro y reabrir subida.',
+        'Actualizar confianza del perfil solo cuando el documento quede validado.',
+      ],
+      verify: 'El badge de Documentos baja y el usuario queda con estado documental coherente.',
+      fallback: 'Si el documento esta huerfano o mal enlazado, reasignarlo o archivarlo antes de validar.',
+    };
+  }
+  if (includes(/importe|precio|margen|profesor cobra|comision|duracion|minutos|tarifa|finanza/)) {
+    return {
+      key: 'finance_amounts',
+      title: 'Importes, duracion o margen',
+      section: 'finanzas',
+      risk: 'Si el total no es proporcional a la duracion, se descuadra admin, familia y profesor.',
+      diagnosis: 'El fallo suele venir de guardar total fijo en vez de precio/hora y duracion real.',
+      solution: 'Mantener precio por hora y calcular siempre total familia, cobra profesor y margen segun minutos reales de la clase.',
+      steps: [
+        'Comprobar hora_inicio y hora_fin para calcular duracion en minutos.',
+        'Aplicar total = precioHora * duracionHoras y profesor = tarifaProfesorHora * duracionHoras.',
+        'Recalcular margen y porcentaje en admin, familia y profesor.',
+        'Buscar clases antiguas con duracion rara y totales no proporcionales.',
+      ],
+      verify: 'Una clase de menos de una hora debe mostrar menos total, menos cobra profesor y margen proporcional.',
+      fallback: 'Si faltan tarifas, marcar como falta importe y no liquidar hasta corregir.',
+    };
+  }
+  if (includes(/movil|responsive|tres rayitas|hamburger|se ve mal|borroso|cuadro|sale del recuadro|overflow/)) {
+    return {
+      key: 'responsive',
+      title: 'Problema visual o responsive',
+      section: 'operaciones',
+      risk: 'Si el panel se rompe en movil, el usuario pierde confianza aunque la logica este bien.',
+      diagnosis: 'Normalmente hay ancho fijo, texto sin wrap, overlay con filtro/backdrop o panel que no respeta min-width:0.',
+      solution: 'Reproducir en viewport movil, localizar el elemento con overflow y corregir layout con grid flexible, wrap y sin filtros en el drawer.',
+      steps: [
+        'Reproducir en movil instalado y navegador con la misma seccion.',
+        'Medir scrollWidth vs clientWidth y localizar el elemento que se sale.',
+        'Eliminar anchos fijos problematicos y asegurar min-width:0/overflow-wrap:anywhere.',
+        'Probar las tres rayitas en admin, familia y profesor despues de corregir.',
+      ],
+      verify: 'No debe haber scroll horizontal, blur raro ni elementos saliendo del recuadro.',
+      fallback: 'Si solo falla instalada como PWA, revisar service worker/cache y manifest antes de tocar layout.',
+    };
+  }
+  if (includes(/worker|automatizacion|github actions|recordatorio|notificacion|no salta|tarea|reintento|job/)) {
+    return {
+      key: 'automation',
+      title: 'Automatizacion, aviso o tarea que no se ejecuta',
+      section: 'operaciones',
+      risk: 'Recordatorios, pagos, matching o reputacion pueden quedarse parados.',
+      diagnosis: 'Puede fallar el worker gratuito, el job atascado, la idempotencia o la condicion que dispara la notificacion.',
+      solution: 'Revisar latido de automatizacion, jobs pendientes/deadLetters y reencolar solo tras confirmar idempotencia.',
+      steps: [
+        'Comprobar ultimo automationEvent o ejecucion de GitHub Actions.',
+        'Revisar systemJobs/deadLetters si hay tareas atascadas.',
+        'Verificar la condicion concreta que deberia disparar el aviso.',
+        'Reencolar o ejecutar worker y confirmar que crea una sola notificacion.',
+      ],
+      verify: 'Debe aparecer el aviso/tarea esperado una vez, sin duplicados.',
+      fallback: 'Si afecta a pagos vencidos o clases sin cerrar, crear incidencia manual y resolver sin esperar al worker.',
+    };
+  }
+  return {
+    key: 'general',
+    title: 'Situacion operativa no clasificada',
+    section: 'incidencias',
+    risk: `${signals.openIncidents} incidencia(s) abierta(s), ${signals.pendingFamilies} familia(s) con pagos pendientes y ${signals.unassignedRequests} solicitud(es) sin cerrar.`,
+    diagnosis: 'Cuando el caso es ambiguo, hay que reducirlo a: que usuario afecta, que flujo bloquea, que dato esta incoherente y que siguiente paso deja el caso resuelto.',
+    solution: 'Crear un diagnostico corto, identificar el flujo afectado y aplicar el playbook mas cercano sin tocar datos que no entiendas.',
+    steps: [
+      'Anotar quien esta afectado: familia, profesor, alumno o admin.',
+      'Ubicar el flujo: calendario, pago, chat, documentos, solicitud, perfil o automatizacion.',
+      'Buscar el dato que no cuadra y compararlo en los paneles afectados.',
+      'Resolver con el minimo cambio verificable y dejar registro de causa y solucion.',
+    ],
+    verify: 'Repetir el flujo como el usuario afectado y comprobar que el estado queda claro.',
+    fallback: 'Si no hay seguridad, no inventar: abrir incidencia con evidencias y decidir manualmente.',
+  };
+}
+
+function answerSolutionFinder(context, question) {
+  const playbook = solutionPlaybookForQuestion(question, context);
+  const rows = [
+    row('Diagnostico probable', 'Causa', playbook.diagnosis, { section: playbook.section, tone: playbook.key === 'permissions' ? 'danger' : 'info' }),
+    row('Mejor solucion concreta', 'Solucion', playbook.solution, { section: playbook.section, tone: 'success' }),
+    ...playbook.steps.slice(0, 4).map((step, index) => row(`Paso ${index + 1}`, 'Accion', step, { section: playbook.section, tone: index === 0 ? 'warning' : 'info' })),
+    row('Comprobacion final', 'Verificar', playbook.verify, { section: playbook.section, tone: 'success' }),
+    row('Si no se resuelve', 'Escalar', playbook.fallback, { section: 'incidencias', tone: 'warning' }),
+  ];
+  return answerPayload(
+    context,
+    'solution_finder',
+    `Mejor solucion operativa: ${playbook.title}`,
+    `${playbook.risk} Mi recomendacion es: ${playbook.solution}`,
+    rows,
+    {
+      confidence: playbook.key === 'general' ? 'media' : 'alta',
+      actions: [
+        { label: 'Abrir area relacionada', section: playbook.section },
+        { label: 'Abrir incidencias', section: 'incidencias' },
+      ],
+      sourceCollections: ['clases', 'pagos', 'incidencias', 'documentos', 'solicitudes', 'profesores', 'familias', 'chats'],
+    },
+  );
+}
+
+function buildOperationalPriorityRows(context) {
+  const pendingFamilyAmount = context.familyStats.reduce((sum, item) => sum + item.pendingAmount, 0);
+  const overdueFamilies = context.familyStats.filter((item) => item.overduePayments.length);
+  const pendingFamilies = context.familyStats.filter((item) => item.pendingPayments.length);
+  const criticalIncidents = context.incidentGroups.reduce((sum, item) => sum + item.critical, 0);
+  const openIncidents = context.incidentGroups.reduce((sum, item) => sum + item.open, 0);
+  const slowTeachers = context.teacherStats.filter((item) => item.active && item.responseHours > 24);
+  const inactiveTeachers = context.teacherStats.filter((item) => item.active && (item.noNewStudentDays === null || item.noNewStudentDays > 30));
+
+  return [
+    pendingFamilies.length ? row(
+      'Cobros familiares',
+      `${formatEuros(pendingFamilyAmount)} pendiente`,
+      `${pendingFamilies.length} familia(s) con pagos pendientes; ${overdueFamilies.length} ya vencida(s). Prioridad: desbloquear caja y evitar impagos largos.`,
+      { section: 'calendario', tone: overdueFamilies.length ? 'danger' : 'warning', priority: overdueFamilies.length ? 100 : 82 },
+    ) : null,
+    openIncidents ? row(
+      'Incidencias abiertas',
+      `${openIncidents} abierta(s)`,
+      `${criticalIncidents} critica(s). Lo importante es resolver las que bloquean clase, pago o confianza de una familia/profesor.`,
+      { section: 'incidencias', tone: criticalIncidents ? 'danger' : 'warning', priority: criticalIncidents ? 96 : 78 },
+    ) : null,
+    context.unassignedRequests.length ? row(
+      'Solicitudes sin profesor cerrado',
+      `${context.unassignedRequests.length} solicitud(es)`,
+      'Hay demanda sin asignacion final. Conviene entrar, elegir profesor y dejar el siguiente paso cerrado.',
+      { section: 'solicitudes', tone: 'warning', priority: 76 },
+    ) : null,
+    context.pendingDocuments.length ? row(
+      'Documentos por revisar',
+      `${context.pendingDocuments.length} documento(s)`,
+      'Validar documentos reduce friccion de confianza y evita perfiles a medias.',
+      { section: 'documentos', tone: 'info', priority: 68 },
+    ) : null,
+    context.classesNeedingClosure.length ? row(
+      'Clases sin cierre claro',
+      `${context.classesNeedingClosure.length} clase(s)`,
+      'Son clases antiguas que no estan cerradas como realizadas o canceladas. Revisa asistencia y pago asociado.',
+      { section: 'calendario', tone: 'warning', priority: 66 },
+    ) : null,
+    slowTeachers.length ? row(
+      'Profesores lentos respondiendo',
+      `${slowTeachers.length} profesor(es)`,
+      'Si tardan mas de 24h, pueden enfriar familias o solicitudes. Revisa chat o reemplazo si hay bloqueo.',
+      { section: 'profesores', tone: 'warning', priority: 58 },
+    ) : null,
+    inactiveTeachers.length ? row(
+      'Profesores sin alumnos recientes',
+      `${inactiveTeachers.length} profesor(es)`,
+      'Puede haber oferta buena parada. Revisa si conviene reactivar, pedir disponibilidad o no mostrarlos tanto.',
+      { section: 'profesores', tone: 'info', priority: 44 },
+    ) : null,
+  ].filter(Boolean).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+}
+
+function answerTodayPriorities(context) {
+  const rows = buildOperationalPriorityRows(context);
+  const top = rows[0];
+  return answerPayload(
+    context,
+    'today_priorities',
+    'Prioridades operativas de hoy',
+    top
+      ? `Lo primero que revisaria es ${top.label.toLowerCase()}: ${top.metric}. Despues seguiria el orden de esta lista.`
+      : 'No veo bloqueos claros ahora mismo. Mantendria una revision rapida de calendario, solicitudes y documentos.',
+    rows,
+    {
+      actions: [
+        { label: 'Abrir calendario', section: 'calendario' },
+        { label: 'Abrir incidencias', section: 'incidencias' },
+        { label: 'Abrir documentos', section: 'documentos' },
+      ],
+    },
+  );
+}
+
+function answerBusinessHealth(context) {
+  const pendingAmount = context.familyStats.reduce((sum, item) => sum + item.pendingAmount, 0);
+  const completedLast30 = context.data.classes
+    .filter(isCompletedClass)
+    .filter((item) => {
+      const age = daysSince(classDate(item));
+      return age !== null && age <= 30;
+    });
+  const revenueLast30 = completedLast30.reduce((sum, item) => sum + amountOf(item), 0);
+  const activeFamilies = context.familyStats.filter((item) => item.active).length;
+  const activeTeachers = context.teacherStats.filter((item) => item.active).length;
+  const activeVerifiedTeachers = context.teacherStats.filter((item) => item.active && item.verified).length;
+  const rows = [
+    row('Caja pendiente', formatEuros(pendingAmount), `${context.familyStats.filter((item) => item.pendingPayments.length).length} familia(s) tienen pagos pendientes.`, { section: 'calendario', tone: pendingAmount > 0 ? 'warning' : 'success' }),
+    row('Ingresos ultimos 30 dias', formatEuros(revenueLast30), `${completedLast30.length} clase(s) realizadas/completadas detectadas en el periodo.`, { section: 'finanzas', tone: revenueLast30 > 0 ? 'success' : 'warning' }),
+    row('Demanda nueva esta semana', `${context.week.requests.length + context.week.leads.length}`, `${context.week.requests.length} solicitud(es) y ${context.week.leads.length} lead(s) publico(s).`, { section: 'solicitudes', tone: (context.week.requests.length + context.week.leads.length) ? 'success' : 'info' }),
+    row('Solicitudes sin cerrar', `${context.unassignedRequests.length}`, 'Demanda que todavia no tiene profesor asignado de forma clara.', { section: 'solicitudes', tone: context.unassignedRequests.length ? 'warning' : 'success' }),
+    row('Base activa', `${activeFamilies} familias / ${activeTeachers} profesores`, `${activeVerifiedTeachers} profesor(es) activos verificados disponibles como oferta de confianza.`, { section: 'profesores', tone: activeVerifiedTeachers ? 'info' : 'warning' }),
+    row('Riesgo de abandono', `${context.familyStats.filter((item) => item.churnScore >= 40).length} usuario(s)`, 'Calculado por pagos, incidencias, inactividad y confianza.', { section: 'familias', tone: context.familyStats.some((item) => item.churnScore >= 70) ? 'danger' : 'info' }),
+  ];
+  return answerPayload(
+    context,
+    'business_health',
+    'Salud del negocio',
+    `Lectura rapida: ${formatEuros(revenueLast30)} realizados en los ultimos 30 dias, ${formatEuros(pendingAmount)} pendiente de cobro y ${context.unassignedRequests.length} solicitud(es) sin cerrar.`,
+    rows,
+    {
+      actions: [
+        { label: 'Abrir finanzas', section: 'finanzas' },
+        { label: 'Abrir calendario', section: 'calendario' },
+        { label: 'Abrir solicitudes', section: 'solicitudes' },
+      ],
+    },
+  );
+}
+
+function answerTrustQuality(context) {
+  const activeTeachers = context.teacherStats.filter((item) => item.active);
+  const verifiedTeachers = activeTeachers.filter((item) => item.verified);
+  const slowTeachers = activeTeachers.filter((item) => item.responseHours > 24);
+  const lowTrustTeachers = activeTeachers.filter((item) => item.trustScore > 0 && item.trustScore < 55);
+  const pendingPaymentFamilies = context.familyStats.filter((item) => item.pendingPayments.length);
+  const rows = [
+    row('Profesores verificados', `${verifiedTeachers.length}/${activeTeachers.length}`, 'Oferta activa con validacion suficiente para asignar con confianza.', { section: 'profesores', tone: activeTeachers.length && verifiedTeachers.length / activeTeachers.length < 0.7 ? 'warning' : 'success' }),
+    row('Documentos pendientes', `${context.pendingDocuments.length}`, 'Archivos que necesitan revision admin antes de subir confianza del perfil.', { section: 'documentos', tone: context.pendingDocuments.length ? 'warning' : 'success' }),
+    row('Respuesta lenta', `${slowTeachers.length} profesor(es)`, 'Mas de 24h de respuesta media o señal equivalente. Afecta mucho a sensacion de confianza.', { section: 'profesores', tone: slowTeachers.length ? 'warning' : 'success' }),
+    row('Perfiles con baja confianza', `${lowTrustTeachers.length} profesor(es)`, 'Confianza inferior a 55/100 en profesores activos.', { section: 'profesores', tone: lowTrustTeachers.length ? 'warning' : 'success' }),
+    row('Familias con friccion de pago', `${pendingPaymentFamilies.length}`, 'Pagos pendientes reducen confianza operativa y pueden acabar en incidencia.', { section: 'familias', tone: pendingPaymentFamilies.length ? 'warning' : 'success' }),
+    row('Incidencias abiertas', `${context.week.openIncidents.length}`, 'Problemas vivos que pueden afectar la percepcion de calidad.', { section: 'incidencias', tone: context.week.openIncidents.length ? 'warning' : 'success' }),
+  ];
+  return answerPayload(
+    context,
+    'trust_quality',
+    'Confianza y calidad de la plataforma',
+    `La confianza depende sobre todo de perfiles verificados, documentos revisados, respuesta rapida y pagos sin friccion. Ahora hay ${context.pendingDocuments.length} documento(s) pendiente(s) y ${slowTeachers.length} profesor(es) lentos respondiendo.`,
+    rows,
+    {
+      actions: [
+        { label: 'Abrir documentos', section: 'documentos' },
+        { label: 'Abrir profesores', section: 'profesores' },
+        { label: 'Abrir incidencias', section: 'incidencias' },
+      ],
+    },
+  );
+}
+
 function answerGeneralHealth(context) {
   const activeInternalInsights = (context.data.internalAiInsights || [])
     .filter((item) => ['', 'active', 'activa', 'open', 'abierta', 'pending', 'pendiente'].includes(statusOf(item)));
+  const priorityRows = buildOperationalPriorityRows(context).slice(0, 3);
   const rows = [
+    ...priorityRows,
     row('Profesores activos', `${context.teacherStats.filter((item) => item.active).length}`, `${context.teacherStats.filter((item) => item.verified).length} verificados.`, { section: 'profesores', tone: 'info' }),
     row('Familias activas', `${context.familyStats.filter((item) => item.active).length}`, `${context.familyStats.filter((item) => item.pendingPayments.length).length} con pagos pendientes.`, { section: 'familias', tone: 'info' }),
     row('Clases esta semana', `${context.week.classes.length}`, `${context.week.completedClasses.length} completadas, ${formatEuros(context.week.revenue)} realizado.`, { section: 'clases', tone: 'success' }),
@@ -874,9 +1303,17 @@ function answerGeneralHealth(context) {
     context,
     'general_health',
     'Estado general interpretado',
-    'Puedo responder mejor si preguntas por pagos, profesores, familias, incidencias, ciudades, asignaturas o automatizaciones.',
+    priorityRows.length
+      ? `Lectura general: hay ${priorityRows.length} foco(s) claros. El primero es ${priorityRows[0].label.toLowerCase()}: ${priorityRows[0].metric}.`
+      : 'Lectura general: no veo bloqueos fuertes; revisaria calendario, solicitudes y documentos como rutina.',
     rows,
-    { confidence: 'media' },
+    {
+      confidence: 'media',
+      actions: [
+        { label: 'Prioridades de hoy', section: 'operaciones' },
+        { label: 'Abrir calendario', section: 'calendario' },
+      ],
+    },
   );
 }
 
@@ -893,6 +1330,10 @@ export function answerAdminQuestion(question, rawData = {}, options = {}) {
   if (intent === 'city_growth') return answerCityGrowth(context);
   if (intent === 'subject_supply_gap') return answerSubjectSupplyGap(context);
   if (intent === 'automation_opportunities') return answerAutomationOpportunities(context);
+  if (intent === 'solution_finder') return answerSolutionFinder(context, question);
+  if (intent === 'today_priorities') return answerTodayPriorities(context);
+  if (intent === 'business_health') return answerBusinessHealth(context);
+  if (intent === 'trust_quality') return answerTrustQuality(context);
   return answerGeneralHealth(context);
 }
 

@@ -6,13 +6,19 @@
  * adapter.
  */
 
-import authAdapter from './adapters/firebase-auth-adapter.js?v=20260630-admin-switch';
+import authAdapter from './adapters/firebase-auth-adapter.js?v=20260815-onboarding-gate';
 import { trackAuthEvent } from './analytics-client.js?v=20260628-analytics';
 
 export const getSession = authAdapter.getSession;
 export const getUsuarioActual = authAdapter.getCurrentUser;
 export const requireAuth = authAdapter.requireAuth;
 export const onAuthChange = authAdapter.onAuthChange;
+export const completePasswordSetupLink = authAdapter.completePasswordSetupLink;
+export const getPasswordSetupEmail = authAdapter.getPasswordSetupEmail;
+export const isPasswordSetupLink = authAdapter.isPasswordSetupLink;
+export const requestPasswordSetupLink = authAdapter.requestPasswordSetupLink;
+export const requestAssistedFamilyActivation = authAdapter.requestAssistedFamilyActivation;
+export const setPasswordAfterEmailVerification = authAdapter.setPasswordAfterEmailVerification;
 
 function authDuration(startedAt) {
   return Math.max(0, Date.now() - startedAt);
@@ -40,11 +46,11 @@ export async function login(email, password) {
   }
 }
 
-export async function loginWithGoogle() {
+export async function loginWithGoogle(roleForNewAccount = '') {
   const startedAt = Date.now();
   await trackAuthEvent('auth.login.started', { method: 'google' });
   try {
-    const result = await authAdapter.loginWithGoogle();
+    const result = await authAdapter.loginWithGoogle(roleForNewAccount);
     await trackAuthEvent('auth.login.succeeded', { method: 'google', durationMs: authDuration(startedAt), role: result?.user?.role || result?.user?.rol || '' });
     return result;
   } catch (error) {
@@ -52,6 +58,9 @@ export async function loginWithGoogle() {
     throw error;
   }
 }
+
+export const getGoogleAccountCompletion = authAdapter.getGoogleAccountCompletion;
+export const completeGoogleAccount = authAdapter.completeGoogleAccount;
 
 export async function logout(options = {}) {
   await trackAuthEvent('auth.logout', { method: 'firebase' });

@@ -15,22 +15,23 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="apple-touch-icon" href="/assets/img/logo-192.png">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../css/dashboard.css?v=20260627-mobile">
+<link rel="stylesheet" href="../css/dashboard.css?v=20260705-panel-pwa-mobile">
 <style>
 body { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:calc(var(--app-vh, 1vh) * 100); padding:20px;
-       background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%); }
+       background: var(--navy); }
 .auth-card {
-  background: var(--white); border-radius: var(--radius);
+  background: var(--white); border-radius: 2px;
   padding: 44px; width:100%; max-width:420px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  box-shadow: none; border-top: 3px solid var(--gold);
 }
 .auth-logo { text-align:center; margin-bottom:32px; }
-.auth-logo img { width:64px;height:64px;border-radius:14px;object-fit:cover; }
+.auth-logo img { width:64px;height:64px;border-radius:2px;object-fit:cover; }
 .auth-logo-name {
   font-family:'Playfair Display',serif; font-size:1.5rem; font-weight:900;
   color:var(--navy); margin-top:10px;
 }
 .auth-logo-name span { color:var(--gold-text); }
+.form-control, .btn { border-radius: 2px; }
 .auth-subtitle { font-size:.875rem; color:var(--gray-mid); margin-top:4px; }
 .auth-title { font-family:'Playfair Display',serif; font-size:1.3rem; font-weight:700;
                color:var(--navy); margin-bottom:24px; }
@@ -46,31 +47,28 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 .google-auth-btn {
   width: 100%;
   min-height: 46px;
-  border: 1.5px solid rgba(15,31,61,.16);
-  border-radius: var(--radius-sm);
+  border: 1px solid #747775;
+  border-radius: 2px;
   background: var(--white);
-  color: var(--text-dark);
-  font-weight: 700;
+  color: #1f1f1f;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   cursor: pointer;
-  transition: border-color .18s, background .18s, transform .15s;
+  transition: border-color .18s, background .18s;
   margin: 0 0 16px;
 }
-.google-auth-btn:hover { border-color: var(--navy); background: rgba(15,31,61,.025); transform: translateY(-1px); }
+.google-auth-btn:hover { border-color: var(--navy); background: rgba(15,31,61,.025); }
 .google-auth-mark {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  color: #4285f4;
-  background: #fff;
-  border: 1px solid rgba(0,0,0,.08);
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: block;
+  object-fit: contain;
 }
 .forgot-link { text-align:right; margin-top:-10px; margin-bottom:14px; }
 .forgot-link a { font-size:.78rem; color:var(--gray-mid); text-decoration:none; }
@@ -80,12 +78,27 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   border-radius:var(--radius-sm); padding:10px 14px;
   color:var(--danger); font-size:.82rem; margin-bottom:16px; display:none;
 }
+.error-banner.success {
+  background:#f5fbf7; border-color:rgba(21,128,61,.24); color:#166534;
+}
+.password-setup-help {
+  display:none; margin-top:14px; padding:13px; border:1px solid rgba(15,31,61,.14);
+  border-radius:2px; background:#f7f8fa; color:var(--gray-mid); font-size:.82rem; line-height:1.45;
+}
+.password-setup-help p { margin:0 0 10px; }
+.password-setup-help button {
+  width:100%; min-height:40px; border:1px solid var(--navy); border-radius:2px;
+  background:var(--white); color:var(--navy); font:inherit; font-weight:700; cursor:pointer;
+}
+.password-setup-help button:hover { background:#f1f3f6; }
 .tab-btns { display:flex; gap:8px; margin-bottom:24px; }
 .tab-btn {
-  flex:1; min-height:44px; padding:9px; border-radius:var(--radius-sm);
+  flex:1; min-height:44px; padding:9px; border-radius:2px;
   border:1.5px solid rgba(0,0,0,0.13); background:none;
   font-family:inherit; font-size:.82rem; font-weight:600;
   cursor:pointer; color:var(--gray-mid); transition:all .18s;
+  display:flex; align-items:center; justify-content:center; text-align:center;
+  text-decoration:none;
 }
 .tab-btn.active { background:var(--navy); color:white; border-color:var(--navy); }
 .sr-only {
@@ -116,7 +129,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     width: 100%;
     max-width: 360px;
     padding: 28px 20px;
-    border-radius: 12px;
+    border-radius: 2px;
     overflow: hidden;
   }
   .auth-logo {
@@ -167,24 +180,25 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   <div class="auth-logo">
     <img src="/assets/img/logo-192.png" alt="ClasesDe10">
     <div class="auth-logo-name">Clases<span>De10</span></div>
-    <div class="auth-subtitle">Tu academia de confianza en Madrid</div>
+    <div class="auth-subtitle">Profesores particulares, bien organizados</div>
   </div>
   <h1 class="sr-only">Iniciar sesión en ClasesDe10</h1>
 
   <div id="error-banner" class="error-banner" role="alert" aria-live="assertive"></div>
 
-  <div class="tab-btns" role="tablist" aria-label="Acceso a ClasesDe10">
-    <button type="button" role="tab" class="tab-btn active" id="tab-login" aria-controls="form-login" aria-selected="true">Iniciar sesión</button>
-    <button type="button" role="tab" class="tab-btn" id="tab-forgot" aria-controls="form-forgot" aria-selected="false">Recuperar acceso</button>
+  <div class="tab-btns" aria-label="Acceso a ClasesDe10">
+    <button type="button" class="tab-btn active" id="tab-login" aria-controls="form-login">Iniciar sesión</button>
+    <a class="tab-btn" href="registro.html">Crear cuenta</a>
   </div>
 
   <button type="button" class="google-auth-btn" id="btn-google-login">
-    <span class="google-auth-mark">G</span>
+    <img class="google-auth-mark" src="https://developers.google.com/static/identity/images/g-logo.png" alt="">
     <span id="btn-google-login-text">Continuar con Google</span>
   </button>
+  <div class="auth-sep" id="login-separator">o usa email</div>
 
   <!-- FORMULARIO LOGIN -->
-  <form id="form-login" method="post" role="tabpanel" aria-labelledby="tab-login" novalidate>
+  <form id="form-login" method="post" aria-labelledby="tab-login" novalidate>
     <div class="form-group">
       <label class="form-label" for="email">Correo electrónico <span class="required">*</span></label>
       <input class="form-control" type="email" id="email" name="email"
@@ -196,16 +210,21 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
              placeholder="••••••••" autocomplete="current-password" maxlength="128" required>
     </div>
     <div class="forgot-link">
-      <a href="#" id="go-forgot">¿Olvidaste tu contraseña?</a>
+      <a href="#" id="go-forgot">¿Has olvidado la contraseña?</a>
     </div>
     <button type="submit" class="btn btn-primary btn-lg" id="btn-login" style="width:100%;justify-content:center">
       <span id="btn-login-text">Entrar a mi cuenta</span>
       <span id="btn-login-loading" style="display:none">Cargando…</span>
     </button>
+    <div class="password-setup-help" id="password-setup-help">
+      <p>¿Creaste esta cuenta con Google? Verifica el correo y podrás crear una contraseña sin perder tu cuenta ni tus datos.</p>
+      <button type="button" id="btn-password-setup">Verificar correo y crear contraseña</button>
+    </div>
   </form>
 
   <!-- FORMULARIO RECUPERAR -->
-  <form id="form-forgot" method="post" role="tabpanel" aria-labelledby="tab-forgot" style="display:none" novalidate>
+  <form id="form-forgot" method="post" aria-labelledby="forgot-title" style="display:none" novalidate>
+    <h2 class="sr-only" id="forgot-title">Recuperar contraseña</h2>
     <p style="font-size:.875rem;color:var(--gray-mid);margin-bottom:16px">
       Introduce tu email y te enviaremos un enlace para restablecer tu contraseña.
     </p>
@@ -218,18 +237,10 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     </button>
   </form>
 
-  <div class="auth-sep">o</div>
-  <div class="auth-footer">
-    ¿Aún no tienes cuenta?
-    <a href="registro.html">Regístrate gratis</a>
-  </div>
-  <div class="auth-footer" style="margin-top:8px">
-    <a href="/">← Volver a la web</a>
-  </div>
 </div>
 
 <script type="module">
-import { login, loginWithGoogle, logout, resetPassword, redirectByRole, getSession, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260630-admin-switch';
+import { login, loginWithGoogle, logout, requestPasswordSetupLink, resetPassword, redirectByRole, getSession, getGoogleAccountCompletion, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260815-onboarding-gate';
 import { focusFirstInvalidField, showToast, validarEmail } from '../js/utils.js';
 import { trackLogin } from '../js/analytics.js';
 
@@ -237,12 +248,36 @@ const errorBanner = document.getElementById('error-banner');
 const formLogin   = document.getElementById('form-login');
 const formForgot  = document.getElementById('form-forgot');
 const tabLogin    = document.getElementById('tab-login');
-const tabForgot   = document.getElementById('tab-forgot');
 const goForgot    = document.getElementById('go-forgot');
+const googleLoginButton = document.getElementById('btn-google-login');
+const loginSeparator = document.getElementById('login-separator');
+const passwordSetupHelp = document.getElementById('password-setup-help');
+const passwordSetupButton = document.getElementById('btn-password-setup');
 const loginParams = new URLSearchParams(window.location.search);
+const requestedRole = ['familia', 'profesor'].includes(loginParams.get('rol')) ? loginParams.get('rol') : '';
+if (requestedRole) document.querySelector('a.tab-btn[href="registro.html"]').href = `registro.html?rol=${encodeURIComponent(requestedRole)}`;
 const adminAccessRequested = loginParams.get('admin') === '1' || loginParams.get('reason') === 'admin-required';
 
+async function redirectIncompleteGoogleAccount(session) {
+  const isGoogle = session?.user?.providerData?.some((provider) => provider.providerId === 'google.com');
+  if (!isGoogle) return false;
+  const { data, error } = await getGoogleAccountCompletion();
+  if (error || !data.requiresAccountCompletion) return false;
+  const roleQuery = data.role ? `?rol=${encodeURIComponent(data.role)}` : '';
+  window.location.href = `/termina-tu-cuenta${roleQuery}`;
+  return true;
+}
+
 function showError(msg) {
+  errorBanner.classList.remove('success');
+  errorBanner.textContent = msg;
+  errorBanner.style.display = 'block';
+  errorBanner.tabIndex = -1;
+  errorBanner.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setTimeout(() => errorBanner.focus({ preventScroll: true }), 120);
+}
+function showSuccess(msg) {
+  errorBanner.classList.add('success');
   errorBanner.textContent = msg;
   errorBanner.style.display = 'block';
   errorBanner.tabIndex = -1;
@@ -251,6 +286,15 @@ function showError(msg) {
 }
 function hideError() {
   errorBanner.style.display = 'none';
+  errorBanner.classList.remove('success');
+}
+
+function showPasswordSetupHelp() {
+  passwordSetupHelp.style.display = 'block';
+}
+
+function hidePasswordSetupHelp() {
+  passwordSetupHelp.style.display = 'none';
 }
 
 function adminAccessMessage(role = '') {
@@ -272,23 +316,21 @@ function setTab(tab) {
   if (tab === 'login') {
     formLogin.style.display = '';
     formForgot.style.display = 'none';
+    googleLoginButton.style.display = '';
+    loginSeparator.style.display = '';
     tabLogin.classList.add('active');
-    tabForgot.classList.remove('active');
-    tabLogin.setAttribute('aria-selected', 'true');
-    tabForgot.setAttribute('aria-selected', 'false');
   } else {
     formLogin.style.display = 'none';
     formForgot.style.display = '';
+    googleLoginButton.style.display = 'none';
+    loginSeparator.style.display = 'none';
+    hidePasswordSetupHelp();
     tabLogin.classList.remove('active');
-    tabForgot.classList.add('active');
-    tabLogin.setAttribute('aria-selected', 'false');
-    tabForgot.setAttribute('aria-selected', 'true');
   }
   hideError();
 }
 
 tabLogin.addEventListener('click', () => setTab('login'));
-tabForgot.addEventListener('click', () => setTab('forgot'));
 goForgot.addEventListener('click', (e) => { e.preventDefault(); setTab('forgot'); });
 document.getElementById('email').addEventListener('input', (event) => event.target.setCustomValidity(''));
 document.getElementById('email-forgot').addEventListener('input', (event) => event.target.setCustomValidity(''));
@@ -326,6 +368,9 @@ formLogin.addEventListener('submit', async (e) => {
       ? 'Email o contraseña incorrectos.'
       : error.message;
     showError(msg);
+    if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(error.code)) {
+      showPasswordSetupHelp();
+    }
     btnText.style.display = '';
     btnLoad.style.display = 'none';
     btn.disabled = false;
@@ -356,27 +401,67 @@ document.getElementById('btn-google-login').addEventListener('click', async () =
   btn.setAttribute('aria-busy', 'true');
   text.textContent = 'Abriendo Google...';
 
-  const { error, usuario } = await loginWithGoogle();
+  const { error, usuario, requiresAccountCompletion, suggestedRole } = await loginWithGoogle();
 
   if (error) {
     showError(error.message);
+    if (error.requiresPasswordSignIn) {
+      const emailInput = document.getElementById('email');
+      if (error.email) emailInput.value = error.email;
+      document.getElementById('password').focus();
+    }
     btn.disabled = false;
     btn.removeAttribute('aria-busy');
     text.textContent = defaultText;
     return;
   }
 
-  if (adminAccessRequested && usuario.rol !== 'admin') {
+  if (adminAccessRequested && usuario?.rol !== 'admin') {
     await logout({ redirect: false });
-    showError(adminAccessMessage(usuario.rol));
+    showError(adminAccessMessage(usuario?.rol || ''));
     btn.disabled = false;
     btn.removeAttribute('aria-busy');
     text.textContent = defaultText;
+    return;
+  }
+
+  if (requiresAccountCompletion) {
+    const completionRole = suggestedRole || usuario?.rol || '';
+    const roleQuery = completionRole ? `?rol=${encodeURIComponent(completionRole)}` : '';
+    window.location.href = `/termina-tu-cuenta${roleQuery}`;
     return;
   }
 
   trackLogin(usuario.rol);
   redirectByRole(usuario.rol);
+});
+
+passwordSetupButton.addEventListener('click', async () => {
+  hideError();
+  const emailInput = document.getElementById('email');
+  const email = emailInput.value.trim();
+  emailInput.setCustomValidity('');
+  if (!validarEmail(email)) {
+    emailInput.setCustomValidity('Introduce un email valido.');
+    focusFirstInvalidField(formLogin);
+    return;
+  }
+
+  const defaultText = passwordSetupButton.textContent;
+  passwordSetupButton.disabled = true;
+  passwordSetupButton.setAttribute('aria-busy', 'true');
+  passwordSetupButton.textContent = 'Enviando enlace…';
+  const { error } = await requestPasswordSetupLink(email);
+  passwordSetupButton.disabled = false;
+  passwordSetupButton.removeAttribute('aria-busy');
+  passwordSetupButton.textContent = defaultText;
+  if (error) {
+    showError(error.message);
+    return;
+  }
+
+  hidePasswordSetupHelp();
+  showSuccess('Revisa tu correo. Te hemos enviado un enlace de un solo uso para verificar la cuenta y crear la contraseña.');
 });
 
 formForgot.addEventListener('submit', async (e) => {
@@ -407,16 +492,20 @@ formForgot.addEventListener('submit', async (e) => {
 // Cubre: usuario ya logado que visita /login.
 const _sesionActual = await getSession();
 if (_sesionActual) {
-  const _usuarioActual = await getUsuarioActual();
-  if (_usuarioActual?.activo) {
+  if (await redirectIncompleteGoogleAccount(_sesionActual)) {
+    // La navegacion a la finalizacion de cuenta ya esta en curso.
+  } else {
+    const _usuarioActual = await getUsuarioActual();
+    if (_usuarioActual?.activo) {
     if (adminAccessRequested && _usuarioActual.rol !== 'admin') {
       await logout({ redirect: false });
       showError(storedAuthNotice || adminAccessMessage(_usuarioActual.rol));
     } else {
       redirectByRole(_usuarioActual.rol);
     }
-  } else if (storedAuthNotice) {
-    showError(storedAuthNotice);
+    } else if (storedAuthNotice) {
+      showError(storedAuthNotice);
+    }
   }
 } else if (storedAuthNotice) {
   showError(storedAuthNotice);
@@ -424,6 +513,7 @@ if (_sesionActual) {
 
 onAuthChange(async (event, session) => {
   if (event === 'SIGNED_IN' && session) {
+    if (await redirectIncompleteGoogleAccount(session)) return;
     const u = await getUsuarioActual();
     if (!u?.activo) return;
     if (adminAccessRequested && u.rol !== 'admin') {
@@ -435,6 +525,6 @@ onAuthChange(async (event, session) => {
   }
 });
 </script>
-<script src="/js/pwa.js" defer></script>
+<script src="/js/pwa.js?v=20260705-panel-pwa-mobile" defer></script>
 </body>
 </html>

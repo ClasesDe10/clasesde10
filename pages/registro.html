@@ -18,16 +18,17 @@
 <link rel="stylesheet" href="../css/dashboard.css?v=20260627-mobile">
 <style>
 body { display:flex; align-items:center; justify-content:center; min-height:100vh; min-height:calc(var(--app-vh, 1vh) * 100); padding:20px;
-       background: linear-gradient(135deg, var(--navy) 0%, #0d2952 55%, #0e3a5a 100%); }
+       background: var(--navy); }
 .auth-card {
-  background: var(--white); border-radius: var(--radius);
+  background: var(--white); border-radius: 2px;
   padding: 44px; width:100%; max-width:520px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+  box-shadow: none; border-top: 3px solid var(--gold);
 }
 .auth-logo { text-align:center; margin-bottom:28px; }
-.auth-logo img { width:56px;height:56px;border-radius:12px;object-fit:cover; }
+.auth-logo img { width:56px;height:56px;border-radius:2px;object-fit:cover; }
 .auth-logo-name { font-family:'Playfair Display',serif;font-size:1.4rem;font-weight:900;color:var(--navy);margin-top:8px; }
 .auth-logo-name span { color:var(--gold-text); }
+.form-control, .btn { border-radius: 2px; }
 .error-banner {
   background:rgba(220,38,38,.07); border:1px solid rgba(220,38,38,.2);
   border-radius:var(--radius-sm); padding:10px 14px;
@@ -40,14 +41,14 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 }
 .rol-selector { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px; }
 .rol-card {
-  border: 2px solid rgba(0,0,0,0.12); border-radius: var(--radius-sm);
+  border: 2px solid rgba(0,0,0,0.12); border-radius: 2px;
   padding: 16px; cursor: pointer; transition: all .18s;
   text-align: center; position: relative;
 }
 .rol-card input[type=radio] { position:absolute; opacity:0; }
 .rol-card:hover { border-color: var(--navy); }
 .rol-card.selected { border-color: var(--navy); background: rgba(15,31,61,.04); }
-.rol-card-icon { font-size: 1.8rem; margin-bottom:6px; }
+.rol-card-icon { display: none; }
 .rol-card-label { font-weight:700; font-size:.875rem; color:var(--text-dark); }
 .rol-card-sub { font-size:.72rem; color:var(--gray-mid); margin-top:2px; }
 .pwd-strength { height:4px; border-radius:2px; margin-top:6px; background:var(--gray-soft); overflow:hidden; }
@@ -62,39 +63,28 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 .google-auth-btn {
   width: 100%;
   min-height: 46px;
-  border: 1.5px solid rgba(15,31,61,.16);
-  border-radius: var(--radius-sm);
+  border: 1px solid #747775;
+  border-radius: 2px;
   background: var(--white);
-  color: var(--text-dark);
-  font-weight: 700;
+  color: #1f1f1f;
+  font-family: 'Google Sans', Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   cursor: pointer;
-  transition: border-color .18s, background .18s, transform .15s;
+  transition: border-color .18s, background .18s;
 }
-.google-auth-btn:hover { border-color: var(--navy); background: rgba(15,31,61,.025); transform: translateY(-1px); }
+.google-auth-btn:hover { border-color: var(--navy); background: rgba(15,31,61,.025); }
 .google-auth-mark {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-  color: #4285f4;
-  background: #fff;
-  border: 1px solid rgba(0,0,0,.08);
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: block;
+  object-fit: contain;
 }
-.google-auth-note {
-  color: var(--gray-mid);
-  font-size: .72rem;
-  line-height: 1.45;
-  text-align: center;
-  margin: 8px 0 0;
-}
-.google-auth-note a { color: var(--navy); font-weight: 700; }
 .terms-note { font-size:.72rem; color:var(--gray-mid); text-align:center; margin-top:12px; line-height:1.5; }
 .terms-note a { color:var(--navy); }
 .auth-check {
@@ -170,7 +160,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
     width: 100%;
     max-width: 360px;
     padding: 28px 20px;
-    border-radius: 12px;
+    border-radius: 2px;
     overflow: hidden;
   }
   .auth-logo {
@@ -251,13 +241,9 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 
     <div id="google-register-block">
       <button type="button" class="google-auth-btn" id="btn-google-registro">
-        <span class="google-auth-mark">G</span>
+        <img class="google-auth-mark" src="https://developers.google.com/static/identity/images/g-logo.png" alt="">
         <span id="btn-google-registro-text">Continuar con Google</span>
       </button>
-      <p class="google-auth-note">
-        Al continuar aceptas los <a href="/terminos.html" target="_blank" rel="noopener noreferrer">Terminos</a>
-        y la <a href="/privacidad.html" target="_blank" rel="noopener noreferrer">Politica de privacidad</a>.
-      </p>
       <div class="auth-sep">o usa email</div>
     </div>
 
@@ -286,7 +272,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
       </div>
       <div class="profesor-extra" id="profesor-extra">
         <div class="profesor-extra-title">Perfil de profesor</div>
-        <div class="form-hint">Crea tu cuenta ahora. Dentro del panel te pediremos foto, zona, formación, notas, materias o actividades, niveles, Bizum, disponibilidad y experiencia antes de poder recibir asignaciones.</div>
+        <div class="form-hint">Después podrás completar tu experiencia, materias, zona y disponibilidad desde el panel.</div>
       </div>
       <div class="form-group">
         <label class="form-label" for="password">Contrasena <span class="required">*</span></label>
@@ -318,13 +304,10 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
   <div class="auth-footer">
     ¿Ya tienes cuenta? <a href="login.html">Inicia sesión</a>
   </div>
-  <div class="auth-footer" style="margin-top:8px">
-    <a href="/">← Volver a la web</a>
-  </div>
 </div>
 
 <script type="module">
-import { loginWithGoogle, redirectByRole, register } from '../js/auth-provider.js?v=20260628-audit';
+import { loginWithGoogle, redirectByRole, register } from '../js/auth-provider.js?v=20260815-onboarding-gate';
 import { focusFirstInvalidField, validarEmail, sanitize } from '../js/utils.js';
 import { trackRegistro } from '../js/analytics.js';
 
@@ -357,8 +340,8 @@ const nextStepsByRole = {
   profesor: {
     title: 'Despues de crear la cuenta',
     steps: [
-      'Completas tu perfil profesional con foto, estudios, zona y disponibilidad.',
-      'El equipo valida tus datos antes de asignarte alumnos.',
+      'Completas tu perfil con experiencia, materias, zona y disponibilidad.',
+      'Revisamos tu perfil antes de enviarte propuestas.',
       'Recibiras solicitudes y coordinaras clases desde chat y calendario.',
     ],
   },
@@ -437,13 +420,19 @@ document.getElementById('btn-google-registro').addEventListener('click', async (
   btn.setAttribute('aria-busy', 'true');
   text.textContent = 'Abriendo Google...';
 
-  const { error, usuario } = await loginWithGoogle(rolSeleccionado);
+  const { error, usuario, requiresAccountCompletion, suggestedRole } = await loginWithGoogle(rolSeleccionado);
 
   if (error) {
     showError(error.message);
     btn.disabled = false;
     btn.removeAttribute('aria-busy');
     text.textContent = defaultText;
+    return;
+  }
+
+  if (requiresAccountCompletion) {
+    const completionRole = suggestedRole || usuario?.rol || rolSeleccionado;
+    window.location.href = `/termina-tu-cuenta?rol=${encodeURIComponent(completionRole)}`;
     return;
   }
 

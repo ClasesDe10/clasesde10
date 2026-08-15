@@ -4,9 +4,11 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -47,14 +49,14 @@ import {
   saveNotificationSettings,
   showBrowserNotification,
   watchUserNotifications,
-} from './notifications-provider.js?v=20260627-domain-auth';
+} from './notifications-provider.js?v=20260808-action-center';
 import {
   DEFAULT_NOTIFICATION_SETTINGS,
   mergeNotificationSettings,
   notificationActionUrl,
   notificationCategoryLabel,
   notificationPriorityClass,
-} from './notification-engine.js?v=20260705-payment-alerts';
+} from './notification-engine.js?v=20260808-action-center';
 import {
   registerPushNotifications,
   watchForegroundPushMessages,
@@ -71,6 +73,16 @@ const SCHEDULE_KIND_ONE_OFF = 'one_off';
 const SCHEDULE_KINDS = new Set([SCHEDULE_KIND_WEEKLY, SCHEDULE_KIND_ONE_OFF]);
 const ACCEPTED_SCHEDULE_STATUSES = new Set(['aceptada', 'accepted', 'confirmada', 'confirmed']);
 const CHAT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const CHAT_REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const VOICE_CALL_RING_TIMEOUT_MS = 90 * 1000;
+const VOICE_CALL_STALE_MS = 2 * 60 * 1000;
+const VOICE_CALL_FALLBACK_DELAY_MS = 10 * 1000;
+const VOICE_CALL_FALLBACK_SAMPLE_RATE = 8000;
+const VOICE_CALL_FALLBACK_CHUNK_SAMPLES = 4000;
+const VOICE_CALL_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
 const CHAT_ATTACHMENT_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -183,6 +195,11 @@ function chatIcon(name) {
     image: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.5"/><path d="m21 16-5-5L5 19"/></svg>',
     mic: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0"/><path d="M12 18v3"/><path d="M8 21h8"/></svg>',
     phone: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.7.6 2.5a2 2 0 0 1-.5 2.1L8 9.5a16 16 0 0 0 6.5 6.5l1.2-1.2a2 2 0 0 1 2.1-.5c.8.3 1.6.5 2.5.6A2 2 0 0 1 22 16.9Z"/></svg>',
+    video: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-3v10l-4-3Z"/></svg>',
+    cameraOff: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m2 2 20 20"/><path d="M10.7 5H15l2 2h2a2 2 0 0 1 2 2v7.3M6.2 6.2 5 7H3a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14a2 2 0 0 0 1.3-.5"/><path d="M14.1 14.1A3 3 0 0 1 9.9 9.9"/></svg>',
+    back: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',
+    search: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>',
+    hangup: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M4.2 10.6c4.9-3.5 10.7-3.5 15.6 0a2 2 0 0 1 .7 2.4l-1 2.3a2 2 0 0 1-2.2 1.2l-3.1-.6a2 2 0 0 1-1.6-1.9v-1.2a11.4 11.4 0 0 0-1.2 0V14a2 2 0 0 1-1.6 1.9l-3.1.6a2 2 0 0 1-2.2-1.2l-1-2.3a2 2 0 0 1 .7-2.4Z"/></svg>',
     calendar: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 11h18"/></svg>',
     edit: '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
   };
@@ -251,6 +268,30 @@ function chatAttachmentLabel(attachment = {}) {
 
 function chatMessagePreview(body = '', attachment = null) {
   return clean(body, 180) || chatAttachmentLabel(attachment) || 'Mensaje';
+}
+
+function normalizeChatReply(reply = {}) {
+  if (!reply || typeof reply !== 'object') return null;
+  const messageId = clean(reply.messageId || reply.id, 180);
+  if (!messageId) return null;
+  return {
+    messageId,
+    senderUid: clean(reply.senderUid, 180),
+    senderName: clean(reply.senderName || 'Mensaje', 160),
+    bodyPreview: clean(reply.bodyPreview || reply.body || 'Mensaje', 240),
+    messageType: clean(reply.messageType || 'text', 40),
+  };
+}
+
+function chatReplyFromMessage(message = {}, chat = {}, currentUid = '', currentDisplayName = '') {
+  const bodyPreview = chatMessagePreview(message.body, message.attachment);
+  return normalizeChatReply({
+    messageId: message.id,
+    senderUid: message.senderUid,
+    senderName: messageSenderDisplayName(message, chat, currentUid, currentDisplayName),
+    bodyPreview,
+    messageType: message.messageType || 'text',
+  });
 }
 
 function chatStoragePath(chatId = '', uid = '', fileName = '') {
@@ -574,6 +615,74 @@ function isGenericIdentityLabel(value) {
   return /\d/.test(token) || /^[A-Z]{2,8}$/.test(token) || /^[a-f0-9]{6,12}$/i.test(token);
 }
 
+function timestampMs(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (value.seconds) return Number(value.seconds) * 1000;
+  const parsed = Date.parse(typeof value === 'string' ? value : normalizeDate(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMessageTime(value) {
+  const milliseconds = timestampMs(value);
+  if (!milliseconds) return '';
+  return new Date(milliseconds).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatChatListTime(value) {
+  const milliseconds = timestampMs(value);
+  if (!milliseconds) return '';
+  const date = new Date(milliseconds);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return formatMessageTime(value);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'Ayer';
+  if (date.getFullYear() === now.getFullYear()) return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+  return date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit' });
+}
+
+function messageDateLabel(value) {
+  const milliseconds = timestampMs(value);
+  if (!milliseconds) return '';
+  const date = new Date(milliseconds);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) return 'Hoy';
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === yesterday.toDateString()) return 'Ayer';
+  return date.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function chatUnreadCount(chat = {}, currentUid = '') {
+  return Math.max(0, Number(chat.unreadBy?.[currentUid] || 0) || 0);
+}
+
+function chatCounterpartUids(chat = {}, currentUid = '') {
+  const ids = new Set(Object.entries(chat.participantUids || {})
+    .filter(([, allowed]) => Boolean(allowed))
+    .map(([uid]) => clean(uid, 180)));
+  [chat.familyUserUid, chat.familyUid, chat.familia_id, chat.teacherUserUid, chat.teacherUid, chat.profesor_id]
+    .map((uid) => clean(uid, 180)).filter(Boolean).forEach((uid) => ids.add(uid));
+  ids.delete(clean(currentUid, 180));
+  return [...ids];
+}
+
+function messageReceiptState(message = {}, chat = {}, currentUid = '') {
+  const messageTime = timestampMs(message.createdAt);
+  if (!messageTime) return 'sent';
+  const counterparts = chatCounterpartUids(chat, currentUid);
+  if (counterparts.some((uid) => timestampMs(chat.readAtBy?.[uid]) >= messageTime)) return 'read';
+  if (counterparts.some((uid) => timestampMs(chat.deliveredAtBy?.[uid]) >= messageTime)) return 'delivered';
+  return 'sent';
+}
+
+function renderMessageReceipt(state = 'sent') {
+  const labels = { sent: 'Enviado', delivered: 'Entregado', read: 'Visto' };
+  const ticks = state === 'sent' ? '✓' : '✓✓';
+  return `<span class="chat-message-receipt ${state}" title="${labels[state] || labels.sent}" aria-label="${labels[state] || labels.sent}">${ticks}</span>`;
+}
+
 function identityKey(value) {
   return clean(value, 180)
     .toLowerCase()
@@ -755,13 +864,16 @@ function chatCounterpartPhotoUrl(chat = {}, role = '') {
 
 function renderChatCallActions(chat = {}, role = '') {
   if (!chat?.id || role === 'admin') return '';
-  return `<button class="chat-icon-btn" type="button" data-chat-call-request title="Solicitar llamada" aria-label="Solicitar llamada segura">${chatIcon('phone')}</button>`;
+  return `
+    <button class="chat-icon-btn" type="button" data-chat-start-call="video" title="Videollamada" aria-label="Iniciar videollamada">${chatIcon('video')}</button>
+    <button class="chat-icon-btn" type="button" data-chat-start-call="voice" title="Llamada" aria-label="Iniciar llamada de voz">${chatIcon('phone')}</button>`;
 }
 
-function chatCallRequestBody(sender, counterpart) {
+function chatCallStartedBody(sender, counterpart, callKind = 'voice') {
   const requester = reliableName(sender, '') || 'La otra persona';
   const target = reliableName(counterpart, '');
-  return `Solicitud de llamada: ${requester} quiere acordar una llamada${target ? ` con ${target}` : ''}. Contestad por este chat para fijar la hora. ClasesDe10 no comparte telefonos reales.`;
+  const label = callKind === 'video' ? 'Videollamada' : 'Llamada de voz';
+  return `${label} iniciada: ${requester} ha abierto una llamada${target ? ` con ${target}` : ''}. Pulsa "Unirse" en este chat para responder. ClasesDe10 no comparte telefonos reales.`;
 }
 
 function chatCallRequesterName(chat = {}, role = '', fallback = '') {
@@ -775,7 +887,6 @@ function chatCallRequesterName(chat = {}, role = '', fallback = '') {
 }
 
 function renderChatCounterpartAvatar(chat = {}, role = '', preference = {}, variant = 'list') {
-  if (role !== 'familia') return '';
   const title = chatTitle(chat, role, preference);
   const photoUrl = chatCounterpartPhotoUrl(chat, role);
   const classes = `chat-contact-avatar chat-contact-avatar-${variant}${photoUrl ? ' has-image' : ''}`;
@@ -1468,19 +1579,29 @@ function renderAvailabilitySummary(availability = {}, role = '') {
     </div>`;
 }
 
-function renderShell(container, role) {
+function renderShell(container, role, showNotifications = true) {
   container.innerHTML = `
     <div class="chat-layout" data-chat-layout>
       <aside class="chat-list-panel">
         <div class="chat-panel-header">
           <div>
-            <div class="chat-title">Chat</div>
-            <div class="chat-subtitle">Mensajes y avisos</div>
+            <div class="chat-title">Mensajes <span class="chat-total-unread" data-chat-total-unread hidden></span></div>
+            <div class="chat-subtitle">Familias y profesores</div>
           </div>
         </div>
-        <div class="chat-tabs">
+        <div class="chat-tabs" ${showNotifications ? '' : 'hidden'}>
           <button type="button" class="chat-tab active" data-chat-tab="chats">Chats</button>
-          <button type="button" class="chat-tab" data-chat-tab="notificaciones">Notificaciones <span data-notification-count></span></button>
+          <button type="button" class="chat-tab" data-chat-tab="notificaciones" ${showNotifications ? '' : 'hidden'}>Notificaciones <span data-notification-count></span></button>
+        </div>
+        <div class="chat-list-controls">
+          <label class="chat-search-field">
+            ${chatIcon('search')}
+            <input type="search" data-chat-search maxlength="120" autocomplete="off" placeholder="Buscar conversación" aria-label="Buscar conversación">
+          </label>
+          <div class="chat-filter-chips" aria-label="Filtrar conversaciones">
+            <button type="button" class="chat-filter-chip active" data-chat-filter="all">Todos</button>
+            <button type="button" class="chat-filter-chip" data-chat-filter="unread">No leídos</button>
+          </div>
         </div>
         <div class="chat-list" data-chat-list></div>
       </aside>
@@ -1489,67 +1610,104 @@ function renderShell(container, role) {
           <div class="chat-empty-title">Selecciona una conversacion</div>
           <div class="chat-empty-subtitle">Elige un chat para empezar.</div>
         </div>
+        <div class="chat-voice-call-bar" data-chat-voice-call-bar hidden></div>
+        <div class="chat-video-call-stage" data-chat-video-stage hidden></div>
+        <div class="chat-thread-search" data-chat-thread-search hidden>
+          <label>
+            ${chatIcon('search')}
+            <input type="search" data-chat-thread-search-input maxlength="120" autocomplete="off" placeholder="Buscar en esta conversación" aria-label="Buscar mensajes en esta conversación">
+          </label>
+          <span data-chat-thread-search-count aria-live="polite"></span>
+          <button type="button" data-chat-search-previous aria-label="Resultado anterior" title="Resultado anterior">↑</button>
+          <button type="button" data-chat-search-next aria-label="Resultado siguiente" title="Resultado siguiente">↓</button>
+          <button type="button" data-chat-close-thread-search aria-label="Cerrar búsqueda" title="Cerrar búsqueda">×</button>
+        </div>
         <div class="chat-messages" data-chat-messages></div>
+        <div class="chat-typing-indicator" data-chat-typing-indicator hidden aria-live="polite"></div>
         <section class="chat-schedule-panel" data-chat-schedule-panel style="display:none"></section>
         <form class="chat-compose" data-chat-form style="display:none">
           <input type="file" data-chat-file-input hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif">
           <input type="file" data-chat-image-input hidden accept="image/jpeg,image/png,image/webp,image/gif">
+          <div class="chat-compose-reply" data-chat-compose-reply hidden>
+            <span class="chat-compose-reply-line" aria-hidden="true"></span>
+            <span class="chat-compose-reply-copy">
+              <strong data-chat-compose-reply-name>Responder</strong>
+              <span data-chat-compose-reply-text></span>
+            </span>
+            <button class="chat-compose-reply-close" type="button" data-chat-cancel-reply aria-label="Cancelar respuesta">×</button>
+          </div>
+          <div class="chat-compose-edit" data-chat-compose-edit hidden>
+            <span class="chat-compose-reply-line" aria-hidden="true"></span>
+            <span class="chat-compose-reply-copy">
+              <strong>Editando mensaje</strong>
+              <span>Los demás verán que se ha editado.</span>
+            </span>
+            <button class="chat-compose-reply-close" type="button" data-chat-cancel-edit aria-label="Cancelar edición">×</button>
+          </div>
           <div class="chat-compose-tools" aria-label="Acciones del chat">
+            <button class="chat-icon-btn chat-emoji-toggle" type="button" data-chat-toggle-emoji title="Emoji" aria-label="Abrir emojis" aria-expanded="false">☺</button>
             <button class="chat-icon-btn" type="button" data-chat-attach-file title="Adjuntar archivo" aria-label="Adjuntar archivo">${chatIcon('clip')}</button>
             <button class="chat-icon-btn" type="button" data-chat-attach-image title="Enviar foto" aria-label="Enviar foto">${chatIcon('image')}</button>
             <button class="chat-icon-btn" type="button" data-chat-audio-record aria-pressed="false" title="Nota de audio" aria-label="Nota de audio">${chatIcon('mic')}</button>
           </div>
           <textarea class="form-control" data-chat-input rows="1" maxlength="2000" aria-label="Mensaje" placeholder="Mensaje"></textarea>
-          <button class="btn btn-primary" type="submit">Enviar</button>
+          <button class="btn btn-primary chat-send-button" type="submit">Enviar</button>
+          <div class="chat-emoji-picker" data-chat-emoji-picker hidden aria-label="Emojis rápidos">
+            ${['😊', '👍', '🙌', '👏', '🎉', '❤️', '😂', '🙏', '✅', '📚', '💡', '👋'].map((emoji) => `<button type="button" data-chat-emoji="${emoji}" aria-label="Insertar ${emoji}">${emoji}</button>`).join('')}
+          </div>
         </form>
       </section>
-      <section class="chat-thread-panel notifications-panel" data-chat-panel="notificaciones" style="display:none">
+      <section class="chat-thread-panel notifications-panel" data-chat-panel="notificaciones" ${showNotifications ? 'style="display:none"' : 'hidden style="display:none"'}>
         <div class="chat-thread-header">
           <div>
             <div class="chat-thread-title">Notificaciones</div>
-            <div class="chat-thread-subtitle">Avisos importantes.</div>
+            <div class="chat-thread-subtitle">Solo avisos que requieren atencion.</div>
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="btn btn-ghost btn-sm" type="button" data-chat-open-panel="chats">Ver chats</button>
-            <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos en este dispositivo</button>
-            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Revisadas</button>
+          <div class="notifications-quick-actions">
+            <button class="btn btn-outline btn-sm" type="button" data-chat-open-panel="chats">Chats</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-enable-browser-notifications>Activar avisos</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-mark-all-notifications>Marcar todo revisado</button>
           </div>
         </div>
-        <form class="admin-notification-form" data-admin-notification-form style="${role === 'admin' ? '' : 'display:none'}">
-          <select class="form-control" data-admin-notification-target aria-label="Destinatarios">
-            <option value="todos">Todos</option>
-            <option value="familia">Familias</option>
-            <option value="profesor">Profesores</option>
-            <option value="alumno">Alumnos</option>
-            <option value="admin">Admins</option>
-          </select>
-          <input class="form-control" type="text" maxlength="120" data-admin-notification-title placeholder="Titulo">
-          <textarea class="form-control" rows="2" maxlength="800" data-admin-notification-body placeholder="Mensaje"></textarea>
-          <button class="btn btn-primary btn-sm" type="submit">Enviar aviso</button>
-        </form>
-        <form class="notification-settings-form" data-notification-settings-form style="${role === 'admin' ? '' : 'display:none'}">
-          <div class="notification-settings-grid">
-            <label><input type="checkbox" data-notification-setting="enabled"> Sistema activo</label>
-            <label><input type="checkbox" data-notification-channel="internal"> Internas</label>
-            <label><input type="checkbox" data-notification-channel="browser"> Navegador</label>
-            <label><input type="checkbox" data-notification-channel="push"> Push PWA</label>
-            <label><input type="checkbox" data-notification-event="class_unmarked_after_24h"> Clases sin marcar 24h</label>
-            <label><input type="checkbox" data-notification-event="class_confirmation_needed"> Confirmaciones</label>
-            <label><input type="checkbox" data-notification-event="weekly_payment_due"> Pagos semana</label>
-            <label><input type="checkbox" data-notification-event="chat_message"> Mensajes</label>
-            <label><input type="checkbox" data-notification-event="verification_pending"> Verificaciones</label>
-            <label><input type="checkbox" data-notification-event="request_created"> Solicitudes</label>
-          </div>
-          <div class="notification-settings-actions">
-            <input class="form-control" type="text" maxlength="300" data-notification-vapid-key placeholder="Clave publica FCM/VAPID">
-            <button class="btn btn-ghost btn-sm" type="submit">Guardar configuracion</button>
-          </div>
-        </form>
+        <details class="notification-admin-tools" data-notification-admin-tools ${role === 'admin' ? '' : 'hidden'}>
+          <summary>Herramientas admin</summary>
+          <form class="admin-notification-form" data-admin-notification-form>
+            <select class="form-control" data-admin-notification-target aria-label="Destinatarios">
+              <option value="todos">Todos</option>
+              <option value="familia">Familias</option>
+              <option value="profesor">Profesores</option>
+              <option value="alumno">Alumnos</option>
+              <option value="admin">Admins</option>
+            </select>
+            <input class="form-control" type="text" maxlength="120" data-admin-notification-title placeholder="Titulo">
+            <textarea class="form-control" rows="2" maxlength="800" data-admin-notification-body placeholder="Mensaje"></textarea>
+            <button class="btn btn-primary btn-sm" type="submit">Enviar aviso</button>
+          </form>
+          <form class="notification-settings-form" data-notification-settings-form>
+            <div class="notification-settings-grid">
+              <label><input type="checkbox" data-notification-setting="enabled"> Sistema activo</label>
+              <label><input type="checkbox" data-notification-channel="internal"> Internas</label>
+              <label><input type="checkbox" data-notification-channel="browser"> Navegador</label>
+              <label><input type="checkbox" data-notification-channel="push"> Push PWA</label>
+              <label><input type="checkbox" data-notification-event="class_unmarked_after_24h"> Clases sin marcar 24h</label>
+              <label><input type="checkbox" data-notification-event="class_confirmation_needed"> Confirmaciones</label>
+              <label><input type="checkbox" data-notification-event="weekly_payment_due"> Pagos semana</label>
+              <label><input type="checkbox" data-notification-event="chat_message"> Mensajes</label>
+              <label><input type="checkbox" data-notification-event="verification_pending"> Verificaciones</label>
+              <label><input type="checkbox" data-notification-event="request_created"> Solicitudes</label>
+            </div>
+            <div class="notification-settings-actions">
+              <input class="form-control" type="text" maxlength="300" data-notification-vapid-key placeholder="Clave publica FCM/VAPID">
+              <button class="btn btn-ghost btn-sm" type="submit">Guardar configuracion</button>
+            </div>
+          </form>
+        </details>
         <div class="notifications-list" data-notifications-list>
           <div class="chat-empty-state">Cargando notificaciones...</div>
         </div>
       </section>
-    </div>`;
+    </div>
+    <div class="sr-only" data-chat-live-region aria-live="polite" aria-atomic="true"></div>`;
 }
 
 function renderSchedulePanelLegacy(container, chat, proposals, role, currentActorIds = new Set(), availability = {}) {
@@ -1627,7 +1785,8 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   panel.style.display = '';
   const plannerOpen = panel.dataset.schedulePlannerOpen === 'true';
   const draft = readScheduleDraft(panel);
-  const selectedKind = normalizeScheduleKind(draft.kind || panel.dataset.scheduleKind || SCHEDULE_KIND_WEEKLY);
+  const requestedKind = normalizeScheduleKind(draft.kind || panel.dataset.scheduleKind || SCHEDULE_KIND_WEEKLY);
+  const selectedKind = requestedKind === SCHEDULE_KIND_ONE_OFF ? SCHEDULE_KIND_WEEKLY : requestedKind;
   panel.dataset.scheduleKind = selectedKind;
   panel.classList.toggle('is-open', plannerOpen);
   const activeProposal = proposals.find((proposal) => proposal.status === 'propuesta');
@@ -1676,13 +1835,11 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   const canRespondActiveProposal = activeProposal && (role === 'admin' || !activeProposalMine);
   const summaryActions = canRespondActiveProposal
     ? `
-        <button class="btn btn-primary btn-sm" type="button" data-focus-active-proposal>Responder propuesta</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_ONE_OFF}">Proponer alternativa</button>`
+        <button class="btn btn-primary btn-sm" type="button" data-focus-active-proposal>Responder propuesta</button>`
     : proposalDisabled && !plannerOpen
       ? `<button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">Ver disponibilidad</button>`
       : `
-        <button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">${acceptedRecurring ? 'Cambiar semanal' : 'Proponer semanal'}</button>
-        <button class="btn btn-ghost btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_ONE_OFF}">Clase puntual</button>`;
+        <button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">${acceptedRecurring ? 'Cambiar semanal' : 'Proponer semanal'}</button>`;
   const visibleProposalList = !plannerOpen && proposals.length
     ? `<div class="schedule-proposal-list chat-schedule-visible-proposals">${proposalRows}</div>`
     : '';
@@ -1711,7 +1868,6 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
         <form class="chat-schedule-form" data-schedule-form>
           <select class="form-control" data-schedule-kind aria-label="Tipo de clase" ${disabledAttr}>
             <option value="${SCHEDULE_KIND_WEEKLY}" ${selectedKind === SCHEDULE_KIND_WEEKLY ? 'selected' : ''}>Semanal fija</option>
-            <option value="${SCHEDULE_KIND_ONE_OFF}" ${selectedKind === SCHEDULE_KIND_ONE_OFF ? 'selected' : ''}>Puntual</option>
           </select>
           ${dateOrWeekdayControl}
           <input class="form-control" type="time" data-schedule-start required aria-label="Hora de inicio" value="${escapeHtml(draft.start)}" ${disabledAttr}>
@@ -1728,22 +1884,36 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
       </div>` : ''}`;
 }
 
-function renderChatList(container, chats, selectedId, role, preferences = {}) {
+function renderChatList(container, chats, selectedId, role, preferences = {}, currentUid = '', filter = 'all', search = '', drafts = {}) {
   const list = container.querySelector('[data-chat-list]');
-  if (!chats.length) {
-    list.innerHTML = '<div class="chat-empty-state">Sin chats activos.</div>';
+  const searchKey = identityKey(search);
+  const visibleChats = chats.filter((chat) => {
+    const preference = preferences[chat.id] || {};
+    if (filter === 'unread' && chatUnreadCount(chat, currentUid) === 0) return false;
+    if (!searchKey) return true;
+    return identityKey([chatTitle(chat, role, preference), chatSubtitle(chat, role, preference), chat.lastMessage].join(' ')).includes(searchKey);
+  });
+  if (!visibleChats.length) {
+    list.innerHTML = chats.length
+      ? '<div class="chat-empty-state">No hay conversaciones que coincidan.</div>'
+      : '<div class="chat-empty-state">Sin chats activos.</div>';
     return;
   }
-  list.innerHTML = chats.map((chat) => {
+  list.innerHTML = visibleChats.map((chat) => {
     const preference = preferences[chat.id] || {};
+    const unread = chatUnreadCount(chat, currentUid);
+    const draft = clean(drafts[chat.id], 2000);
+    const mine = clean(chat.lastMessageByUid, 180) === clean(currentUid, 180);
+    const receiptState = mine ? messageReceiptState({ createdAt: chat.lastMessageAt }, chat, currentUid) : '';
+    const preview = draft || chat.lastMessage || 'Sin mensajes todavía';
     return `
-      <button class="chat-list-item ${chat.id === selectedId ? 'active' : ''}" type="button" data-chat-id="${escapeHtml(chat.id)}">
+      <button class="chat-list-item ${chat.id === selectedId ? 'active' : ''} ${unread ? 'unread' : ''} ${draft ? 'has-draft' : ''}" type="button" data-chat-id="${escapeHtml(chat.id)}" aria-label="${escapeAttribute(`${chatTitle(chat, role, preference)}${draft ? ', borrador guardado' : ''}${unread ? `, ${unread} mensajes sin leer` : ''}`, 240)}">
         <span class="chat-list-main">
           ${renderChatCounterpartAvatar(chat, role, preference, 'list')}
           <span class="chat-list-copy">
-            <span class="chat-list-name">${escapeHtml(chatTitle(chat, role, preference))}</span>
+            <span class="chat-list-heading"><span class="chat-list-name">${escapeHtml(chatTitle(chat, role, preference))}</span><time class="chat-list-time">${escapeHtml(formatChatListTime(chat.lastMessageAt))}</time></span>
             <span class="chat-list-meta">${escapeHtml(chatSubtitle(chat, role, preference))}</span>
-            <span class="chat-list-preview">${escapeHtml(chat.lastMessage || 'Sin mensajes todavia')}</span>
+            <span class="chat-list-preview-row"><span class="chat-list-preview">${draft ? '<span class="chat-draft-label">Borrador: </span>' : mine ? renderMessageReceipt(receiptState) : ''}${!draft && mine ? '<span class="chat-preview-mine">Tú: </span>' : ''}${escapeHtml(preview)}</span>${unread ? `<span class="chat-unread-badge">${unread > 99 ? '99+' : unread}</span>` : ''}</span>
           </span>
         </span>
       </button>`;
@@ -1755,11 +1925,12 @@ function renderThreadHeader(container, chat, role, preference = {}) {
   if (!chat) return;
   const customName = clean(preference.displayNameOverride, 120);
   header.innerHTML = `
+    <button class="chat-icon-btn chat-mobile-back" type="button" data-chat-mobile-back title="Conversaciones" aria-label="Volver a conversaciones">${chatIcon('back')}</button>
     <div class="chat-thread-identity">
       ${renderChatCounterpartAvatar(chat, role, preference, 'thread')}
       <div class="chat-thread-heading">
         <div class="chat-thread-title">${escapeHtml(chatTitle(chat, role, preference))}</div>
-        <div class="chat-thread-subtitle">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
+        <div class="chat-thread-subtitle" data-chat-presence data-default-text="${escapeAttribute(chatSubtitle(chat, role, preference), 240)}">${escapeHtml(chatSubtitle(chat, role, preference))}</div>
       </div>
     </div>
     <form class="chat-alias-form" data-chat-name-form hidden>
@@ -1767,9 +1938,11 @@ function renderThreadHeader(container, chat, role, preference = {}) {
       <button class="btn btn-primary btn-sm" type="submit">Guardar</button>
     </form>
     <div class="chat-header-actions">
-      <button class="chat-icon-btn" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>
+      <button class="chat-icon-btn" type="button" data-chat-toggle-thread-search title="Buscar mensajes" aria-label="Buscar en esta conversación">${chatIcon('search')}</button>
+      <button class="chat-icon-btn" type="button" data-chat-toggle-starred title="Mensajes destacados" aria-label="Mostrar mensajes destacados">★</button>
+      <button class="chat-icon-btn chat-header-secondary" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>
       ${renderChatCallActions(chat, role)}
-      <button class="chat-icon-btn chat-alias-toggle" type="button" data-edit-chat-name title="Nombre del chat" aria-label="Nombre del chat">${chatIcon('edit')}</button>
+      <button class="chat-icon-btn chat-alias-toggle chat-header-secondary" type="button" data-edit-chat-name title="Nombre del chat" aria-label="Nombre del chat">${chatIcon('edit')}</button>
     </div>`;
 }
 
@@ -1799,19 +1972,64 @@ function renderMessageAttachment(attachment = {}) {
     </a>`;
 }
 
-function renderMessageText(value = '') {
+function renderHighlightedTextSegment(value = '', search = '') {
+  const text = String(value || '');
+  const queryText = clean(search, 120);
+  if (!queryText) return escapeHtml(text);
+  const lowerText = text.toLocaleLowerCase('es');
+  const lowerQuery = queryText.toLocaleLowerCase('es');
+  let html = '';
+  let index = 0;
+  let matchIndex = lowerText.indexOf(lowerQuery, index);
+  while (matchIndex >= 0) {
+    html += escapeHtml(text.slice(index, matchIndex));
+    html += `<mark>${escapeHtml(text.slice(matchIndex, matchIndex + queryText.length))}</mark>`;
+    index = matchIndex + queryText.length;
+    matchIndex = lowerText.indexOf(lowerQuery, index);
+  }
+  html += escapeHtml(text.slice(index));
+  return html;
+}
+
+function renderMessageText(value = '', search = '') {
   const text = clean(value, 2000);
   const urlPattern = /https:\/\/[^\s]+/g;
   let html = '';
   let lastIndex = 0;
   for (const match of text.matchAll(urlPattern)) {
     const url = match[0];
-    html += escapeHtml(text.slice(lastIndex, match.index));
-    html += `<a href="${escapeAttribute(url, 600)}" target="_blank" rel="noopener">${escapeHtml(url)}</a>`;
+    html += renderHighlightedTextSegment(text.slice(lastIndex, match.index), search);
+    html += `<a href="${escapeAttribute(url, 600)}" target="_blank" rel="noopener">${renderHighlightedTextSegment(url, search)}</a>`;
     lastIndex = match.index + url.length;
   }
-  html += escapeHtml(text.slice(lastIndex));
+  html += renderHighlightedTextSegment(text.slice(lastIndex), search);
   return html;
+}
+
+function renderCallMessageActions(message = {}, mine = false) {
+  const callId = clean(message.callId, 180);
+  if (!callId) return '';
+  const label = message.callKind === 'video' ? 'Videollamada' : 'Llamada de voz';
+  if (mine) {
+    return `
+      <div class="chat-call-message-actions">
+        <span>${label} iniciada desde ClasesDe10.</span>
+      </div>`;
+  }
+  return `
+    <div class="chat-call-message-actions">
+      <span>${label}. Si sigue activa, el control para responder aparece arriba del chat.</span>
+    </div>`;
+}
+
+function renderMessageReply(reply = {}) {
+  const normalized = normalizeChatReply(reply);
+  if (!normalized) return '';
+  return `
+    <button class="chat-message-reply-quote" type="button" data-chat-jump-message="${escapeAttribute(normalized.messageId, 180)}" aria-label="Ir al mensaje respondido">
+      <strong>${escapeHtml(normalized.senderName || 'Mensaje')}</strong>
+      <span>${escapeHtml(normalized.bodyPreview || 'Mensaje')}</span>
+    </button>`;
 }
 
 async function hydrateMessageAttachments(box) {
@@ -1868,26 +2086,86 @@ function messageSenderDisplayName(message = {}, chat = {}, currentUid = '', curr
   return directName || currentName || 'Usuario';
 }
 
-function renderMessages(container, messages, currentUid, chat = {}, currentDisplayName = '') {
+function renderMessageReactions(messageId = '', reactions = [], currentUid = '') {
+  const grouped = new Map();
+  reactions.filter((reaction) => reaction.messageId === messageId).forEach((reaction) => {
+    const emoji = clean(reaction.emoji, 8);
+    if (!CHAT_REACTION_EMOJIS.includes(emoji)) return;
+    const current = grouped.get(emoji) || { emoji, count: 0, mine: false };
+    current.count += 1;
+    current.mine = current.mine || clean(reaction.uid, 180) === currentUid;
+    grouped.set(emoji, current);
+  });
+  if (!grouped.size) return '';
+  return `
+    <div class="chat-message-reactions" aria-label="Reacciones">
+      ${Array.from(grouped.values()).map((reaction) => `
+        <button type="button" class="${reaction.mine ? 'mine' : ''}" data-chat-react-message="${escapeAttribute(messageId, 180)}" data-chat-reaction="${escapeAttribute(reaction.emoji, 8)}" aria-label="${escapeAttribute(`${reaction.emoji}, ${reaction.count} reacciones`, 80)}">
+          <span>${reaction.emoji}</span><b>${reaction.count}</b>
+        </button>`).join('')}
+    </div>`;
+}
+
+function renderMessages(container, messages, currentUid, chat = {}, currentDisplayName = '', options = {}) {
   const box = container.querySelector('[data-chat-messages]');
+  const search = clean(options.search, 120);
+  const starredIds = options.starredIds instanceof Set ? options.starredIds : new Set(options.starredIds || []);
+  const reactions = Array.isArray(options.reactions) ? options.reactions : [];
+  const visibleMessages = options.showStarredOnly
+    ? messages.filter((message) => starredIds.has(message.id))
+    : messages;
   const hadMessages = Boolean(box.querySelector('.chat-message'));
   const distanceFromBottom = box.scrollHeight - box.scrollTop - box.clientHeight;
   const shouldStickToBottom = !hadMessages || distanceFromBottom < 120;
   const previousScrollTop = box.scrollTop;
-  if (!messages.length) {
-    box.innerHTML = '<div class="chat-empty-state">Sin mensajes todavia.</div>';
+  if (!visibleMessages.length) {
+    box.innerHTML = options.showStarredOnly
+      ? '<div class="chat-empty-state">No hay mensajes destacados en esta conversación.</div>'
+      : '<div class="chat-empty-state">Sin mensajes todavia.</div>';
     return;
   }
-  box.innerHTML = messages.map((message) => {
+  let lastDateLabel = '';
+  box.innerHTML = visibleMessages.map((message) => {
     const mine = message.senderUid === currentUid;
-    const attachment = normalizeChatAttachment(message.attachment);
+    const deleted = Boolean(message.deletedAt);
+    const attachment = deleted ? null : normalizeChatAttachment(message.attachment);
     const body = clean(message.body, 2000);
+    const starred = starredIds.has(message.id);
+    const searchMatch = Boolean(search && body.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')));
+    const searchCurrent = searchMatch && message.id === options.searchCurrentId;
     const senderDisplayName = messageSenderDisplayName(message, chat, currentUid, currentDisplayName);
+    const dateLabel = messageDateLabel(message.createdAt);
+    const dateSeparator = dateLabel && dateLabel !== lastDateLabel
+      ? `<div class="chat-date-separator"><span>${escapeHtml(dateLabel)}</span></div>`
+      : '';
+    lastDateLabel = dateLabel || lastDateLabel;
+    const receipt = mine ? renderMessageReceipt(messageReceiptState(message, chat, currentUid)) : '';
     return `
-      <div class="chat-message ${mine ? 'mine' : ''}">
-        <div class="chat-message-meta">${escapeHtml(senderDisplayName)} - ${escapeHtml(formatDateTime(message.createdAt))}</div>
-        ${body ? `<div class="chat-message-body">${renderMessageText(body)}</div>` : ''}
-        ${attachment ? renderMessageAttachment(attachment) : ''}
+      ${dateSeparator}
+      <div class="chat-message ${mine ? 'mine' : ''} ${starred ? 'is-starred' : ''} ${deleted ? 'is-deleted' : ''} ${searchMatch ? 'is-search-match' : ''} ${searchCurrent ? 'is-search-current' : ''}" data-message-id="${escapeAttribute(message.id, 180)}">
+        ${!deleted ? `<div class="chat-message-actions" aria-label="Acciones del mensaje">
+          <button type="button" data-chat-open-message-reactions="${escapeAttribute(message.id, 180)}" aria-label="Reaccionar al mensaje" title="Reaccionar">☺</button>
+          <button type="button" data-chat-reply-message="${escapeAttribute(message.id, 180)}" aria-label="Responder al mensaje" title="Responder">↩</button>
+          <button type="button" data-chat-toggle-message-menu="${escapeAttribute(message.id, 180)}" aria-label="Más acciones" title="Más acciones">⋮</button>
+        </div>
+        <div class="chat-message-reaction-picker" data-chat-message-reaction-picker="${escapeAttribute(message.id, 180)}" hidden>
+          ${CHAT_REACTION_EMOJIS.map((emoji) => `<button type="button" data-chat-react-message="${escapeAttribute(message.id, 180)}" data-chat-reaction="${emoji}" aria-label="Reaccionar con ${emoji}">${emoji}</button>`).join('')}
+        </div>
+        <div class="chat-message-more-menu" data-chat-message-menu="${escapeAttribute(message.id, 180)}" hidden>
+          <button type="button" data-chat-star-message="${escapeAttribute(message.id, 180)}">${starred ? '☆ Quitar destacado' : '★ Destacar mensaje'}</button>
+          ${body ? `<button type="button" data-chat-copy-message="${escapeAttribute(message.id, 180)}">⧉ Copiar texto</button>` : ''}
+          ${mine && message.messageType === 'text' ? `<button type="button" data-chat-edit-message="${escapeAttribute(message.id, 180)}">✎ Editar mensaje</button>` : ''}
+          ${mine ? `<button type="button" class="is-danger" data-chat-delete-message="${escapeAttribute(message.id, 180)}">⌫ Eliminar para todos</button>` : ''}
+        </div>` : ''}
+        <div class="chat-message-bubble">
+          ${!mine && senderDisplayName ? `<div class="chat-message-sender">${escapeHtml(senderDisplayName)}</div>` : ''}
+          ${deleted ? '' : renderMessageReply(message.replyTo)}
+          ${body ? `<div class="chat-message-body ${deleted ? 'chat-message-deleted' : ''}">${deleted ? 'Este mensaje fue eliminado.' : renderMessageText(body, search)}</div>` : ''}
+          ${!deleted && message.messageType === 'call' ? renderCallMessageActions(message, mine) : ''}
+          ${attachment ? renderMessageAttachment(attachment) : ''}
+          <div class="chat-message-meta">${starred ? '<span title="Mensaje destacado">★</span>' : ''}${message.editedAt && !deleted ? '<span>Editado</span>' : ''}<time>${escapeHtml(formatMessageTime(message.createdAt))}</time>${receipt}</div>
+        </div>
+        ${deleted ? '' : renderMessageReactions(message.id, reactions, currentUid)}
       </div>`;
   }).join('');
   hydrateMessageAttachments(box).catch(() => {});
@@ -1969,7 +2247,7 @@ function dashboardSectionForNotification(notification, role = '') {
     return { section: role === 'profesor' ? 'alumnos' : 'solicitudes', label: role === 'profesor' ? 'Ver alumnos' : 'Ver solicitud' };
   }
   if (payload.incidentId || type.includes('incident')) {
-    return { section: role === 'admin' ? 'incidencias' : 'chat', panel: role === 'admin' ? '' : 'notificaciones', label: role === 'admin' ? 'Ver incidencia' : 'Ver aviso' };
+    return { section: role === 'admin' ? 'incidencias' : 'chat', panel: role === 'admin' ? '' : 'notificaciones', label: role === 'admin' ? 'Arreglar incidencia' : 'Ver aviso' };
   }
   if (type === 'teacher_verified' || type === 'profile_updated' || payload.profileId || payload.teacherId) {
     return { section: role === 'admin' ? 'profesores' : 'perfil', label: role === 'admin' ? 'Ver perfil' : 'Mi perfil' };
@@ -2017,7 +2295,7 @@ function renderNotifications(container, notifications) {
     return `
       <article class="notification-item ${unread ? 'unread' : ''} priority-${escapeHtml(priority)}" data-notification-id="${escapeHtml(notification.id)}">
         <div>
-          <div class="notification-kicker">${escapeHtml(label)}${priorityLabel ? ` · ${escapeHtml(priorityLabel)}` : ''}${unread ? ' · nueva' : ''}</div>
+          <div class="notification-kicker">${escapeHtml(label)}${priorityLabel ? ` · ${escapeHtml(priorityLabel)}` : ''}</div>
           <div class="notification-title">${escapeHtml(notificationTitle(notification))}</div>
           <div class="notification-body">${escapeHtml(notificationBody(notification))}</div>
           <div class="notification-meta">${escapeHtml(meta)}</div>
@@ -2077,9 +2355,10 @@ export async function initChatWidget({
   role,
   profileId,
   showToast = () => {},
+  showNotifications = true,
 }) {
   if (!container) return;
-  renderShell(container, role);
+  renderShell(container, role, showNotifications);
   container.dataset.chatRole = role;
 
   const state = {
@@ -2087,11 +2366,15 @@ export async function initChatWidget({
     notifications: [],
     notificationsReady: false,
     lastUnreadCount: 0,
+    lastRenderedUnreadCount: -1,
     selectedChat: null,
     unsubscribe: null,
     unsubscribeProposals: null,
     unsubscribeNotifications: null,
     unsubscribePushMessages: null,
+    unsubscribeVoiceCalls: null,
+    unsubscribeTyping: null,
+    unsubscribeReactions: null,
     unsubscribeAuth: null,
     disposed: false,
     notificationSettings: DEFAULT_NOTIFICATION_SETTINGS,
@@ -2102,6 +2385,25 @@ export async function initChatWidget({
     audioStream: null,
     audioChunks: [],
     audioStartedAt: 0,
+    voiceCall: null,
+    currentMessages: [],
+    messageReactions: [],
+    replyTarget: null,
+    editTarget: null,
+    draftsByChat: {},
+    draftSaveTimer: null,
+    chatSubscriptions: new Map(),
+    chatSnapshotReady: new Set(),
+    previousLastMessageAt: new Map(),
+    pendingReceiptWrites: new Set(),
+    chatListFilter: 'all',
+    chatSearch: '',
+    threadSearch: '',
+    threadSearchIndex: 0,
+    showStarredOnly: false,
+    typingTimer: null,
+    typingChatId: '',
+    originalDocumentTitle: document.title,
   };
   const currentUid = clean(firebaseAuth.currentUser?.uid || usuario.firebase_uid || usuario.uid || usuario.id, 180);
   const currentActorIds = new Set([
@@ -2112,6 +2414,155 @@ export async function initChatWidget({
     profileId,
   ].map((value) => clean(value, 180)).filter(Boolean));
   const senderName = readableChatIdentity(fullName(usuario.nombre, usuario.apellidos), usuario.displayName, usuario.email) || role;
+  const draftStorageKey = `cd10_chat_drafts_${currentUid || 'anonimo'}`;
+
+  try {
+    const storedDrafts = JSON.parse(localStorage.getItem(draftStorageKey) || '{}');
+    if (storedDrafts && typeof storedDrafts === 'object' && !Array.isArray(storedDrafts)) {
+      state.draftsByChat = Object.fromEntries(Object.entries(storedDrafts)
+        .map(([chatId, value]) => [clean(chatId, 180), clean(value, 2000)])
+        .filter(([chatId, value]) => chatId && value));
+    }
+  } catch (_) {
+    state.draftsByChat = {};
+  }
+
+  function persistChatDrafts() {
+    clearTimeout(state.draftSaveTimer);
+    state.draftSaveTimer = null;
+    try {
+      localStorage.setItem(draftStorageKey, JSON.stringify(state.draftsByChat));
+    } catch (_) {}
+  }
+
+  function updateChatDraft(chatId, value, { immediate = false } = {}) {
+    const safeChatId = clean(chatId, 180);
+    if (!safeChatId) return;
+    const draft = clean(value, 2000);
+    if (draft) state.draftsByChat[safeChatId] = draft;
+    else delete state.draftsByChat[safeChatId];
+    renderChatListFromState();
+    clearTimeout(state.draftSaveTimer);
+    if (immediate) persistChatDrafts();
+    else state.draftSaveTimer = setTimeout(persistChatDrafts, 350);
+  }
+
+  function renderComposerReply() {
+    const box = container.querySelector('[data-chat-compose-reply]');
+    if (!box) return;
+    const reply = normalizeChatReply(state.replyTarget);
+    box.hidden = !reply;
+    if (!reply) return;
+    const name = box.querySelector('[data-chat-compose-reply-name]');
+    const text = box.querySelector('[data-chat-compose-reply-text]');
+    if (name) name.textContent = `Responder a ${reply.senderName || 'mensaje'}`;
+    if (text) text.textContent = reply.bodyPreview || 'Mensaje';
+  }
+
+  function setComposerReply(reply = null) {
+    const nextReply = normalizeChatReply(reply);
+    if (nextReply && state.editTarget) setComposerEdit(null);
+    state.replyTarget = nextReply;
+    renderComposerReply();
+    const input = container.querySelector('[data-chat-input]');
+    input?.focus();
+  }
+
+  function renderComposerEdit() {
+    const box = container.querySelector('[data-chat-compose-edit]');
+    if (box) box.hidden = !state.editTarget;
+    const replyBox = container.querySelector('[data-chat-compose-reply]');
+    if (replyBox && state.editTarget) replyBox.hidden = true;
+  }
+
+  function setComposerEdit(message = null) {
+    state.editTarget = message && !message.deletedAt ? message : null;
+    if (state.editTarget) setComposerReply(null);
+    renderComposerEdit();
+    const input = container.querySelector('[data-chat-input]');
+    if (!input) return;
+    if (state.editTarget) {
+      input.value = clean(state.editTarget.body, 2000);
+      input.style.height = 'auto';
+      input.style.height = `${Math.min(112, input.scrollHeight)}px`;
+    } else if (state.selectedChat?.id) {
+      input.value = state.draftsByChat[state.selectedChat.id] || '';
+    }
+    input.focus();
+  }
+
+  function starredMessageIds(chatId = state.selectedChat?.id) {
+    const preference = state.chatPreferencesById[chatId] || {};
+    return new Set(Array.isArray(preference.starredMessageIds) ? preference.starredMessageIds.map(String) : []);
+  }
+
+  function threadSearchMatches() {
+    const search = clean(state.threadSearch, 120).toLocaleLowerCase('es');
+    if (!search) return [];
+    const starredIds = starredMessageIds();
+    return state.currentMessages.filter((message) => (
+      !message.deletedAt
+      && (!state.showStarredOnly || starredIds.has(message.id))
+      && clean(message.body, 2000).toLocaleLowerCase('es').includes(search)
+    ));
+  }
+
+  function renderCurrentMessages({ focusSearchResult = false } = {}) {
+    const matches = threadSearchMatches();
+    if (matches.length) state.threadSearchIndex = Math.max(0, Math.min(state.threadSearchIndex, matches.length - 1));
+    else state.threadSearchIndex = 0;
+    const currentMatch = matches[state.threadSearchIndex];
+    renderMessages(container, state.currentMessages, currentUid, state.selectedChat || {}, senderName, {
+      reactions: state.messageReactions,
+      search: state.threadSearch,
+      searchCurrentId: currentMatch?.id || '',
+      starredIds: starredMessageIds(),
+      showStarredOnly: state.showStarredOnly,
+    });
+    const count = container.querySelector('[data-chat-thread-search-count]');
+    if (count) count.textContent = state.threadSearch ? (matches.length ? `${state.threadSearchIndex + 1} de ${matches.length}` : 'Sin resultados') : '';
+    if (focusSearchResult && currentMatch) {
+      requestAnimationFrame(() => {
+        container.querySelector(`[data-message-id="${CSS.escape(currentMatch.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    }
+  }
+
+  function syncThreadHeaderControls() {
+    const searchOpen = !container.querySelector('[data-chat-thread-search]')?.hidden;
+    container.querySelector('[data-chat-toggle-thread-search]')?.classList.toggle('active', searchOpen);
+    const starredToggle = container.querySelector('[data-chat-toggle-starred]');
+    starredToggle?.classList.toggle('active', state.showStarredOnly);
+    starredToggle?.setAttribute('aria-pressed', state.showStarredOnly ? 'true' : 'false');
+  }
+
+  async function persistSelectedChatPreference(patch = {}) {
+    if (!state.selectedChat?.id || !currentUid) return;
+    const existing = state.chatPreferencesById[state.selectedChat.id] || { exists: false };
+    const payload = { ...patch, updatedAt: serverTimestamp() };
+    if (!existing.exists) payload.createdAt = serverTimestamp();
+    await setDoc(doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid), payload, { merge: true });
+    state.chatPreferencesById[state.selectedChat.id] = { ...existing, ...patch, exists: true };
+  }
+
+  async function copyChatText(value = '') {
+    const text = clean(value, 2000);
+    if (!text) return false;
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    const helper = document.createElement('textarea');
+    helper.value = text;
+    helper.setAttribute('readonly', '');
+    helper.style.position = 'fixed';
+    helper.style.opacity = '0';
+    document.body.appendChild(helper);
+    helper.select();
+    const copied = document.execCommand('copy');
+    helper.remove();
+    return copied;
+  }
 
   function disposeRealtimeListeners() {
     state.disposed = true;
@@ -2120,6 +2571,9 @@ export async function initChatWidget({
       'unsubscribeProposals',
       'unsubscribeNotifications',
       'unsubscribePushMessages',
+      'unsubscribeVoiceCalls',
+      'unsubscribeTyping',
+      'unsubscribeReactions',
     ].forEach((key) => {
       if (typeof state[key] === 'function') {
         state[key]();
@@ -2129,6 +2583,8 @@ export async function initChatWidget({
   }
 
   function disposeWidget() {
+    persistChatDrafts();
+    teardownVoiceCall();
     disposeRealtimeListeners();
     if (typeof state.unsubscribeAuth === 'function') {
       state.unsubscribeAuth();
@@ -2157,9 +2613,32 @@ export async function initChatWidget({
     return createAdminNotification({ targetRole, title, body, currentUid });
   }
 
+  function messageRecipients(chat = {}) {
+    return chatCounterpartUids(chat, currentUid).filter(Boolean);
+  }
+
+  function chatAfterMessageUpdates(chat, messageId, preview, messageType = 'text') {
+    const updates = {
+      lastMessage: clean(preview, 180) || 'Mensaje',
+      lastMessageAt: serverTimestamp(),
+      lastMessageByUid: currentUid,
+      lastMessageId: clean(messageId, 180),
+      lastMessageType: clean(messageType, 40) || 'text',
+      updatedAt: serverTimestamp(),
+      [`unreadBy.${currentUid}`]: 0,
+      [`readAtBy.${currentUid}`]: serverTimestamp(),
+    };
+    messageRecipients(chat).forEach((uid) => {
+      updates[`unreadBy.${uid}`] = increment(1);
+    });
+    return updates;
+  }
+
   async function addSystemChatMessage(chat, body) {
     const chatRef = doc(firebaseDb, 'chats', chat.id);
-    await addDoc(collection(chatRef, 'mensajes'), {
+    const messageRef = doc(collection(chatRef, 'mensajes'));
+    const batch = writeBatch(firebaseDb);
+    batch.set(messageRef, {
       senderUid: currentUid,
       senderRole: role,
       senderName,
@@ -2167,19 +2646,19 @@ export async function initChatWidget({
       createdAt: serverTimestamp(),
       readBy: { [currentUid]: true },
     });
-    await updateDoc(chatRef, {
-      lastMessage: body.slice(0, 180),
-      lastMessageAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    batch.update(chatRef, chatAfterMessageUpdates(chat, messageRef.id, body, 'text'));
+    await batch.commit();
   }
 
-  async function sendChatMessage({ body = '', attachment = null, messageType = 'text', senderDisplayName = '' } = {}) {
+  async function sendChatMessage({ body = '', attachment = null, messageType = 'text', senderDisplayName = '', callId = '', callKind = '', replyTo = null } = {}) {
     if (!state.selectedChat) return;
     const safeBody = clean(body || chatAttachmentLabel(attachment), 2000);
     if (!safeBody && !attachment) return;
     const safeSenderName = readableChatIdentity(senderDisplayName, senderName) || role;
+    const safeCallId = clean(callId, 180);
+    const safeCallKind = clean(callKind, 20);
     const chatRef = doc(firebaseDb, 'chats', state.selectedChat.id);
+    const messageRef = doc(collection(chatRef, 'mensajes'));
     const payload = {
       senderUid: currentUid,
       senderRole: role,
@@ -2190,35 +2669,966 @@ export async function initChatWidget({
       readBy: { [currentUid]: true },
     };
     if (attachment) payload.attachment = normalizeChatAttachment(attachment);
-    await addDoc(collection(chatRef, 'mensajes'), payload);
-    await updateDoc(chatRef, {
-      lastMessage: chatMessagePreview(safeBody, attachment),
-      lastMessageAt: serverTimestamp(),
+    if (safeCallId) payload.callId = safeCallId;
+    if (safeCallKind) payload.callKind = safeCallKind;
+    const normalizedReply = normalizeChatReply(replyTo);
+    if (normalizedReply) payload.replyTo = normalizedReply;
+    const batch = writeBatch(firebaseDb);
+    batch.set(messageRef, payload);
+    batch.update(chatRef, chatAfterMessageUpdates(state.selectedChat, messageRef.id, chatMessagePreview(safeBody, attachment), messageType));
+    await batch.commit();
+  }
+
+  function currentMessageById(messageId = '') {
+    return state.currentMessages.find((message) => message.id === clean(messageId, 180)) || null;
+  }
+
+  async function editChatMessage(message, body = '') {
+    if (!state.selectedChat?.id || !message || message.senderUid !== currentUid || message.deletedAt) return;
+    const safeBody = clean(body, 2000);
+    if (!safeBody) throw new Error('El mensaje no puede quedar vacío.');
+    const messageRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'mensajes', message.id);
+    const batch = writeBatch(firebaseDb);
+    batch.update(messageRef, { body: safeBody, editedAt: serverTimestamp() });
+    if (state.selectedChat.lastMessageId === message.id) {
+      batch.update(doc(firebaseDb, 'chats', state.selectedChat.id), {
+        lastMessage: safeBody.slice(0, 180),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  async function deleteChatMessage(message) {
+    if (!state.selectedChat?.id || !message || message.senderUid !== currentUid || message.deletedAt) return;
+    const messageRef = doc(firebaseDb, 'chats', state.selectedChat.id, 'mensajes', message.id);
+    const batch = writeBatch(firebaseDb);
+    const deletePatch = {
+      body: 'Mensaje eliminado',
+      deletedAt: serverTimestamp(),
+      deletedByUid: currentUid,
+    };
+    if (message.attachment) deletePatch.attachment = null;
+    batch.update(messageRef, deletePatch);
+    if (state.selectedChat.lastMessageId === message.id) {
+      batch.update(doc(firebaseDb, 'chats', state.selectedChat.id), {
+        lastMessage: 'Mensaje eliminado',
+        updatedAt: serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  function chatReactionDoc(messageId = '') {
+    const safeMessageId = clean(messageId, 180);
+    return doc(firebaseDb, 'chats', state.selectedChat.id, 'reacciones', `${safeMessageId}_${currentUid}`);
+  }
+
+  async function toggleMessageReaction(messageId = '', emoji = '') {
+    if (!state.selectedChat?.id || !currentUid) return;
+    const safeMessageId = clean(messageId, 180);
+    const safeEmoji = clean(emoji, 8);
+    if (!safeMessageId || !CHAT_REACTION_EMOJIS.includes(safeEmoji) || !currentMessageById(safeMessageId)) return;
+    const existing = state.messageReactions.find((reaction) => reaction.messageId === safeMessageId && reaction.uid === currentUid);
+    const reactionRef = chatReactionDoc(safeMessageId);
+    if (existing?.emoji === safeEmoji) {
+      await deleteDoc(reactionRef);
+      return;
+    }
+    const payload = {
+      uid: currentUid,
+      messageId: safeMessageId,
+      emoji: safeEmoji,
       updatedAt: serverTimestamp(),
+    };
+    if (!existing) payload.createdAt = serverTimestamp();
+    await setDoc(reactionRef, payload, { merge: true });
+  }
+
+  async function toggleStarredMessage(messageId = '') {
+    const safeMessageId = clean(messageId, 180);
+    if (!safeMessageId || !currentMessageById(safeMessageId)) return;
+    const ids = starredMessageIds();
+    if (ids.has(safeMessageId)) ids.delete(safeMessageId);
+    else ids.add(safeMessageId);
+    const starredMessageIdsValue = Array.from(ids).slice(-100);
+    await persistSelectedChatPreference({ starredMessageIds: starredMessageIdsValue });
+    renderCurrentMessages();
+  }
+
+  function selectedChatCallCollection(chatId = state.selectedChat?.id) {
+    return collection(firebaseDb, 'chats', chatId, 'calls');
+  }
+
+  function selectedChatCallDoc(callId, chatId = state.selectedChat?.id) {
+    return doc(firebaseDb, 'chats', chatId, 'calls', callId);
+  }
+
+  function voiceCallsAvailable() {
+    return Boolean(window.RTCPeerConnection && window.RTCSessionDescription && window.RTCIceCandidate && navigator.mediaDevices?.getUserMedia);
+  }
+
+  function chatParticipantUidMap(chat = {}) {
+    const map = {};
+    if (chat.participantUids && typeof chat.participantUids === 'object') {
+      Object.entries(chat.participantUids).forEach(([uid, allowed]) => {
+        const safeUid = clean(uid, 180);
+        if (safeUid && allowed) map[safeUid] = true;
+      });
+    }
+    [
+      currentUid,
+      chat.familyUserUid,
+      chat.familyUid,
+      chat.familia_id,
+      chat.teacherUserUid,
+      chat.teacherUid,
+      chat.profesor_id,
+    ].map((value) => clean(value, 180)).filter(Boolean).forEach((uid) => {
+      map[uid] = true;
+    });
+    return map;
+  }
+
+  function sessionDescriptionData(description) {
+    const rawSdp = String(description?.sdp || '').slice(0, 200000);
+    return {
+      type: clean(description?.type, 40),
+      // SDP is line-oriented and must retain its final CRLF. Trimming it makes
+      // Chromium reject an otherwise valid offer/answer as an invalid SDP line.
+      sdp: rawSdp && !rawSdp.endsWith('\n') ? `${rawSdp}\r\n` : rawSdp,
+    };
+  }
+
+  function candidateData(candidate) {
+    const json = candidate?.toJSON?.() || {};
+    return {
+      candidate: clean(json.candidate, 4000),
+      sdpMid: json.sdpMid === null || json.sdpMid === undefined ? null : clean(json.sdpMid, 80),
+      sdpMLineIndex: Number.isFinite(json.sdpMLineIndex) ? json.sdpMLineIndex : null,
+      usernameFragment: json.usernameFragment === undefined || json.usernameFragment === null ? null : clean(json.usernameFragment, 120),
+      createdByUid: currentUid,
+      createdAt: serverTimestamp(),
+    };
+  }
+
+  function setVoiceCallBar(text = '', {
+    callId = '',
+    callKind = state.voiceCall?.kind || 'voice',
+    tone = 'active',
+    canJoin = false,
+    canEnd = true,
+    canDecline = false,
+    canMute = Boolean(state.voiceCall?.localStream),
+  } = {}) {
+    const bar = container.querySelector('[data-chat-voice-call-bar]');
+    if (!bar) return;
+    const safeCallId = clean(callId || state.voiceCall?.callId, 180);
+    if (!text) {
+      bar.hidden = true;
+      bar.innerHTML = '';
+      delete bar.dataset.callState;
+      delete bar.dataset.callTransport;
+      delete bar.dataset.remoteAudio;
+      delete bar.dataset.callKind;
+      renderVideoCallStage();
+      return;
+    }
+    if (state.voiceCall) {
+      state.voiceCall.statusText = text;
+      state.voiceCall.statusOptions = { callId: safeCallId, callKind, tone, canJoin, canEnd, canDecline, canMute };
+    }
+    const muted = Boolean(state.voiceCall?.muted);
+    bar.hidden = false;
+    bar.dataset.callTone = tone;
+    bar.dataset.callState = tone;
+    bar.dataset.callTransport = state.voiceCall?.fallbackActive ? 'firestore' : 'webrtc';
+    bar.dataset.remoteAudio = state.voiceCall?.fallbackRemoteChunks > 0 ? 'live' : 'pending';
+    bar.dataset.callKind = callKind;
+    const isVideo = callKind === 'video';
+    const cameraOff = Boolean(state.voiceCall?.cameraOff);
+    bar.innerHTML = `
+      <div class="chat-voice-call-copy">
+        <span class="chat-voice-call-dot" aria-hidden="true"></span>
+        <div>
+          <strong>${isVideo ? 'Videollamada' : 'Llamada de voz'}</strong>
+          <span>${escapeHtml(text)}</span>
+        </div>
+      </div>
+      <div class="chat-voice-call-actions">
+        ${canJoin && safeCallId ? `<button class="btn btn-primary btn-sm" type="button" data-chat-join-call="${escapeAttribute(safeCallId)}">${isVideo ? chatIcon('video') : chatIcon('phone')} Unirse</button>` : ''}
+        ${canDecline && safeCallId ? `<button class="btn btn-ghost btn-sm" type="button" data-chat-decline-call="${escapeAttribute(safeCallId)}">Rechazar</button>` : ''}
+        ${isVideo && state.voiceCall?.localStream ? `<button class="btn btn-ghost btn-sm" type="button" data-chat-toggle-camera aria-pressed="${cameraOff ? 'true' : 'false'}">${cameraOff ? chatIcon('video') : chatIcon('cameraOff')} ${cameraOff ? 'Activar cámara' : 'Apagar cámara'}</button>` : ''}
+        ${canMute ? `<button class="btn btn-ghost btn-sm" type="button" data-chat-toggle-mute aria-pressed="${muted ? 'true' : 'false'}">${chatIcon('mic')} ${muted ? 'Activar micro' : 'Silenciar'}</button>` : ''}
+        ${canEnd ? `<button class="btn btn-ghost btn-sm" type="button" data-chat-end-call>${chatIcon('hangup')} Colgar</button>` : ''}
+      </div>
+      <audio data-chat-remote-audio autoplay playsinline></audio>`;
+    const audio = bar.querySelector('[data-chat-remote-audio]');
+    if (audio && state.voiceCall?.remoteStream) attachRemoteStreamToBar(state.voiceCall.remoteStream);
+    renderVideoCallStage();
+  }
+
+  function renderVideoCallStage() {
+    const stage = container.querySelector('[data-chat-video-stage]');
+    if (!stage) return;
+    const call = state.voiceCall;
+    if (!call || call.kind !== 'video') {
+      stage.hidden = true;
+      stage.innerHTML = '';
+      return;
+    }
+    stage.hidden = false;
+    if (call.fallbackActive) {
+      stage.innerHTML = '<div class="chat-video-fallback"><strong>Vídeo no disponible en esta red</strong><span>La conversación continúa por audio seguro.</span></div>';
+      return;
+    }
+    stage.innerHTML = `
+      <video class="chat-video-remote" data-chat-remote-video autoplay playsinline></video>
+      <video class="chat-video-local" data-chat-local-video autoplay playsinline muted></video>
+      <div class="chat-video-placeholder" data-chat-video-placeholder>Conectando vídeo…</div>`;
+    const localVideo = stage.querySelector('[data-chat-local-video]');
+    const remoteVideo = stage.querySelector('[data-chat-remote-video]');
+    if (localVideo && call.localStream) {
+      localVideo.srcObject = call.localStream;
+      localVideo.play?.().catch(() => {});
+    }
+    if (remoteVideo && call.remoteStream) {
+      remoteVideo.srcObject = call.remoteStream;
+      remoteVideo.play?.().catch(() => {});
+      const hasRemoteVideo = call.remoteStream.getVideoTracks?.().some((track) => track.readyState === 'live');
+      stage.querySelector('[data-chat-video-placeholder]')?.toggleAttribute('hidden', Boolean(hasRemoteVideo));
+    }
+  }
+
+  function teardownVoiceCall({ hideBar = true } = {}) {
+    const call = state.voiceCall;
+    if (!call) {
+      if (hideBar) setVoiceCallBar('');
+      return;
+    }
+    call.unsubscribers?.forEach((unsubscribe) => {
+      try {
+        unsubscribe();
+      } catch (_) {}
+    });
+    clearTimeout(call.connectionTimer);
+    clearTimeout(call.ringTimer);
+    clearTimeout(call.fallbackTimer);
+    if (call.fallbackProcessor) call.fallbackProcessor.onaudioprocess = null;
+    call.fallbackProcessor?.disconnect?.();
+    call.fallbackSource?.disconnect?.();
+    call.fallbackSilentGain?.disconnect?.();
+    call.fallbackAudioContext?.close?.().catch?.(() => {});
+    call.localStream?.getTracks?.().forEach((track) => track.stop());
+    state.voiceCall = null;
+    call.peer?.close?.();
+    if (hideBar) setVoiceCallBar('');
+    else renderVideoCallStage();
+  }
+
+  async function markVoiceCallEnded() {
+    const call = state.voiceCall;
+    if (!call?.callRef) {
+      teardownVoiceCall();
+      return;
+    }
+    try {
+      await updateDoc(call.callRef, {
+        status: 'ended',
+        endedByUid: currentUid,
+        endedByRole: role,
+        endedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (_) {
+      // The local call still needs to release the microphone even if the remote update fails.
+    }
+    teardownVoiceCall();
+  }
+
+  async function declineVoiceCall(callId) {
+    const safeCallId = clean(callId, 180);
+    if (!safeCallId || !state.selectedChat?.id) return;
+    const callRef = selectedChatCallDoc(safeCallId, state.selectedChat.id);
+    try {
+      await updateDoc(callRef, {
+        status: 'rejected',
+        endedByUid: currentUid,
+        endedByRole: role,
+        endedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setVoiceCallBar('');
+    } catch (error) {
+      showToast('No se pudo rechazar', error.message || 'Actualiza el chat e intentalo de nuevo.', 'error');
+    }
+  }
+
+  function attachRemoteStreamToBar(remoteStream) {
+    const audio = container.querySelector('[data-chat-remote-audio]');
+    if (!audio) return;
+    audio.srcObject = remoteStream;
+    const playback = audio.play?.();
+    if (!playback?.catch) return;
+    playback.catch(() => {
+      const actions = container.querySelector('.chat-voice-call-actions');
+      if (!actions || actions.querySelector('[data-chat-enable-audio]')) return;
+      actions.insertAdjacentHTML('afterbegin', '<button class="btn btn-primary btn-sm" type="button" data-chat-enable-audio>Activar audio</button>');
+    });
+    renderVideoCallStage();
+  }
+
+  function toggleVoiceCallMute() {
+    const call = state.voiceCall;
+    if (!call?.localStream) return;
+    call.muted = !call.muted;
+    call.localStream.getAudioTracks().forEach((track) => {
+      track.enabled = !call.muted;
+    });
+    setVoiceCallBar(call.statusText || 'Llamada en curso.', call.statusOptions || { tone: 'active' });
+  }
+
+  function toggleVideoCamera() {
+    const call = state.voiceCall;
+    if (!call?.localStream || call.kind !== 'video') return;
+    call.cameraOff = !call.cameraOff;
+    call.localStream.getVideoTracks().forEach((track) => { track.enabled = !call.cameraOff; });
+    setVoiceCallBar(call.statusText || 'Videollamada en curso.', call.statusOptions || { callKind: 'video', tone: 'active' });
+  }
+
+  function preferredVoiceTransport() {
+    try {
+      return clean(sessionStorage.getItem('cd10_call_transport'), 40).toLowerCase();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function voicePeerConfiguration() {
+    const preferredTransport = preferredVoiceTransport();
+    const forceRelay = preferredTransport === 'relay' || preferredTransport === 'firestore';
+    return {
+      iceServers: VOICE_CALL_ICE_SERVERS,
+      iceCandidatePoolSize: 4,
+      ...(forceRelay ? { iceTransportPolicy: 'relay' } : {}),
+    };
+  }
+
+  function floatSampleToMuLaw(value) {
+    let sample = Math.max(-1, Math.min(1, Number(value) || 0)) * 32767;
+    const sign = sample < 0 ? 0x80 : 0;
+    if (sample < 0) sample = -sample;
+    sample = Math.min(32635, Math.round(sample)) + 0x84;
+    let exponent = 7;
+    for (let mask = 0x4000; exponent > 0 && (sample & mask) === 0; mask >>= 1) exponent -= 1;
+    const mantissa = (sample >> (exponent + 3)) & 0x0f;
+    return (~(sign | (exponent << 4) | mantissa)) & 0xff;
+  }
+
+  function muLawToFloatSample(value) {
+    const decoded = (~Number(value)) & 0xff;
+    const sign = decoded & 0x80;
+    const exponent = (decoded >> 4) & 0x07;
+    const mantissa = decoded & 0x0f;
+    let sample = ((mantissa << 3) + 0x84) << exponent;
+    sample -= 0x84;
+    return (sign ? -sample : sample) / 32768;
+  }
+
+  function downsampleToMuLaw(input, inputRate) {
+    const ratio = Math.max(1, Number(inputRate) / VOICE_CALL_FALLBACK_SAMPLE_RATE);
+    const outputLength = Math.max(1, Math.floor(input.length / ratio));
+    const output = new Uint8Array(outputLength);
+    for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
+      const start = Math.floor(outputIndex * ratio);
+      const end = Math.min(input.length, Math.max(start + 1, Math.floor((outputIndex + 1) * ratio)));
+      let total = 0;
+      for (let inputIndex = start; inputIndex < end; inputIndex += 1) total += input[inputIndex];
+      output[outputIndex] = floatSampleToMuLaw(total / Math.max(1, end - start));
+    }
+    return output;
+  }
+
+  function bytesToBase64(bytes) {
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + 0x8000)));
+    }
+    return btoa(binary);
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(String(value || ''));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  function ensureVoiceAudioActivationButton() {
+    const actions = container.querySelector('.chat-voice-call-actions');
+    if (!actions || actions.querySelector('[data-chat-enable-audio]')) return;
+    actions.insertAdjacentHTML('afterbegin', '<button class="btn btn-primary btn-sm" type="button" data-chat-enable-audio>Activar audio</button>');
+  }
+
+  function playFallbackAudioBytes(call, bytes) {
+    const audioContext = call?.fallbackAudioContext;
+    if (!audioContext || !bytes?.length || state.voiceCall !== call) return;
+    const buffer = audioContext.createBuffer(1, bytes.length, VOICE_CALL_FALLBACK_SAMPLE_RATE);
+    const channel = buffer.getChannelData(0);
+    for (let index = 0; index < bytes.length; index += 1) channel[index] = muLawToFloatSample(bytes[index]);
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    const earliestStart = audioContext.currentTime + 0.05;
+    const startAt = Math.max(earliestStart, call.fallbackNextPlaybackAt || (audioContext.currentTime + 0.15));
+    source.start(startAt);
+    call.fallbackNextPlaybackAt = startAt + buffer.duration;
+  }
+
+  function flushFallbackPlaybackQueue(call = state.voiceCall) {
+    if (!call?.fallbackAudioContext || call.fallbackAudioContext.state !== 'running') return;
+    const pending = call.fallbackPlaybackQueue?.splice(0) || [];
+    pending.forEach((bytes) => playFallbackAudioBytes(call, bytes));
+  }
+
+  async function resumeFallbackAudio(call = state.voiceCall) {
+    if (!call?.fallbackAudioContext) return;
+    await call.fallbackAudioContext.resume().catch(() => {});
+    if (call.fallbackAudioContext.state === 'running') flushFallbackPlaybackQueue(call);
+    else ensureVoiceAudioActivationButton();
+  }
+
+  function scheduleFallbackPlayback(call, encodedAudio) {
+    if (!call?.fallbackActive || state.voiceCall !== call || !encodedAudio) return;
+    let bytes;
+    try {
+      bytes = base64ToBytes(encodedAudio);
+    } catch (error) {
+      console.warn('No se pudo decodificar un tramo de audio seguro', error);
+      return;
+    }
+    call.fallbackRemoteChunks = (call.fallbackRemoteChunks || 0) + 1;
+    if (call.fallbackRemoteChunks === 1) {
+      setVoiceCallBar('Conectada. Audio seguro activo.', { tone: 'connected', canMute: true });
+    }
+    if (call.fallbackAudioContext?.state === 'running') {
+      playFallbackAudioBytes(call, bytes);
+      return;
+    }
+    call.fallbackPlaybackQueue = call.fallbackPlaybackQueue || [];
+    call.fallbackPlaybackQueue.push(bytes);
+    if (call.fallbackPlaybackQueue.length > 20) call.fallbackPlaybackQueue.shift();
+    ensureVoiceAudioActivationButton();
+  }
+
+  function watchFallbackAudio(call) {
+    const remoteUid = clean(call?.remoteUid, 180);
+    if (!remoteUid) return null;
+    const seenSequences = new Set();
+    return onSnapshot(
+      collection(call.callRef, 'audioStreams', remoteUid, 'chunks'),
+      (snap) => {
+        const changes = snap.docChanges()
+          .filter((change) => ['added', 'modified'].includes(change.type))
+          .map((change) => change.doc.data() || {})
+          .filter((data) => Number.isInteger(data.seq) && !seenSequences.has(data.seq))
+          .sort((a, b) => a.seq - b.seq);
+        changes.forEach((data) => {
+          seenSequences.add(data.seq);
+          if (seenSequences.size > 120) {
+            const oldest = Math.min(...seenSequences);
+            seenSequences.delete(oldest);
+          }
+          scheduleFallbackPlayback(call, data.audio);
+        });
+      },
+      (error) => {
+        console.warn('No se pudo recibir el audio seguro de la llamada', error);
+        if (state.voiceCall === call) setVoiceCallBar('Reconectando el audio seguro...', { tone: 'warning', canMute: true });
+      },
+    );
+  }
+
+  async function writeFallbackAudioChunk(call, bytes) {
+    if (!call?.fallbackActive || state.voiceCall !== call || !bytes?.length) return;
+    const sequence = call.fallbackSequence || 0;
+    call.fallbackSequence = sequence + 1;
+    const slotId = `slot_${String(sequence % 12).padStart(2, '0')}`;
+    const chunkRef = doc(call.callRef, 'audioStreams', currentUid, 'chunks', slotId);
+    await setDoc(chunkRef, {
+      senderUid: currentUid,
+      seq: sequence,
+      sampleRate: VOICE_CALL_FALLBACK_SAMPLE_RATE,
+      codec: 'mulaw',
+      audio: bytesToBase64(bytes),
+      createdAt: serverTimestamp(),
     });
   }
 
-  async function requestChatCall(button) {
-    if (!state.selectedChat) return;
-    const chatId = state.selectedChat.id;
-    const counterpart = chatTitle(state.selectedChat, role, state.chatPreferencesById?.[chatId] || {});
-    const requester = chatCallRequesterName(state.selectedChat, role, senderName);
+  async function startFirestoreAudioFallback() {
+    const call = state.voiceCall;
+    if (!call || call.fallbackActive || call.fallbackStarting) return;
+    if (!clean(call.remoteUid, 180)) {
+      clearTimeout(call.fallbackTimer);
+      call.fallbackTimer = setTimeout(() => startFirestoreAudioFallback(), 500);
+      return;
+    }
+    call.fallbackStarting = true;
+    try {
+      const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextConstructor) throw new Error('El navegador no permite el canal de audio alternativo.');
+      call.fallbackActive = true;
+      clearTimeout(call.connectionTimer);
+      clearTimeout(call.fallbackTimer);
+      const previousPeer = call.peer;
+      call.peer = null;
+      previousPeer?.close?.();
+      if (call.kind === 'video') {
+        call.videoFallback = true;
+        call.localStream?.getVideoTracks?.().forEach((track) => track.stop());
+        renderVideoCallStage();
+      }
+
+      const audioContext = new AudioContextConstructor({ latencyHint: 'interactive' });
+      const source = audioContext.createMediaStreamSource(call.localStream);
+      const processor = audioContext.createScriptProcessor(2048, 1, 1);
+      const silentGain = audioContext.createGain();
+      silentGain.gain.value = 0;
+      call.fallbackAudioContext = audioContext;
+      call.fallbackSource = source;
+      call.fallbackProcessor = processor;
+      call.fallbackSilentGain = silentGain;
+      call.fallbackPendingBytes = [];
+      call.fallbackPlaybackQueue = [];
+      call.fallbackSequence = call.fallbackSequence || 0;
+      call.fallbackRemoteChunks = call.fallbackRemoteChunks || 0;
+      call.fallbackWriteQueue = call.fallbackWriteQueue || Promise.resolve();
+      processor.onaudioprocess = (event) => {
+        if (!call.fallbackActive || state.voiceCall !== call || call.muted) return;
+        const encoded = downsampleToMuLaw(event.inputBuffer.getChannelData(0), audioContext.sampleRate);
+        call.fallbackPendingBytes.push(...encoded);
+        while (call.fallbackPendingBytes.length >= VOICE_CALL_FALLBACK_CHUNK_SAMPLES) {
+          const bytes = Uint8Array.from(call.fallbackPendingBytes.splice(0, VOICE_CALL_FALLBACK_CHUNK_SAMPLES));
+          call.fallbackWriteQueue = call.fallbackWriteQueue
+            .then(() => writeFallbackAudioChunk(call, bytes))
+            .catch((error) => {
+              console.warn('No se pudo enviar un tramo de audio seguro', error);
+              if (state.voiceCall === call) setVoiceCallBar('Reconectando el audio seguro...', { tone: 'warning', canMute: true });
+            });
+        }
+      };
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(audioContext.destination);
+      const unsubscribe = watchFallbackAudio(call);
+      if (unsubscribe) call.unsubscribers.push(unsubscribe);
+      setVoiceCallBar('Conectando audio seguro...', { tone: 'active', canMute: true });
+      await resumeFallbackAudio(call);
+      await updateDoc(call.callRef, {
+        status: 'active',
+        transportMode: 'firestore_audio',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      call.fallbackActive = false;
+      console.warn('No se pudo activar el audio seguro alternativo', error);
+      if (state.voiceCall === call) setVoiceCallBar('No se ha podido conectar el audio. Intentalo de nuevo.', { tone: 'warning', canMute: true });
+    } finally {
+      call.fallbackStarting = false;
+    }
+  }
+
+  function scheduleVoiceFallback(peer, delay = null) {
+    const call = state.voiceCall;
+    if (!call || call.peer !== peer || call.fallbackActive) return;
+    clearTimeout(call.fallbackTimer);
+    const preferredDelay = preferredVoiceTransport() === 'firestore' ? 500 : VOICE_CALL_FALLBACK_DELAY_MS;
+    call.fallbackTimer = setTimeout(() => {
+      if (state.voiceCall !== call || call.fallbackActive || peer.connectionState === 'connected') return;
+      startFirestoreAudioFallback();
+    }, Number.isFinite(delay) ? delay : preferredDelay);
+  }
+
+  async function createVoicePeer(callRef, candidateCollectionName, callKind = 'voice') {
+    const wantsVideo = callKind === 'video';
+    const localStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: wantsVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
+    });
+    const remoteStream = new MediaStream();
+    const peer = new RTCPeerConnection(voicePeerConfiguration());
+    localStream.getTracks().forEach((track) => peer.addTrack(track, localStream));
+    peer.addEventListener('track', (event) => {
+      const stream = event.streams?.[0];
+      if (stream) {
+        stream.getTracks().forEach((track) => {
+          if (!remoteStream.getTracks().some((item) => item.id === track.id)) remoteStream.addTrack(track);
+        });
+      } else if (event.track) {
+        remoteStream.addTrack(event.track);
+      }
+      attachRemoteStreamToBar(remoteStream);
+      renderVideoCallStage();
+    });
+    peer.addEventListener('icecandidate', (event) => {
+      if (!event.candidate) return;
+      addDoc(collection(callRef, candidateCollectionName), candidateData(event.candidate)).catch((error) => {
+        console.warn('No se pudo guardar candidato de llamada', error);
+      });
+    });
+    peer.addEventListener('connectionstatechange', async () => {
+      if (state.voiceCall?.peer !== peer) return;
+      if (peer.connectionState === 'connected') {
+        clearTimeout(state.voiceCall.connectionTimer);
+        clearTimeout(state.voiceCall.fallbackTimer);
+        state.voiceCall.connectionTimer = null;
+        setVoiceCallBar(wantsVideo ? 'Conectada. Ya podéis veros y hablar.' : 'Conectada. Ya podéis hablar.', { callKind, tone: 'connected', canMute: true });
+      } else if (peer.connectionState === 'disconnected') {
+        setVoiceCallBar('Recuperando la conexion...', { tone: 'warning', canMute: true });
+        clearTimeout(state.voiceCall.connectionTimer);
+        state.voiceCall.connectionTimer = setTimeout(() => {
+          if (state.voiceCall?.peer !== peer || peer.connectionState === 'connected') return;
+          startFirestoreAudioFallback();
+        }, 8000);
+      } else if (peer.connectionState === 'failed') {
+        setVoiceCallBar('Cambiando al audio seguro...', { tone: 'warning', canMute: true });
+        startFirestoreAudioFallback();
+      } else if (peer.connectionState === 'closed') {
+        teardownVoiceCall();
+      }
+    });
+    return { peer, localStream, remoteStream };
+  }
+
+  async function addOrQueueRemoteCandidate(peer, data = {}) {
+    const call = state.voiceCall;
+    if (!call || call.peer !== peer || !data.candidate) return;
+    const candidate = new RTCIceCandidate({
+      candidate: clean(data.candidate, 4000),
+      sdpMid: data.sdpMid ?? null,
+      sdpMLineIndex: data.sdpMLineIndex ?? null,
+      usernameFragment: data.usernameFragment ?? null,
+    });
+    if (!peer.remoteDescription?.type) {
+      call.pendingRemoteCandidates.push(candidate);
+      return;
+    }
+    try {
+      await peer.addIceCandidate(candidate);
+    } catch (error) {
+      if (peer.signalingState !== 'closed') console.warn('No se pudo aplicar candidato remoto de llamada', error);
+    }
+  }
+
+  async function flushRemoteCandidates(peer) {
+    const call = state.voiceCall;
+    if (!call || call.peer !== peer || !peer.remoteDescription?.type) return;
+    const pending = call.pendingRemoteCandidates.splice(0);
+    for (const candidate of pending) {
+      try {
+        await peer.addIceCandidate(candidate);
+      } catch (error) {
+        if (peer.signalingState !== 'closed') console.warn('No se pudo aplicar candidato remoto pendiente', error);
+      }
+    }
+  }
+
+  function watchRemoteCandidates(callRef, candidateCollectionName, peer) {
+    const seen = new Set();
+    return onSnapshot(collection(callRef, candidateCollectionName), (snap) => {
+      snap.docChanges().forEach((change) => {
+        if (change.type !== 'added' || seen.has(change.doc.id)) return;
+        seen.add(change.doc.id);
+        const data = change.doc.data() || {};
+        if (clean(data.createdByUid, 180) === currentUid || !data.candidate) return;
+        addOrQueueRemoteCandidate(peer, data);
+      });
+    }, (error) => {
+      console.warn('No se pudieron recibir candidatos de llamada', error);
+    });
+  }
+
+  function watchVoiceCallDocument(callRef, peer, mode) {
+    return onSnapshot(callRef, async (snap) => {
+      if (!snap.exists() || state.voiceCall?.callRef?.path !== callRef.path) return;
+      const data = snap.data() || {};
+      if (['ended', 'failed', 'missed', 'rejected'].includes(data.status)) {
+        teardownVoiceCall();
+        const endedCopy = data.status === 'rejected'
+          ? 'La llamada ha sido rechazada.'
+          : data.status === 'missed' ? 'La llamada no ha sido atendida.' : 'La llamada ha terminado.';
+        showToast('Llamada finalizada', endedCopy, 'info');
+        return;
+      }
+      if (mode === 'caller' && data.answeredByUid) state.voiceCall.remoteUid = clean(data.answeredByUid, 180);
+      if (mode === 'answerer' && data.createdByUid) state.voiceCall.remoteUid = clean(data.createdByUid, 180);
+      if (data.transportMode === 'firestore_audio' && !state.voiceCall.fallbackActive) {
+        await startFirestoreAudioFallback();
+        return;
+      }
+      if (mode === 'caller' && data.answer && !state.voiceCall.remoteDescriptionSet && !state.voiceCall.remoteDescriptionPending) {
+        state.voiceCall.remoteDescriptionPending = true;
+        try {
+          await peer.setRemoteDescription(new RTCSessionDescription(data.answer));
+          state.voiceCall.remoteDescriptionSet = true;
+          await flushRemoteCandidates(peer);
+          setVoiceCallBar(state.voiceCall.kind === 'video' ? 'Conectando vídeo…' : 'Conectando audio…', { callKind: state.voiceCall.kind, tone: 'active', canMute: true });
+          scheduleVoiceFallback(peer);
+        } catch (error) {
+          showToast('No se pudo conectar', error.message || 'La llamada no pudo completarse.', 'error');
+        } finally {
+          if (state.voiceCall?.peer === peer) state.voiceCall.remoteDescriptionPending = false;
+        }
+      }
+    });
+    state.chatSubscriptions.forEach((unsubscribe) => {
+      try { unsubscribe(); } catch (_) {}
+    });
+    state.chatSubscriptions.clear();
+    clearTimeout(state.typingTimer);
+    document.title = state.originalDocumentTitle;
+  }
+
+  function voiceCallCreatedAtMs(call = {}) {
+    if (typeof call.createdAt?.toMillis === 'function') return call.createdAt.toMillis();
+    const parsed = Date.parse(call.createdAt || '');
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }
+
+  function freshVoiceCallsFromSnapshot(snap) {
+    const oldestAllowed = Date.now() - VOICE_CALL_STALE_MS;
+    return snap.docs
+      .map((item) => ({ id: item.id, ...item.data() }))
+      .filter((item) => voiceCallCreatedAtMs(item) >= oldestAllowed)
+      .sort((a, b) => voiceCallCreatedAtMs(b) - voiceCallCreatedAtMs(a));
+  }
+
+  async function findOpenVoiceCall(chatId) {
+    const snap = await getDocs(query(
+      collection(firebaseDb, 'chats', chatId, 'calls'),
+      where('status', 'in', ['ringing', 'active']),
+      limit(8),
+    ));
+    const fresh = freshVoiceCallsFromSnapshot(snap);
+    const freshIds = new Set(fresh.map((item) => item.id));
+    snap.docs.forEach((item) => {
+      if (freshIds.has(item.id)) return;
+      updateDoc(item.ref, { status: 'missed', endedAt: serverTimestamp(), updatedAt: serverTimestamp() }).catch(() => {});
+    });
+    return fresh[0] || null;
+  }
+
+  function watchIncomingVoiceCalls(chat) {
+    if (!chat?.id || role === 'admin') return null;
+    const openCallsQuery = query(
+      collection(firebaseDb, 'chats', chat.id, 'calls'),
+      where('status', 'in', ['ringing', 'active']),
+      limit(8),
+    );
+    return onSnapshot(openCallsQuery, (snap) => {
+      if (state.selectedChat?.id !== chat.id || state.voiceCall) return;
+      const incoming = freshVoiceCallsFromSnapshot(snap)
+        .find((item) => clean(item.createdByUid, 180) !== currentUid);
+      if (!incoming) {
+        setVoiceCallBar('');
+        return;
+      }
+      const caller = readableChatIdentity(incoming.callerName) || 'La otra persona';
+      const callKind = incoming.kind === 'video' ? 'video' : 'voice';
+      const copy = incoming.status === 'active'
+        ? `Hay una ${callKind === 'video' ? 'videollamada' : 'llamada'} en curso. Puedes unirte ahora.`
+        : `${caller} te está llamando${callKind === 'video' ? ' por vídeo' : ''}.`;
+      setVoiceCallBar(copy, {
+        callId: incoming.id,
+        callKind,
+        tone: 'active',
+        canJoin: true,
+        canEnd: false,
+        canDecline: incoming.status === 'ringing',
+        canMute: false,
+      });
+    }, (error) => {
+      console.warn('No se pudo escuchar el estado de las llamadas', error);
+    });
+  }
+
+  function scheduleRingingTimeout(callRef, peer) {
+    const call = state.voiceCall;
+    if (!call || call.peer !== peer) return;
+    call.ringTimer = setTimeout(async () => {
+      if (state.voiceCall?.peer !== peer) return;
+      try {
+        const snap = await getDoc(callRef);
+        if (snap.exists() && snap.data()?.status === 'ringing') {
+          await updateDoc(callRef, {
+            status: 'missed',
+            endedByUid: currentUid,
+            endedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
+      } catch (_) {}
+      if (state.voiceCall?.peer === peer) {
+        teardownVoiceCall();
+        showToast('Sin respuesta', 'La llamada no ha sido atendida.', 'info');
+      }
+    }, VOICE_CALL_RING_TIMEOUT_MS);
+  }
+
+  async function startVoiceCall(button, requestedKind = 'voice') {
+    if (!state.selectedChat || role === 'admin') return;
+    const callKind = requestedKind === 'video' ? 'video' : 'voice';
+    if (!voiceCallsAvailable()) {
+      showToast('Llamadas no disponibles', 'Este navegador no permite llamadas de voz desde la web.', 'warning');
+      return;
+    }
+    const chat = state.selectedChat;
+    const chatId = chat.id;
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     try {
+      const openCall = await findOpenVoiceCall(chatId).catch(() => null);
+      if (openCall?.id) {
+        if (clean(openCall.createdByUid, 180) !== currentUid) {
+          await joinVoiceCall(openCall.id, button);
+          return;
+        }
+        await updateDoc(selectedChatCallDoc(openCall.id, chatId), {
+          status: 'failed',
+          endedByUid: currentUid,
+          endedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }).catch(() => {});
+      }
+      teardownVoiceCall();
+      const callRef = doc(selectedChatCallCollection(chatId));
+      const { peer, localStream, remoteStream } = await createVoicePeer(callRef, 'offerCandidates', callKind);
+      state.voiceCall = {
+        callId: callRef.id,
+        chatId,
+        callRef,
+        peer,
+        localStream,
+        remoteStream,
+        unsubscribers: [],
+        pendingRemoteCandidates: [],
+        remoteDescriptionSet: false,
+        remoteDescriptionPending: false,
+        muted: false,
+        mode: 'caller',
+        kind: callKind,
+        cameraOff: false,
+        remoteUid: '',
+        fallbackActive: false,
+        fallbackStarting: false,
+        fallbackRemoteChunks: 0,
+      };
+      setVoiceCallBar('Llamando… La otra persona recibirá el aviso en este chat.', { callId: callRef.id, callKind, tone: 'active', canMute: true });
+      const offer = await peer.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callKind === 'video' });
+      await peer.setLocalDescription(offer);
+      await setDoc(callRef, {
+        kind: callKind,
+        status: 'ringing',
+        createdByUid: currentUid,
+        createdByRole: role,
+        callerName: chatCallRequesterName(chat, role, senderName),
+        participantUids: chatParticipantUidMap(chat),
+        offer: sessionDescriptionData(peer.localDescription),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      state.voiceCall.unsubscribers.push(watchVoiceCallDocument(callRef, peer, 'caller'));
+      state.voiceCall.unsubscribers.push(watchRemoteCandidates(callRef, 'answerCandidates', peer));
+      scheduleRingingTimeout(callRef, peer);
+      const counterpart = chatTitle(chat, role, state.chatPreferencesById?.[chatId] || {});
+      const requester = chatCallRequesterName(chat, role, senderName);
       await sendChatMessage({
-        body: chatCallRequestBody(requester, counterpart),
+        body: chatCallStartedBody(requester, counterpart, callKind),
         messageType: 'call',
         senderDisplayName: requester,
+        callId: callRef.id,
+        callKind,
+      }).catch((error) => {
+        console.warn('La llamada se inicio, pero no se pudo guardar el mensaje informativo', error);
       });
-      showToast('Solicitud enviada', 'La llamada se acuerda por chat. No se ha compartido ningun telefono.', 'success');
+      showToast(callKind === 'video' ? 'Videollamada iniciada' : 'Llamada iniciada', 'La otra persona puede pulsar Unirse. No se comparte ningún teléfono.', 'success');
       await refreshChats();
       selectChat(chatId);
     } catch (error) {
-      showToast('No se pudo pedir llamada', error.message || 'Revisa permisos del chat.', 'error');
+      teardownVoiceCall();
+      showToast('No se pudo iniciar la llamada', error.message || 'Revisa permisos de microfono y chat.', 'error');
     } finally {
       button.disabled = false;
       button.removeAttribute('aria-busy');
+    }
+  }
+
+  async function joinVoiceCall(callId, button = null) {
+    if (!state.selectedChat || role === 'admin') return;
+    if (!voiceCallsAvailable()) {
+      showToast('Llamadas no disponibles', 'Este navegador no permite llamadas de voz desde la web.', 'warning');
+      return;
+    }
+    const safeCallId = clean(callId, 180);
+    if (!safeCallId) return;
+    const chatId = state.selectedChat.id;
+    const callRef = selectedChatCallDoc(safeCallId, chatId);
+    button?.setAttribute('aria-busy', 'true');
+    if (button) button.disabled = true;
+    try {
+      const callSnap = await getDoc(callRef);
+      if (!callSnap.exists()) throw new Error('La llamada ya no existe.');
+      const callData = callSnap.data() || {};
+      const callKind = callData.kind === 'video' ? 'video' : 'voice';
+      if (!['ringing', 'active'].includes(callData.status)) throw new Error('La llamada ya ha terminado.');
+      if (clean(callData.createdByUid, 180) === currentUid) throw new Error('Esta llamada ya la has iniciado tu.');
+      if (!callData.offer?.sdp) throw new Error('La llamada aun no esta preparada.');
+      teardownVoiceCall();
+      const { peer, localStream, remoteStream } = await createVoicePeer(callRef, 'answerCandidates', callKind);
+      state.voiceCall = {
+        callId: safeCallId,
+        chatId,
+        callRef,
+        peer,
+        localStream,
+        remoteStream,
+        unsubscribers: [],
+        pendingRemoteCandidates: [],
+        remoteDescriptionSet: false,
+        remoteDescriptionPending: false,
+        muted: false,
+        mode: 'answerer',
+        kind: callKind,
+        cameraOff: false,
+        remoteUid: clean(callData.createdByUid, 180),
+        fallbackActive: false,
+        fallbackStarting: false,
+        fallbackRemoteChunks: 0,
+      };
+      setVoiceCallBar(callKind === 'video' ? 'Conectando vídeo…' : 'Conectando audio…', { callId: safeCallId, callKind, tone: 'active', canMute: true });
+      state.voiceCall.unsubscribers.push(watchVoiceCallDocument(callRef, peer, 'answerer'));
+      state.voiceCall.unsubscribers.push(watchRemoteCandidates(callRef, 'offerCandidates', peer));
+      await peer.setRemoteDescription(new RTCSessionDescription(callData.offer));
+      state.voiceCall.remoteDescriptionSet = true;
+      await flushRemoteCandidates(peer);
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      await updateDoc(callRef, {
+        status: 'active',
+        answer: sessionDescriptionData(peer.localDescription),
+        answeredByUid: currentUid,
+        answeredByRole: role,
+        startedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      scheduleVoiceFallback(peer);
+      showToast(callKind === 'video' ? 'Entrando en videollamada' : 'Entrando en llamada', 'Conexión dentro de ClasesDe10, sin teléfonos reales.', 'success');
+    } catch (error) {
+      teardownVoiceCall();
+      showToast('No se pudo entrar en la llamada', error.message || 'Permite el microfono e intentalo de nuevo.', 'error');
+    } finally {
+      button?.removeAttribute('aria-busy');
+      if (button) button.disabled = false;
     }
   }
 
@@ -2245,7 +3655,9 @@ export async function initChatWidget({
       body: chatAttachmentLabel(attachment),
       attachment,
       messageType: attachment.kind,
+      replyTo: state.replyTarget,
     });
+    setComposerReply(null);
     return attachment;
   }
 
@@ -2312,7 +3724,8 @@ export async function initChatWidget({
         try {
           const attachment = await uploadChatAttachment(file, 'audio');
           attachment.durationMs = durationMs;
-          await sendChatMessage({ body: 'Nota de audio', attachment, messageType: 'audio' });
+          await sendChatMessage({ body: 'Nota de audio', attachment, messageType: 'audio', replyTo: state.replyTarget });
+          setComposerReply(null);
           showToast('Audio enviado', 'Nota de voz enviada.', 'success');
           await refreshChats();
           if (state.selectedChat?.id) selectChat(state.selectedChat.id);
@@ -2329,21 +3742,286 @@ export async function initChatWidget({
     }
   }
 
+  function sortChatsByActivity() {
+    state.chats.sort((a, b) => timestampMs(b.lastMessageAt || b.updatedAt) - timestampMs(a.lastMessageAt || a.updatedAt));
+  }
+
+  function renderChatListFromState() {
+    sortChatsByActivity();
+    renderChatList(
+      container,
+      state.chats,
+      state.selectedChat?.id,
+      role,
+      state.chatPreferencesById,
+      currentUid,
+      state.chatListFilter,
+      state.chatSearch,
+      state.draftsByChat,
+    );
+    const totalUnread = state.chats.reduce((total, chat) => total + chatUnreadCount(chat, currentUid), 0);
+    const counter = container.querySelector('[data-chat-total-unread]');
+    if (counter) {
+      counter.hidden = totalUnread === 0;
+      counter.textContent = totalUnread > 99 ? '99+' : String(totalUnread || '');
+    }
+    document.querySelectorAll('.sidebar-link[data-section="chat"]').forEach((link) => {
+      let badge = link.querySelector('[data-chat-nav-unread]');
+      if (!badge && totalUnread) {
+        badge = document.createElement('span');
+        badge.dataset.chatNavUnread = '';
+        badge.className = 'chat-nav-unread';
+        link.appendChild(badge);
+      }
+      if (badge) {
+        badge.hidden = totalUnread === 0;
+        badge.textContent = totalUnread > 99 ? '99+' : String(totalUnread || '');
+      }
+      link.classList.toggle('has-chat-unread', totalUnread > 0);
+    });
+    document.querySelectorAll('.hamburger-btn').forEach((button) => {
+      let badge = button.querySelector('[data-chat-menu-unread]');
+      if (!badge && totalUnread) {
+        badge = document.createElement('b');
+        badge.dataset.chatMenuUnread = '';
+        badge.className = 'chat-menu-unread';
+        button.appendChild(badge);
+      }
+      if (badge) {
+        badge.hidden = totalUnread === 0;
+        badge.textContent = totalUnread > 99 ? '99+' : String(totalUnread || '');
+        badge.setAttribute('aria-label', `${totalUnread} mensajes sin leer`);
+      }
+      button.classList.toggle('has-chat-unread', totalUnread > 0);
+    });
+    document.title = totalUnread ? `(${totalUnread}) ${state.originalDocumentTitle}` : state.originalDocumentTitle;
+    if (state.lastRenderedUnreadCount !== totalUnread) {
+      state.lastRenderedUnreadCount = totalUnread;
+      window.dispatchEvent(new CustomEvent('cd10:chat-unread', { detail: { count: totalUnread } }));
+    }
+  }
+
+  function playIncomingMessageTone() {
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextConstructor) return;
+    try {
+      const audioContext = new AudioContextConstructor();
+      const gain = audioContext.createGain();
+      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.18);
+      const oscillator = audioContext.createOscillator();
+      oscillator.frequency.setValueAtTime(740, audioContext.currentTime);
+      oscillator.frequency.setValueAtTime(880, audioContext.currentTime + 0.08);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.2);
+      oscillator.addEventListener('ended', () => audioContext.close().catch(() => {}), { once: true });
+    } catch (_) {}
+  }
+
+  function notifyIncomingChatMessage(chat) {
+    const title = chatTitle(chat, role, state.chatPreferencesById[chat.id] || {});
+    const body = clean(chat.lastMessage, 180) || 'Nuevo mensaje';
+    const liveRegion = container.querySelector('[data-chat-live-region]');
+    if (liveRegion) liveRegion.textContent = `Nuevo mensaje de ${title}: ${body}`;
+    playIncomingMessageTone();
+    const shouldInterrupt = state.selectedChat?.id !== chat.id || document.visibilityState !== 'visible' || !container.offsetParent;
+    if (shouldInterrupt) {
+      showToast(`Mensaje de ${title}`, body, 'info');
+      showBrowserNotification(`Mensaje de ${title}`, body, {
+        url: `${window.location.pathname}#chat`,
+        type: 'chat_message',
+        chatId: chat.id,
+      });
+    }
+  }
+
+  async function markChatDelivered(chat) {
+    if (!chat?.id || clean(chat.lastMessageByUid, 180) === currentUid) return;
+    const lastMessageAt = timestampMs(chat.lastMessageAt);
+    if (!lastMessageAt || timestampMs(chat.deliveredAtBy?.[currentUid]) >= lastMessageAt) return;
+    const key = `delivered:${chat.id}:${lastMessageAt}`;
+    if (state.pendingReceiptWrites.has(key)) return;
+    state.pendingReceiptWrites.add(key);
+    try {
+      await updateDoc(doc(firebaseDb, 'chats', chat.id), {
+        [`deliveredAtBy.${currentUid}`]: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn('No se pudo confirmar la entrega del mensaje', error);
+    } finally {
+      state.pendingReceiptWrites.delete(key);
+    }
+  }
+
+  async function markChatRead(chat) {
+    if (!chat?.id || document.visibilityState !== 'visible' || !container.offsetParent) return;
+    const lastMessageAt = timestampMs(chat.lastMessageAt);
+    const unread = chatUnreadCount(chat, currentUid);
+    if (!unread && (!lastMessageAt || timestampMs(chat.readAtBy?.[currentUid]) >= lastMessageAt)) return;
+    const key = `read:${chat.id}:${lastMessageAt}`;
+    if (state.pendingReceiptWrites.has(key)) return;
+    state.pendingReceiptWrites.add(key);
+    const optimisticTime = new Date().toISOString();
+    chat.unreadBy = { ...(chat.unreadBy || {}), [currentUid]: 0 };
+    chat.readAtBy = { ...(chat.readAtBy || {}), [currentUid]: optimisticTime };
+    chat.deliveredAtBy = { ...(chat.deliveredAtBy || {}), [currentUid]: optimisticTime };
+    renderChatListFromState();
+    try {
+      await updateDoc(doc(firebaseDb, 'chats', chat.id), {
+        [`unreadBy.${currentUid}`]: 0,
+        [`deliveredAtBy.${currentUid}`]: serverTimestamp(),
+        [`readAtBy.${currentUid}`]: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn('No se pudo guardar el visto del chat', error);
+    } finally {
+      state.pendingReceiptWrites.delete(key);
+    }
+  }
+
+  function applyRealtimeChat(chatId, data = {}) {
+    const index = state.chats.findIndex((item) => item.id === chatId);
+    if (index < 0) return;
+    const previous = state.chats[index];
+    const next = { ...previous, ...data, id: chatId };
+    const previousMessageAt = state.previousLastMessageAt.get(chatId) || timestampMs(previous.lastMessageAt);
+    const nextMessageAt = timestampMs(next.lastMessageAt);
+    const wasReady = state.chatSnapshotReady.has(chatId);
+    state.chats[index] = next;
+    if (state.selectedChat?.id === chatId) {
+      state.selectedChat = next;
+      if (state.currentMessages.length) renderCurrentMessages();
+    }
+    renderChatListFromState();
+    if (wasReady && nextMessageAt > previousMessageAt && clean(next.lastMessageByUid, 180) !== currentUid) {
+      notifyIncomingChatMessage(next);
+    }
+    state.chatSnapshotReady.add(chatId);
+    state.previousLastMessageAt.set(chatId, nextMessageAt);
+    if (clean(next.lastMessageByUid, 180) !== currentUid) markChatDelivered(next);
+    if (state.selectedChat?.id === chatId) markChatRead(next);
+  }
+
+  function syncChatRealtimeSubscriptions() {
+    const activeIds = new Set(state.chats.map((chat) => chat.id));
+    state.chatSubscriptions.forEach((unsubscribe, chatId) => {
+      if (activeIds.has(chatId)) return;
+      unsubscribe();
+      state.chatSubscriptions.delete(chatId);
+    });
+    state.chats.forEach((chat) => {
+      if (state.chatSubscriptions.has(chat.id)) return;
+      const unsubscribe = onSnapshot(doc(firebaseDb, 'chats', chat.id), (snap) => {
+        if (!isCurrentSessionActive() || !snap.exists()) return;
+        applyRealtimeChat(chat.id, snap.data() || {});
+      }, (error) => console.warn('No se pudo actualizar la conversación en tiempo real', error));
+      state.chatSubscriptions.set(chat.id, unsubscribe);
+    });
+  }
+
   async function refreshChats() {
     container.querySelector('[data-chat-list]').innerHTML = '<div class="chat-empty-state">Cargando chats...</div>';
     state.chats = await loadChats(db, role, profileId, usuario, currentActorIds);
     state.chatPreferencesById = await loadChatPreferences(state.chats, currentUid);
-    renderChatList(container, state.chats, state.selectedChat?.id, role, state.chatPreferencesById);
-    if (!state.selectedChat && state.chats.length) selectChat(state.chats[0].id);
+    renderChatListFromState();
+    syncChatRealtimeSubscriptions();
+    if (!state.selectedChat && state.chats.length && !window.matchMedia('(max-width: 720px)').matches) selectChat(state.chats[0].id);
+  }
+
+  async function publishTyping(chatId, isTyping) {
+    const safeChatId = clean(chatId, 180);
+    if (!safeChatId || !currentUid) return;
+    await setDoc(doc(firebaseDb, 'chats', safeChatId, 'typing', currentUid), {
+      uid: currentUid,
+      name: senderName,
+      isTyping: Boolean(isTyping),
+      updatedAt: serverTimestamp(),
+    }, { merge: true }).catch(() => {});
+  }
+
+  function stopTyping(chatId = state.typingChatId) {
+    clearTimeout(state.typingTimer);
+    state.typingTimer = null;
+    state.lastTypingWriteAt = 0;
+    state.typingChatId = '';
+    if (chatId) publishTyping(chatId, false);
+  }
+
+  function scheduleTyping() {
+    const chatId = state.selectedChat?.id;
+    if (!chatId) return;
+    const now = Date.now();
+    state.typingChatId = chatId;
+    if (!state.lastTypingWriteAt || now - state.lastTypingWriteAt > 1800) {
+      state.lastTypingWriteAt = now;
+      publishTyping(chatId, true);
+    }
+    clearTimeout(state.typingTimer);
+    state.typingTimer = setTimeout(() => stopTyping(chatId), 2400);
+  }
+
+  function watchTyping(chat) {
+    const indicator = container.querySelector('[data-chat-typing-indicator]');
+    if (!chat?.id || !indicator) return null;
+    return onSnapshot(collection(firebaseDb, 'chats', chat.id, 'typing'), (snap) => {
+      const active = snap.docs.map((item) => item.data() || {}).find((entry) => (
+        clean(entry.uid, 180) !== currentUid
+        && entry.isTyping === true
+        && Date.now() - timestampMs(entry.updatedAt) < 8000
+      ));
+      indicator.hidden = !active;
+      indicator.textContent = active ? `${readableChatIdentity(active.name) || 'La otra persona'} está escribiendo…` : '';
+      const presence = container.querySelector('[data-chat-presence]');
+      if (presence) {
+        presence.textContent = active ? 'escribiendo…' : (presence.dataset.defaultText || chatSubtitle(chat, role, state.chatPreferencesById[chat.id] || {}));
+        presence.classList.toggle('is-typing', Boolean(active));
+      }
+    }, () => {
+      indicator.hidden = true;
+      indicator.textContent = '';
+      const presence = container.querySelector('[data-chat-presence]');
+      if (presence) {
+        presence.textContent = presence.dataset.defaultText || chatSubtitle(chat, role, state.chatPreferencesById[chat.id] || {});
+        presence.classList.remove('is-typing');
+      }
+    });
   }
 
   function selectChat(chatId) {
     const chat = state.chats.find((item) => item.id === chatId);
     if (!chat) return;
+    if (state.selectedChat?.id && state.selectedChat.id !== chatId) stopTyping(state.selectedChat.id);
+    setComposerReply(null);
+    setComposerEdit(null);
+    state.threadSearch = '';
+    state.threadSearchIndex = 0;
+    state.showStarredOnly = false;
+    state.messageReactions = [];
+    const threadSearch = container.querySelector('[data-chat-thread-search]');
+    if (threadSearch) threadSearch.hidden = true;
+    const threadSearchInput = container.querySelector('[data-chat-thread-search-input]');
+    if (threadSearchInput) threadSearchInput.value = '';
+    const emojiPicker = container.querySelector('[data-chat-emoji-picker]');
+    const emojiToggle = container.querySelector('[data-chat-toggle-emoji]');
+    if (emojiPicker) emojiPicker.hidden = true;
+    emojiToggle?.setAttribute('aria-expanded', 'false');
     state.selectedChat = chat;
-    renderChatList(container, state.chats, chat.id, role, state.chatPreferencesById);
+    container.querySelector('[data-chat-layout]')?.classList.add('chat-mobile-thread-open');
+    renderChatListFromState();
     renderThreadHeader(container, chat, role, state.chatPreferencesById[chat.id] || {});
+    syncThreadHeaderControls();
     container.querySelector('[data-chat-form]').style.display = '';
+    const draftInput = container.querySelector('[data-chat-input]');
+    if (draftInput) {
+      draftInput.value = state.draftsByChat[chat.id] || '';
+      draftInput.style.height = 'auto';
+      draftInput.style.height = `${Math.min(112, draftInput.scrollHeight)}px`;
+    }
     const schedulePanel = container.querySelector('[data-chat-schedule-panel]');
     if (schedulePanel) {
       schedulePanel.dataset.scheduleVisible = 'false';
@@ -2371,14 +4049,30 @@ export async function initChatWidget({
 
     if (state.unsubscribe) state.unsubscribe();
     if (state.unsubscribeProposals) state.unsubscribeProposals();
+    if (state.unsubscribeVoiceCalls) state.unsubscribeVoiceCalls();
+    if (state.unsubscribeTyping) state.unsubscribeTyping();
+    if (state.unsubscribeReactions) state.unsubscribeReactions();
+    state.unsubscribeVoiceCalls = watchIncomingVoiceCalls(chat);
+    state.unsubscribeTyping = watchTyping(chat);
+    state.unsubscribeReactions = onSnapshot(
+      query(collection(firebaseDb, 'chats', chat.id, 'reacciones'), limit(500)),
+      (snap) => {
+        if (!isCurrentSessionActive() || state.selectedChat?.id !== chat.id) return;
+        state.messageReactions = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+        renderCurrentMessages();
+      },
+      (error) => console.warn('No se pudieron cargar las reacciones del chat', error),
+    );
     const messagesQuery = query(
       collection(firebaseDb, 'chats', chat.id, 'mensajes'),
-      orderBy('createdAt', 'asc'),
-      limit(100),
+      orderBy('createdAt', 'desc'),
+      limit(250),
     );
     state.unsubscribe = onSnapshot(messagesQuery, (snap) => {
       if (!isCurrentSessionActive()) return;
-      renderMessages(container, snap.docs.map((item) => ({ id: item.id, ...item.data() })), currentUid, chat, senderName);
+      state.currentMessages = snap.docs.map((item) => ({ id: item.id, ...item.data() })).reverse();
+      renderCurrentMessages();
+      markChatRead(state.selectedChat || chat);
     }, (error) => {
       handleRealtimeError('No se pudo abrir el chat', 'Chat no disponible', 'No se pudo abrir la conversacion.', error);
     });
@@ -2536,6 +4230,19 @@ export async function initChatWidget({
   }, true);
 
   container.addEventListener('click', async (event) => {
+    if (!event.target.closest('[data-chat-toggle-emoji], [data-chat-emoji-picker]')) {
+      const picker = container.querySelector('[data-chat-emoji-picker]');
+      const toggle = container.querySelector('[data-chat-toggle-emoji]');
+      if (picker) picker.hidden = true;
+      toggle?.setAttribute('aria-expanded', 'false');
+    }
+    if (!event.target.closest('[data-chat-open-message-reactions], [data-chat-message-reaction-picker], [data-chat-react-message]')) {
+      container.querySelectorAll('[data-chat-message-reaction-picker]').forEach((picker) => { picker.hidden = true; });
+    }
+    if (!event.target.closest('[data-chat-toggle-message-menu], [data-chat-message-menu]')) {
+      container.querySelectorAll('[data-chat-message-menu]').forEach((menu) => { menu.hidden = true; });
+    }
+
     const tab = event.target.closest('[data-chat-tab]');
     if (tab) {
       setPanel(tab.dataset.chatTab);
@@ -2554,9 +4261,256 @@ export async function initChatWidget({
       return;
     }
 
-    const callRequest = event.target.closest('[data-chat-call-request]');
-    if (callRequest) {
-      await requestChatCall(callRequest);
+    const toggleThreadSearch = event.target.closest('[data-chat-toggle-thread-search]');
+    if (toggleThreadSearch) {
+      const searchPanel = container.querySelector('[data-chat-thread-search]');
+      if (!searchPanel) return;
+      searchPanel.hidden = !searchPanel.hidden;
+      toggleThreadSearch.classList.toggle('active', !searchPanel.hidden);
+      if (!searchPanel.hidden) container.querySelector('[data-chat-thread-search-input]')?.focus();
+      return;
+    }
+
+    if (event.target.closest('[data-chat-close-thread-search]')) {
+      const searchPanel = container.querySelector('[data-chat-thread-search]');
+      if (searchPanel) searchPanel.hidden = true;
+      state.threadSearch = '';
+      state.threadSearchIndex = 0;
+      const input = container.querySelector('[data-chat-thread-search-input]');
+      if (input) input.value = '';
+      container.querySelector('[data-chat-toggle-thread-search]')?.classList.remove('active');
+      renderCurrentMessages();
+      return;
+    }
+
+    const searchNavigation = event.target.closest('[data-chat-search-previous], [data-chat-search-next]');
+    if (searchNavigation) {
+      const matches = threadSearchMatches();
+      if (!matches.length) return;
+      const direction = searchNavigation.matches('[data-chat-search-previous]') ? -1 : 1;
+      state.threadSearchIndex = (state.threadSearchIndex + direction + matches.length) % matches.length;
+      renderCurrentMessages({ focusSearchResult: true });
+      return;
+    }
+
+    const toggleStarred = event.target.closest('[data-chat-toggle-starred]');
+    if (toggleStarred) {
+      state.showStarredOnly = !state.showStarredOnly;
+      toggleStarred.classList.toggle('active', state.showStarredOnly);
+      toggleStarred.setAttribute('aria-pressed', state.showStarredOnly ? 'true' : 'false');
+      renderCurrentMessages();
+      return;
+    }
+
+    const emojiToggle = event.target.closest('[data-chat-toggle-emoji]');
+    if (emojiToggle) {
+      const picker = container.querySelector('[data-chat-emoji-picker]');
+      if (!picker) return;
+      picker.hidden = !picker.hidden;
+      emojiToggle.setAttribute('aria-expanded', picker.hidden ? 'false' : 'true');
+      if (!picker.hidden) picker.querySelector('button')?.focus();
+      return;
+    }
+
+    const emojiButton = event.target.closest('[data-chat-emoji]');
+    if (emojiButton) {
+      const input = container.querySelector('[data-chat-input]');
+      if (!input) return;
+      const emoji = emojiButton.dataset.chatEmoji || '';
+      const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+      const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+      input.setRangeText(emoji, start, end, 'end');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      container.querySelector('[data-chat-emoji-picker]').hidden = true;
+      container.querySelector('[data-chat-toggle-emoji]')?.setAttribute('aria-expanded', 'false');
+      input.focus();
+      return;
+    }
+
+    if (event.target.closest('[data-chat-cancel-reply]')) {
+      setComposerReply(null);
+      return;
+    }
+
+    if (event.target.closest('[data-chat-cancel-edit]')) {
+      setComposerEdit(null);
+      return;
+    }
+
+    const openReactionPicker = event.target.closest('[data-chat-open-message-reactions]');
+    if (openReactionPicker) {
+      const picker = container.querySelector(`[data-chat-message-reaction-picker="${CSS.escape(openReactionPicker.dataset.chatOpenMessageReactions || '')}"]`);
+      if (picker) picker.hidden = !picker.hidden;
+      return;
+    }
+
+    const reactionButton = event.target.closest('[data-chat-react-message]');
+    if (reactionButton) {
+      try {
+        await toggleMessageReaction(reactionButton.dataset.chatReactMessage, reactionButton.dataset.chatReaction);
+      } catch (error) {
+        showToast('No se guardó la reacción', error.message || 'Inténtalo de nuevo.', 'error');
+      }
+      return;
+    }
+
+    const messageMenuToggle = event.target.closest('[data-chat-toggle-message-menu]');
+    if (messageMenuToggle) {
+      const menu = container.querySelector(`[data-chat-message-menu="${CSS.escape(messageMenuToggle.dataset.chatToggleMessageMenu || '')}"]`);
+      if (menu) menu.hidden = !menu.hidden;
+      return;
+    }
+
+    const starButton = event.target.closest('[data-chat-star-message]');
+    if (starButton) {
+      try {
+        await toggleStarredMessage(starButton.dataset.chatStarMessage);
+      } catch (error) {
+        showToast('No se pudo destacar', error.message || 'Inténtalo de nuevo.', 'error');
+      }
+      return;
+    }
+
+    const editButton = event.target.closest('[data-chat-edit-message]');
+    if (editButton) {
+      const message = currentMessageById(editButton.dataset.chatEditMessage);
+      container.querySelectorAll('[data-chat-message-menu]').forEach((menu) => { menu.hidden = true; });
+      if (message) setComposerEdit(message);
+      return;
+    }
+
+    const deleteButton = event.target.closest('[data-chat-delete-message]');
+    if (deleteButton) {
+      if (deleteButton.dataset.confirmDelete !== 'true') {
+        deleteButton.dataset.confirmDelete = 'true';
+        deleteButton.textContent = 'Confirmar eliminación';
+        setTimeout(() => {
+          if (!deleteButton.isConnected) return;
+          delete deleteButton.dataset.confirmDelete;
+          deleteButton.textContent = '⌫ Eliminar para todos';
+        }, 3500);
+        return;
+      }
+      const message = currentMessageById(deleteButton.dataset.chatDeleteMessage);
+      try {
+        await deleteChatMessage(message);
+        if (state.editTarget?.id === message?.id) setComposerEdit(null);
+        showToast('Mensaje eliminado', 'Ya no se muestra su contenido en la conversación.', 'success');
+      } catch (error) {
+        showToast('No se pudo eliminar', error.message || 'Inténtalo de nuevo.', 'error');
+      }
+      return;
+    }
+
+    const replyButton = event.target.closest('[data-chat-reply-message]');
+    if (replyButton) {
+      const message = state.currentMessages.find((item) => String(item.id) === String(replyButton.dataset.chatReplyMessage));
+      if (message) setComposerReply(chatReplyFromMessage(message, state.selectedChat || {}, currentUid, senderName));
+      return;
+    }
+
+    const copyButton = event.target.closest('[data-chat-copy-message]');
+    if (copyButton) {
+      const message = state.currentMessages.find((item) => String(item.id) === String(copyButton.dataset.chatCopyMessage));
+      try {
+        const copied = await copyChatText(message?.body || '');
+        showToast(copied ? 'Mensaje copiado' : 'No se pudo copiar', copied ? 'Ya puedes pegarlo donde quieras.' : 'Selecciona el texto manualmente.', copied ? 'success' : 'warning');
+      } catch (_) {
+        showToast('No se pudo copiar', 'Selecciona el texto manualmente.', 'warning');
+      }
+      return;
+    }
+
+    const jumpButton = event.target.closest('[data-chat-jump-message]');
+    if (jumpButton) {
+      const target = container.querySelector(`[data-message-id="${CSS.escape(jumpButton.dataset.chatJumpMessage || '')}"]`);
+      if (target) {
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target.classList.add('is-highlighted');
+        setTimeout(() => target.classList.remove('is-highlighted'), 1400);
+      } else {
+        showToast('Mensaje anterior', 'Ese mensaje ya no está entre los últimos cargados.', 'info');
+      }
+      return;
+    }
+
+    const mobileBack = event.target.closest('[data-chat-mobile-back]');
+    if (mobileBack) {
+      stopTyping(state.selectedChat?.id);
+      setComposerReply(null);
+      state.selectedChat = null;
+      state.currentMessages = [];
+      state.unsubscribe?.();
+      state.unsubscribe = null;
+      state.unsubscribeProposals?.();
+      state.unsubscribeProposals = null;
+      state.unsubscribeVoiceCalls?.();
+      state.unsubscribeVoiceCalls = null;
+      state.unsubscribeTyping?.();
+      state.unsubscribeTyping = null;
+      state.unsubscribeReactions?.();
+      state.unsubscribeReactions = null;
+      setComposerEdit(null);
+      container.querySelector('[data-chat-layout]')?.classList.remove('chat-mobile-thread-open');
+      container.querySelector('[data-chat-header]').innerHTML = '<div><div class="chat-empty-title">Selecciona una conversación</div><div class="chat-empty-subtitle">Elige un chat para empezar.</div></div>';
+      container.querySelector('[data-chat-messages]').innerHTML = '';
+      container.querySelector('[data-chat-form]').style.display = 'none';
+      renderChatListFromState();
+      return;
+    }
+
+    const chatFilter = event.target.closest('[data-chat-filter]');
+    if (chatFilter) {
+      state.chatListFilter = chatFilter.dataset.chatFilter === 'unread' ? 'unread' : 'all';
+      container.querySelectorAll('[data-chat-filter]').forEach((button) => {
+        button.classList.toggle('active', button === chatFilter);
+      });
+      renderChatListFromState();
+      return;
+    }
+
+    const startCall = event.target.closest('[data-chat-start-call]');
+    if (startCall) {
+      await startVoiceCall(startCall, startCall.dataset.chatStartCall);
+      return;
+    }
+
+    const joinCall = event.target.closest('[data-chat-join-call]');
+    if (joinCall) {
+      await joinVoiceCall(joinCall.dataset.chatJoinCall, joinCall);
+      return;
+    }
+
+    const endCall = event.target.closest('[data-chat-end-call]');
+    if (endCall) {
+      await markVoiceCallEnded();
+      return;
+    }
+
+    const declineCall = event.target.closest('[data-chat-decline-call]');
+    if (declineCall) {
+      await declineVoiceCall(declineCall.dataset.chatDeclineCall);
+      return;
+    }
+
+    const toggleMute = event.target.closest('[data-chat-toggle-mute]');
+    if (toggleMute) {
+      toggleVoiceCallMute();
+      return;
+    }
+
+    const toggleCamera = event.target.closest('[data-chat-toggle-camera]');
+    if (toggleCamera) {
+      toggleVideoCamera();
+      return;
+    }
+
+    const enableAudio = event.target.closest('[data-chat-enable-audio]');
+    if (enableAudio) {
+      const audio = container.querySelector('[data-chat-remote-audio]');
+      await audio?.play?.().catch(() => {});
+      await resumeFallbackAudio();
+      enableAudio.remove();
       return;
     }
 
@@ -2708,7 +4662,7 @@ export async function initChatWidget({
     if (!panel) return;
     panel.dataset.scheduleVisible = 'true';
     panel.dataset.schedulePlannerOpen = 'true';
-    panel.dataset.scheduleKind = normalizeScheduleKind(event.detail?.kind || SCHEDULE_KIND_ONE_OFF);
+    panel.dataset.scheduleKind = SCHEDULE_KIND_WEEKLY;
     renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
     setTimeout(() => focusSchedulePrimaryField(panel), 50);
   });
@@ -2736,23 +4690,14 @@ export async function initChatWidget({
       if (!state.selectedChat || !currentUid) return;
       const input = chatNameForm.querySelector('[data-chat-name-input]');
       const displayNameOverride = clean(input?.value, 120);
-      const existingPreference = state.chatPreferencesById[state.selectedChat.id] || {};
-      const payload = {
-        displayNameOverride,
-        updatedAt: serverTimestamp(),
-      };
-      if (!existingPreference.exists) payload.createdAt = serverTimestamp();
 
       const button = chatNameForm.querySelector('button[type="submit"]');
       button.disabled = true;
       try {
-        await setDoc(doc(firebaseDb, 'chats', state.selectedChat.id, 'preferencias', currentUid), payload, { merge: true });
-        state.chatPreferencesById[state.selectedChat.id] = {
-          exists: true,
-          displayNameOverride,
-        };
-        renderChatList(container, state.chats, state.selectedChat.id, role, state.chatPreferencesById);
+        await persistSelectedChatPreference({ displayNameOverride });
+        renderChatListFromState();
         renderThreadHeader(container, state.selectedChat, role, state.chatPreferencesById[state.selectedChat.id] || {});
+        syncThreadHeaderControls();
         showToast(displayNameOverride ? 'Nombre guardado' : 'Nombre restablecido', displayNameOverride ? 'Solo lo veras tu en este chat.' : 'Vuelves a ver el nombre por defecto.', 'success');
       } catch (error) {
         showToast('No se pudo guardar', error.message || 'Revisa permisos del chat.', 'error');
@@ -3151,21 +5096,89 @@ export async function initChatWidget({
     }
   }
 
+  container.querySelector('[data-chat-search]')?.addEventListener('input', (event) => {
+    state.chatSearch = clean(event.currentTarget.value, 120);
+    renderChatListFromState();
+  });
+
+  container.querySelector('[data-chat-thread-search-input]')?.addEventListener('input', (event) => {
+    state.threadSearch = clean(event.currentTarget.value, 120);
+    state.threadSearchIndex = 0;
+    renderCurrentMessages({ focusSearchResult: Boolean(state.threadSearch) });
+  });
+
+  const chatInput = container.querySelector('[data-chat-input]');
+  chatInput?.addEventListener('input', () => {
+    chatInput.style.height = 'auto';
+    chatInput.style.height = `${Math.min(112, chatInput.scrollHeight)}px`;
+    if (state.selectedChat?.id && !state.editTarget) updateChatDraft(state.selectedChat.id, chatInput.value);
+    if (clean(chatInput.value, 2000)) scheduleTyping();
+    else stopTyping(state.selectedChat?.id);
+  });
+  chatInput?.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      const picker = container.querySelector('[data-chat-emoji-picker]');
+      if (picker && !picker.hidden) {
+        picker.hidden = true;
+        container.querySelector('[data-chat-toggle-emoji]')?.setAttribute('aria-expanded', 'false');
+        event.preventDefault();
+        return;
+      }
+      if (state.replyTarget) {
+        setComposerReply(null);
+        event.preventDefault();
+        return;
+      }
+      if (state.editTarget) {
+        setComposerEdit(null);
+        event.preventDefault();
+        return;
+      }
+    }
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    container.querySelector('[data-chat-form]')?.requestSubmit();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.selectedChat) markChatRead(state.selectedChat);
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('[data-section="chat"]')) return;
+    setTimeout(() => {
+      if (state.selectedChat) markChatRead(state.selectedChat);
+    }, 80);
+  });
+  window.addEventListener('hashchange', () => {
+    if (window.location.hash !== '#chat') return;
+    setTimeout(() => {
+      if (state.selectedChat) markChatRead(state.selectedChat);
+    }, 80);
+  });
+
   container.querySelector('[data-chat-form]').addEventListener('submit', async (event) => {
     event.preventDefault();
     const input = container.querySelector('[data-chat-input]');
     const body = clean(input.value, 2000);
     if (!body || !state.selectedChat) return;
+    const chatId = state.selectedChat.id;
+    const replyTo = state.replyTarget;
+    const editTarget = state.editTarget;
 
     input.disabled = true;
     try {
-      await sendChatMessage({ body, messageType: 'text' });
+      if (editTarget) await editChatMessage(editTarget, body);
+      else await sendChatMessage({ body, messageType: 'text', replyTo });
       input.value = '';
-      await refreshChats();
-      selectChat(state.selectedChat.id);
+      input.style.height = 'auto';
+      if (!editTarget) updateChatDraft(chatId, '', { immediate: true });
+      if (state.selectedChat?.id === chatId) {
+        setComposerReply(null);
+        if (editTarget) setComposerEdit(null);
+      }
+      stopTyping(chatId);
     } catch (error) {
-      console.error('No se pudo enviar el mensaje', error);
-      showToast('No se envio el mensaje', error.message || 'Revisa permisos de chat.', 'error');
+      console.error(editTarget ? 'No se pudo editar el mensaje' : 'No se pudo enviar el mensaje', error);
+      showToast(editTarget ? 'No se editó el mensaje' : 'No se envió el mensaje', error.message || 'Revisa permisos de chat.', 'error');
     } finally {
       input.disabled = false;
       input.focus();
@@ -3216,43 +5229,45 @@ export async function initChatWidget({
   });
 
   try {
-    if (role === 'admin') {
+    if (showNotifications && role === 'admin') {
       const loaded = await loadNotificationSettings();
       state.notificationSettings = loaded.settings;
       state.notificationPublicConfig = loaded.publicConfig;
       renderNotificationSettings(container, state.notificationSettings, state.notificationPublicConfig);
     }
-    state.unsubscribeNotifications = watchUserNotifications(currentUid, (notifications) => {
-      const unreadCount = notifications.filter(isNotificationUnread).length;
-      const latestUnread = notifications.find(isNotificationUnread);
-      state.notifications = notifications;
-      renderNotifications(container, notifications);
+    if (showNotifications) {
+      state.unsubscribeNotifications = watchUserNotifications(currentUid, (notifications) => {
+        const unreadCount = notifications.filter(isNotificationUnread).length;
+        const latestUnread = notifications.find(isNotificationUnread);
+        state.notifications = notifications;
+        renderNotifications(container, notifications);
 
-      if (state.notificationsReady && unreadCount > state.lastUnreadCount && latestUnread) {
-        showBrowserNotification(notificationTitle(latestUnread), notificationBody(latestUnread), {
-          url: '/pages/login.html',
-          notificationId: latestUnread.id,
-        });
-      }
-      state.notificationsReady = true;
-      state.lastUnreadCount = unreadCount;
-    });
-    if (!state.unsubscribeNotifications) {
-      state.notifications = [];
-      renderNotifications(container, []);
-    }
-    Promise.resolve(watchForegroundPushMessages((payload) => {
-      const title = payload.notification?.title || payload.data?.title || 'ClasesDe10';
-      const body = payload.notification?.body || payload.data?.body || '';
-      showBrowserNotification(title, body, {
-        url: payload.fcmOptions?.link || payload.data?.url || '/pages/login.html',
-        type: payload.data?.type || 'push',
+        if (state.notificationsReady && unreadCount > state.lastUnreadCount && latestUnread) {
+          showBrowserNotification(notificationTitle(latestUnread), notificationBody(latestUnread), {
+            url: '/pages/login.html',
+            notificationId: latestUnread.id,
+          });
+        }
+        state.notificationsReady = true;
+        state.lastUnreadCount = unreadCount;
       });
-    })).then((unsubscribe) => {
-      state.unsubscribePushMessages = unsubscribe;
-    }).catch((error) => {
-      console.warn('No se pudo activar escucha push en primer plano', error);
-    });
+      if (!state.unsubscribeNotifications) {
+        state.notifications = [];
+        renderNotifications(container, []);
+      }
+      Promise.resolve(watchForegroundPushMessages((payload) => {
+        const title = payload.notification?.title || payload.data?.title || 'ClasesDe10';
+        const body = payload.notification?.body || payload.data?.body || '';
+        showBrowserNotification(title, body, {
+          url: payload.fcmOptions?.link || payload.data?.url || '/pages/login.html',
+          type: payload.data?.type || 'push',
+        });
+      })).then((unsubscribe) => {
+        state.unsubscribePushMessages = unsubscribe;
+      }).catch((error) => {
+        console.warn('No se pudo activar escucha push en primer plano', error);
+      });
+    }
     await refreshChats();
   } catch (error) {
     console.error('No se pudieron cargar chats', error);

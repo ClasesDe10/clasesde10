@@ -12,15 +12,15 @@ async function read(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const [admin, chat, rules, functionsIndex, automationEngine, automationWorker, css, classCancellation] = await Promise.all([
+const [admin, chat, rules, automationEngine, automationWorker, css, classCancellation, firebaseConfig] = await Promise.all([
   read('pages/dashboard/admin.html'),
   read('js/chat-widget.js'),
   read('firebase/firestore.rules'),
-  read('functions/index.js'),
   read('functions/platform-automation-engine.js'),
   read('scripts/firebase-automation-worker.mjs'),
   read('css/dashboard.css'),
   read('js/class-cancellation.js'),
+  read('firebase.json'),
 ]);
 
 assert(admin.includes('prepararFlujoAsignacion'), 'Admin assignment must prepare chat scheduling flow.');
@@ -29,7 +29,7 @@ assert(admin.includes('buildAssignmentPricingQuote'), 'Admin assignment must att
 assert(admin.includes('renderPricingQuoteLine'), 'Admin matching must display family price, teacher amount and margin.');
 assert(admin.includes('Profesor asignado, chat creado'), 'Admin must confirm chat creation after assignment.');
 assert(!admin.includes('assignment_ready_for_scheduling'), 'Admin must not write duplicate scheduling automation events from the browser.');
-assert(!admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment notifications must be centralized in Functions.');
+assert(!admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment notifications must be centralized in the automation worker.');
 
 assert(chat.includes('data-schedule-form'), 'Chat widget must render schedule proposal form.');
 assert(chat.includes('availability-engine.js'), 'Chat widget must use the shared availability engine.');
@@ -80,12 +80,35 @@ assert(chat.includes('realChatTitle'), 'Chat widget must only show a real chat n
 assert(chat.includes('renderChatCounterpartAvatar'), 'Family chat must render the professor avatar next to the teacher name.');
 assert(chat.includes('chatCounterpartPhotoUrl'), 'Family chat must resolve the professor profile photo from chat data.');
 assert(chat.includes('teacherPhotoUrl') && chat.includes('profesor_foto_url'), 'Chat documents must carry professor profile photo aliases.');
-assert(chat.includes('data-chat-call-request'), 'Chat must keep voice calls as an in-app request action.');
-assert(chat.includes("messageType: 'call'"), 'Chat call requests must be persisted as call messages.');
-assert(chat.includes('ClasesDe10 no comparte telefonos reales'), 'Chat call requests must explain that real phones are not shared.');
+assert(chat.includes('data-chat-start-call'), 'Chat must expose an in-app voice call action.');
+assert(chat.includes('data-chat-start-call="video"'), 'Chat must expose a first-party video call action.');
+assert(chat.includes('data-chat-join-call'), 'Chat call messages must let the other participant join the call.');
+assert(chat.includes('RTCPeerConnection'), 'Chat calls must use browser audio calls instead of phone numbers.');
+assert(chat.includes('echoCancellation: true') && chat.includes('noiseSuppression: true') && chat.includes("callKind === 'video'"), 'Chat calls must request processed audio and optional camera video.');
+assert(chat.includes('startFirestoreAudioFallback'), 'Chat calls must include a first-party HTTPS audio fallback for restrictive networks.');
+assert(chat.includes("transportMode: 'firestore_audio'"), 'Chat calls must synchronize the HTTPS fallback between both participants.');
+assert(chat.includes("codec: 'mulaw'") && chat.includes('VOICE_CALL_FALLBACK_CHUNK_SAMPLES'), 'The HTTPS fallback must use bounded low-bandwidth audio chunks.');
+assert(!chat.includes('openrelay.metered.ca'), 'Chat calls must not depend on unauthenticated public TURN relays.');
+assert(chat.includes('pendingRemoteCandidates'), 'Chat calls must queue remote ICE candidates until the remote description is ready.');
+assert(chat.includes('flushRemoteCandidates'), 'Chat calls must flush queued ICE candidates after setting the remote description.');
+assert(!chat.includes('sdp: clean(description?.sdp'), 'Chat calls must preserve the SDP final CRLF required by browsers.');
+assert(chat.includes('watchIncomingVoiceCalls'), 'Chat must surface incoming calls in real time without depending on message rendering.');
+assert(chat.includes('VOICE_CALL_RING_TIMEOUT_MS'), 'Unanswered calls must expire instead of remaining permanently open.');
+assert(chat.includes('data-chat-toggle-mute'), 'Active calls must let each participant mute their microphone.');
+assert(chat.includes('data-chat-enable-audio'), 'Calls must recover from browser autoplay blocking.');
+assert(chat.includes("messageType: 'call'"), 'Chat voice calls must be persisted as call messages.');
+assert(chat.includes('ClasesDe10 no comparte telefonos reales'), 'Chat voice calls must explain that real phones are not shared.');
+assert(!chat.includes('Solicitud de llamada'), 'Chat must not use the old call-request-only wording.');
 assert(!chat.includes('href="tel:'), 'Chat must not expose real phone numbers through tel links.');
-assert(!chat.includes('data-chat-video-call'), 'Chat must not expose videocall controls.');
-assert(!chat.includes('Videollamada'), 'Chat must not offer videocalls in family or teacher chat.');
+assert(chat.includes('renderVideoCallStage') && chat.includes('data-chat-toggle-camera'), 'Video calls must render remote/local video and expose a camera control.');
+assert(firebaseConfig.includes('camera=(self), microphone=(self)'), 'Production hosting must allow first-party camera and microphone access for chat calls.');
+assert(chat.includes('chatUnreadCount') && chat.includes('data-chat-total-unread'), 'Chat must expose persistent unread counters.');
+assert(chat.includes('markChatDelivered') && chat.includes('markChatRead'), 'Chat must distinguish delivered messages from read messages.');
+assert(chat.includes('renderMessageReceipt') && chat.includes('Entregado') && chat.includes('Visto'), 'Outgoing messages must show sent, delivered and seen receipts.');
+assert(chat.includes('watchTyping') && chat.includes('está escribiendo'), 'Chat must show a real-time typing indicator.');
+assert(chat.includes('syncChatRealtimeSubscriptions'), 'Conversation list metadata must update in real time outside the selected thread.');
+assert(chat.includes('showBrowserNotification') && chat.includes('chat-nav-unread'), 'Incoming messages must surface outside the open chat.');
+assert(chat.includes("'hidden style=\"display:none\"'"), 'The dedicated notification centre must stay visually separate when chat notifications are disabled.');
 assert(!chat.includes('meet.jit.si'), 'Chat must not generate external videocall rooms.');
 assert(chat.includes('Esperando respuesta'), 'Own schedule proposals must clearly show they are waiting for the other participant.');
 assert(chat.includes("relationshipStage: 'horario_propuesto'"), 'Schedule proposals must update the chat relationship stage.');
@@ -93,11 +116,6 @@ assert(chat.includes("relationshipStage: 'clase_programada'"), 'Accepted proposa
 assert(chat.includes("lastRelationshipEvent: 'class_scheduled_from_chat'"), 'Accepted proposals must leave a relationship event marker.');
 assert(!chat.includes("collection(firebaseDb, 'notificaciones')"), 'Chat widget must not create chat notifications directly.');
 
-assert(functionsIndex.includes("document: 'asignaciones/{assignmentId}'"), 'Functions must react to assignment creation.');
-assert(functionsIndex.includes("'relationship.ensure_chat'"), 'Functions must support server-side chat repair/creation.');
-assert(functionsIndex.includes("document: 'chats/{chatId}/programaciones/{proposalId}'"), 'Functions must react to chat schedule proposals.');
-assert(functionsIndex.includes('syncBusySlotsForClass'), 'Functions must keep busySlots synchronized from class lifecycle changes.');
-assert(functionsIndex.includes("db.collection('busySlots').doc"), 'Functions must write sanitized busySlots documents.');
 assert(automationEngine.includes('schedule.proposed.core'), 'Automation rules must cover schedule proposals.');
 assert(automationEngine.includes('assignment.created.core'), 'Automation rules must cover assignment creation.');
 assert(automationWorker.includes('ensureChatForAssignmentWorker'), 'Worker must be able to repair assignment chats without deployed Functions.');
@@ -172,6 +190,8 @@ assert(css.includes('.chat-schedule-summary'), 'Dashboard CSS must style compact
 assert(css.includes('.chat-schedule-visible-proposals'), 'Dashboard CSS must style visible schedule proposal strips.');
 assert(css.includes('.schedule-availability-action'), 'Dashboard CSS must style availability recovery actions.');
 assert(css.includes('.chat-layout-notifications'), 'Dashboard CSS must isolate notification-only view.');
+assert(css.includes('.chat-thread-panel[hidden]') && css.includes('display: none !important'), 'Hidden chat panels must not leak into the active conversation view.');
+assert(css.includes('.chat-header-secondary'), 'Mobile chat must hide secondary header actions to preserve the contact identity.');
 assert(css.includes('.schedule-availability-busy'), 'Dashboard CSS must style occupied schedule slots.');
 assert(css.includes('.class-cancel-action'), 'Dashboard CSS must style calendar cancellation as a sensitive action.');
 

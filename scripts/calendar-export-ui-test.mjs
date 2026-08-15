@@ -23,6 +23,9 @@ const [calendar, calendarSync, family, professor, css] = await Promise.all([
 assert(calendar.includes('dayIndicatorMode'), 'Calendar component must support a visible day indicator mode.');
 assert(calendar.includes('day-event-summary'), 'Calendar component must render larger day summary chips.');
 assert(calendar.includes('daySummaryLabel'), 'Calendar component must allow role-specific day labels.');
+assert(calendar.includes('classIndicatorPriority'), 'Calendar component must prioritize the most urgent event independently from color.');
+assert(calendar.includes('dayStatusSummary'), 'Calendar days must expose their textual status summary.');
+assert(calendar.includes('role="button" tabindex="0"'), 'Calendar days must be keyboard accessible.');
 assert(css.includes('.day-chip'), 'Dashboard CSS must style larger calendar day chips.');
 assert(css.includes('.calendar-actions-bar'), 'Dashboard CSS must style calendar export actions.');
 
@@ -35,6 +38,9 @@ for (const [name, html] of [['family', family], ['professor', professor]]) {
   assert(html.includes('FULL_CALENDAR_EXPORT_FUTURE_MONTHS'), `${name} calendar must export a complete forward range for mobile calendar import.`);
   assert(html.includes('downloadCalendarItems'), `${name} calendar must share ICS download behavior for month and full exports.`);
   assert(html.includes("dayIndicatorMode: 'summary'"), `${name} calendar must use visible day chips.`);
+  assert(html.includes('classIndicatorPriority:'), `${name} calendar must prioritize attendance review over secondary events.`);
+  assert(html.includes("{ className: 'dot-red', label: 'Revisar ahora' }"), `${name} calendar must explain red as immediate review.`);
+  assert(html.includes("{ className: 'dot-gray', label: 'Cancelada' }"), `${name} calendar must keep closed cancellations neutral.`);
 }
 
 assert(calendarSync.includes('DTSTART;VALUE=DATE'), 'ICS export must support all-day payment/payout events.');

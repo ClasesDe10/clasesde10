@@ -53,6 +53,10 @@ async (page) => {
 
     const professorRef = doc(firebaseDb, 'profesores', uid);
     const stages = [];
+    function isPermissionDenied(error) {
+      return String(error?.code || '').includes('permission-denied')
+        || /missing or insufficient permissions|permission-denied|PERMISSION_DENIED/i.test(String(error?.message || error || ''));
+    }
     async function mergeStage(stage, payload) {
       try {
         await setDoc(professorRef, {
@@ -113,12 +117,42 @@ async (page) => {
       tiene_coche: true,
       perfil_completo: true,
     });
+    await mergeStage('payout', {
+      frecuencia_cobro_profesor: 'quincenal',
+      payoutFrequency: 'quincenal',
+      fecha_inicio_cobro_profesor: '2026-07-15',
+      payoutAnchorDate: '2026-07-15',
+      dia_cobro_profesor: 15,
+      payoutDayOfMonth: 15,
+      payoutLockedAt: serverTimestamp(),
+    });
+
+    let payoutChangeDenied = false;
+    try {
+      await setDoc(professorRef, {
+        frecuencia_cobro_profesor: 'mensual',
+        payoutFrequency: 'mensual',
+        fecha_inicio_cobro_profesor: '2026-08-01',
+        payoutAnchorDate: '2026-08-01',
+        dia_cobro_profesor: 1,
+        payoutDayOfMonth: 1,
+        payoutLockedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        updated_at: new Date().toISOString(),
+      }, { merge: true });
+    } catch (error) {
+      if (!isPermissionDenied(error)) throw new Error(`profesores payout-lock failed unexpectedly: ${error.message}`);
+      payoutChangeDenied = true;
+    }
+    if (!payoutChangeDenied) throw new Error('profesores payout-lock unexpectedly allowed a second payout change');
+
     return {
       uid,
       email,
       wroteUser: true,
       wroteTeacher: true,
       stages,
+      payoutChangeDenied,
     };
   }, { email, password });
 }

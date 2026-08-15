@@ -87,7 +87,15 @@ import {
   EXPERIMENTATION_ENGINE_VERSION,
   buildExperimentResults,
 } from '../js/experimentation-engine.js';
-import { buildNotificationDocument } from '../js/notification-engine.js';
+import {
+  buildNotificationDocument,
+  inferNotificationRole,
+  isNotificationEnabled,
+  minimalUserNotificationCopy,
+  safeInternalActionUrl,
+  shouldCreateUserFacingNotification,
+  userFacingNotificationDedupeKey,
+} from '../js/notification-engine.js';
 import {
   buildDocumentExpiryPatch,
   normalizeDocumentRecord,
@@ -185,6 +193,7 @@ const PAYMENT_OVERDUE_ESCALATION_STEPS = Object.freeze([
 let automationRulesCache = { expiresAt: 0, rules: [] };
 let platformConfigCache = { expiresAt: 0, config: {} };
 let platformConfigRuntime = {};
+let workerNotificationSettingsCache = { expiresAt: 0, settings: null };
 
 function clean(value, max = 500) {
   return String(value || '').trim().slice(0, max);
@@ -475,11 +484,24 @@ function adminNotificationDedupeKey(title, payload = {}) {
   return notificationId(payload.type || 'admin_notification', entity, title);
 }
 
-async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '') {
+async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '', extra = {}) {
   const targetUid = clean(userUid, 180);
   if (!targetUid) return false;
 
-  const id = notificationId('auto', key || payload.type || 'notification', targetUid);
+  const type = payload.type || extra.type || 'automation';
+  const role = inferNotificationRole({ role: extra.role, payload, key });
+  const priority = extra.priority || payload.priority || '';
+  if (!shouldCreateUserFacingNotification({ type, role, priority, payload })) return false;
+
+  const copy = minimalUserNotificationCopy({ title, body, type, role, payload });
+  const policyKey = userFacingNotificationDedupeKey({
+    type,
+    role,
+    payload,
+    key,
+    nowIso: isoNow(),
+  });
+  const id = notificationId('auto', policyKey || key || payload.type || 'notification', targetUid);
   const ref = db.collection('notificaciones').doc(id);
   const existing = await ref.get();
   if (existing.exists) return false;
@@ -487,15 +509,17 @@ async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '') 
   await writeDoc(db.collection('notificaciones'), id, {
     ...buildNotificationDocument({
       userUid: targetUid,
-      title,
-      body,
-      type: payload.type || 'automation',
+      title: copy.title,
+      body: copy.body,
+      type,
       payload,
-      source: 'admin',
+      role,
+      priority,
+      source: extra.source || 'admin',
     }),
     readAt: null,
     leida: false,
-    fromRole: 'admin',
+    fromRole: extra.fromRole || 'admin',
     fromAutomation: true,
     createdAt: now(),
     updatedAt: now(),
@@ -518,6 +542,160 @@ async function notifyAdminsOnce(db, title, body, payload = {}, key = '') {
 
   const writes = await Promise.all(admins.map((user) => notifyUserOnce(db, user.id, title, body, payload, `${key || payload.type}_${user.id}`)));
   return writes.filter(Boolean).length;
+}
+
+async function loadWorkerNotificationSettings(db) {
+  if (workerNotificationSettingsCache.settings && workerNotificationSettingsCache.expiresAt > Date.now()) {
+    return workerNotificationSettingsCache.settings;
+  }
+  const snap = await db.collection('configuracion').doc('notificaciones').get().catch(() => null);
+  const settings = snap?.exists ? snap.data() : {};
+  workerNotificationSettingsCache = { expiresAt: Date.now() + 5 * 60 * 1000, settings };
+  return settings;
+}
+
+async function getPushTokensForUser(db, userUid) {
+  const targetUid = clean(userUid, 180);
+  if (!targetUid) return [];
+  const snap = await db.collection('notificationTokens')
+    .where('userUid', '==', targetUid)
+    .where('active', '==', true)
+    .limit(20)
+    .get();
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })).filter((item) => clean(item.token, 2000));
+}
+
+async function deactivateInvalidPushTokens(db, tokens, responses = []) {
+  const invalidCodes = new Set([
+    'messaging/invalid-registration-token',
+    'messaging/registration-token-not-registered',
+    'messaging/invalid-argument',
+  ]);
+  const batch = db.batch();
+  let count = 0;
+  responses.forEach((response, index) => {
+    if (response.success) return;
+    if (!invalidCodes.has(response.error?.code)) return;
+    const tokenDoc = tokens[index];
+    if (!tokenDoc?.id) return;
+    batch.set(db.collection('notificationTokens').doc(tokenDoc.id), {
+      active: false,
+      deactivatedAt: now(),
+      deactivationReason: response.error.code,
+      updatedAt: now(),
+    }, { merge: true });
+    count += 1;
+  });
+  if (count && !dryRun) await batch.commit();
+  return count;
+}
+
+function notificationNeedsPush(notification = {}) {
+  const channels = Array.isArray(notification.channels) ? notification.channels : [];
+  if (!channels.includes('push')) return false;
+  if (notification.push?.attemptedAt || notification.push?.skippedAt) return false;
+  if (notification.readAt || notification.leida === true) return false;
+  return Boolean(clean(notification.userUid || notification.usuario_id, 180));
+}
+
+async function sendPushForNotificationWorker(db, notificationId, notification, stats = {}) {
+  const userUid = clean(notification.userUid || notification.usuario_id, 180);
+  if (!userUid) return { sent: 0, failed: 0, skipped: 'missing_user' };
+
+  const settings = await loadWorkerNotificationSettings(db);
+  const type = clean(notification.type || notification.payload?.type || 'automation', 80);
+  const role = clean(notification.role || '', 40);
+  if (!isNotificationEnabled(settings, type, 'push', role)) {
+    await writeDoc(db.collection('notificaciones'), notificationId, {
+      push: {
+        skippedAt: now(),
+        skippedReason: 'push_disabled_by_settings',
+      },
+      updatedAt: now(),
+    });
+    stats.pushNotificationsSkipped += 1;
+    return { sent: 0, failed: 0, skipped: 'push_disabled_by_settings' };
+  }
+
+  const tokens = await getPushTokensForUser(db, userUid);
+  if (!tokens.length) {
+    await writeDoc(db.collection('notificaciones'), notificationId, {
+      push: {
+        skippedAt: now(),
+        skippedReason: 'no_tokens',
+      },
+      updatedAt: now(),
+    });
+    stats.pushNotificationsSkipped += 1;
+    return { sent: 0, failed: 0, skipped: 'no_tokens' };
+  }
+
+  const actionUrl = safeInternalActionUrl(notification.actionUrl || notification.payload?.url || '/pages/login.html');
+  const message = {
+    tokens: tokens.map((item) => item.token),
+    notification: {
+      title: clean(notification.title || notification.titulo || 'ClasesDe10', 140),
+      body: clean(notification.body || notification.cuerpo || '', 800),
+    },
+    data: {
+      notificationId,
+      type,
+      url: actionUrl,
+    },
+    webpush: {
+      fcmOptions: { link: actionUrl },
+      notification: {
+        icon: 'https://clasesde10.com/assets/img/logo-192.png',
+        badge: 'https://clasesde10.com/assets/img/logo-192.png',
+        tag: notificationId,
+        renotify: true,
+        requireInteraction: clean(notification.priority, 40) === 'critical',
+      },
+    },
+  };
+
+  if (dryRun) {
+    stats.pushNotificationsSent += tokens.length;
+    return { sent: tokens.length, failed: 0, dryRun: true };
+  }
+
+  const response = await admin.messaging().sendEachForMulticast(message);
+  await deactivateInvalidPushTokens(db, tokens, response.responses);
+  await writeDoc(db.collection('notificaciones'), notificationId, {
+    push: {
+      attemptedAt: now(),
+      successCount: response.successCount,
+      failureCount: response.failureCount,
+      tokenCount: tokens.length,
+      delivery: 'github_actions_worker',
+    },
+    updatedAt: now(),
+  });
+  stats.pushNotificationsSent += response.successCount;
+  stats.pushNotificationsFailed += response.failureCount;
+  return { sent: response.successCount, failed: response.failureCount };
+}
+
+async function processPendingPushNotifications(db, stats) {
+  const scanLimit = runtimeNumber('automation.pushNotificationBatchLimit', Number(process.env.PUSH_NOTIFICATION_LIMIT || 50), 1, 200);
+  const notifications = await listRecentCollection(db, 'notificaciones', scanLimit, 'createdAt');
+  for (const notification of notifications.filter(notificationNeedsPush)) {
+    stats.pushNotificationsChecked += 1;
+    try {
+      await sendPushForNotificationWorker(db, notification.id, notification, stats);
+    } catch (error) {
+      stats.pushNotificationsFailed += 1;
+      await writeDoc(db.collection('notificaciones'), notification.id, {
+        push: {
+          attemptedAt: now(),
+          failureCount: 1,
+          lastError: serializeJobError(error),
+          delivery: 'github_actions_worker',
+        },
+        updatedAt: now(),
+      });
+    }
+  }
 }
 
 async function addAutomationEvent(db, payload) {
@@ -647,7 +825,12 @@ async function materializeWorkerAutomationPlan(db, event, stats) {
   for (const notification of plan.notifications) {
     const payload = notification.payload || { type: notification.type || 'automation' };
     if (notification.userUid) {
-      const created = await notifyUserOnce(db, notification.userUid, notification.title, notification.body, payload, notification.id);
+      const created = await notifyUserOnce(db, notification.userUid, notification.title, notification.body, payload, notification.id, {
+        role: notification.role || notification.targetRole || '',
+        priority: notification.priority || '',
+        fromRole: 'automation',
+        source: 'automation',
+      });
       if (created) stats.platformNotificationsCreated += 1;
       continue;
     }
@@ -1798,10 +1981,14 @@ async function processPublicLeads(db, stats) {
         },
         updatedAt: now(),
       });
-      await notifyAdmins(db, 'Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Una familia'} solicito ${requestPayload.materia || 'materia sin indicar'}.`, {
+      const assistedAccount = clean(lead.metadata?.account_mode, 80) === 'assisted_parent_activation';
+      await notifyAdmins(db, assistedAccount ? 'Nuevo formulario de familia' : 'Nueva familia solicita profesor', `${lead.nombre || lead.email || 'Una familia'} solicito ${requestPayload.materia || 'materia sin indicar'}${lead.metadata?.alumno ? ` para ${lead.metadata.alumno}` : ''}.`, {
         type: 'family_lead_request',
+        subtype: assistedAccount ? 'assisted_family_form' : 'direct_family_request',
         leadId: doc.id,
         requestId: requestRef.id,
+        section: 'leads',
+        accountStatus: lead.accountStatus || '',
       });
       stats.familyLeadsProcessed += 1;
       continue;
@@ -1818,6 +2005,84 @@ async function processPublicLeads(db, stats) {
       leadId: doc.id,
     });
     stats.contactLeadsProcessed += 1;
+  }
+}
+
+async function processActivatedAssistedFamilyLeads(db, stats) {
+  const snap = await db.collection('leadsPublicos')
+    .where('accountStatus', '==', 'activated')
+    .limit(limit * 2)
+    .get();
+
+  for (const doc of snap.docs) {
+    const lead = doc.data() || {};
+    if (lead.accountLinkedAt || lead.tipo !== 'familia') continue;
+    if (clean(lead.metadata?.account_mode, 80) !== 'assisted_parent_activation') continue;
+
+    const familyUid = clean(lead.accountUid, 180);
+    if (!familyUid) continue;
+    const studentName = clean(lead.metadata?.alumno, 160);
+    const studentId = clean(lead.studentId, 180) || `lead_${doc.id}`;
+    const requestId = clean(lead.solicitudId, 180) || `lead_${doc.id}`;
+    const subject = clean(lead.metadata?.materia || lead.asunto || lead.mensaje, 180);
+
+    if (studentName) {
+      const studentRef = db.collection('alumnos').doc(studentId);
+      const studentSnap = await studentRef.get();
+      await studentRef.set({
+        familyUid,
+        familia_id: familyUid,
+        nombre: studentName,
+        materias: subject ? [subject] : [],
+        materias_necesita: subject ? [subject] : [],
+        active: true,
+        activo: true,
+        source: 'assisted_parent_form',
+        publicLeadId: doc.id,
+        ...(studentSnap.exists ? {} : { createdAt: now() }),
+        updatedAt: now(),
+      }, { merge: true });
+    }
+
+    const requestRef = db.collection('solicitudes').doc(requestId);
+    const requestSnap = await requestRef.get();
+    const linkPatch = {
+      familyUid,
+      familia_id: familyUid,
+      studentId: studentName ? studentId : null,
+      alumno_id: studentName ? studentId : null,
+      familySnapshot: {
+        nombre: clean(lead.nombre, 160),
+        email: clean(lead.email, 254).toLowerCase(),
+        telefono: clean(lead.telefono, 40),
+      },
+      studentSnapshot: {
+        nombre: studentName,
+        nivel: clean(lead.metadata?.nivel, 120),
+      },
+      updatedAt: now(),
+      updated_at: isoNow(),
+    };
+    if (requestSnap.exists) {
+      await requestRef.set(linkPatch, { merge: true });
+    } else {
+      await requestRef.set({ ...leadToPublicRequest(doc.id, lead), ...linkPatch }, { merge: true });
+    }
+
+    await updateRef(doc.ref, {
+      accountLinkedAt: now(),
+      studentId,
+      solicitudId: requestId,
+      updatedAt: now(),
+    });
+    await notifyAdminsOnce(
+      db,
+      'Cuenta familiar activada',
+      `${lead.nombre || lead.email || 'Una familia'} ya verifico el correo y activo su cuenta.`,
+      { type: 'family_lead_request', subtype: 'assisted_family_activated', leadId: doc.id, requestId, familyUid },
+      `assisted_family_activated_${doc.id}`,
+    );
+    stats.assistedFamilyAccountsLinked += 1;
   }
 }
 
@@ -3247,11 +3512,31 @@ async function processClassLifecycle(db, stats) {
   }
 }
 
+async function findOpenClassIncident(db, classId) {
+  const targetClassId = clean(classId, 180);
+  if (!targetClassId) return null;
+  const isOpenIncident = (item) => {
+    const data = item.data();
+    const status = lower(data.estado || data.status);
+    return !['cerrada', 'resuelta', 'closed', 'resolved'].includes(status);
+  };
+
+  const byClassId = await db.collection('incidencias').where('classId', '==', targetClassId).limit(10).get().catch(() => null);
+  const existingByClassId = byClassId?.docs?.find(isOpenIncident);
+  if (existingByClassId) return { id: existingByClassId.id, ...existingByClassId.data() };
+
+  const byLegacyClassId = await db.collection('incidencias').where('clase_id', '==', targetClassId).limit(10).get().catch(() => null);
+  const existingByLegacyClassId = byLegacyClassId?.docs?.find(isOpenIncident);
+  return existingByLegacyClassId ? { id: existingByLegacyClassId.id, ...existingByLegacyClassId.data() } : null;
+}
+
 async function createClassIncidentOnce(db, classId, classData, source, notes, stats) {
   const id = notificationId('class_incident', source, classId);
   const ref = db.collection('incidencias').doc(id);
   const existing = await ref.get();
   if (existing.exists) return false;
+  const existingOpenIncident = await findOpenClassIncident(db, classId);
+  if (existingOpenIncident) return false;
   const aiClassification = classifyIncident(textFromValues(source, notes, classLabel(classData), classData), {
     source,
     classId,
@@ -3493,7 +3778,7 @@ async function processAttendanceConfirmations(db, stats) {
 
     if (['incidencia', 'discrepancia'].includes(summary) || ['cancelada', 'reprogramada'].includes(classStatus(data))) {
       const source = summary === 'discrepancia' ? 'attendance_mismatch' : `class_${classStatus(data) || 'incident'}`;
-      const created = await createClassIncidentOnce(
+      await createClassIncidentOnce(
         db,
         doc.id,
         data,
@@ -3501,15 +3786,14 @@ async function processAttendanceConfirmations(db, stats) {
         `Revisar incidencia de clase: ${label}. Estado asistencia: ${summary}.`,
         stats,
       );
-      if (created) {
-        await notifyAdminsOnce(
-          db,
-          'Incidencia de clase',
-          `Revisar la clase ${label}. Estado: ${summary}.`,
-          { type: 'class_incident', classId: doc.id, source, url: '/pages/login.html' },
-          `class_incident_${source}_${doc.id}_admin`,
-        );
-      }
+      const adminNotifications = await notifyAdminsOnce(
+        db,
+        'Incidencia de clase',
+        `Revisar la clase ${label}. Estado: ${summary}.`,
+        { type: 'class_incident', classId: doc.id, source, url: '/pages/login.html' },
+        `class_incident_${source}_${doc.id}_admin`,
+      );
+      if (adminNotifications) stats.attendanceRemindersCreated += adminNotifications;
     }
   }
 }
@@ -4989,7 +5273,7 @@ function relationshipFollowupOptions() {
     adminEscalationDays: runtimeNumber('followup.adminEscalationDays', 14, 1, 365),
     userNotificationCooldownHours: runtimeNumber('followup.userNotificationCooldownHours', 24, 1, 720),
     adminCooldownHours: runtimeNumber('followup.adminCooldownHours', 24, 1, 720),
-    maxUserNotifications: runtimeNumber('followup.maxUserNotifications', 40, 0, 500),
+    maxUserNotifications: runtimeNumber('followup.maxUserNotifications', 6, 0, 50),
   };
 }
 
@@ -5031,10 +5315,13 @@ async function materializeRelationshipFollowupAction(db, action, stats) {
       recipient.body,
       {
         type: 'relationship_followup',
+        role: recipient.role,
+        priority: recipient.priority || action.priority,
         followupId: action.id,
         actionId: action.actionId,
         relationshipId: action.relationshipId,
         stage: action.stage,
+        category: action.category,
         section: recipient.section || action.section,
         url: '/pages/login.html',
       },
@@ -5213,7 +5500,7 @@ function proactiveAssistOptions() {
     userNotificationCooldownHours: runtimeNumber('proactiveAssist.userNotificationCooldownHours', 72, 1, 1440),
     adminCooldownHours: runtimeNumber('proactiveAssist.adminCooldownHours', 24, 1, 1440),
     adminEscalationHours: runtimeNumber('proactiveAssist.adminEscalationHours', 48, 1, 1440),
-    maxUserNotifications: runtimeNumber('proactiveAssist.maxUserNotifications', 30, 0, 500),
+    maxUserNotifications: runtimeNumber('proactiveAssist.maxUserNotifications', 6, 0, 50),
   };
 }
 
@@ -5255,6 +5542,8 @@ async function materializeProactiveAssistSignal(db, signal, stats) {
       recipient.body,
       {
         type: 'proactive_assist',
+        role: recipient.role,
+        priority: recipient.priority || signal.priority,
         signalId: signal.id,
         proactiveSignalId: signal.signalId,
         category: signal.category,
@@ -5877,6 +6166,7 @@ async function main() {
     leadsSeen: 0,
     leadsFlaggedForReview: 0,
     familyLeadsProcessed: 0,
+    assistedFamilyAccountsLinked: 0,
     teacherLeadsProcessed: 0,
     contactLeadsProcessed: 0,
     requestsSeen: 0,
@@ -5926,6 +6216,10 @@ async function main() {
     platformRuleRunsCreated: 0,
     platformAutomationEvents: 0,
     platformNotificationsCreated: 0,
+    pushNotificationsChecked: 0,
+    pushNotificationsSent: 0,
+    pushNotificationsFailed: 0,
+    pushNotificationsSkipped: 0,
     platformSystemJobsQueued: 0,
     platformAuditLogsCreated: 0,
     platformCrmTasksCreated: 0,
@@ -6072,6 +6366,7 @@ async function main() {
   }
 
   await processQueuedSystemJobs(db, stats);
+  await processActivatedAssistedFamilyLeads(db, stats);
   await processPublicLeads(db, stats);
   await processPendingRequests(db, stats);
   await processActiveMatchingInterventions(db, stats);
@@ -6093,6 +6388,7 @@ async function main() {
   await processRelationshipFollowups(db, stats);
   await processProactiveAssist(db, stats);
   await processInternalAiAssistant(db, stats);
+  await processPendingPushNotifications(db, stats);
 
   if (criticalOnly) {
     await writeMaintenanceHealthSnapshot(db, stats, 'github_actions_critical_worker');
@@ -6105,6 +6401,7 @@ async function main() {
   await processPreventiveIncidentRadar(db, stats);
   await processAlertPriorityEngine(db, stats);
   await processTrustReputation(db, stats);
+  await processPendingPushNotifications(db, stats);
   await writeAnalyticsRollup(db, stats);
   const snapshot = await writeScaleMetricSnapshot(db, 'github_actions_worker');
   stats.metricSnapshotsCreated += 1;
