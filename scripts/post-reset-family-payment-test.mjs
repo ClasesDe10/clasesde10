@@ -17,6 +17,10 @@ assert(source.includes("value = '35.00'") && source.includes("value = '59.00'") 
 assert(source.includes("setInputFiles({") && source.includes('proofDocumentCreated'), 'The flow must upload and verify a real payment proof.');
 assert(source.includes("window.validarPago(paymentId, 'validado'") && source.includes('atomic admin payment approval'), 'The flow must approve the proof through the authenticated admin application.');
 assert(source.includes('Admin CRM profile is missing') && source.includes('Hijo Aceptacion'), 'The flow must verify full family and child identity in the admin CRM.');
+assert(source.includes('paymentSchedules/${fixture.scheduleId}') && source.includes("frequency: 'quincenal'") && source.includes("hasText: 'Cada 15 dias'"), 'The flow must exercise a real fortnightly family payment day.');
+assert(source.includes('.admin-family-payment-event') && source.includes('Admin calendar does not state the exact overdue family debt.'), 'The flow must verify exact family debt in the authenticated admin calendar.');
+assert(source.includes('.admin-teacher-payout-event') && source.includes('Admin calendar does not state the exact teacher payout.'), 'The flow must verify the exact teacher payout in the authenticated admin calendar.');
+assert(source.includes('Admin debt card is missing the related child.') && source.includes('Admin debt card does not expose every related profile action.'), 'The flow must verify child identity and profile actions on admin debt alerts.');
 assert(source.includes('liveUnlockWithoutReload') && source.includes("classList.contains('payment-paid')"), 'The flow must verify live unlock and green paid calendar state.');
 assert(source.includes('preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket)') && source.includes('preFixtureVerification = runIndependentVerification()'), 'A retry must remove orphan fixtures and prove a clean pre-test state.');
 assert(source.includes('finally {') && source.includes('cleanupAcceptanceArtifacts(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');

@@ -1339,7 +1339,7 @@ import {
   buildTeacherPayoutDebtBreakdown,
   groupFamilyDebtEntries,
   uniqueTeacherDebtAmount,
-} from '../../js/admin-economic-calendar.js?v=20260815-admin-debt';
+} from '../../js/admin-economic-calendar.js?v=20260815-admin-debt-people';
 import {
   addDoc,
   collection,
@@ -3453,6 +3453,10 @@ function buildAdminFamilyDebtCalendarEvents(classes = [], year, monthIndex) {
       ...clase,
       familyUid: firstAdminValue(clase.familyUid, clase.familia_id),
       familyName: adminPersonName('Familia', firstAdminValue(clase.familyUid, clase.familia_id), clase.familia_nombre, clase.familyName, clase.familiaName, clase.parentName),
+      studentId: firstAdminValue(clase.studentId, clase.alumno_id, clase.studentUid),
+      studentName: adminPersonName('Alumno', firstAdminValue(clase.studentId, clase.alumno_id, clase.studentUid), clase.alumno_nombre, clase.studentName, clase.alumnoName),
+      teacherUid: firstAdminValue(clase.teacherUid, clase.profesor_id, clase.teacherId),
+      teacherName: adminPersonName('Profesor', firstAdminValue(clase.teacherUid, clase.profesor_id, clase.teacherId), clase.profesor_nombre, clase.teacherName, clase.teacherDisplayName),
       amount: economic.familyAmount,
       dueAt: economic.dueAt || clase.familyPaymentDueAt || clase.paymentDueAt || '',
     }));
@@ -4734,6 +4738,8 @@ function renderAdminFamilyPaymentCalendarCard(event = {}) {
   const payment = event.latestPayment || group.latestPayment || null;
   const classes = group.classes || [];
   const hasAmount = money(group.amount) > 0;
+  const debtStudents = isDebt ? (group.students || []) : [];
+  const debtTeachers = isDebt ? (group.teachers || []) : [];
   const periodText = isDebt
     ? `El impago mas antiguo vencio ${group.dueAt || group.oldestDueAt ? formatDateTimeHint(group.dueAt || group.oldestDueAt) : 'en una fecha no registrada'}`
     : group.paymentPeriodStart
@@ -4760,8 +4766,12 @@ function renderAdminFamilyPaymentCalendarCard(event = {}) {
       </div>
       <div class="clase-info">
         ${renderAdminPerson(adminPersonOptions('familia', { ...group, ...event }, { name: group.familyName, compact: true }))}
-        ${renderAdminPerson(adminPersonOptions('alumno', { ...group, ...event }, { name: group.studentName, compact: true }))}
-        ${group.teacherUid || group.profesor_id || group.teacherName ? renderAdminPerson(adminPersonOptions('profesor', { ...group, ...event }, { name: group.teacherName, compact: true })) : ''}
+        ${debtStudents.length
+          ? debtStudents.map((student) => renderAdminPerson(adminPersonOptions('alumno', { studentId: student.id, alumno_id: student.id, studentName: student.name, alumno_nombre: student.name }, { id: student.id, name: student.name, compact: true }))).join('')
+          : renderAdminPerson(adminPersonOptions('alumno', { ...group, ...event }, { name: group.studentName, compact: true }))}
+        ${debtTeachers.length
+          ? debtTeachers.map((teacher) => renderAdminPerson(adminPersonOptions('profesor', { teacherUid: teacher.id, profesor_id: teacher.id, teacherName: teacher.name, profesor_nombre: teacher.name }, { id: teacher.id, name: teacher.name, compact: true }))).join('')
+          : group.teacherUid || group.profesor_id || group.teacherName ? renderAdminPerson(adminPersonOptions('profesor', { ...group, ...event }, { name: group.teacherName, compact: true })) : ''}
         <div class="calendar-payment-period">${sanitize(periodText)}</div>
         ${paymentMeta}
         ${isDebt ? `<div class="calendar-economic-callout is-debt">${sanitize(group.familyName || 'Esta familia')} debe exactamente ${sanitize(formatEuros(group.amount))} por ${sanitize(String(group.classCount || classes.length))} ${Number(group.classCount || classes.length) === 1 ? 'clase' : 'clases'}.</div>` : ''}

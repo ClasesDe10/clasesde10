@@ -13,7 +13,7 @@ async (page) => {
   const result = await page.evaluate(async () => {
     const [{ Calendario }, { buildAdminFinancialDaySummaries }] = await Promise.all([
       import('/js/calendario.js?v=20260815-economic-summaries'),
-      import('/js/admin-economic-calendar.js?v=20260815-admin-debt'),
+      import('/js/admin-economic-calendar.js?v=20260815-admin-debt-people'),
     ]);
     document.body.innerHTML = `
       <main style="max-width:980px;margin:24px auto;padding:20px">

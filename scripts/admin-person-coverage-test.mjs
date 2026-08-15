@@ -25,6 +25,8 @@ for (const marker of [
   "esPagoProfesor(p) ? 'profesor' : 'familia'",
   "renderAdminFamilyPaymentCalendarCard",
   "renderAdminTeacherPayoutCalendarCard",
+  "debtStudents.map((student) => renderAdminPerson",
+  "debtTeachers.map((teacher) => renderAdminPerson",
   "renderFinanceBreakdown('Profesores rentables'",
   'clase-personas-contexto',
   'renderPerson: renderAdminPerson',

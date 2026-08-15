@@ -27,14 +27,16 @@ assert.equal(payout.amount, 50, 'Professor payout must equal every unpaid class 
 assert.deepEqual(payout.classes.map((item) => item.id), ['old', 'current']);
 
 const familyDebt = groupFamilyDebtEntries([
-  { id: 'c1', familyUid: 'f1', familyName: 'Familia Uno', amount: 35, dueAt: '2026-07-01T20:00:00Z' },
-  { id: 'c2', familyUid: 'f1', familyName: 'Familia Uno', amount: 40, dueAt: '2026-07-15T20:00:00Z' },
-  { id: 'c2', familyUid: 'f1', familyName: 'Familia Uno', amount: 40, dueAt: '2026-07-15T20:00:00Z' },
+  { id: 'c1', familyUid: 'f1', familyName: 'Familia Uno', studentId: 's1', studentName: 'Hija Uno', teacherUid: 't1', teacherName: 'Profesor Uno', amount: 35, dueAt: '2026-07-01T20:00:00Z' },
+  { id: 'c2', familyUid: 'f1', familyName: 'Familia Uno', studentId: 's2', studentName: 'Hijo Dos', teacherUid: 't1', teacherName: 'Profesor Uno', amount: 40, dueAt: '2026-07-15T20:00:00Z' },
+  { id: 'c2', familyUid: 'f1', familyName: 'Familia Uno', studentId: 's2', studentName: 'Hijo Dos', teacherUid: 't1', teacherName: 'Profesor Uno', amount: 40, dueAt: '2026-07-15T20:00:00Z' },
 ]);
 assert.equal(familyDebt.length, 1, 'One family must produce one debt alert.');
 assert.equal(familyDebt[0].amount, 75, 'Family debt alert must contain the exact unique class total.');
 assert.equal(familyDebt[0].classCount, 2);
 assert.equal(familyDebt[0].oldestDueAt, '2026-07-01T20:00:00Z');
+assert.deepEqual(familyDebt[0].students.map((item) => item.name), ['Hija Uno', 'Hijo Dos'], 'Debt must retain every related child.');
+assert.deepEqual(familyDebt[0].teachers.map((item) => item.name), ['Profesor Uno'], 'Debt must retain each related teacher once.');
 
 const summaries = buildAdminFinancialDaySummaries([
   { id: 'debt', calendarEventType: 'admin_family_debt_alert', amount: 75, paymentGroup: { familyUid: 'f1', amount: 75 } },

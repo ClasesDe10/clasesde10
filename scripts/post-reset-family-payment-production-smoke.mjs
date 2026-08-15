@@ -170,6 +170,7 @@ async function cleanupAcceptanceArtifacts(db, bucket, fixture = {}) {
     fixture.adminUser?.localId,
     fixture.studentId,
     fixture.assignmentId,
+    fixture.scheduleId,
     ...fixture.classIds,
     fixture.paymentId,
     fixture.documentId,
@@ -293,7 +294,7 @@ async function seedFixture(db, fixture) {
   fixture.teacher = await identity('signUp', { email: fixture.teacherEmail, password: fixture.password, returnSecureToken: true });
   fixture.adminUser = await identity('signUp', { email: fixture.adminEmail, password: fixture.password, returnSecureToken: true });
   const nowIso = new Date().toISOString();
-  const currentDueAt = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const currentDueAt = new Date(`${fixture.currentDate}T20:00:00`).toISOString();
   const oldDueAt = new Date(Date.now() - 40 * DAY_MS).toISOString();
   const familyUid = fixture.family.localId;
   const teacherUid = fixture.teacher.localId;
@@ -372,6 +373,10 @@ async function seedFixture(db, fixture) {
     apellidos: fixture.label,
     estado_verificacion: 'verificado',
     verificationStatus: 'verificado',
+    payoutFrequency: 'quincenal',
+    frecuencia_cobro_profesor: 'quincenal',
+    payoutAnchorDate: fixture.currentDate,
+    fecha_inicio_cobro_profesor: fixture.currentDate,
     status: 'activo',
     active: true,
     testRun: fixture.prefix,
@@ -399,6 +404,39 @@ async function seedFixture(db, fixture) {
     apellidos: fixture.label,
     active: true,
     activo: true,
+    testRun: fixture.prefix,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  });
+  batch.set(db.doc(`paymentSchedules/${fixture.scheduleId}`), {
+    id: fixture.scheduleId,
+    ownerUid: familyUid,
+    familyUid,
+    familia_id: familyUid,
+    teacherUid,
+    profesor_id: teacherUid,
+    studentId: fixture.studentId,
+    alumno_id: fixture.studentId,
+    assignmentId: fixture.assignmentId,
+    asignacion_id: fixture.assignmentId,
+    familyName: `Familia Aceptacion ${fixture.label}`,
+    familia_nombre: `Familia Aceptacion ${fixture.label}`,
+    teacherName: `Profesor Aceptacion ${fixture.label}`,
+    profesor_nombre: `Profesor Aceptacion ${fixture.label}`,
+    studentName: `Hijo Aceptacion ${fixture.label}`,
+    alumno_nombre: `Hijo Aceptacion ${fixture.label}`,
+    frequency: 'quincenal',
+    paymentFrequency: 'quincenal',
+    frecuencia_pago: 'quincenal',
+    recurrenceDays: 14,
+    anchorDate: fixture.currentDate,
+    paymentAnchorDate: fixture.currentDate,
+    fecha_inicio_pago: fixture.currentDate,
+    time: '20:00',
+    paymentTime: '20:00',
+    hora_pago: '20:00',
+    active: true,
+    status: 'active',
     testRun: fixture.prefix,
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -513,6 +551,12 @@ async function verifyFamilyLockedAndMarkAttendance(page, fixture) {
   await page.evaluate(() => document.querySelector('[data-section="calendario"]')?.click());
   await page.waitForSelector(`.calendar-day[data-fecha="${fixture.currentDate}"]`, { timeout: 30000 });
   await page.locator(`.calendar-day[data-fecha="${fixture.currentDate}"]`).click();
+  const scheduledPaymentCard = page.locator('#cal-clases-dia .calendar-payment-due-item').filter({ hasText: 'Cada 15 dias' }).first();
+  await scheduledPaymentCard.waitFor({ state: 'visible', timeout: 30000 });
+  const scheduledPaymentText = (await scheduledPaymentCard.innerText()).replace(/\s+/g, ' ').trim();
+  assert.match(scheduledPaymentText, /60,00|60\.00/, 'Fortnightly payment day does not show the exact full family debt.');
+  assert.match(scheduledPaymentText, /Este periodo:\s*(?:35,00|35\.00)/i, 'Fortnightly payment day does not separate the current period.');
+  assert.match(scheduledPaymentText, /Impagado anterior:\s*(?:25,00|25\.00)/i, 'Fortnightly payment day does not carry older debt.');
   const attendance = page.locator(`select[data-action="actualizar-asistencia-familia"][data-id="${fixture.unmarkedClassId}"]`);
   await attendance.waitFor({ state: 'visible', timeout: 30000 });
   await attendance.selectOption('no_realizada');
@@ -526,7 +570,7 @@ async function verifyFamilyLockedAndMarkAttendance(page, fixture) {
     const snapshot = await fixture.db.doc(`clases/${fixture.unmarkedClassId}`).get();
     return snapshot.data()?.familyConfirmationStatus === 'no_realizada';
   });
-  return { lockText };
+  return { lockText, scheduledPaymentText };
 }
 
 async function submitExactFamilyPayment(page, fixture) {
@@ -616,6 +660,36 @@ async function verifyAdminIdentityAndApprove(page, fixture) {
   }
   await page.locator('#modal-familia-detalle .modal-close').click();
 
+  await page.evaluate(() => window.cd10AdminGoTo('calendario'));
+  await page.waitForSelector(`.calendar-day[data-fecha="${fixture.currentDate}"]`, { timeout: 30000 });
+  await page.locator(`.calendar-day[data-fecha="${fixture.currentDate}"]`).click();
+  const familyCollectionCard = page.locator('#cal-clases-dia .admin-family-payment-event').filter({ hasText: `Familia Aceptacion ${fixture.label}` }).first();
+  await familyCollectionCard.waitFor({ state: 'visible', timeout: 30000 });
+  const familyCollectionText = (await familyCollectionCard.innerText()).replace(/\s+/g, ' ').trim();
+  assert.match(familyCollectionText, /60,00|60\.00/, 'Admin calendar does not show the exact scheduled family collection.');
+  assert.match(familyCollectionText, /Impagado anterior:\s*(?:25,00|25\.00)/i, 'Admin calendar does not explain the older family debt carryover.');
+  for (const expected of [`Familia Aceptacion ${fixture.label}`, `Hijo Aceptacion ${fixture.label}`, `Profesor Aceptacion ${fixture.label}`]) {
+    assert.ok(familyCollectionText.includes(expected), `Admin family collection card is missing "${expected}".`);
+  }
+  assert.ok(await familyCollectionCard.locator('[data-action="ver-persona-admin"]').count() >= 3, 'Admin family collection card does not expose every related profile action.');
+
+  const teacherPayoutCard = page.locator('#cal-clases-dia .admin-teacher-payout-event').filter({ hasText: `Profesor Aceptacion ${fixture.label}` }).first();
+  await teacherPayoutCard.waitFor({ state: 'visible', timeout: 30000 });
+  const teacherPayoutText = (await teacherPayoutCard.innerText()).replace(/\s+/g, ' ').trim();
+  assert.match(teacherPayoutText, /debes pagar exactamente\s+(?:40,00|40\.00)/i, 'Admin calendar does not state the exact teacher payout.');
+  assert.ok(teacherPayoutText.includes(`Hijo Aceptacion ${fixture.label}`), 'Teacher payout card is missing the related child.');
+  assert.ok(await teacherPayoutCard.locator('[data-action="ver-persona-admin"]').count() >= 2, 'Teacher payout card does not expose teacher and child profile actions.');
+
+  await page.locator(`.calendar-day[data-fecha="${fixture.todayDate}"]`).click();
+  const familyDebtCard = page.locator('#cal-clases-dia .admin-family-payment-event').filter({ hasText: `Familia Aceptacion ${fixture.label}` }).first();
+  await familyDebtCard.waitFor({ state: 'visible', timeout: 30000 });
+  const familyDebtText = (await familyDebtCard.innerText()).replace(/\s+/g, ' ').trim();
+  assert.match(familyDebtText, /debe exactamente\s+(?:25,00|25\.00)/i, 'Admin calendar does not state the exact overdue family debt.');
+  assert.ok(familyDebtText.includes(`Familia Aceptacion ${fixture.label}`), 'Admin debt card is missing the full family name.');
+  assert.ok(familyDebtText.includes(`Hijo Aceptacion ${fixture.label}`), 'Admin debt card is missing the related child.');
+  assert.ok(familyDebtText.includes(`Profesor Aceptacion ${fixture.label}`), 'Admin debt card is missing the related teacher.');
+  assert.ok(await familyDebtCard.locator('[data-action="ver-persona-admin"]').count() >= 3, 'Admin debt card does not expose every related profile action.');
+
   await page.evaluate(async (paymentId) => {
     await window.validarPago(paymentId, 'validado', { silent: true, refresh: false, source: 'post_reset_acceptance' });
   }, fixture.paymentId);
@@ -639,7 +713,14 @@ async function verifyAdminIdentityAndApprove(page, fixture) {
       ? state
       : null;
   }, { timeoutMs: 45000 });
-  return { familyCardText, crmText, finalState };
+  return {
+    familyCardText,
+    crmText,
+    familyCollectionText,
+    familyDebtText,
+    teacherPayoutText,
+    finalState,
+  };
 }
 
 async function verifyLiveUnlockAndGreenCalendar(page, fixture) {
@@ -680,11 +761,13 @@ const fixture = {
   adminEmail: `${prefix}-admin@example.com`,
   studentId: `${prefix}_student`,
   assignmentId: `${prefix}_assignment`,
+  scheduleId: `${prefix}_schedule`,
   oldClassId: `${prefix}_old`,
   currentClassId: `${prefix}_current`,
   unmarkedClassId: `${prefix}_unmarked`,
-  oldDate: isoDateDaysAgo(46),
+  oldDate: isoDateDaysAgo(1),
   currentDate: isoDateDaysAgo(1),
+  todayDate: isoDateDaysAgo(0),
   classIds: [],
   paymentId: '',
   documentId: '',
@@ -714,6 +797,7 @@ try {
   const unlocked = await verifyLiveUnlockAndGreenCalendar(familyPage, fixture);
   flowResult = {
     lockedAccessVerified: /30 dias/i.test(locked.lockText),
+    fortnightlyPaymentDayVerified: /Cada 15 dias/i.test(locked.scheduledPaymentText),
     attendanceRequiredAndNoShowExcluded: true,
     partialPaymentRejected: true,
     alteredAmountRejected: true,
@@ -721,6 +805,14 @@ try {
     exactClassIds: [fixture.oldClassId, fixture.currentClassId].sort(),
     proofDocumentCreated: Boolean(submitted.documentId),
     adminFullIdentityAndChildVerified: approved.crmText.includes(`Hijo Aceptacion ${fixture.label}`),
+    adminFamilyCollectionCalendarVerified: /60,00|60\.00/.test(approved.familyCollectionText),
+    adminFamilyDebtCalendarVerified: /debe exactamente\s+(?:25,00|25\.00)/i.test(approved.familyDebtText),
+    adminTeacherPayoutCalendarVerified: /debes pagar exactamente\s+(?:40,00|40\.00)/i.test(approved.teacherPayoutText),
+    adminCalendarFullIdentityVerified: approved.familyCollectionText.includes(`Hijo Aceptacion ${fixture.label}`)
+      && approved.teacherPayoutText.includes(`Hijo Aceptacion ${fixture.label}`),
+    exactScheduledFamilyCollectionAmount: 60,
+    exactAdminDebtAmount: 25,
+    exactTeacherPayoutAmount: 40,
     atomicApprovalVerified: approved.finalState.family.paymentAccessLocked === false,
     liveUnlockWithoutReload: true,
     paidCalendarGreen: /Justificante validado|Pagada/i.test(unlocked.paidText),

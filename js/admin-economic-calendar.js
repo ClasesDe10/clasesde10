@@ -29,6 +29,23 @@ function defaultTeacherKey(item = {}) {
   return clean(item.teacherUid || item.profesor_id || item.teacherId, 180);
 }
 
+function defaultStudentId(item = {}) {
+  return clean(item.studentId || item.alumno_id || item.studentUid, 180);
+}
+
+function appendRelatedPerson(group, collectionName, person = {}) {
+  const id = clean(person.id, 180);
+  const name = clean(person.name, 240);
+  const key = id || name.toLowerCase();
+  if (!key) return;
+  const existing = group[collectionName].find((item) => item.key === key);
+  if (existing) {
+    if (!existing.name && name) existing.name = name;
+    return;
+  }
+  group[collectionName].push({ key, id, name });
+}
+
 /**
  * Returns every completed, unpaid class owed to a teacher by a payout date.
  * Classes before the current period are retained as carryover instead of lost.
@@ -96,6 +113,8 @@ export function groupFamilyDebtEntries(entries = []) {
         amount: 0,
         classIds: [],
         classes: [],
+        students: [],
+        teachers: [],
         oldestDueAt: dueAt,
       });
     }
@@ -103,6 +122,14 @@ export function groupFamilyDebtEntries(entries = []) {
     if (classId && group.classIds.includes(classId)) continue;
     if (classId) group.classIds.push(classId);
     group.classes.push(entry);
+    appendRelatedPerson(group, 'students', {
+      id: defaultStudentId(entry),
+      name: clean(entry.studentName || entry.alumno_nombre || entry.alumnoName, 240),
+    });
+    appendRelatedPerson(group, 'teachers', {
+      id: defaultTeacherKey(entry),
+      name: clean(entry.teacherName || entry.profesor_nombre || entry.profesorName, 240),
+    });
     group.amount = money(group.amount + money(entry.amount));
     if (dueAt && (!group.oldestDueAt || dueAt < group.oldestDueAt)) group.oldestDueAt = dueAt;
     if (group.familyName === 'Una familia' && clean(entry.familyName || entry.familia_nombre, 180)) {
@@ -172,4 +199,3 @@ export function uniqueTeacherDebtAmount(events = []) {
     (event) => event.payoutAmount,
   );
 }
-
