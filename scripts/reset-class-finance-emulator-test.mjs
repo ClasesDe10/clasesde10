@@ -144,7 +144,7 @@ async function seed(db, bucket) {
     'documentBlobChunks/identity_chunk': { documentId: 'identity_document', index: 0, bytes: 'identity' },
     'busySlots/manual_slot': { source: 'manual_availability', weekday: 2 },
     'notificaciones/profile_notice': { type: 'profile_complete', message: 'Todo correcto' },
-    'analyticsEvents/profile_event': { eventType: 'profile_completed', section: 'contact_details' },
+    'analyticsEvents/profile_event': { analyticsVersion: 'analytics-v1', eventName: 'page.view', eventType: 'profile_completed', section: 'contact_details' },
     'incidencias/login_incident': { category: 'login', description: 'No puedo entrar' },
     'importAudits/contact_import': { description: 'Contactos importados' },
     'legacyImports/user_legacy': { source: 'usuarios', rows: 1 },

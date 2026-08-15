@@ -57,7 +57,7 @@ const filteredCollections = [
   'importAudits',
   'legacyImports',
 ];
-const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendances?|asistencias?|schedules?|horarios?|payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as)|revenues?|ingresos?|amounts?|importes?|euros?|commissions?|comisiones?|statistics?|estad[ií]sticas?|stats?|metrics?|analytics?)\b|€/i;
+const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendances?|asistencias?|schedules?|horarios?|payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as)|revenues?|ingresos?|amounts?|importes?|euros?|commissions?|comisiones?|statistics?|estad[ií]sticas?|stats?|metrics?)\b|€/i;
 const paymentDocumentWords = /(?:justificante|comprobante|receipt|recibo|payment|pago|bizum|transferencia|factura)/i;
 const familyResetFields = new Set([
   'updatedAt',

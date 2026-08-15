@@ -74,7 +74,7 @@ const scheduleMessageNeedles = [
   'Clase puntual rechazada',
   'clase creada',
 ];
-const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendances?|asistencias?|schedules?|horarios?|payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as)|revenues?|ingresos?|amounts?|importes?|euros?|commissions?|comisiones?|statistics?|estad[ií]sticas?|stats?|metrics?|analytics?)\b/i;
+const derivedWords = /\b(class(?:es)?|clase(?:s)?|attendances?|asistencias?|schedules?|horarios?|payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|economic(?:o|a|os|as)?|finance|financial|finanzas?|financier(?:o|a|os|as)|revenues?|ingresos?|amounts?|importes?|euros?|commissions?|comisiones?|statistics?|estad[ií]sticas?|stats?|metrics?)\b/i;
 const financialMessageWords = /(?:\b(?:payments?|pago(?:s)?|bizum|justificante(?:s)?|comprobante(?:s)?|impago(?:s)?|cobro(?:s)?|dinero|amounts?|importe(?:s)?|euro(?:s)?|transferencia(?:s)?|recibo(?:s)?|factura(?:s)?|liquidaci[oó]n(?:es)?|revenues?|ingresos?|commissions?|comisiones?|finance|financial|finanzas?|financier(?:o|a|os|as))\b|€)/i;
 const trustSnapshotFields = [
   'trustScore', 'trustLevel', 'trustLevelKey', 'trustLevelRank', 'trustLevelLabel',

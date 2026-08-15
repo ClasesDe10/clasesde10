@@ -103,5 +103,6 @@ assert(derivedWords.test('Pago de clases pendiente') === true, 'Payment and clas
 assert(derivedWords.test(derivedSearchText({ eventType: 'overdue_payments', monthlyRevenue: 85, pendingPayments: 2 })) === true, 'Snake-case and camel-case financial metrics must be detected.');
 assert(derivedWords.test(derivedSearchText({ type: 'weekly_schedule', proposalStatus: 'accepted' })) === true, 'Technical chat scheduling identifiers must be detected.');
 assert(derivedWords.test(derivedSearchText({ eventType: 'profile_completed', section: 'contact_details' })) === false, 'Unrelated profile events must remain outside the reset.');
+assert(derivedWords.test(derivedSearchText({ analyticsVersion: 'analytics-v1', eventName: 'page.view', category: 'navigation' })) === false, 'Anonymous page telemetry must not be mistaken for class or financial statistics.');
 
 console.log('Class and finance reset safety validation passed.');
