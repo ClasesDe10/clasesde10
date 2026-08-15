@@ -45,26 +45,28 @@ async function main() {
   }
 
   const adcPath = writeTemporaryAdc(readFirebaseCliRefreshToken());
-  const child = spawn(command, args, {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      GOOGLE_APPLICATION_CREDENTIALS: adcPath,
-    },
-    stdio: 'inherit',
-    windowsHide: true,
-  });
+  try {
+    const child = spawn(command, args, {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        GOOGLE_APPLICATION_CREDENTIALS: adcPath,
+      },
+      stdio: 'inherit',
+      windowsHide: true,
+    });
 
-  const exitCode = await new Promise((resolve) => {
-    child.on('exit', (code) => resolve(code ?? 1));
-    child.on('error', () => resolve(1));
-  });
-
-  fs.rmSync(adcPath, { force: true });
-  process.exit(exitCode);
+    const exitCode = await new Promise((resolve) => {
+      child.on('exit', (code) => resolve(code ?? 1));
+      child.on('error', () => resolve(1));
+    });
+    process.exitCode = exitCode;
+  } finally {
+    fs.rmSync(adcPath, { force: true });
+  }
 }
 
 main().catch((error) => {
   console.error(error?.message || error);
-  process.exit(1);
+  process.exitCode = 1;
 });
