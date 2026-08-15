@@ -82,6 +82,10 @@ assert(chat.includes('chatCounterpartPhotoUrl'), 'Family chat must resolve the p
 assert(chat.includes('teacherPhotoUrl') && chat.includes('profesor_foto_url'), 'Chat documents must carry professor profile photo aliases.');
 assert(chat.includes('data-chat-start-call'), 'Chat must expose an in-app voice call action.');
 assert(chat.includes('data-chat-start-call="video"'), 'Chat must expose a first-party video call action.');
+assert(chat.includes('chat-call-primary') && chat.includes('<span>Llamar</span>'), 'The voice call action must be visibly labelled instead of relying on an icon.');
+assert(!chat.includes("if (!chat?.id || role === 'admin') return '';"), 'Admin chat must render the same call action as family and professor chats.');
+assert(!chat.includes("if (!chat?.id || role === 'admin') return null;"), 'Admin chat must receive incoming call state.');
+assert(!chat.includes("if (!state.selectedChat || role === 'admin') return;"), 'Admin chat must be able to start and join calls.');
 assert(chat.includes('data-chat-join-call'), 'Chat call messages must let the other participant join the call.');
 assert(chat.includes('RTCPeerConnection'), 'Chat calls must use browser audio calls instead of phone numbers.');
 assert(chat.includes('echoCancellation: true') && chat.includes('noiseSuppression: true') && chat.includes("callKind === 'video'"), 'Chat calls must request processed audio and optional camera video.');
@@ -183,6 +187,7 @@ assert(rules.includes("'classResetCutoffIso'"), 'Firestore rules must allow clas
 assert(rules.includes('chatTeacherUid(get(chatPath).data)'), 'Class creation rules must accept canonical or legacy chat teacher ids.');
 assert(rules.includes("request.resource.data.participantUids[request.auth.uid] == true"), 'Class creation rules must require the creator in participantUids.');
 assert(rules.includes('match /preferencias/{userUid}'), 'Firestore rules must protect per-user chat preferences.');
+assert(rules.includes("isAdmin()\n              || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)"), 'Admin calls must retain the secure audio fallback used by chat participants.');
 assert(rules.includes('validChatPreferenceCreate'), 'Firestore rules must validate chat preference creation.');
 assert(rules.includes('availabilityTeacherBelongsToAuth'), 'Availability rules must support teacher profile ids as well as auth uids.');
 assert(rules.includes("'assignmentIntroSentAt'"), 'Chat creation rules must allow the assignment intro marker.');

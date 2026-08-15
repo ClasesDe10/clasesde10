@@ -1608,6 +1608,30 @@ pre,
   border-color: rgba(220,38,38,.35);
   color: var(--danger);
 }
+.chat-call-primary {
+  width: auto;
+  min-width: 84px;
+  gap: 7px;
+  padding: 0 12px;
+  border-color: var(--navy);
+  background: var(--navy);
+  color: var(--white);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+}
+.chat-call-primary:hover,
+.chat-call-primary:focus-visible {
+  border-color: var(--gold);
+  background: #172b50;
+  color: var(--white);
+}
+.chat-call-primary span {
+  line-height: 1;
+}
+.chat-call-video {
+  border-color: rgba(15, 31, 61, .22);
+}
 .chat-voice-call-bar {
   border-bottom: 1px solid rgba(0,0,0,.08);
   background: rgba(232,160,48,.08);
@@ -10147,6 +10171,15 @@ tbody tr:hover {
 
   .chat-header-secondary {
     display: none;
+  }
+
+  .chat-header-utility {
+    display: none;
+  }
+
+  .chat-call-primary {
+    min-width: 80px;
+    padding-inline: 10px;
   }
 
   .chat-tabs {
