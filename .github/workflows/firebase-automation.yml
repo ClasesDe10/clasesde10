@@ -94,12 +94,19 @@ jobs:
           REQUESTED_LIMIT: ${{ github.event.inputs.limit }}
           EVENT_SCHEDULE: ${{ github.event.schedule }}
         run: |
-          # Reserve the one-off production reset window. The next scheduled run
-          # (10:17 UTC) remains enabled automatically after this dated guard.
-          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$(date -u +%Y-%m-%dT%H)" = "2026-08-16T08" ]; then
-            echo "Skipping the 2026-08-16 08:17 UTC worker during the class/finance reset window."
-            exit 0
-          fi
+          # Reserve every reset, verification and authenticated-acceptance
+          # fallback window. Scheduled or manual writes remain paused; an
+          # explicitly requested dry-run stays available for diagnostics.
+          CURRENT_DATE="$(date -u +%Y-%m-%d)"
+          CURRENT_HOUR="$(date -u +%H)"
+          case "$CURRENT_DATE" in
+            2026-08-16|2026-08-17|2026-08-18)
+              if [ "$CURRENT_HOUR" -ge 7 ] && [ "$CURRENT_HOUR" -lt 12 ] && [ "$REQUESTED_DRY_RUN" != "true" ]; then
+                echo "Skipping Firebase writes during the protected class/finance reset window ($CURRENT_DATE $CURRENT_HOUR UTC)."
+                exit 0
+              fi
+              ;;
+          esac
           MODE="$REQUESTED_MODE"
           if [ -z "$MODE" ]; then
             MODE="critical"

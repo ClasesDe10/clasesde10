@@ -14,6 +14,7 @@ function assert(condition, message) {
 const source = fs.readFileSync(new URL('./reset-class-financial-data.mjs', import.meta.url), 'utf8');
 const verifierSource = fs.readFileSync(new URL('./verify-class-financial-reset.mjs', import.meta.url), 'utf8');
 const authWrapperSource = fs.readFileSync(new URL('./run-with-firebase-cli-adc.mjs', import.meta.url), 'utf8');
+const automationWorkflow = fs.readFileSync(new URL('../.github/workflows/firebase-automation.yml', import.meta.url), 'utf8');
 
 assert(source.includes("const APPLY_TOKEN = 'DELETE_CLASS_FINANCE_DATA'"), 'Production reset must require an explicit confirmation token.');
 assert(source.includes("const apply = args.has('--apply')"), 'Production reset must remain a dry-run by default.');
@@ -86,6 +87,11 @@ assert(verifierSource.includes('familyProfilesBeforeDerivedReset') && verifierSo
 assert(verifierSource.includes("!key.startsWith('trust')") && verifierSource.includes('familyResetFields'), 'The family CRM comparison may ignore only reset-owned trust/payment fields.');
 assert(authWrapperSource.includes('try {') && authWrapperSource.includes('finally {') && authWrapperSource.includes('fs.rmSync(adcPath, { force: true })'), 'Temporary Firebase credentials must always be removed.');
 assert(!authWrapperSource.includes('process.exit(exitCode)'), 'The credential cleanup must run before the child exit code is propagated.');
+for (const protectedDate of ['2026-08-16', '2026-08-17', '2026-08-18']) {
+  assert(automationWorkflow.includes(protectedDate), `The remote worker must pause during the ${protectedDate} fallback window.`);
+}
+assert(automationWorkflow.includes('CURRENT_HOUR') && automationWorkflow.includes('-ge 7') && automationWorkflow.includes('-lt 12'), 'The remote write blackout must cover reset, verification, acceptance and finalization.');
+assert(automationWorkflow.includes('REQUESTED_DRY_RUN') && automationWorkflow.includes('!= "true"'), 'Read-only diagnostics must remain available during the remote blackout.');
 
 assert(normalizeStoragePath('gs://clasesde10-50add.firebasestorage.app/pagos/family/receipt.png') === 'pagos/family/receipt.png', 'gs:// receipt paths must normalize.');
 assert(
