@@ -1352,6 +1352,70 @@ export function buildFamilyAllDuePaymentGroup(groups = [], dueDateIso = '', opti
   };
 }
 
+/**
+ * Rebuilds the debt that existed when a family submitted a proof and verifies
+ * that the proof covers that debt exactly. Pending proofs are deliberately not
+ * subtracted here: accepting two partial proofs must never be an alternative to
+ * the one complete payment required from the family.
+ */
+export function validateFamilyPaymentCompleteness(payment = {}, classes = [], scheduleIndex = new Map(), options = {}) {
+  const submittedAtMs = Number(options.nowMs ?? (
+    comparableDateValue(
+      payment.created_at
+      || payment.createdAt
+      || payment.submittedAt
+      || payment.submitted_at,
+    ) || Date.now()
+  ));
+  const submittedDateIso = cleanPaymentText(
+    options.dateIso || new Date(submittedAtMs).toISOString().slice(0, 10),
+    10,
+  ).slice(0, 10);
+  const rawClassIds = Array.isArray(payment.classIds) && payment.classIds.length
+    ? payment.classIds.map(String).filter(Boolean)
+    : [payment.classId, payment.class_id, payment.clase_id].map((id) => cleanPaymentText(id, 180)).filter(Boolean);
+  const submittedClassIds = Array.from(new Set(rawClassIds)).sort();
+  const access = buildFamilyPaymentAccessState(classes, scheduleIndex, { ...options, nowMs: submittedAtMs });
+  const groups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, { ...options, nowMs: submittedAtMs });
+  const expectedGroup = buildFamilyAllDuePaymentGroup(groups, submittedDateIso, {
+    dateKey: options.dateKey,
+    dueAt: options.dueAt,
+    includeUndated: true,
+    key: `family-all-due-validation-${submittedDateIso}`,
+    nowMs: submittedAtMs,
+  });
+  const expectedClassIds = Array.from(new Set((expectedGroup?.classIds || []).map(String).filter(Boolean))).sort();
+  const submittedAmount = paymentAmount(payment);
+  const expectedAmount = paymentAmount({ amount: expectedGroup?.amount || 0 });
+  const sameClassIds = expectedClassIds.length === submittedClassIds.length
+    && expectedClassIds.every((id, index) => id === submittedClassIds[index]);
+  const exactAmount = Math.abs(expectedAmount - submittedAmount) < 0.01;
+  const duplicateClassIds = rawClassIds.length !== submittedClassIds.length;
+
+  let reason = 'matched_all_due_classes';
+  if (access.paymentSubmissionBlocked) reason = 'attendance_decision_required';
+  else if (!expectedClassIds.length) reason = 'no_due_classes';
+  else if (duplicateClassIds) reason = 'duplicate_class_ids';
+  else if (!sameClassIds) reason = 'class_set_mismatch';
+  else if (!exactAmount) reason = 'amount_mismatch';
+
+  return {
+    valid: reason === 'matched_all_due_classes',
+    reason,
+    submittedAtMs,
+    submittedDateIso,
+    submittedAmount,
+    expectedAmount,
+    submittedClassIds,
+    expectedClassIds,
+    missingClassIds: expectedClassIds.filter((id) => !submittedClassIds.includes(id)),
+    unexpectedClassIds: submittedClassIds.filter((id) => !expectedClassIds.includes(id)),
+    duplicateClassIds,
+    access,
+    expectedGroup,
+  };
+}
+
 export function buildFamilyClassPaymentConfirmationPayload(group = {}, input = {}, options = {}) {
   const classIds = Array.isArray(input.classIds) && input.classIds.length
     ? input.classIds.map(String).filter(Boolean)

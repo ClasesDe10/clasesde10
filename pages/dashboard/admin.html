@@ -1401,7 +1401,8 @@ import {
   samePaymentRelation,
   shouldAutoValidatePaymentReview,
   shouldReopenFamilyClassPayment,
-} from '../../js/payment-engine.js?v=20260815-family-payment-lock';
+  validateFamilyPaymentCompleteness,
+} from '../../js/payment-engine.js?v=20260815-family-payment-completeness';
 import {
   FINANCE_ERP_VERSION,
   buildClassPricingQuote,
@@ -2907,6 +2908,14 @@ function adminDateOnly(value) {
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
   const parsed = new Date(raw);
   return Number.isNaN(parsed.getTime()) ? '' : adminIsoDateLocal(parsed);
+}
+
+function adminTimestampMs(value) {
+  if (!value) return 0;
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+  if (Number.isFinite(value?.seconds)) return value.seconds * 1000;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function adminClassDateIso(clase = {}) {
@@ -7972,20 +7981,43 @@ window.validarPago = async (id, estado, options = {}) => {
     const linkedClasses = linkedClassIds.map((classId) => familyClassesById.get(String(classId))).filter(Boolean);
     const everyLinkedClassExists = linkedClasses.length === linkedClassIds.length && linkedClassIds.length > 0;
     const everyLinkedClassWasGiven = linkedClasses.every((clase) => isFamilyConfirmedGivenClass(clase));
-    const linkedAmount = Math.round(linkedClasses.reduce((sum, clase) => sum + classPaymentAmount(clase), 0) * 100) / 100;
-    const exactLinkedAmount = Math.abs(linkedAmount - Number(pagoActual.monto || pagoActual.amount || 0)) < 0.01;
-    if (!everyLinkedClassExists || !everyLinkedClassWasGiven || !exactLinkedAmount) {
+    const paymentContext = await loadAdminPaymentContext({ force: true });
+    const submittedAtValue = pagoActual.created_at || pagoActual.createdAt || pagoActual.submittedAt || pagoActual.submitted_at;
+    const submittedAtMs = adminTimestampMs(submittedAtValue) || Date.now();
+    const completeness = validateFamilyPaymentCompleteness(
+      { ...pagoActual, id, classIds: linkedClassIds },
+      clasesFamiliaParaAcceso,
+      paymentContext.scheduleIndex,
+      {
+        nowMs: submittedAtMs,
+        dateIso: adminDateOnly(submittedAtValue) || adminIsoDateLocal(new Date(submittedAtMs)),
+        dateKey: adminDueDateForPaymentGroup,
+      },
+    );
+    if (!everyLinkedClassExists || !everyLinkedClassWasGiven || !completeness.valid) {
       if (!options.silent) {
+        let detail = 'El justificante debe incluir exactamente todas las clases impagadas y el importe calculado por la plataforma.';
+        if (!everyLinkedClassWasGiven || completeness.reason === 'attendance_decision_required') {
+          detail = 'La familia debe marcar primero como dada o no dada cada clase que ya haya vencido.';
+        } else if (completeness.reason === 'amount_mismatch') {
+          detail = `El importe correcto de todas las clases pendientes en ese momento era ${formatEuros(completeness.expectedAmount)}.`;
+        } else if (completeness.reason === 'no_due_classes') {
+          detail = 'No había clases pendientes de pago en la fecha de envío de este justificante.';
+        } else if (completeness.reason === 'duplicate_class_ids') {
+          detail = 'El justificante contiene una clase repetida y debe corregirse antes de aprobarlo.';
+        } else if (completeness.reason === 'class_set_mismatch') {
+          detail = `Debía incluir exactamente ${completeness.expectedClassIds.length} clase(s) por ${formatEuros(completeness.expectedAmount)}.`;
+        }
         showToast(
           'No se puede validar este pago',
-          !everyLinkedClassWasGiven
-            ? 'Todas las clases deben estar marcadas por la familia como dadas antes de cobrarlas.'
-            : 'El justificante debe incluir exactamente todas sus clases y el importe calculado por la plataforma.',
+          detail,
           'warning',
         );
       }
       return;
     }
+    reconciliationStatus = 'matched';
+    reconciliationReason = completeness.reason;
   }
 
   const payload = {

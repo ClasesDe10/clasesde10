@@ -29,6 +29,7 @@ import {
   samePaymentRelation,
   shouldAutoValidatePaymentReview,
   unpaidFamilyClasses,
+  validateFamilyPaymentCompleteness,
   economicCalendarLegend,
   weeklyPaymentDueAtForClass,
 } from '../js/payment-engine.js';
@@ -254,6 +255,55 @@ assert(JSON.stringify(allFamilyDebt.classIds.slice().sort()) === JSON.stringify(
 assert(allFamilyDebt.classIds.length === new Set(allFamilyDebt.classIds).size, 'A class repeated by overlapping schedule groups must only be charged once.');
 assert(allFamilyDebt.studentName === '3 alumnos' && allFamilyDebt.teacherName === '3 profesores', 'Multi-relation payments must not mislabel one child or teacher as the only relation.');
 assert(allFamilyDebt.relationCount === 3 && allFamilyDebt.hasOverdueCarryover, 'Family-wide payment metadata must expose all covered relations and debt carryover.');
+const completenessClasses = [
+  {
+    id: 'complete_old', estado: 'realizada', familyConfirmationStatus: 'realizada', familyPaymentStatus: 'pendiente',
+    precio_total: 25, fecha: '2026-06-10', hora_fin: '18:00', familyPaymentDueAt: '2026-06-20T20:00:00.000Z',
+    familyUid: 'family_complete', teacherUid: 'teacher_1', studentId: 'student_1',
+  },
+  {
+    id: 'complete_current', estado: 'realizada', familyConfirmationStatus: 'realizada', familyPaymentStatus: 'pendiente',
+    precio_total: 35, fecha: '2026-06-25', hora_fin: '18:00', familyPaymentDueAt: '2026-06-27T20:00:00.000Z',
+    familyUid: 'family_complete', teacherUid: 'teacher_2', studentId: 'student_2',
+  },
+  {
+    id: 'complete_future', estado: 'realizada', familyConfirmationStatus: 'realizada', familyPaymentStatus: 'pendiente',
+    precio_total: 50, fecha: '2026-07-01', hora_fin: '18:00', familyPaymentDueAt: '2026-07-02T20:00:00.000Z',
+    familyUid: 'family_complete', teacherUid: 'teacher_2', studentId: 'student_2',
+  },
+];
+const completePayment = {
+  id: 'payment_complete', paymentType: 'family_payment', familyUid: 'family_complete',
+  classIds: ['complete_old', 'complete_current'], amount: 60, created_at: '2026-06-27T21:00:00.000Z',
+};
+const completeValidation = validateFamilyPaymentCompleteness(completePayment, completenessClasses, new Map(), {
+  nowMs: new Date('2026-06-27T21:00:00.000Z').getTime(),
+  dateIso: '2026-06-27',
+});
+assert(completeValidation.valid && completeValidation.expectedAmount === 60, 'Admin validation must accept the exact complete family debt at submission time.');
+assert(JSON.stringify(completeValidation.expectedClassIds) === JSON.stringify(['complete_current', 'complete_old']), 'Completeness validation must include old and current debt but not future classes.');
+const partialValidation = validateFamilyPaymentCompleteness({ ...completePayment, classIds: ['complete_current'], amount: 35 }, completenessClasses, new Map(), {
+  nowMs: new Date('2026-06-27T21:00:00.000Z').getTime(),
+  dateIso: '2026-06-27',
+});
+assert(!partialValidation.valid && partialValidation.reason === 'class_set_mismatch' && partialValidation.missingClassIds.includes('complete_old'), 'Admin validation must reject a proof that omits older family debt.');
+const alteredAmountValidation = validateFamilyPaymentCompleteness({ ...completePayment, amount: 59 }, completenessClasses, new Map(), {
+  nowMs: new Date('2026-06-27T21:00:00.000Z').getTime(),
+  dateIso: '2026-06-27',
+});
+assert(!alteredAmountValidation.valid && alteredAmountValidation.reason === 'amount_mismatch', 'Admin validation must reject an altered total even when class IDs are complete.');
+const unmarkedValidation = validateFamilyPaymentCompleteness(completePayment, [
+  ...completenessClasses,
+  {
+    id: 'complete_unmarked', estado: 'confirmada', familyPaymentStatus: 'pendiente', precio_total: 20,
+    fecha: '2026-06-24', hora_fin: '18:00', familyPaymentDueAt: '2026-06-27T20:00:00.000Z',
+    familyUid: 'family_complete', teacherUid: 'teacher_3', studentId: 'student_3',
+  },
+], new Map(), {
+  nowMs: new Date('2026-06-27T21:00:00.000Z').getTime(),
+  dateIso: '2026-06-27',
+});
+assert(!unmarkedValidation.valid && unmarkedValidation.reason === 'attendance_decision_required', 'Admin validation must reject payment while a due class still lacks the family attendance decision.');
 const paymentAccessClasses = [
   {
     id: 'old_debt',

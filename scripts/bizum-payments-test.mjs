@@ -111,6 +111,9 @@ assert(paymentEngine.includes('teacherPayoutId'), 'Payment engine must link clas
 assert(adminDashboard.includes('Solicitudes Bizum'), 'Admin payment filters must include Bizum requests.');
 assert(adminDashboard.includes('buildPaymentValidationPayload'), 'Admin validation must use payment engine validation payloads.');
 assert(adminDashboard.includes('matchPaymentToClasses'), 'Admin validation must reconcile family payments to classes when safe.');
+assert(adminDashboard.includes('validateFamilyPaymentCompleteness'), 'Admin validation must rebuild and verify the complete family debt before approval.');
+assert(paymentEngine.includes("reason = 'class_set_mismatch'"), 'Payment completeness must reject omitted or unexpected classes.');
+assert(paymentEngine.includes("reason = 'attendance_decision_required'"), 'Payment completeness must reject debts while due attendance remains unmarked.');
 assert(adminDashboard.includes('buildClassPaymentPatch'), 'Admin validation must update class payment states through the payment engine.');
 assert(adminDashboard.includes('paymentStatusForBadge'), 'Admin payment table must render normalized payment statuses.');
 
@@ -118,6 +121,12 @@ assert(rules.includes('validTeacherPayoutCreate'), 'Firestore rules must validat
 assert(rules.includes('validTeacherPayoutPreferenceUpdate'), 'Firestore rules must lock teacher payout preference after first save.');
 assert(rules.includes('payoutLockedAt'), 'Firestore rules must require a payout lock timestamp.');
 assert(rules.includes('validFamilyPaymentCreate'), 'Firestore rules must validate family payment creates.');
+assert(rules.includes('validFamilyPaymentEvidence'), 'Firestore rules must require evidence for family payment creates.');
+assert(rules.includes('request.resource.data.classIds.size() > 0'), 'Family payments must contain at least one linked class.');
+assert(rules.includes('request.resource.data.classCount == request.resource.data.classIds.size()'), 'Family payment class counts must match their exact class list.');
+assert(rules.includes("get(familyPaymentDocumentPath()).data.documentType == 'justificante_pago'"), 'Family payments must reference an owned payment proof document.');
+assert(rules.includes("request.resource.data.reconciliationStatus == 'matched'"), 'Family payments must be reconciled to their mandatory classes.');
+assert(rules.includes("request.resource.data.verificationSource == 'family_dashboard_confirmation'"), 'Family payments must originate from the exact dashboard confirmation flow.');
 assert(rules.includes("request.resource.data.paymentType == 'teacher_payout'"), 'Rules must require teacher_payout type.');
 assert(rules.includes("request.resource.data.paymentType == 'family_payment'"), 'Rules must require family_payment type.');
 assert(rules.includes("request.resource.data.canonicalCollection == 'pagos'"), 'Payment rules must accept normalized payment metadata safely.');

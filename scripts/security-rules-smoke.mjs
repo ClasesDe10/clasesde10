@@ -91,6 +91,7 @@ async function runBrowserSecuritySmoke(email, password) {
       const uid = credential.user.uid;
       const results = [];
       const temporaryDocumentIds = [];
+      const temporaryPaymentIds = [];
       const temporaryPaymentScheduleIds = [];
 
       function isPermissionDenied(error) {
@@ -284,6 +285,77 @@ async function runBrowserSecuritySmoke(email, password) {
 
       await expectAllowed('owner can create pending document metadata', () => setDoc(doc(firebaseDb, 'documentos', documentId), validDocument));
 
+      const paymentId = `security_payment_${uid}_${Date.now()}`;
+      temporaryPaymentIds.push(paymentId);
+      const paymentRef = doc(firebaseDb, 'pagos', paymentId);
+      const validFamilyPayment = {
+        tipo: 'pago_familia',
+        paymentType: 'family_payment',
+        familia_id: uid,
+        familyUid: uid,
+        documento_id: documentId,
+        documentId,
+        monto: 12.34,
+        amount: 12.34,
+        metodo: 'bizum',
+        method: 'bizum',
+        gateway: 'manual',
+        provider: 'manual',
+        estado: 'pendiente',
+        status: 'pendiente',
+        referencia: `SEC-${paymentId}`,
+        reference: `SEC-${paymentId}`,
+        concepto: 'Justificante de una clase de seguridad',
+        notas_familia: 'Prueba temporal de reglas.',
+        familyNotes: 'Prueba temporal de reglas.',
+        paymentRecipientName: 'Miguel G. G.',
+        paymentRecipientPhone: '613016665',
+        paymentRecipientLabel: 'ClasesDe10 - Miguel G. G.',
+        paymentRecipientRole: 'platform_admin',
+        platformCollectsPayment: true,
+        fundsFlow: 'platform_collects_then_teacher_payout',
+        fundsFlowExplanation: 'ClasesDe10 recibe el pago de la familia y despues liquida al profesor correspondiente.',
+        classIds: [`security_class_${uid}`],
+        classCount: 1,
+        reconciliationStatus: 'matched',
+        verificationSource: 'family_dashboard_confirmation',
+        verified: false,
+        dueAt: nowIso,
+        due_at: nowIso,
+        idempotencyKey: `security-payment-${uid}-${Date.now()}`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await expectAllowed('family can create a class-linked payment with its own proof', () => setDoc(paymentRef, validFamilyPayment));
+
+      await expectDenied('family cannot create a payment without linked classes', () => setDoc(doc(firebaseDb, 'pagos', `${paymentId}_empty`), {
+        ...validFamilyPayment,
+        classIds: [],
+        classCount: 0,
+        idempotencyKey: `${validFamilyPayment.idempotencyKey}-empty`,
+      }));
+
+      await expectDenied('family cannot create a payment with a mismatched class count', () => setDoc(doc(firebaseDb, 'pagos', `${paymentId}_count`), {
+        ...validFamilyPayment,
+        classCount: 2,
+        idempotencyKey: `${validFamilyPayment.idempotencyKey}-count`,
+      }));
+
+      await expectDenied('family cannot create a payment without an owned proof', () => setDoc(doc(firebaseDb, 'pagos', `${paymentId}_proof`), {
+        ...validFamilyPayment,
+        documento_id: `${documentId}_missing`,
+        documentId: `${documentId}_missing`,
+        idempotencyKey: `${validFamilyPayment.idempotencyKey}-proof`,
+      }));
+
+      await expectDenied('family cannot create an unmatched manual payment', () => setDoc(doc(firebaseDb, 'pagos', `${paymentId}_unmatched`), {
+        ...validFamilyPayment,
+        reconciliationStatus: 'pending_match',
+        verificationSource: 'manual_proof',
+        idempotencyKey: `${validFamilyPayment.idempotencyKey}-unmatched`,
+      }));
+
       await expectDenied('owner cannot self-validate document', () => updateDoc(doc(firebaseDb, 'documentos', documentId), {
         status: 'validado',
         estado: 'validado',
@@ -350,6 +422,7 @@ async function runBrowserSecuritySmoke(email, password) {
       return {
         uid,
         temporaryDocumentIds,
+        temporaryPaymentIds,
         temporaryPaymentScheduleIds,
         results,
       };
@@ -382,6 +455,9 @@ try {
   for (const documentId of browserResult.temporaryDocumentIds || []) {
     cleanup.push({ collection: 'documentos', id: documentId, ...(await firestoreDeleteWithCliToken('documentos', documentId)) });
   }
+  for (const paymentId of browserResult.temporaryPaymentIds || []) {
+    cleanup.push({ collection: 'pagos', id: paymentId, ...(await firestoreDeleteWithCliToken('pagos', paymentId)) });
+  }
   for (const scheduleId of browserResult.temporaryPaymentScheduleIds || []) {
     cleanup.push({ collection: 'paymentSchedules', id: scheduleId, ...(await firestoreDeleteWithCliToken('paymentSchedules', scheduleId)) });
   }
@@ -405,6 +481,13 @@ try {
     for (const documentId of browserResult.temporaryDocumentIds) {
       try {
         cleanup.push({ collection: 'documentos', id: documentId, ...(await firestoreDeleteWithCliToken('documentos', documentId)) });
+      } catch {}
+    }
+  }
+  if (browserResult?.temporaryPaymentIds?.length && !cleanup.some((item) => item.collection === 'pagos')) {
+    for (const paymentId of browserResult.temporaryPaymentIds) {
+      try {
+        cleanup.push({ collection: 'pagos', id: paymentId, ...(await firestoreDeleteWithCliToken('pagos', paymentId)) });
       } catch {}
     }
   }

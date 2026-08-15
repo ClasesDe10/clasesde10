@@ -1273,6 +1273,26 @@ service cloud.firestore {
         ]);
     }
 
+    function familyPaymentDocumentPath() {
+      return /databases/$(database)/documents/documentos/$(request.resource.data.documentId);
+    }
+
+    function validFamilyPaymentEvidence() {
+      return request.resource.data.classIds is list
+        && request.resource.data.classIds.size() > 0
+        && request.resource.data.classCount == request.resource.data.classIds.size()
+        && request.resource.data.documentId is string
+        && request.resource.data.documentId.size() > 0
+        && request.resource.data.documento_id == request.resource.data.documentId
+        && request.resource.data.reconciliationStatus == 'matched'
+        && request.resource.data.verificationSource == 'family_dashboard_confirmation'
+        && request.resource.data.verified == false
+        && exists(familyPaymentDocumentPath())
+        && get(familyPaymentDocumentPath()).data.ownerUid == request.auth.uid
+        && get(familyPaymentDocumentPath()).data.documentType == 'justificante_pago'
+        && get(familyPaymentDocumentPath()).data.tipo == 'justificante_pago';
+    }
+
     function validFamilyPaymentCreate() {
       return hasRole('familia')
         && request.resource.data.familyUid == request.auth.uid
@@ -1297,6 +1317,7 @@ service cloud.firestore {
         && request.resource.data.fundsFlow == 'platform_collects_then_teacher_payout'
         && request.resource.data.fundsFlowExplanation is string
         && request.resource.data.fundsFlowExplanation.size() <= 500
+        && validFamilyPaymentEvidence()
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time
         && (!request.resource.data.keys().hasAny(['canonicalCollection']) || request.resource.data.canonicalCollection == 'pagos')

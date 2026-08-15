@@ -17,7 +17,7 @@ assert(familyHtml.includes('Incluidas obligatoriamente'), 'The payment modal mus
 assert(familyHtml.includes('exactClasses') && familyHtml.includes('exactAmount'), 'The submission handler must reject partial class or amount payloads.');
 assert(familyHtml.includes('onSnapshot') && familyHtml.includes('wasPersistedLocked || familyPaymentAccessLocked'), 'Admin access restoration must reach an open family dashboard without requiring a manual reload.');
 assert(adminHtml.includes('buildFamilyPaymentAccessPatch(access'), 'Admin payment validation must recalculate and restore family access.');
-assert(adminHtml.includes('everyLinkedClassWasGiven') && adminHtml.includes('exactLinkedAmount'), 'Admin validation must reject unmarked classes and incorrect receipt totals.');
+assert(adminHtml.includes('everyLinkedClassWasGiven') && adminHtml.includes('validateFamilyPaymentCompleteness'), 'Admin validation must reject unmarked classes, partial debt and incorrect receipt totals.');
 assert(worker.includes('familyPaymentAccessLocksApplied'), 'Scheduled automation must materialize overdue family access locks.');
 assert(css.includes('.family-payment-access-locked'), 'The dashboard must hide unavailable navigation while payment-locked.');
 
