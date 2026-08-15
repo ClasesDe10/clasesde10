@@ -240,7 +240,7 @@ body { display:flex; align-items:center; justify-content:center; min-height:100v
 </div>
 
 <script type="module">
-import { login, loginWithGoogle, logout, requestPasswordSetupLink, resetPassword, redirectByRole, getSession, getGoogleAccountCompletion, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260815-onboarding-gate';
+import { login, loginWithGoogle, logout, requestPasswordSetupLink, resetPassword, redirectByRole, getSession, getGoogleAccountCompletion, getUsuarioActual, onAuthChange } from '../js/auth-provider.js?v=20260815-logout-r1';
 import { focusFirstInvalidField, showToast, validarEmail } from '../js/utils.js';
 import { trackLogin } from '../js/analytics.js';
 
@@ -254,6 +254,7 @@ const loginSeparator = document.getElementById('login-separator');
 const passwordSetupHelp = document.getElementById('password-setup-help');
 const passwordSetupButton = document.getElementById('btn-password-setup');
 const loginParams = new URLSearchParams(window.location.search);
+const logoutCompleted = loginParams.get('logout') === '1';
 const requestedRole = ['familia', 'profesor'].includes(loginParams.get('rol')) ? loginParams.get('rol') : '';
 if (requestedRole) document.querySelector('a.tab-btn[href="registro.html"]').href = `registro.html?rol=${encodeURIComponent(requestedRole)}`;
 const adminAccessRequested = loginParams.get('admin') === '1' || loginParams.get('reason') === 'admin-required';
@@ -509,6 +510,11 @@ if (_sesionActual) {
   }
 } else if (storedAuthNotice) {
   showError(storedAuthNotice);
+} else if (logoutCompleted) {
+  showSuccess('Has cerrado sesión correctamente.');
+  const cleanUrl = new URL(window.location.href);
+  cleanUrl.searchParams.delete('logout');
+  window.history.replaceState({}, '', `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`);
 }
 
 onAuthChange(async (event, session) => {

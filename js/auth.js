@@ -6,7 +6,7 @@
  * adapter.
  */
 
-import authAdapter from './adapters/firebase-auth-adapter.js?v=20260815-onboarding-gate';
+import authAdapter from './adapters/firebase-auth-adapter.js?v=20260815-logout-r1';
 import { trackAuthEvent } from './analytics-client.js?v=20260628-analytics';
 
 export const getSession = authAdapter.getSession;
@@ -63,7 +63,8 @@ export const getGoogleAccountCompletion = authAdapter.getGoogleAccountCompletion
 export const completeGoogleAccount = authAdapter.completeGoogleAccount;
 
 export async function logout(options = {}) {
-  await trackAuthEvent('auth.logout', { method: 'firebase' });
+  // Analytics must never delay or prevent the actual Firebase sign-out.
+  void trackAuthEvent('auth.logout', { method: 'firebase' });
   return authAdapter.logout(options);
 }
 

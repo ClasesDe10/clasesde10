@@ -24,7 +24,7 @@ import {
   setPasswordAfterEmailVerification,
   verifyPasswordResetCode,
   confirmPasswordResetCode,
-} from '../firebase-auth.js?v=20260815-onboarding-gate';
+} from '../firebase-auth.js?v=20260815-logout-r1';
 
 export const authAdapter = {
   completeGoogleAccount,

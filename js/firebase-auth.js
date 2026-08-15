@@ -72,6 +72,7 @@ googleProvider.setCustomParameters({ prompt: 'select_account' });
 const PASSWORD_SETUP_STORAGE_KEY = 'cd10-password-setup-email';
 const PASSWORD_SETUP_TTL_MS = 30 * 60 * 1000;
 const PENDING_GOOGLE_LINK_TTL_MS = 10 * 60 * 1000;
+const LOGOUT_AUDIT_TIMEOUT_MS = 600;
 let pendingGoogleCredential = null;
 let pendingGoogleEmail = '';
 let pendingGoogleStartedAt = 0;
@@ -1178,15 +1179,48 @@ export async function register({
 }
 
 export async function logout(options = {}) {
+  const triggeredByClick = typeof options?.preventDefault === 'function' && 'currentTarget' in options;
+  const trigger = triggeredByClick && options.currentTarget?.nodeType === 1 ? options.currentTarget : null;
+  const logoutOptions = triggeredByClick ? {} : (options || {});
+  if (triggeredByClick) options.preventDefault();
+  if (trigger?.dataset.logoutPending === 'true') return;
+
+  const wasDisabled = Boolean(trigger?.disabled);
+  if (trigger) {
+    trigger.dataset.logoutPending = 'true';
+    trigger.disabled = true;
+    trigger.setAttribute('aria-busy', 'true');
+  }
+
   const user = firebaseAuth.currentUser;
-  await recordAuthAudit('auth.logout', {
-    entityId: user?.uid || 'current_user',
-    actor: { actorUid: user?.uid || '', actorEmail: user?.email || '' },
-    description: 'Cierre de sesion.',
-  });
-  await signOut(firebaseAuth);
-  if (options.redirect === false) return;
-  window.location.href = options.redirectTo || '/';
+  try {
+    await Promise.race([
+      recordAuthAudit('auth.logout', {
+        entityId: user?.uid || 'current_user',
+        actor: { actorUid: user?.uid || '', actorEmail: user?.email || '' },
+        description: 'Cierre de sesion.',
+      }),
+      new Promise((resolve) => window.setTimeout(resolve, LOGOUT_AUDIT_TIMEOUT_MS)),
+    ]);
+    await signOut(firebaseAuth);
+  } catch (error) {
+    if (trigger) {
+      delete trigger.dataset.logoutPending;
+      trigger.disabled = wasDisabled;
+      trigger.removeAttribute('aria-busy');
+    }
+    throw error;
+  }
+
+  if (logoutOptions.redirect === false) {
+    if (trigger) {
+      delete trigger.dataset.logoutPending;
+      trigger.disabled = wasDisabled;
+      trigger.removeAttribute('aria-busy');
+    }
+    return;
+  }
+  window.location.replace(logoutOptions.redirectTo || '/pages/login.html?logout=1');
 }
 
 export async function resetPassword(email) {

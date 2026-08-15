@@ -903,7 +903,7 @@
 
 <script type="module">
 import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-onboarding-gate';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260815-document-open';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
 import {
@@ -1688,7 +1688,13 @@ document.addEventListener('click', (e) => {
   if (!btn) return;
   closeModal(btn.dataset.closeModal);
 });
-document.getElementById('btn-logout').addEventListener('click', logout);
+document.getElementById('btn-logout').addEventListener('click', async (event) => {
+  try {
+    await logout(event);
+  } catch (_) {
+    showToast('No se pudo cerrar la sesión', 'Comprueba tu conexión e inténtalo de nuevo.', 'error');
+  }
+});
 function abrirPanelNotificaciones() {
   irA('notificaciones');
 }

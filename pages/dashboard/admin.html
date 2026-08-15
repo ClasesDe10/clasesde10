@@ -1323,7 +1323,7 @@ import { initAdminDocuments } from '../../js/admin-documents.js?v=20260628-docum
 import { initAdminPlatformConfig } from '../../js/admin-platform-config.js?v=20260630-supervision';
 import { initAdminIncidents } from '../../js/admin-incidents.js?v=20260710-actionable-incidents';
 import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../../js/platform-config.js?v=20260630-supervision';
-import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-onboarding-gate';
+import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
 import { initChatWidget } from '../../js/chat-widget.js?v=20260815-chat-r8';
@@ -1796,7 +1796,13 @@ document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
   if (btn) closeModal(btn.dataset.closeModal);
 });
-document.getElementById('btn-logout').addEventListener('click', () => logout());
+document.getElementById('btn-logout').addEventListener('click', async (event) => {
+  try {
+    await logout(event);
+  } catch (_) {
+    showToast('No se pudo cerrar la sesión', 'Comprueba tu conexión e inténtalo de nuevo.', 'error');
+  }
+});
 function abrirPanelNotificaciones() {
   irA('notificaciones');
 }
