@@ -1353,6 +1353,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
 import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260706-teacher-profile-location-v1';
@@ -2031,6 +2032,33 @@ async function loadAdminPaymentScheduleIndex() {
     firestoreLimit(adminReadLimit('paymentSchedules')),
   )).catch(() => null);
   return buildPaymentScheduleIndex(snap?.docs?.map((item) => ({ id: item.id, ...item.data() })) || []);
+}
+
+async function loadAdminFamilyRowsExact(collectionName, familyUid, fields = ['familyUid', 'familia_id']) {
+  const cleanFamilyUid = String(familyUid || '').trim();
+  if (!cleanFamilyUid) return [];
+  const snapshots = await Promise.all(fields.map((field) => getDocs(firestoreQuery(
+    collection(firebaseDb, collectionName),
+    where(field, '==', cleanFamilyUid),
+  ))));
+  const rows = new Map();
+  snapshots.forEach((snapshot) => snapshot.docs.forEach((item) => {
+    rows.set(item.id, { id: item.id, ...item.data() });
+  }));
+  return Array.from(rows.values());
+}
+
+async function loadAdminFamilyClassesExact(familyUid) {
+  return loadAdminFamilyRowsExact('clases', familyUid);
+}
+
+async function loadAdminFamilyPaymentScheduleIndexExact(familyUid) {
+  const schedules = await loadAdminFamilyRowsExact(
+    'paymentSchedules',
+    familyUid,
+    ['ownerUid', 'familyUid', 'familia_id'],
+  );
+  return buildPaymentScheduleIndex(schedules);
 }
 
 function adminClassPaymentStatus(clase = {}) {
@@ -7959,18 +7987,15 @@ window.validarPago = async (id, estado, options = {}) => {
   let reconciliationStatus = pagoActual.reconciliationStatus || 'pending_match';
   let reconciliationReason = pagoActual.reconciliationReason || '';
   let clasesFamiliaParaAcceso = [];
+  let familyScheduleIndex = null;
+  const familyUid = pagoActual.familyUid || pagoActual.familia_id || '';
 
   if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado)) {
-    const familyUid = pagoActual.familyUid || pagoActual.familia_id;
     if (familyUid) {
-      const [legacyClasses, canonicalClasses] = await Promise.all([
-        db.from('clases').select('*').eq('familia_id', familyUid),
-        db.from('clases').select('*').eq('familyUid', familyUid),
+      [clasesFamiliaParaAcceso, familyScheduleIndex] = await Promise.all([
+        loadAdminFamilyClassesExact(familyUid),
+        loadAdminFamilyPaymentScheduleIndexExact(familyUid),
       ]);
-      clasesFamiliaParaAcceso = Array.from(new Map([
-        ...(legacyClasses.data || []),
-        ...(canonicalClasses.data || []),
-      ].map((item) => [String(item.id || item.calendarUid || ''), item])).values());
     }
     const match = matchPaymentToClasses({ ...pagoActual, id }, clasesFamiliaParaAcceso);
     linkedClassIds = linkedClassIds.length ? linkedClassIds : match.classIds;
@@ -7981,13 +8006,12 @@ window.validarPago = async (id, estado, options = {}) => {
     const linkedClasses = linkedClassIds.map((classId) => familyClassesById.get(String(classId))).filter(Boolean);
     const everyLinkedClassExists = linkedClasses.length === linkedClassIds.length && linkedClassIds.length > 0;
     const everyLinkedClassWasGiven = linkedClasses.every((clase) => isFamilyConfirmedGivenClass(clase));
-    const paymentContext = await loadAdminPaymentContext({ force: true });
     const submittedAtValue = pagoActual.created_at || pagoActual.createdAt || pagoActual.submittedAt || pagoActual.submitted_at;
     const submittedAtMs = adminTimestampMs(submittedAtValue) || Date.now();
     const completeness = validateFamilyPaymentCompleteness(
       { ...pagoActual, id, classIds: linkedClassIds },
       clasesFamiliaParaAcceso,
-      paymentContext.scheduleIndex,
+      familyScheduleIndex || new Map(),
       {
         nowMs: submittedAtMs,
         dateIso: adminDateOnly(submittedAtValue) || adminIsoDateLocal(new Date(submittedAtMs)),
@@ -8031,8 +8055,53 @@ window.validarPago = async (id, estado, options = {}) => {
     reconciliationStatus,
     reconciliationReason,
   };
-  const { error } = await db.from('pagos').update(payload).eq('id', id);
-  if (error) { if (!options.silent) showToast('Error', error.message, 'error'); return; }
+  const isFamilyApproval = !esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado) && linkedClassIds.length > 0;
+  const isFamilyRejection = !esPagoProfesor(pagoActual) && shouldReopenFamilyClassPayment(normalizedEstado);
+  let paymentUpdatedAtomically = false;
+  let rejectedPayment = null;
+  let rejectedClassIds = [];
+
+  if (isFamilyApproval) {
+    if (linkedClassIds.length > 498) throw new Error('El pago contiene demasiadas clases para validarlo de forma atomica. Divide la deuda con soporte antes de aprobarlo.');
+    const paidClassPatch = buildClassPaymentPatch({ ...pagoActual, id, paymentType: 'family_payment' }, '', { nowIso: fechaValidacion });
+    const paidIds = new Set(linkedClassIds.map(String));
+    const reconciledClasses = clasesFamiliaParaAcceso.map((clase) => (
+      paidIds.has(String(clase.id)) ? { ...clase, ...paidClassPatch, familyPaymentId: id } : clase
+    ));
+    const access = buildFamilyPaymentAccessState(reconciledClasses, familyScheduleIndex || new Map());
+    const batch = writeBatch(firebaseDb);
+    batch.update(firestoreDoc(firebaseDb, 'pagos', id), { ...payload, updatedAt: serverTimestamp() });
+    linkedClassIds.forEach((classId) => batch.update(
+      firestoreDoc(firebaseDb, 'clases', classId),
+      { ...paidClassPatch, familyPaymentId: id, updatedAt: serverTimestamp() },
+    ));
+    batch.set(firestoreDoc(firebaseDb, 'familias', familyUid), {
+      ...buildFamilyPaymentAccessPatch(access, { nowIso: fechaValidacion }),
+      updatedAt: serverTimestamp(),
+      updated_at: fechaValidacion,
+    }, { merge: true });
+    await batch.commit();
+    paymentUpdatedAtomically = true;
+  } else if (isFamilyRejection && linkedClassIds.length) {
+    if (!clasesFamiliaParaAcceso.length && familyUid) clasesFamiliaParaAcceso = await loadAdminFamilyClassesExact(familyUid);
+    const ownedClassIds = new Set(clasesFamiliaParaAcceso.map((clase) => String(clase.id || '')).filter(Boolean));
+    rejectedClassIds = Array.from(new Set(linkedClassIds.filter((classId) => ownedClassIds.has(String(classId))).map(String)));
+    if (rejectedClassIds.length > 499) throw new Error('El justificante contiene demasiadas clases para reabrirlas de forma atomica.');
+    rejectedPayment = { ...pagoActual, ...payload, id, paymentType: 'family_payment', estado: normalizedEstado, status: normalizedEstado };
+    const batch = writeBatch(firebaseDb);
+    batch.update(firestoreDoc(firebaseDb, 'pagos', id), { ...payload, updatedAt: serverTimestamp() });
+    rejectedClassIds.forEach((classId) => batch.update(
+      firestoreDoc(firebaseDb, 'clases', classId),
+      { ...buildClassFamilyPaymentReopenPatch(rejectedPayment, classId, { nowIso: fechaValidacion, status: normalizedEstado }), updatedAt: serverTimestamp() },
+    ));
+    await batch.commit();
+    paymentUpdatedAtomically = true;
+  }
+
+  if (!paymentUpdatedAtomically) {
+    const { error } = await db.from('pagos').update(payload).eq('id', id);
+    if (error) { if (!options.silent) showToast('Error', error.message, 'error'); return; }
+  }
 
   if (esPagoProfesor(pagoActual) && normalizedEstado === 'pagado' && Array.isArray(pagoActual.classIds)) {
     const updates = pagoActual.classIds.map((classId) => db.from('clases').update(buildClassPaymentPatch({ ...pagoActual, id }, classId, { nowIso: fechaValidacion })).eq('id', classId));
@@ -8045,42 +8114,8 @@ window.validarPago = async (id, estado, options = {}) => {
     }
   }
 
-  if (!esPagoProfesor(pagoActual) && PAID_PAYMENT_STATUSES.includes(normalizedEstado) && linkedClassIds.length) {
-    const paidClassPatch = buildClassPaymentPatch({ ...pagoActual, id, paymentType: 'family_payment' }, '', { nowIso: fechaValidacion });
-    const updates = linkedClassIds.map((classId) => db.from('clases').update({ ...paidClassPatch, familyPaymentId: id }).eq('id', classId));
-    const results = await Promise.all(updates);
-    const failed = results.find((result) => result.error);
-    if (failed) {
-      if (!options.silent) showToast('Pago actualizado', 'El pago se valido, pero alguna clase no pudo marcarse como cobrada.', 'warning');
-      if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
-      return;
-    }
-    const familyUid = pagoActual.familyUid || pagoActual.familia_id;
-    if (familyUid && clasesFamiliaParaAcceso.length) {
-      const paidIds = new Set(linkedClassIds.map(String));
-      const reconciledClasses = clasesFamiliaParaAcceso.map((clase) => (
-        paidIds.has(String(clase.id)) ? { ...clase, ...paidClassPatch, familyPaymentId: id } : clase
-      ));
-      const access = buildFamilyPaymentAccessState(reconciledClasses, await loadAdminPaymentScheduleIndex());
-      await setDoc(firestoreDoc(firebaseDb, 'familias', familyUid), {
-        ...buildFamilyPaymentAccessPatch(access, { nowIso: fechaValidacion }),
-        updatedAt: serverTimestamp(),
-        updated_at: fechaValidacion,
-      }, { merge: true });
-    }
-  }
-
-  if (!esPagoProfesor(pagoActual) && shouldReopenFamilyClassPayment(normalizedEstado) && linkedClassIds.length) {
-    const rejectedPayment = { ...pagoActual, ...payload, id, paymentType: 'family_payment', estado: normalizedEstado, status: normalizedEstado };
-    const updates = linkedClassIds.map((classId) => db.from('clases').update(buildClassFamilyPaymentReopenPatch(rejectedPayment, classId, { nowIso: fechaValidacion, status: normalizedEstado })).eq('id', classId));
-    const results = await Promise.all(updates);
-    const failed = results.find((result) => result.error);
-    if (failed) {
-      if (!options.silent) showToast('Pago actualizado', 'El justificante se rechazo, pero alguna clase no pudo reabrirse para la familia.', 'warning');
-      if (options.refresh !== false) await refreshPaymentRelatedAdminViews();
-      return;
-    }
-    await notifyFamilyPaymentRejected(rejectedPayment, normalizedEstado, linkedClassIds, fechaValidacion).catch((notificationError) => {
+  if (rejectedPayment) {
+    await notifyFamilyPaymentRejected(rejectedPayment, normalizedEstado, rejectedClassIds, fechaValidacion).catch((notificationError) => {
       console.warn('No se pudo avisar a la familia del justificante rechazado', notificationError);
     });
   }

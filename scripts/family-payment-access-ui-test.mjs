@@ -18,6 +18,18 @@ assert(familyHtml.includes('exactClasses') && familyHtml.includes('exactAmount')
 assert(familyHtml.includes('onSnapshot') && familyHtml.includes('wasPersistedLocked || familyPaymentAccessLocked'), 'Admin access restoration must reach an open family dashboard without requiring a manual reload.');
 assert(adminHtml.includes('buildFamilyPaymentAccessPatch(access'), 'Admin payment validation must recalculate and restore family access.');
 assert(adminHtml.includes('everyLinkedClassWasGiven') && adminHtml.includes('validateFamilyPaymentCompleteness'), 'Admin validation must reject unmarked classes, partial debt and incorrect receipt totals.');
+assert(adminHtml.includes('loadAdminFamilyClassesExact') && adminHtml.includes("where(field, '==', cleanFamilyUid)"), 'Admin approval must rebuild the complete family debt without a global read limit.');
+const atomicApproval = adminHtml.slice(adminHtml.indexOf('if (isFamilyApproval)'), adminHtml.indexOf('} else if (isFamilyRejection'));
+assert(
+  atomicApproval.includes('writeBatch(firebaseDb)')
+    && atomicApproval.includes("firestoreDoc(firebaseDb, 'pagos', id)")
+    && atomicApproval.includes("firestoreDoc(firebaseDb, 'clases', classId)")
+    && atomicApproval.includes("firestoreDoc(firebaseDb, 'familias', familyUid)")
+    && atomicApproval.includes('await batch.commit()'),
+  'Family proof approval must atomically update the payment, every class and the family access lock.',
+);
+const atomicRejection = adminHtml.slice(adminHtml.indexOf('} else if (isFamilyRejection'), adminHtml.indexOf('if (!paymentUpdatedAtomically)'));
+assert(atomicRejection.includes('ownedClassIds.has') && atomicRejection.includes('await batch.commit()'), 'Rejected proofs must only reopen classes owned by that family and update atomically.');
 assert(worker.includes('familyPaymentAccessLocksApplied'), 'Scheduled automation must materialize overdue family access locks.');
 assert(css.includes('.family-payment-access-locked'), 'The dashboard must hide unavailable navigation while payment-locked.');
 
