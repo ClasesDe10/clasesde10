@@ -48,10 +48,11 @@ Auditar y completar de forma autónoma toda la cola de solicitudes del hilo para
 | Q20 | Alta asistida de familias, bandeja de formularios y revisión integral del contenido público | completado | Formulario mínimo, activación segura sin contraseña predecible, perfil obligatorio, avisos admin y contenido público/SEO desplegados; escritura anónima temporal y limpieza, reglas, 36 URLs, cabeceras y marcadores productivos verificados. |
 | Q21 | Producción obligatoria en todos los prompts y publicación de todo cambio acumulado local | completado | Regla permanente añadida a `AGENTS.md`; 447 archivos reconciliados, validados y fusionados mediante la PR #1 con ambos controles CI aprobados; Firebase Hosting y reglas de Firestore publicados en `clasesde10-50add`; auditorías productivas superadas y dependencias con 0 vulnerabilidades conocidas. |
 | Q22 | Evitar correos en “escribiendo…” y mostrar el nombre personal o el nombre asignado al contacto | completado | Resolución corregida en el chat compartido por familia, profesor y admin: alias privado del receptor, nombre de pila del perfil/chat y etiqueta neutra; los correos se rechazan también en datos antiguos. Validación integral superada, PWA v85 desplegada y el código servido por `clasesde10.com` pasó la prueba productiva de privacidad de identidad. |
+| Q23 | Hacer visible y accesible la llamada desde el chat actual | completado | Botón principal “Llamar” y videollamada integrados en la cabecera; acciones secundarias ceden espacio en móvil; familia, profesor y admin comparten controles y audio seguro. Batería integral superada, Hosting y reglas de Firestore publicados y marcadores productivos verificados en los tres paneles. |
 
 ## Último punto de control
 
 - Fecha: 2026-08-15.
-- Completado: Q01-Q22 reconciliados, implementados, desplegados y verificados en producción.
-- Evidencia final Q22: batería integral verde, prueba productiva sobre `chat-widget.js`, paneles familia/profesor/admin en revisión r7 y caché PWA v85 activa.
+- Completado: Q01-Q23 reconciliados, implementados, desplegados y verificados en producción.
+- Evidencia final Q23: batería integral verde, botón “Llamar” y videollamada servidos por `clasesde10.com`, paneles familia/profesor/admin en revisión r8, caché PWA v86 activa y reglas de llamada publicadas.
 - Acción siguiente: ninguna; la cola está cerrada.

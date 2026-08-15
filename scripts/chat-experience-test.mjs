@@ -3,18 +3,21 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [chat, css, rules, familyDashboard, professorDashboard] = await Promise.all([
+const [chat, css, rules, familyDashboard, professorDashboard, adminDashboard] = await Promise.all([
   readFile(new URL('../js/chat-widget.js', import.meta.url), 'utf8'),
   readFile(new URL('../css/dashboard.css', import.meta.url), 'utf8'),
   readFile(new URL('../firebase/firestore.rules', import.meta.url), 'utf8'),
   readFile(new URL('../pages/dashboard/familia.html', import.meta.url), 'utf8'),
   readFile(new URL('../pages/dashboard/profesor.html', import.meta.url), 'utf8'),
+  readFile(new URL('../pages/dashboard/admin.html', import.meta.url), 'utf8'),
 ]);
 
 assert.match(familyDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'familia'[\s\S]*?showNotifications:\s*false/, 'Family dashboard must use the complete shared chat widget.');
 assert.match(professorDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'profesor'[\s\S]*?showNotifications:\s*false/, 'Professor dashboard must use the complete shared chat widget.');
-assert.match(familyDashboard, /chat-widget\.js\?v=20260815-chat-r7/, 'Family chat must load the same shared widget version as professor chat.');
-assert.match(professorDashboard, /chat-widget\.js\?v=20260815-chat-r7/, 'Professor chat must load the same shared widget version as family chat.');
+assert.match(adminDashboard, /initChatWidget\(\{[\s\S]*?role:\s*'admin'[\s\S]*?showNotifications:\s*false/, 'Admin dashboard must use the complete shared chat widget.');
+assert.match(familyDashboard, /chat-widget\.js\?v=20260815-chat-r8/, 'Family chat must load the same shared widget version as professor chat.');
+assert.match(professorDashboard, /chat-widget\.js\?v=20260815-chat-r8/, 'Professor chat must load the same shared widget version as family chat.');
+assert.match(adminDashboard, /chat-widget\.js\?v=20260815-chat-r8/, 'Admin chat must load the same shared widget version as family and professor chats.');
 
 assert.match(chat, /\[`unreadBy\.\$\{uid\}`\] = increment\(1\)/, 'Each recipient must receive an unread counter increment.');
 assert.match(chat, /deliveredAtBy/, 'The chat must persist delivered receipts.');
@@ -33,6 +36,9 @@ assert.match(chat, /data-chat-toggle-emoji/, 'The composer must include quick em
 assert.match(chat, /cd10_chat_drafts_/, 'Drafts must persist on the current device.');
 assert.match(chat, /data-chat-start-call="voice"/, 'Voice calls must remain available.');
 assert.match(chat, /data-chat-start-call="video"/, 'Video calls must remain available.');
+assert.match(chat, /chat-call-primary[\s\S]*?<span>Llamar<\/span>/, 'Voice calls must be a clearly labelled primary chat action.');
+assert.match(css, /\.chat-call-primary\s*\{[\s\S]*?min-width:[\s\S]*?background:\s*var\(--navy\)/, 'The primary call action must remain visually prominent.');
+assert.match(css, /\.chat-header-utility\s*\{\s*display:\s*none;/, 'Mobile chat must prioritize call controls over secondary utilities.');
 assert.match(chat, /data-chat-thread-search-input/, 'Chats must support searching inside the selected conversation.');
 assert.match(chat, /data-chat-react-message/, 'Messages must support persistent emoji reactions.');
 assert.match(chat, /data-chat-edit-message/, 'People must be able to edit their own text messages.');

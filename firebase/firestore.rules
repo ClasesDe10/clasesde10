@@ -3103,7 +3103,10 @@ service cloud.firestore {
           allow create, update: if signedIn()
             && request.auth.uid == senderUid
             && exists(/databases/$(database)/documents/chats/$(chatId))
-            && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+            && (
+              isAdmin()
+              || isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+            )
             && request.resource.data.keys().hasOnly([
               'senderUid',
               'seq',

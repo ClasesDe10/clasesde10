@@ -863,10 +863,10 @@ function chatCounterpartPhotoUrl(chat = {}, role = '') {
 }
 
 function renderChatCallActions(chat = {}, role = '') {
-  if (!chat?.id || role === 'admin') return '';
+  if (!chat?.id) return '';
   return `
-    <button class="chat-icon-btn" type="button" data-chat-start-call="video" title="Videollamada" aria-label="Iniciar videollamada">${chatIcon('video')}</button>
-    <button class="chat-icon-btn" type="button" data-chat-start-call="voice" title="Llamada" aria-label="Iniciar llamada de voz">${chatIcon('phone')}</button>`;
+    <button class="chat-icon-btn chat-call-primary" type="button" data-chat-start-call="voice" title="Llamar por voz" aria-label="Iniciar llamada de voz">${chatIcon('phone')}<span>Llamar</span></button>
+    <button class="chat-icon-btn chat-call-video" type="button" data-chat-start-call="video" title="Videollamada" aria-label="Iniciar videollamada">${chatIcon('video')}</button>`;
 }
 
 function chatCallStartedBody(sender, counterpart, callKind = 'voice') {
@@ -1984,10 +1984,10 @@ function renderThreadHeader(container, chat, role, preference = {}) {
       <button class="btn btn-primary btn-sm" type="submit">Guardar</button>
     </form>
     <div class="chat-header-actions">
-      <button class="chat-icon-btn" type="button" data-chat-toggle-thread-search title="Buscar mensajes" aria-label="Buscar en esta conversación">${chatIcon('search')}</button>
-      <button class="chat-icon-btn" type="button" data-chat-toggle-starred title="Mensajes destacados" aria-label="Mostrar mensajes destacados">★</button>
-      <button class="chat-icon-btn chat-header-secondary" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>
       ${renderChatCallActions(chat, role)}
+      <button class="chat-icon-btn chat-header-utility" type="button" data-chat-toggle-thread-search title="Buscar mensajes" aria-label="Buscar en esta conversación">${chatIcon('search')}</button>
+      <button class="chat-icon-btn chat-header-utility" type="button" data-chat-toggle-starred title="Mensajes destacados" aria-label="Mostrar mensajes destacados">★</button>
+      <button class="chat-icon-btn chat-header-secondary" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>
       <button class="chat-icon-btn chat-alias-toggle chat-header-secondary" type="button" data-edit-chat-name title="Nombre del chat" aria-label="Nombre del chat">${chatIcon('edit')}</button>
     </div>`;
 }
@@ -3468,7 +3468,7 @@ export async function initChatWidget({
   }
 
   function watchIncomingVoiceCalls(chat) {
-    if (!chat?.id || role === 'admin') return null;
+    if (!chat?.id) return null;
     const openCallsQuery = query(
       collection(firebaseDb, 'chats', chat.id, 'calls'),
       where('status', 'in', ['ringing', 'active']),
@@ -3525,7 +3525,7 @@ export async function initChatWidget({
   }
 
   async function startVoiceCall(button, requestedKind = 'voice') {
-    if (!state.selectedChat || role === 'admin') return;
+    if (!state.selectedChat) return;
     const callKind = requestedKind === 'video' ? 'video' : 'voice';
     if (!voiceCallsAvailable()) {
       showToast('Llamadas no disponibles', 'Este navegador no permite llamadas de voz desde la web.', 'warning');
@@ -3613,7 +3613,7 @@ export async function initChatWidget({
   }
 
   async function joinVoiceCall(callId, button = null) {
-    if (!state.selectedChat || role === 'admin') return;
+    if (!state.selectedChat) return;
     if (!voiceCallsAvailable()) {
       showToast('Llamadas no disponibles', 'Este navegador no permite llamadas de voz desde la web.', 'warning');
       return;
