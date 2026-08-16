@@ -380,7 +380,6 @@ export function buildLifecycleNotifications(classId, to, classData = {}) {
   }
   if (to === 'clase_finalizada' || to === 'pendiente_confirmacion') {
     notifications.push(lifecycleNotification(to, classId, classData, 'teacher', 'Clase pendiente de confirmar', `Confirma el resultado de ${label}.`, 'class_confirmation_needed'));
-    notifications.push(lifecycleNotification(to, classId, classData, 'family', 'Clase pendiente de confirmar', `Confirma si la clase ${label} se dio correctamente.`, 'class_confirmation_needed'));
   }
   if (to === 'pendiente_pago') {
     notifications.push(lifecycleNotification(to, classId, classData, 'family', 'Pago pendiente', `Queda pendiente el pago de ${label}.`, 'family_payment_pending'));

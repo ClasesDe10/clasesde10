@@ -6742,7 +6742,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   gap: 2px;
 }
 .family-payment-access-banner,
-.family-payment-marking-banner {
+.family-payment-marking-banner,
+.teacher-attendance-access-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -6752,10 +6753,16 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   padding: 20px 22px;
 }
 .family-payment-access-banner[hidden],
-.family-payment-marking-banner[hidden] {
+.family-payment-marking-banner[hidden],
+.teacher-attendance-access-banner[hidden] {
   display: none;
 }
 .family-payment-access-banner {
+  border: 1px solid rgba(185, 28, 28, .28);
+  background: linear-gradient(135deg, rgba(254, 226, 226, .96), rgba(255, 247, 237, .96));
+  box-shadow: 0 14px 30px rgba(127, 29, 29, .08);
+}
+.teacher-attendance-access-banner {
   border: 1px solid rgba(185, 28, 28, .28);
   background: linear-gradient(135deg, rgba(254, 226, 226, .96), rgba(255, 247, 237, .96));
   box-shadow: 0 14px 30px rgba(127, 29, 29, .08);
@@ -6769,12 +6776,33 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   letter-spacing: .06em;
   text-transform: uppercase;
 }
+.teacher-attendance-access-kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: #991b1b;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
 .family-payment-access-banner h2 {
   margin: 0;
   color: var(--navy);
   font-size: 1.08rem;
 }
+.teacher-attendance-access-banner h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: 1.08rem;
+}
 .family-payment-access-banner p {
+  margin: 6px 0 0;
+  max-width: 760px;
+  color: var(--gray-dark);
+  font-size: .88rem;
+  line-height: 1.5;
+}
+.teacher-attendance-access-banner p {
   margin: 6px 0 0;
   max-width: 760px;
   color: var(--gray-dark);
@@ -6806,6 +6834,12 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 }
 .family-payment-access-locked .calendar-actions-bar {
   display: none;
+}
+.teacher-attendance-access-locked .sidebar-link[data-section]:not([data-section="calendario"]),
+.teacher-attendance-access-locked .sidebar-section-title,
+.teacher-attendance-access-locked #btn-notificaciones,
+.teacher-attendance-access-locked #verificacion-banner {
+  display: none !important;
 }
 .payment-confirm-card .payment-action-unavailable {
   max-width: 250px;
@@ -6984,7 +7018,8 @@ textarea.form-control { resize: vertical; min-height: 90px; }
 
 @media (max-width: 900px) {
   .family-payment-access-banner,
-  .family-payment-marking-banner {
+  .family-payment-marking-banner,
+  .teacher-attendance-access-banner {
     align-items: stretch;
     flex-direction: column;
     padding: 16px;

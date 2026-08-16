@@ -946,8 +946,20 @@ export function hasFamilyAttendanceDecision(classData = {}) {
   return ['realizada', 'no_realizada', 'incidencia'].includes(familyAttendanceDecision(classData));
 }
 
+export function hasTeacherAttendanceDecision(classData = {}) {
+  const explicit = cleanPaymentText(
+    classData.teacherConfirmationStatus
+    || classData.teacherAttendanceStatus
+    || classData.confirmacion_profesor,
+    40,
+  ).toLowerCase();
+  if (['realizada', 'no_realizada'].includes(explicit)) return true;
+  const operational = cleanPaymentText(classData.estado || classData.status, 40).toLowerCase();
+  return ['realizada', 'completada', 'completed', 'pagada', 'paid'].includes(operational);
+}
+
 export function isFamilyConfirmedGivenClass(classData = {}) {
-  return familyAttendanceDecision(classData) === 'realizada';
+  return hasTeacherAttendanceDecision(classData) && familyAttendanceDecision(classData) === 'realizada';
 }
 
 function classEndMsForPayment(classData = {}) {
@@ -1023,6 +1035,8 @@ export function buildFamilyPaymentAccessState(classes = [], scheduleIndex = new 
     .slice()
     .sort((a, b) => String(a.paymentDueAt || '').localeCompare(String(b.paymentDueAt || '')))[0] || null;
   const debtAmount = Math.round(overdueDebtClasses.reduce((sum, item) => sum + classPaymentAmount(item), 0) * 100) / 100;
+  const waitingTeacherClasses = unmarkedDueClasses.filter((classData) => !hasTeacherAttendanceDecision(classData));
+  const familyDecisionRequiredClasses = unmarkedDueClasses.filter((classData) => hasTeacherAttendanceDecision(classData));
 
   return {
     locked: overdueDebtClasses.length > 0,
@@ -1037,6 +1051,10 @@ export function buildFamilyPaymentAccessState(classes = [], scheduleIndex = new 
     unmarkedDueClassCount: unmarkedDueClasses.length,
     unmarkedDueClassIds: unmarkedDueClasses.map((item) => String(item.id || '')).filter(Boolean),
     unmarkedDueClasses,
+    waitingTeacherClassCount: waitingTeacherClasses.length,
+    waitingTeacherClassIds: waitingTeacherClasses.map((item) => String(item.id || '')).filter(Boolean),
+    familyDecisionRequiredClassCount: familyDecisionRequiredClasses.length,
+    familyDecisionRequiredClassIds: familyDecisionRequiredClasses.map((item) => String(item.id || '')).filter(Boolean),
     paymentSubmissionBlocked: unmarkedDueClasses.length > 0,
   };
 }

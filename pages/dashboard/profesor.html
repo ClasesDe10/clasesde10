@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-family-payment-lock">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260816-teacher-attendance-lock">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -102,6 +102,14 @@
     </header>
 
     <div class="page-content">
+      <section class="teacher-attendance-access-banner" id="teacher-attendance-access-banner" hidden aria-live="assertive">
+        <div>
+          <span class="teacher-attendance-access-kicker">Acceso limitado por clases sin marcar</span>
+          <h2>Completa el calendario para recuperar todo el panel</h2>
+          <p id="teacher-attendance-access-copy">Solo puedes usar el calendario hasta indicar si las clases pendientes se dieron o no se dieron.</p>
+        </div>
+        <button class="btn btn-primary" type="button" data-section="calendario">Revisar calendario</button>
+      </section>
 
       <!-- ══ INICIO ══ -->
       <section id="section-inicio" class="dash-section">
@@ -923,7 +931,8 @@ import {
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260815-calendar-semantics';
+  teacherAttendanceAccessState,
+} from '../../js/calendar-engine.js?v=20260816-teacher-attendance-lock';
 import { buildTeacherPayoutPayload } from '../../js/payment-engine.js?v=20260710-calendar-polish2';
 import {
   addLocalDays,
@@ -1014,6 +1023,66 @@ let perfil = perfilFirestoreSnap?.exists()
       status: 'pendiente_perfil',
     });
 const profesorId = perfilLegacy?.id || perfil?.id || profesorFirestoreId;
+const TEACHER_ATTENDANCE_ALLOWED_SECTIONS = new Set(['calendario']);
+let teacherAttendanceAccess = {
+  locked: perfil?.attendanceAccessLocked === true,
+  overdueClassCount: Number(perfil?.attendanceAccessClassCount || 0),
+  overdueClassIds: Array.isArray(perfil?.attendanceAccessClassIds) ? perfil.attendanceAccessClassIds : [],
+  oldestClassEndAt: perfil?.attendanceAccessOldestClassEndAt || '',
+};
+let teacherAttendanceAccessLocked = teacherAttendanceAccess.locked;
+
+function applyTeacherAttendanceAccessState(nextState = {}) {
+  const wasLocked = teacherAttendanceAccessLocked;
+  teacherAttendanceAccess = { ...teacherAttendanceAccess, ...nextState };
+  teacherAttendanceAccessLocked = teacherAttendanceAccess.locked === true;
+  document.body.classList.toggle('teacher-attendance-access-locked', teacherAttendanceAccessLocked);
+
+  const banner = document.getElementById('teacher-attendance-access-banner');
+  const copy = document.getElementById('teacher-attendance-access-copy');
+  if (banner) banner.hidden = !teacherAttendanceAccessLocked;
+  if (copy && teacherAttendanceAccessLocked) {
+    const count = Math.max(1, Number(teacherAttendanceAccess.overdueClassCount || 0));
+    const oldestDate = String(teacherAttendanceAccess.oldestClassEndAt || '').slice(0, 10);
+    const dateText = oldestDate ? ` La mas antigua termino el ${oldestDate}.` : '';
+    copy.textContent = `Tienes ${count} clase${count === 1 ? '' : 's'} de hace mas de 5 dias sin marcar.${dateText} Solo puedes usar el calendario hasta indicar si se ${count === 1 ? 'dio' : 'dieron'} o no.`;
+  }
+
+  if (teacherAttendanceAccessLocked) {
+    const visibleSection = document.querySelector('.dash-section:not([style*="display:none"])')?.id?.replace('section-', '') || '';
+    if (visibleSection && !TEACHER_ATTENDANCE_ALLOWED_SECTIONS.has(visibleSection)) irA('calendario');
+  } else if (wasLocked) {
+    showToast('Acceso completo recuperado', 'Ya has marcado todas las clases atrasadas.', 'success');
+  }
+}
+
+async function loadTeacherAttendanceAccessClasses() {
+  const uid = usuario.uid || usuario.firebase_uid || usuario.id;
+  const queries = [
+    ['teacherUid', uid],
+    ['profesor_id', uid],
+  ].filter(([, value]) => value);
+  const results = await Promise.allSettled(queries.map(([field, value]) => getDocs(firestoreQuery(
+    firestoreCollection(firebaseDb, 'clases'),
+    where(field, '==', value),
+  ))));
+  const fulfilled = results.filter((result) => result.status === 'fulfilled');
+  if (!fulfilled.length) throw new Error('No se pudieron comprobar las clases pendientes.');
+  return mergeById(fulfilled.flatMap((result) => result.value.docs.map((item) => ({ id: item.id, ...item.data() }))));
+}
+
+async function refreshTeacherAttendanceAccessState(options = {}) {
+  try {
+    const classes = await loadTeacherAttendanceAccessClasses();
+    const access = teacherAttendanceAccessState(classes);
+    applyTeacherAttendanceAccessState(access);
+    return access;
+  } catch (error) {
+    if (!options.silent) console.warn('No se pudo actualizar el bloqueo de asistencia del profesor', error);
+    applyTeacherAttendanceAccessState(teacherAttendanceAccess);
+    return teacherAttendanceAccess;
+  }
+}
 
 function isExpectedPermissionFallback(error) {
   return /permission|insufficient permissions/i.test(String(error?.message || error || ''));
@@ -1629,6 +1698,7 @@ function renderTeacherClassAction(clase) {
 }
 
 function irA(sec, options = {}) {
+  if (teacherAttendanceAccessLocked && !TEACHER_ATTENDANCE_ALLOWED_SECTIONS.has(sec)) sec = 'calendario';
   if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
   document.querySelectorAll('.dash-section').forEach((s) => {
     s.style.display = 'none';
@@ -4601,7 +4671,8 @@ async function actualizarAsistenciaDesdeCalendario(select) {
       estado === 'realizada' ? 'La familia ya puede confirmar la clase.' : 'Hemos registrado que la clase no se dio.',
       'success',
     );
-    await Promise.allSettled([cargarInicio(), cargarMisClases()]);
+    await refreshTeacherAttendanceAccessState({ silent: true });
+    if (!teacherAttendanceAccessLocked) await Promise.allSettled([cargarInicio(), cargarMisClases()]);
     if (cal) await cargarClasesCalendario(cal.anio, cal.mes);
   } catch (error) {
     select.value = previous;
@@ -5327,8 +5398,10 @@ window.eliminarDisponibilidad = async (id, button = null) => {
 
 // ── INIT ─────────────────────────────────────────────────────────
 syncTeacherPayoutSettings();
-cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
-irA(sectionFromHash(), { fromHash: true });
+await refreshTeacherAttendanceAccessState();
+if (!teacherAttendanceAccessLocked) cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
+irA(sectionFromHash(teacherAttendanceAccessLocked ? 'calendario' : 'inicio'), { fromHash: true });
+window.setInterval(() => refreshTeacherAttendanceAccessState({ silent: true }), 5 * 60 * 1000);
 </script>
 <script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
 </body>

@@ -30,6 +30,7 @@ export const CANONICAL_CLASS_STATUSES = Object.freeze([
 export const SCHEDULED_CLASS_STATUSES = Object.freeze(['pendiente', 'confirmada', 'programada', 'reprogramada']);
 export const ATTENDANCE_STATUSES = Object.freeze(['pendiente', 'realizada', 'no_realizada', 'incidencia']);
 export const PAID_STATUSES = Object.freeze(['pagado', 'paid', 'validado', 'validated']);
+export const TEACHER_ATTENDANCE_LOCK_GRACE_DAYS = 5;
 
 export function cleanCalendarText(value, max = 500) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -145,6 +146,55 @@ export function classAttendanceReminderState(classData = {}, options = {}) {
   };
 }
 
+export function teacherAttendanceAccessState(classes = [], options = {}) {
+  const nowMs = Number(options.nowMs ?? Date.now());
+  const graceDays = Math.max(0, Number(options.graceDays ?? TEACHER_ATTENDANCE_LOCK_GRACE_DAYS));
+  const graceHours = graceDays * 24;
+  const overdueClasses = (Array.isArray(classes) ? classes : [])
+    .filter((classData) => classAttendanceReminderState(classData, { nowMs, graceHours }).isOverdue)
+    .map((classData) => ({
+      id: cleanCalendarText(classData.id || classData.classId || classData.clase_id, 180),
+      endAt: classEndAt(classData),
+      date: normalizeDateString(classData.fecha || classData.date),
+      subject: cleanCalendarText(classData.materia || classData.subject || 'Clase', 180),
+    }))
+    .filter((classData) => classData.id)
+    .sort((left, right) => (
+      Number(left.endAt?.getTime?.() || 0) - Number(right.endAt?.getTime?.() || 0)
+        || left.id.localeCompare(right.id)
+    ));
+
+  return {
+    locked: overdueClasses.length > 0,
+    reason: overdueClasses.length ? 'unmarked_classes_over_5_days' : '',
+    graceDays,
+    overdueClassCount: overdueClasses.length,
+    overdueClassIds: overdueClasses.map((classData) => classData.id),
+    oldestClassEndAt: overdueClasses[0]?.endAt?.toISOString?.() || '',
+    overdueClasses: overdueClasses.map((classData) => ({
+      id: classData.id,
+      date: classData.date,
+      subject: classData.subject,
+      endAt: classData.endAt?.toISOString?.() || '',
+    })),
+  };
+}
+
+export function buildTeacherAttendanceAccessPatch(access = {}, options = {}) {
+  const locked = access.locked === true;
+  const nowIso = options.nowIso || new Date().toISOString();
+  return {
+    attendanceAccessLocked: locked,
+    attendanceAccessStatus: locked ? 'calendar_only' : 'active',
+    attendanceAccessReason: locked ? access.reason || 'unmarked_classes_over_5_days' : null,
+    attendanceAccessClassCount: locked ? Number(access.overdueClassCount || 0) : 0,
+    attendanceAccessClassIds: locked ? Array.from(new Set((access.overdueClassIds || []).map(String))).sort() : [],
+    attendanceAccessOldestClassEndAt: locked ? access.oldestClassEndAt || null : null,
+    attendanceAccessLockedAt: locked ? options.lockedAt || nowIso : null,
+    attendanceAccessUpdatedAt: nowIso,
+  };
+}
+
 export function minutesUntilClass(classData = {}, nowMs = Date.now()) {
   const start = classStartAt(classData);
   if (!start) return null;
@@ -255,6 +305,21 @@ export function classAttendanceState(classData = {}, options = {}) {
     familyNextStep: ended ? 'El profesor debe registrar primero el resultado.' : 'Cuando termine, el profesor registrara el resultado.',
   };
 
+  if (ended && teacherMarked && !hasFamilyConfirmation && ['realizada', 'no_realizada'].includes(teacherStatus)) {
+    return {
+      ...base,
+      key: 'pending_family',
+      label: 'Falta confirmar familia',
+      tone: 'warning',
+      canFamilyConfirm: true,
+      canFamilyReportIssue: true,
+      teacherNextStep: 'Esperando confirmacion de la familia.',
+      familyNextStep: teacherStatus === 'realizada'
+        ? 'El profesor la marco como impartida. Confirma si se dio o no se dio.'
+        : 'El profesor marco que no se dio. Confirma si estas de acuerdo.',
+    };
+  }
+
   if (incidentStatus === 'abierta' || attendanceStatus === 'incidencia' || attendanceStatus === 'discrepancia') {
     return {
       ...base,
@@ -301,19 +366,6 @@ export function classAttendanceState(classData = {}, options = {}) {
     };
   }
 
-  if (teacherStatus === 'realizada' && !hasFamilyConfirmation) {
-    return {
-      ...base,
-      key: 'pending_family',
-      label: 'Falta confirmar familia',
-      tone: 'warning',
-      canFamilyConfirm: ended,
-      canFamilyReportIssue: ended,
-      teacherNextStep: 'Esperando confirmacion de la familia.',
-      familyNextStep: 'El profesor la marco como impartida. Confirma si todo fue correcto.',
-    };
-  }
-
   if (familyStatus === 'realizada' && teacherStatus !== 'realizada') {
     return {
       ...base,
@@ -333,9 +385,8 @@ export function classAttendanceState(classData = {}, options = {}) {
       label: 'Revisar: falta marcar',
       tone: 'danger',
       canTeacherRegister: true,
-      canFamilyReportIssue: !hasFamilyConfirmation,
       teacherNextStep: 'La clase ya terminó. Marca ahora si se dio o no.',
-      familyNextStep: 'El profesor todavía no ha marcado si se dio o no. Puedes avisar si no se dio.',
+      familyNextStep: 'El profesor todavía no ha marcado si se dio o no. Debes esperar a que lo registre.',
     };
   }
 
@@ -554,10 +605,13 @@ export function buildTeacherAttendancePayload(status, notes = '', reason = '', u
 export function buildFamilyConfirmationPayload(status, notes = '', userUid = '', nowIso = new Date().toISOString(), previous = {}) {
   const normalized = cleanCalendarText(status, 40).toLowerCase();
   const familyStatus = ATTENDANCE_STATUSES.includes(normalized) ? normalized : 'realizada';
-  const teacherStatus = cleanCalendarText(previous.teacherConfirmationStatus || previous.teacherAttendanceStatus || '', 40).toLowerCase();
+  const teacherStatus = cleanCalendarText(previous.teacherConfirmationStatus || previous.teacherAttendanceStatus || previous.confirmacion_profesor || '', 40).toLowerCase();
+  if (!['realizada', 'no_realizada'].includes(teacherStatus)) {
+    throw new Error('El profesor debe marcar primero si la clase se dio o no se dio.');
+  }
   const attendanceStatus = familyStatus === 'realizada' && teacherStatus === 'realizada'
     ? 'confirmada_por_ambas_partes'
-    : familyStatus === 'realizada' ? 'pendiente_profesor' : 'incidencia';
+    : 'incidencia';
   return {
     confirmacion_familia: familyStatus,
     familyConfirmationStatus: familyStatus,
@@ -565,7 +619,7 @@ export function buildFamilyConfirmationPayload(status, notes = '', userUid = '',
     attendanceStatus,
     lifecycleStatus: attendanceStatus === 'confirmada_por_ambas_partes'
       ? 'pendiente_pago'
-      : attendanceStatus === 'pendiente_profesor' ? 'pendiente_confirmacion' : 'incidencia',
+      : 'incidencia',
     incidentStatus: familyStatus === 'incidencia' || familyStatus === 'no_realizada' ? 'abierta' : null,
     familyConfirmedAt: nowIso,
     familyConfirmedByUid: userUid,

@@ -4,7 +4,7 @@
  */
 
 import { nombreMes, nombreDia, formatHora } from './utils.js';
-import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js?v=20260815-calendar-semantics';
+import { classStatusForBadge, normalizeClassStatus } from './calendar-engine.js?v=20260816-teacher-attendance-lock';
 
 export class Calendario {
   constructor({ contenedor, onDiaClick, onMesChange, classDotClass, classIndicatorPriority, legendItems, dayIndicatorMode, daySummaryLabel, daySummaryItems }) {

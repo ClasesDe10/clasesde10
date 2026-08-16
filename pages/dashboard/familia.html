@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260815-family-payment-lock">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260816-teacher-attendance-lock">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -824,7 +824,7 @@ import {
   classEnded,
   classStatusForBadge,
   isScheduledClassStatus,
-} from '../../js/calendar-engine.js?v=20260815-calendar-semantics';
+} from '../../js/calendar-engine.js?v=20260816-teacher-attendance-lock';
 import {
   applyClassPaymentContext,
   buildFamilyAllDuePaymentGroup,
@@ -1020,11 +1020,15 @@ function applyFamilyPaymentAccessState(nextState = {}) {
   }
 
   const markingCount = Number(nextState.unmarkedDueClassCount ?? familyPaymentAccess.unmarkedDueClassCount ?? 0);
+  const waitingTeacherCount = Number(nextState.waitingTeacherClassCount ?? familyPaymentAccess.waitingTeacherClassCount ?? 0);
+  const familyDecisionCount = Number(nextState.familyDecisionRequiredClassCount ?? familyPaymentAccess.familyDecisionRequiredClassCount ?? Math.max(0, markingCount - waitingTeacherCount));
   const markingBanner = document.getElementById('family-payment-marking-banner');
   const markingCopy = document.getElementById('family-payment-marking-copy');
   if (markingBanner) markingBanner.hidden = markingCount <= 0;
   if (markingCopy && markingCount > 0) {
-    markingCopy.textContent = `Tienes ${markingCount} clase${markingCount === 1 ? '' : 's'} pasada${markingCount === 1 ? '' : 's'} sin marcar. Indica si se dio o no se dio; solo las impartidas entraran en el pago.`;
+    markingCopy.textContent = waitingTeacherCount > 0
+      ? `Hay ${waitingTeacherCount} clase${waitingTeacherCount === 1 ? '' : 's'} esperando a que el profesor marque si se ${waitingTeacherCount === 1 ? 'dio' : 'dieron'} o no. Despues podras confirmar${familyDecisionCount > 0 ? ` las otras ${familyDecisionCount}` : ''} y pagar solo las impartidas.`
+      : `Tienes ${familyDecisionCount || markingCount} clase${(familyDecisionCount || markingCount) === 1 ? '' : 's'} pasada${(familyDecisionCount || markingCount) === 1 ? '' : 's'} por confirmar. Indica si se dio o no se dio; solo las impartidas entraran en el pago.`;
   }
 
   if (locked) {
@@ -1506,7 +1510,9 @@ function familyAttendanceSelectValue(attendance = {}) {
 
 function renderFamilyAttendanceSelect(clase, attendance) {
   const value = familyAttendanceSelectValue(attendance);
-  const canChange = !attendance.hasFamilyConfirmation && (attendance.canFamilyConfirm || attendance.canFamilyReportIssue);
+  const canChange = attendance.teacherMarked
+    && !attendance.hasFamilyConfirmation
+    && (attendance.canFamilyConfirm || attendance.canFamilyReportIssue);
   const realizedDisabled = attendance.canFamilyConfirm ? '' : 'disabled';
   const notDoneDisabled = attendance.canFamilyReportIssue ? '' : 'disabled';
   const disabled = canChange ? '' : 'disabled';
@@ -3279,6 +3285,17 @@ async function guardarConfirmacionClaseFamilia(control, status) {
   control.disabled = true;
   if (!isSelect) control.textContent = 'Guardando...';
 
+  const classId = control.dataset.id;
+  const claseRef = firestoreDoc(firebaseDb, 'clases', classId);
+  const claseSnap = await getDoc(claseRef).catch(() => null);
+  const claseActual = claseSnap?.exists() ? { id: claseSnap.id, ...claseSnap.data() } : {};
+  const attendance = classAttendanceState(claseActual);
+  if (!attendance.teacherMarked) {
+    restoreControl();
+    showToast('Esperando al profesor', 'El profesor debe marcar primero si la clase se dio o no se dio.', 'info');
+    return;
+  }
+
   const notas = ['incidencia', 'no_realizada'].includes(status)
     ? await promptAction({
       title: status === 'no_realizada' ? 'Clase no realizada' : 'Informar de una incidencia',
@@ -3294,12 +3311,8 @@ async function guardarConfirmacionClaseFamilia(control, status) {
     return;
   }
 
-  const classId = control.dataset.id;
-  const claseRef = firestoreDoc(firebaseDb, 'clases', classId);
-  const claseSnap = await getDoc(claseRef).catch(() => null);
-  const claseActual = claseSnap?.exists() ? { id: claseSnap.id, ...claseSnap.data() } : {};
-  const payload = buildFamilyConfirmationPayload(status, notas, usuario.uid || usuario.id, new Date().toISOString(), claseActual);
   try {
+    const payload = buildFamilyConfirmationPayload(status, notas, usuario.uid || usuario.id, new Date().toISOString(), claseActual);
     await updateDoc(claseRef, payload);
   } catch (error) {
     restoreControl();
@@ -4776,10 +4789,11 @@ function renderPaymentGroupCard(group = {}) {
   const extra = group.classCount > 4 ? `<li><span>Y ${group.classCount - 4} clase(s) mas</span><strong></strong></li>` : '';
   const isUpcoming = group.paymentWindow === 'upcoming' || group.upcoming;
   const attendanceBlocked = familyPaymentAccess.paymentSubmissionBlocked === true;
+  const waitingTeacher = Number(familyPaymentAccess.waitingTeacherClassCount || 0) > 0;
   const action = isUpcoming
     ? '<em class="payment-action-unavailable">Disponible cuando llegue el dia de pago.</em>'
     : attendanceBlocked
-      ? '<button class="btn btn-outline btn-sm" type="button" data-section="calendario">Marcar clases antes de pagar</button>'
+      ? `<button class="btn btn-outline btn-sm" type="button" data-section="calendario">${waitingTeacher ? 'Esperando al profesor' : 'Marcar clases antes de pagar'}</button>`
       : `<button class="btn btn-primary btn-sm" data-action="confirmar-pago-grupo" data-key="${sanitize(group.key)}">Pagar todas y subir justificante</button>`;
   return `
     <article class="payment-confirm-card ${paymentWindow.cardClass}">
@@ -5149,7 +5163,14 @@ function updatePaymentClassSelection() {
 
 function abrirModalPagoGrupo(group = {}) {
   if (familyPaymentAccess.paymentSubmissionBlocked) {
-    showToast('Primero marca las clases', 'Ve al calendario e indica si cada clase pasada se dio o no se dio. Después aparecerá el importe exacto a pagar.', 'warning');
+    const waitingTeacher = Number(familyPaymentAccess.waitingTeacherClassCount || 0);
+    showToast(
+      waitingTeacher ? 'Esperando al profesor' : 'Primero marca las clases',
+      waitingTeacher
+        ? `El profesor debe marcar primero ${waitingTeacher} clase${waitingTeacher === 1 ? '' : 's'}. Despues podras confirmar y ver el importe exacto a pagar.`
+        : 'Ve al calendario e indica si cada clase pasada se dio o no se dio. Después aparecerá el importe exacto a pagar.',
+      waitingTeacher ? 'info' : 'warning',
+    );
     irA('calendario');
     return;
   }

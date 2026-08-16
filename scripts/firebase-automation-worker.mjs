@@ -42,12 +42,14 @@ import {
 } from '../js/internal-ai-assistant-engine.js';
 import {
   SCHEDULED_CLASS_STATUSES,
+  buildTeacherAttendanceAccessPatch,
   buildClassIncidentPayload,
   classEnded,
   classReminderWindows,
   getClassAttendanceSummary,
   isScheduledClassStatus,
   normalizeClassStatus,
+  teacherAttendanceAccessState,
 } from '../js/calendar-engine.js';
 import {
   buildAlertPriorityPlan,
@@ -1070,6 +1072,43 @@ async function loadCompleteFamilyPaymentAccessContext(db) {
   const paymentSchedules = schedulesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
   const lockedFamilies = lockedFamiliesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }));
   return { classes, paymentSchedules, lockedFamilies };
+}
+
+async function loadCompleteTeacherAttendanceAccessContext(db) {
+  const [classesSnap, lockedTeachersSnap] = await Promise.all([
+    db.collection('clases').where('classResetGeneration', '==', CLASS_RESET_GENERATION).get(),
+    db.collection('profesores').where('attendanceAccessLocked', '==', true).get(),
+  ]);
+  return {
+    classes: filterAfterClassReset(classesSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref }))),
+    lockedTeachers: lockedTeachersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data(), __ref: doc.ref })),
+  };
+}
+
+function teacherAttendanceAccessProfileUid(profile = {}) {
+  return clean(profile.userUid || profile.usuario_id || profile.uid || profile.id, 180);
+}
+
+function teacherAttendanceAccessFactsMatch(profile = {}, access = {}) {
+  return profile.attendanceAccessLocked === true
+    && clean(profile.attendanceAccessReason, 120) === clean(access.reason || 'unmarked_classes_over_5_days', 120)
+    && Number(profile.attendanceAccessClassCount || 0) === Number(access.overdueClassCount || 0)
+    && sameStringSet(profile.attendanceAccessClassIds, access.overdueClassIds);
+}
+
+async function resolveTeacherAttendanceAccessProfile(db, teacherUid, knownProfiles = new Map()) {
+  const known = knownProfiles.get(teacherUid);
+  if (known?.__ref) return known;
+  const direct = await db.collection('profesores').doc(teacherUid).get();
+  if (direct.exists) return { id: direct.id, ...direct.data(), __ref: direct.ref };
+  for (const field of ['userUid', 'usuario_id']) {
+    const snap = await db.collection('profesores').where(field, '==', teacherUid).limit(1).get();
+    if (!snap.empty) {
+      const doc = snap.docs[0];
+      return { id: doc.id, ...doc.data(), __ref: doc.ref };
+    }
+  }
+  return { id: teacherUid, userUid: teacherUid, __ref: db.collection('profesores').doc(teacherUid) };
 }
 
 function familyPaymentAccessProfileUid(profile = {}) {
@@ -3823,7 +3862,7 @@ async function processUnmarkedClasses(db, stats) {
     if (!isScheduledClassStatus(data.estado || data.status)) continue;
     if (!classEndedMoreThan(data, confirmationGraceMinutes)) continue;
 
-    const { teacherUid, familyUid } = await resolveClassRecipients(db, data);
+    const { teacherUid } = await resolveClassRecipients(db, data);
     const label = classLabel(data);
     const payload = {
       type: 'class_unmarked_after_24h',
@@ -3853,26 +3892,6 @@ async function processUnmarkedClasses(db, stats) {
       });
     }
 
-    const familyCreated = await notifyUserOnce(
-      db,
-      familyUid,
-      'Confirma si la clase se dio',
-      `Han pasado 24h desde la clase ${label}. Confirma desde tu panel si se realizo o si hubo incidencia.`,
-      payload,
-      `${key}_family`,
-    );
-    created += familyCreated ? 1 : 0;
-    if (familyCreated) {
-      await applyClassTrustPenalty(doc.ref, {
-        classId: doc.id,
-        notificationType: 'class_unmarked_after_24h',
-        role: 'familia',
-        userUid: familyUid,
-        points: CLASS_UNMARKED_PENALTY_POINTS,
-        reason: 'No confirmo la asistencia de la clase dentro de las 24h posteriores.',
-      });
-    }
-
     created += await notifyAdminsOnce(
       db,
       'Clase sin registrar',
@@ -3899,6 +3918,71 @@ async function processUnmarkedClasses(db, stats) {
       );
     }
     stats.classesChecked += 1;
+  }
+}
+
+async function processTeacherAttendanceAccessSweep(db, stats) {
+  const { classes, lockedTeachers } = await loadCompleteTeacherAttendanceAccessContext(db);
+  const classesByTeacher = new Map();
+  classes.forEach((classData) => {
+    const teacherUid = clean(classData.teacherUid || classData.profesor_id, 180);
+    if (!teacherUid) return;
+    if (!classesByTeacher.has(teacherUid)) classesByTeacher.set(teacherUid, []);
+    classesByTeacher.get(teacherUid).push(classData);
+  });
+
+  const lockedProfilesByUid = new Map();
+  lockedTeachers.forEach((profile) => {
+    [profile.id, profile.userUid, profile.usuario_id, profile.uid]
+      .map((value) => clean(value, 180))
+      .filter(Boolean)
+      .forEach((uid) => lockedProfilesByUid.set(uid, profile));
+  });
+  const teachersToEvaluate = new Set([
+    ...classesByTeacher.keys(),
+    ...lockedTeachers.map((profile) => teacherAttendanceAccessProfileUid(profile)).filter(Boolean),
+  ]);
+
+  for (const teacherUid of teachersToEvaluate) {
+    const access = teacherAttendanceAccessState(classesByTeacher.get(teacherUid) || []);
+    const lockedProfile = lockedProfilesByUid.get(teacherUid) || null;
+    if (access.locked) {
+      const profile = lockedProfile || await resolveTeacherAttendanceAccessProfile(db, teacherUid, lockedProfilesByUid);
+      const wasLocked = profile.attendanceAccessLocked === true;
+      if (!teacherAttendanceAccessFactsMatch(profile, access)) {
+        await writeDoc(db.collection('profesores'), profile.id || teacherUid, {
+          ...buildTeacherAttendanceAccessPatch(access, {
+            lockedAt: profile.attendanceAccessLockedAt || isoNow(),
+          }),
+          updatedAt: now(),
+          updated_at: isoNow(),
+        });
+        stats.teacherAttendanceAccessLocksApplied += 1;
+      }
+      if (!wasLocked) {
+        const recipientUid = teacherAttendanceAccessProfileUid(profile) || teacherUid;
+        await notifyUserOnce(
+          db,
+          recipientUid,
+          'Acceso limitado hasta completar el calendario',
+          `Tienes ${access.overdueClassCount} clase${access.overdueClassCount === 1 ? '' : 's'} de hace mas de 5 dias sin marcar. Solo puedes usar el calendario hasta indicar si se ${access.overdueClassCount === 1 ? 'dio' : 'dieron'} o no.`,
+          {
+            type: 'teacher_attendance_access_locked',
+            classCount: access.overdueClassCount,
+            classIds: access.overdueClassIds,
+            url: '/pages/dashboard/profesor.html#calendario',
+          },
+          `teacher_attendance_access_locked_${recipientUid}_${access.overdueClassIds[0] || 'attendance'}`,
+        );
+      }
+    } else if (lockedProfile?.attendanceAccessLocked === true) {
+      await writeDoc(db.collection('profesores'), lockedProfile.id || teacherUid, {
+        ...buildTeacherAttendanceAccessPatch(access),
+        updatedAt: now(),
+        updated_at: isoNow(),
+      });
+      stats.teacherAttendanceAccessLocksRestored += 1;
+    }
   }
 }
 
@@ -6450,6 +6534,24 @@ async function main() {
     }, paymentAccessFixture)) {
       throw new Error('Self-test failed: changed family payment debt was incorrectly treated as stable.');
     }
+    const attendanceAccessFixture = teacherAttendanceAccessState([{
+      id: 'class_unmarked',
+      estado: 'confirmada',
+      fecha: '2026-07-01',
+      hora_inicio: '17:00',
+      hora_fin: '18:00',
+    }], { nowMs: new Date('2026-07-06T18:00:00').getTime() });
+    if (!attendanceAccessFixture.locked || attendanceAccessFixture.overdueClassCount !== 1) {
+      throw new Error('Self-test failed: teacher attendance access did not lock after five days.');
+    }
+    if (!teacherAttendanceAccessFactsMatch({
+      attendanceAccessLocked: true,
+      attendanceAccessReason: 'unmarked_classes_over_5_days',
+      attendanceAccessClassCount: 1,
+      attendanceAccessClassIds: ['class_unmarked'],
+    }, attendanceAccessFixture)) {
+      throw new Error('Self-test failed: equivalent teacher attendance access facts were not stable.');
+    }
     const debtSummaryFixture = groupFamilyDebtEntries([
       { id: 'class_old', familyUid: 'family_1', familyName: 'Familia Prueba', studentId: 'student_1', studentName: 'Hija Prueba', teacherUid: 'teacher_1', teacherName: 'Profesor Prueba', amount: 25, dueAt: '2026-07-01T20:00:00.000Z' },
       { id: 'class_current', familyUid: 'family_1', familyName: 'Familia Prueba', studentId: 'student_1', studentName: 'Hija Prueba', teacherUid: 'teacher_1', teacherName: 'Profesor Prueba', amount: 35, dueAt: '2026-07-15T20:00:00.000Z' },
@@ -6472,6 +6574,7 @@ async function main() {
       maintenanceHealthVersion: MAINTENANCE_HEALTH_VERSION,
       maintenanceStatus: maintenanceHealth.status,
       familyPaymentAccessSweep: 'passed',
+      teacherAttendanceAccessSweep: 'passed',
       adminFamilyDebtSummary: 'passed',
       best: aiMerged[0],
     }, null, 2));
@@ -6514,6 +6617,8 @@ async function main() {
     paymentEscalationNoticesCreated: 0,
     familyPaymentAccessLocksApplied: 0,
     familyPaymentAccessLocksRestored: 0,
+    teacherAttendanceAccessLocksApplied: 0,
+    teacherAttendanceAccessLocksRestored: 0,
     adminFamilyDebtSummariesUpserted: 0,
     adminFamilyDebtSummariesResolved: 0,
     classPaymentContextsUpdated: 0,
@@ -6703,6 +6808,7 @@ async function main() {
   await processClassLifecycle(db, stats);
   await processUpcomingClassReminders(db, stats);
   await processUnmarkedClasses(db, stats);
+  await processTeacherAttendanceAccessSweep(db, stats);
   await processAttendanceConfirmations(db, stats);
   await processClassLifecycle(db, stats);
   await processIncidentClassification(db, stats);

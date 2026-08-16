@@ -1549,8 +1549,19 @@ service cloud.firestore {
         );
     }
 
+    function classTeacherAttendanceResult(data) {
+      return data.keys().hasAny(['teacherConfirmationStatus'])
+        ? data.teacherConfirmationStatus
+        : data.keys().hasAny(['teacherAttendanceStatus'])
+          ? data.teacherAttendanceStatus
+          : data.keys().hasAny(['confirmacion_profesor'])
+            ? data.confirmacion_profesor
+            : '';
+    }
+
     function validFamilyClassConfirmationUpdate() {
       return isFamilyParticipant(resource.data)
+        && classTeacherAttendanceResult(resource.data) in ['realizada', 'no_realizada']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'confirmacion_familia',
           'familyConfirmationStatus',
@@ -1568,17 +1579,18 @@ service cloud.firestore {
         && request.resource.data.familyConfirmationStatus in ['realizada', 'no_realizada', 'incidencia']
         && request.resource.data.confirmacion_familia == request.resource.data.familyConfirmationStatus
         && (
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['lifecycleStatus'])
-          || (
-            request.resource.data.attendanceStatus == 'confirmada_por_ambas_partes'
+          (
+            classTeacherAttendanceResult(resource.data) == 'realizada'
+            && request.resource.data.familyConfirmationStatus == 'realizada'
+            && request.resource.data.attendanceStatus == 'confirmada_por_ambas_partes'
             && request.resource.data.lifecycleStatus == 'pendiente_pago'
           )
           || (
-            request.resource.data.attendanceStatus == 'pendiente_profesor'
-            && request.resource.data.lifecycleStatus == 'pendiente_confirmacion'
-          )
-          || (
-            request.resource.data.attendanceStatus == 'incidencia'
+            (
+              classTeacherAttendanceResult(resource.data) != 'realizada'
+              || request.resource.data.familyConfirmationStatus != 'realizada'
+            )
+            && request.resource.data.attendanceStatus == 'incidencia'
             && request.resource.data.lifecycleStatus == 'incidencia'
           )
         );

@@ -13,6 +13,8 @@ assert(source.includes('resetMarkerPath') && source.includes('verificationMarker
 assert(source.includes("verificationMarker.verification?.mode, 'read_only_independent_verification'"), 'Post-reset acceptance must require the independent read-only verifier.');
 assert(source.includes('paymentAccessLocked: true') && source.includes('paymentAccessDebtAmount: 25'), 'The fixture must cover the overdue access lock.');
 assert(source.includes('unmarkedClassId') && source.includes("selectOption('no_realizada')"), 'The flow must mark a past class as not given before payment.');
+assert(source.includes('teacherCalendarOnlyLockVerified') && source.includes('teacherAccessRestoredAfterMarking'), 'The flow must verify the five-day teacher calendar-only lock and immediate restoration.');
+assert(source.includes('Family attendance was enabled before the teacher marked the class.'), 'The flow must verify that the family cannot act before the teacher.');
 assert(source.includes("value = '35.00'") && source.includes("value = '59.00'") && source.includes("value = '60.00'"), 'The flow must reject partial and altered payments before accepting the exact total.');
 assert(source.includes("setInputFiles({") && source.includes('proofDocumentCreated'), 'The flow must upload and verify a real payment proof.');
 assert(source.includes("window.validarPago(paymentId, 'validado'") && source.includes('atomic admin payment approval'), 'The flow must approve the proof through the authenticated admin application.');

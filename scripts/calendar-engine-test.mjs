@@ -3,6 +3,7 @@ import {
   buildClassIncidentPayload,
   buildFamilyConfirmationPayload,
   buildParticipantClassIncidentCreatePayload,
+  buildTeacherAttendanceAccessPatch,
   buildTeacherAttendancePayload,
   classAttendanceCalendarVisual,
   classAttendanceReminderState,
@@ -12,6 +13,7 @@ import {
   getClassAttendanceSummary,
   isScheduledClassStatus,
   normalizeClassStatus,
+  teacherAttendanceAccessState,
   validateClassTimeRange,
 } from '../js/calendar-engine.js';
 import {
@@ -104,6 +106,7 @@ const endedClassNow = new Date('2026-06-30T18:10:00').getTime();
 const endedClassState = classAttendanceState(endedClass, { nowMs: endedClassNow });
 const endedClassVisual = classAttendanceCalendarVisual(endedClass, { nowMs: endedClassNow });
 assert(endedClassState.canTeacherRegister, 'Ended classes must ask the teacher to register the result first.');
+assert(!endedClassState.canFamilyConfirm && !endedClassState.canFamilyReportIssue, 'Families must not mark attendance before the teacher.');
 assert(endedClassState.key === 'pending_teacher' && endedClassState.tone === 'danger', 'An ended unmarked class must immediately become a review state.');
 assert(endedClassVisual.dotClass === 'dot-red' && endedClassVisual.calendarLabel === 'Revisar', 'An ended unmarked class must be red and explicitly labelled Revisar.');
 const futureClassVisual = classAttendanceCalendarVisual(endedClass, { nowMs: new Date('2026-06-30T17:30:00').getTime() });
@@ -119,14 +122,31 @@ assert(!classAttendanceReminderState({ ...endedClass, ...teacherPayload }, { now
 const pendingFamilyState = classAttendanceState({ ...endedClass, ...teacherPayload }, { nowMs: new Date('2026-06-30T18:10:00').getTime() });
 assert(pendingFamilyState.canFamilyConfirm && pendingFamilyState.key === 'pending_family', 'Teacher-marked classes must ask family for confirmation.');
 assert(classAttendanceCalendarVisual({ ...endedClass, ...teacherPayload }, { nowMs: endedClassNow }).dotClass === 'dot-amber', 'Family confirmation pending must use amber.');
+const teacherNotGivenPendingFamily = classAttendanceState({ ...endedClass, ...notGivenPayload }, { nowMs: endedClassNow });
+assert(teacherNotGivenPendingFamily.key === 'pending_family' && teacherNotGivenPendingFamily.canFamilyConfirm, 'Families must be able to respond after the teacher marks a class as not given.');
 
-const familyPayload = buildFamilyConfirmationPayload('incidencia', 'No aparecio', 'family_1', '2026-06-30T18:10:00.000Z');
+let familyBeforeTeacherRejected = false;
+try {
+  buildFamilyConfirmationPayload('realizada', '', 'family_1', '2026-06-30T18:10:00.000Z', endedClass);
+} catch (error) {
+  familyBeforeTeacherRejected = /profesor debe marcar primero/i.test(error.message);
+}
+assert(familyBeforeTeacherRejected, 'Family payloads must reject attendance before the teacher marks the class.');
+const familyPayload = buildFamilyConfirmationPayload('incidencia', 'No aparecio', 'family_1', '2026-06-30T18:10:00.000Z', teacherPayload);
 assert(familyPayload.incidentStatus === 'abierta', 'Family incidents must open incident status.');
 assert(getClassAttendanceSummary({ ...teacherPayload, ...familyPayload }) === 'incidencia', 'Incident confirmations must summarize as incidencia.');
 const confirmedPayload = buildFamilyConfirmationPayload('realizada', '', 'family_1', '2026-06-30T18:12:00.000Z', teacherPayload);
 const confirmedState = classAttendanceState({ ...endedClass, ...teacherPayload, ...confirmedPayload }, { nowMs: new Date('2026-06-30T18:15:00').getTime() });
 assert(confirmedState.key === 'confirmed_by_both' && !confirmedState.canFamilyConfirm, 'Classes confirmed by both parties must be closed for attendance.');
 assert(classAttendanceCalendarVisual({ ...endedClass, ...teacherPayload, ...confirmedPayload }, { nowMs: endedClassNow }).dotClass === 'dot-emerald', 'Closed attendance must use green.');
+
+const teacherLockBeforeFiveDays = teacherAttendanceAccessState([endedClass], { nowMs: new Date('2026-07-05T17:59:00').getTime() });
+assert(!teacherLockBeforeFiveDays.locked, 'Teacher access must remain open until five full days have elapsed.');
+const teacherLockAtFiveDays = teacherAttendanceAccessState([endedClass], { nowMs: new Date('2026-07-05T18:00:00').getTime() });
+assert(teacherLockAtFiveDays.locked && teacherLockAtFiveDays.overdueClassIds[0] === endedClass.id, 'Teacher access must become calendar-only after five full days without a result.');
+assert(!teacherAttendanceAccessState([{ ...endedClass, ...teacherPayload }], { nowMs: new Date('2026-07-06T18:00:00').getTime() }).locked, 'Marking the overdue class must restore teacher access immediately.');
+const teacherLockPatch = buildTeacherAttendanceAccessPatch(teacherLockAtFiveDays, { nowIso: '2026-07-05T18:00:00.000Z' });
+assert(teacherLockPatch.attendanceAccessLocked && teacherLockPatch.attendanceAccessStatus === 'calendar_only', 'Teacher lock persistence must expose calendar-only access.');
 
 const incident = buildClassIncidentPayload('class_1', { familyUid: 'family_1', teacherUid: 'teacher_1' }, 'family_confirmation', 'No se dio', 'family_1');
 assert(incident.estado === 'abierta' && incident.teacherUid === 'teacher_1', 'Incident payload must include participants and open status.');

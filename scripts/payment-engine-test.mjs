@@ -199,13 +199,18 @@ assert(confirmationGroups[0].dueNow === false && confirmationGroups[0].upcoming 
 assert(confirmationGroups[0].classes.every((item) => item.paymentBucket === 'upcoming'), 'Each class must expose its payment-window bucket.');
 assert(confirmationGroups[0].bizumPhone === '613016665', 'Family confirmation groups must use ClasesDe10 central Bizum phone.');
 assert(confirmationGroups[0].teacherPhone === '', 'Family confirmation groups must not expose the teacher real phone for payment.');
-assert(unpaidFamilyClasses([{
+const familyMarkedBeforeTeacher = {
   id: 'family_marked_before_worker',
   estado: 'confirmada',
   familyConfirmationStatus: 'realizada',
   familyPaymentStatus: 'pendiente',
   precio_total: 25,
-}]).length === 1, 'A class marked as given by the family must become payable without waiting for a background lifecycle worker.');
+};
+assert(unpaidFamilyClasses([familyMarkedBeforeTeacher]).length === 0, 'A family cannot make a class payable before the teacher marks attendance.');
+assert(unpaidFamilyClasses([{
+  ...familyMarkedBeforeTeacher,
+  teacherConfirmationStatus: 'realizada',
+}]).length === 1, 'A class marked as given by both parties must become payable without waiting for a background lifecycle worker.');
 const dueNowConfirmationGroups = buildFamilyPaymentConfirmationGroups(classes, [], scheduleIndex, {
   nowMs: new Date('2026-06-27T10:00:00').getTime(),
 });

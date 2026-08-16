@@ -379,6 +379,13 @@ async function seedFixture(db, fixture) {
     fecha_inicio_cobro_profesor: fixture.currentDate,
     status: 'activo',
     active: true,
+    attendanceAccessLocked: true,
+    attendanceAccessStatus: 'calendar_only',
+    attendanceAccessReason: 'unmarked_classes_over_5_days',
+    attendanceAccessClassCount: 1,
+    attendanceAccessClassIds: [fixture.teacherOverdueClassId],
+    attendanceAccessOldestClassEndAt: `${fixture.teacherOverdueDate}T18:00:00.000Z`,
+    attendanceAccessLockedAt: nowIso,
     testRun: fixture.prefix,
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -463,9 +470,6 @@ async function seedFixture(db, fixture) {
     estado: 'realizada',
     status: 'realizada',
     lifecycleStatus: 'pendiente_pago',
-    teacherConfirmationStatus: 'realizada',
-    teacherAttendanceStatus: 'realizada',
-    confirmacion_profesor: 'realizada',
     familyPaymentStatus: 'pendiente',
     estado_pago_familia: 'pendiente',
     estado_pago: 'pendiente',
@@ -489,6 +493,9 @@ async function seedFixture(db, fixture) {
     startTime: '17:00',
     hora_fin: '18:00',
     endTime: '18:00',
+    teacherConfirmationStatus: 'realizada',
+    teacherAttendanceStatus: 'realizada',
+    confirmacion_profesor: 'realizada',
     familyConfirmationStatus: 'realizada',
     familyAttendanceStatus: 'realizada',
     confirmacion_familia: 'realizada',
@@ -507,6 +514,9 @@ async function seedFixture(db, fixture) {
     startTime: '18:00',
     hora_fin: '19:00',
     endTime: '19:00',
+    teacherConfirmationStatus: 'realizada',
+    teacherAttendanceStatus: 'realizada',
+    confirmacion_profesor: 'realizada',
     familyConfirmationStatus: 'realizada',
     familyAttendanceStatus: 'realizada',
     confirmacion_familia: 'realizada',
@@ -525,12 +535,63 @@ async function seedFixture(db, fixture) {
     startTime: '19:00',
     hora_fin: '20:00',
     endTime: '20:00',
+    estado: 'confirmada',
+    status: 'confirmada',
+    lifecycleStatus: 'pendiente_confirmacion',
     precio_total: 20,
     familyAmount: 20,
     familyPaymentDueAt: currentDueAt,
     paymentDueAt: currentDueAt,
   });
+  batch.set(db.doc(`clases/${fixture.teacherOverdueClassId}`), {
+    ...commonClass,
+    id: fixture.teacherOverdueClassId,
+    calendarUid: fixture.teacherOverdueClassId,
+    fecha: fixture.teacherOverdueDate,
+    date: fixture.teacherOverdueDate,
+    hora_inicio: '17:00',
+    startTime: '17:00',
+    hora_fin: '18:00',
+    endTime: '18:00',
+    estado: 'confirmada',
+    status: 'confirmada',
+    lifecycleStatus: 'pendiente_confirmacion',
+    precio_total: 0,
+    familyAmount: 0,
+    importe_profesor: 0,
+    teacherAmount: 0,
+  });
   await batch.commit();
+}
+
+async function verifyTeacherCalendarOnlyLock(page, fixture) {
+  await login(page, fixture.teacherEmail, fixture.password, 'profesor');
+  await page.waitForSelector('#teacher-attendance-access-banner:not([hidden])', { timeout: 30000 });
+  const lockText = (await page.locator('#teacher-attendance-access-copy').innerText()).replace(/\s+/g, ' ').trim();
+  assert.match(lockText, /mas de 5 dias sin marcar/i);
+
+  await page.evaluate(() => document.querySelector('[data-section="perfil"]')?.click());
+  await page.waitForTimeout(300);
+  assert.equal((await page.locator('#topbar-title').innerText()).trim(), 'Calendario', 'Locked teacher reached a forbidden section.');
+
+  const targetMonth = fixture.teacherOverdueDate.slice(0, 7);
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  if (targetMonth < currentMonth) await page.locator('#cal-prev').click();
+  await page.waitForSelector(`.calendar-day[data-fecha="${fixture.teacherOverdueDate}"]`, { timeout: 30000 });
+  await page.locator(`.calendar-day[data-fecha="${fixture.teacherOverdueDate}"]`).click();
+  const attendance = page.locator(`select[data-action="actualizar-asistencia-calendario"][data-id="${fixture.teacherOverdueClassId}"]`);
+  await attendance.waitFor({ state: 'visible', timeout: 30000 });
+  await attendance.selectOption('no_realizada');
+  const dialog = page.locator('.action-dialog-overlay.open');
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  await dialog.locator('textarea').fill(`Clase no impartida - ${fixture.prefix}`);
+  await dialog.locator('[data-action-dialog-confirm]').click();
+  await dialog.waitFor({ state: 'detached', timeout: 30000 });
+  await page.waitForSelector('#teacher-attendance-access-banner[hidden]', { timeout: 30000 });
+  await page.evaluate(() => document.querySelector('[data-section="perfil"]')?.click());
+  await page.waitForSelector('#section-perfil:not([style*="display: none"])', { timeout: 30000 });
+  await fixture.db.doc(`clases/${fixture.teacherOverdueClassId}`).delete();
+  return { lockText, unlocked: true };
 }
 
 async function verifyFamilyLockedAndMarkAttendance(page, fixture) {
@@ -559,7 +620,28 @@ async function verifyFamilyLockedAndMarkAttendance(page, fixture) {
   assert.match(scheduledPaymentText, /Impagado anterior:\s*(?:25,00|25\.00)/i, 'Fortnightly payment day does not carry older debt.');
   const attendance = page.locator(`select[data-action="actualizar-asistencia-familia"][data-id="${fixture.unmarkedClassId}"]`);
   await attendance.waitFor({ state: 'visible', timeout: 30000 });
-  await attendance.selectOption('no_realizada');
+  assert.equal(await attendance.isDisabled(), true, 'Family attendance was enabled before the teacher marked the class.');
+  await fixture.db.doc(`clases/${fixture.unmarkedClassId}`).update({
+    estado: 'realizada',
+    status: 'realizada',
+    lifecycleStatus: 'pendiente_confirmacion',
+    teacherConfirmationStatus: 'realizada',
+    teacherAttendanceStatus: 'realizada',
+    confirmacion_profesor: 'realizada',
+    attendanceStatus: 'pendiente_familia',
+    teacherMarkedAt: new Date().toISOString(),
+    teacherMarkedByUid: fixture.teacher.localId,
+    updatedAt: new Date().toISOString(),
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#family-payment-access-banner:not([hidden])', { timeout: 30000 });
+  await page.evaluate(() => document.querySelector('[data-section="calendario"]')?.click());
+  await page.waitForSelector(`.calendar-day[data-fecha="${fixture.currentDate}"]`, { timeout: 30000 });
+  await page.locator(`.calendar-day[data-fecha="${fixture.currentDate}"]`).click();
+  const enabledAttendance = page.locator(`select[data-action="actualizar-asistencia-familia"][data-id="${fixture.unmarkedClassId}"]`);
+  await enabledAttendance.waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await enabledAttendance.isEnabled(), true, 'Family attendance did not unlock after the teacher marked the class.');
+  await enabledAttendance.selectOption('no_realizada');
   const dialog = page.locator('.action-dialog-overlay.open');
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   await dialog.locator('textarea').fill(`No se impartio - ${fixture.prefix}`);
@@ -785,8 +867,10 @@ const fixture = {
   oldClassId: `${prefix}_old`,
   currentClassId: `${prefix}_current`,
   unmarkedClassId: `${prefix}_unmarked`,
+  teacherOverdueClassId: `${prefix}_teacher_overdue`,
   oldDate: isoDateDaysAgo(1),
   currentDate: isoDateDaysAgo(1),
+  teacherOverdueDate: isoDateDaysAgo(6),
   todayDate: isoDateDaysAgo(0),
   classIds: [],
   paymentId: '',
@@ -795,11 +879,12 @@ const fixture = {
   teacher: null,
   adminUser: null,
 };
-fixture.classIds = [fixture.oldClassId, fixture.currentClassId, fixture.unmarkedClassId];
+fixture.classIds = [fixture.oldClassId, fixture.currentClassId, fixture.unmarkedClassId, fixture.teacherOverdueClassId];
 
 let browser = null;
 let familyContext = null;
 let adminContext = null;
+let teacherContext = null;
 let flowResult = null;
 let flowError = null;
 let cleanup = null;
@@ -809,14 +894,19 @@ try {
   browser = await launchBrowser();
   familyContext = await browser.newContext({ viewport: { width: 1366, height: 900 }, serviceWorkers: 'block' });
   adminContext = await browser.newContext({ viewport: { width: 1366, height: 900 }, serviceWorkers: 'block' });
+  teacherContext = await browser.newContext({ viewport: { width: 1366, height: 900 }, serviceWorkers: 'block' });
   const familyPage = await familyContext.newPage();
   const adminPage = await adminContext.newPage();
+  const teacherPage = await teacherContext.newPage();
+  const teacherAccess = await verifyTeacherCalendarOnlyLock(teacherPage, fixture);
   const locked = await verifyFamilyLockedAndMarkAttendance(familyPage, fixture);
   const submitted = await submitExactFamilyPayment(familyPage, fixture);
   const approved = await verifyAdminIdentityAndApprove(adminPage, fixture);
   const unlocked = await verifyLiveUnlockAndGreenCalendar(familyPage, fixture);
   flowResult = {
     lockedAccessVerified: /30 dias/i.test(locked.lockText),
+    teacherCalendarOnlyLockVerified: /5 dias/i.test(teacherAccess.lockText),
+    teacherAccessRestoredAfterMarking: teacherAccess.unlocked,
     fortnightlyPaymentDayVerified: /Cada 15 dias/i.test(locked.scheduledPaymentText),
     attendanceRequiredAndNoShowExcluded: true,
     partialPaymentRejected: true,
@@ -848,6 +938,7 @@ try {
   await Promise.all([
     familyContext?.close().catch(() => {}),
     adminContext?.close().catch(() => {}),
+    teacherContext?.close().catch(() => {}),
   ]);
   await browser?.close().catch(() => {});
   try {

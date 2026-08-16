@@ -1,6 +1,7 @@
 import {
   CLASS_LIFECYCLE_STATES,
   buildClassLifecycleTransition,
+  buildLifecycleNotifications,
   canTransitionClassLifecycle,
   deriveLifecycleTargetState,
   nextLifecycleState,
@@ -67,6 +68,13 @@ assert(deriveLifecycleTargetState({
   hora_inicio: '16:00',
   hora_fin: '17:00',
 }, { nowMs: now }) === 'pendiente_confirmacion', 'Stale ended scheduled classes must request confirmation.');
+const unmarkedLifecycleNotifications = buildLifecycleNotifications('class_waiting_teacher', 'pendiente_confirmacion', {
+  estado: 'confirmada',
+  fecha: '2026-06-30',
+  hora_inicio: '16:00',
+});
+assert(unmarkedLifecycleNotifications.some((item) => item.role === 'teacher'), 'An unmarked ended class must remind the teacher.');
+assert(!unmarkedLifecycleNotifications.some((item) => item.role === 'family'), 'A family must not be prompted before the teacher marks attendance.');
 
 const confirmedClass = {
   estado: 'realizada',

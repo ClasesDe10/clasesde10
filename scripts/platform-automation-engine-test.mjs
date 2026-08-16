@@ -99,11 +99,11 @@ const overdueClassPlan = buildAutomationPlan({
 });
 
 assertHas(overdueClassPlan.notifications, (item) => item.userUid === 'teacher_user_1' && item.type === 'class_unmarked_after_24h', 'overdue class must notify teacher after 24h');
-assertHas(overdueClassPlan.notifications, (item) => item.userUid === 'family_user_1' && item.type === 'class_unmarked_after_24h', 'overdue class must notify family after 24h');
+assert.ok(!overdueClassPlan.notifications.some((item) => item.userUid === 'family_user_1' && item.type === 'class_unmarked_after_24h'), 'family must wait for the teacher and must not receive an impossible attendance reminder');
 assertHas(overdueClassPlan.crmTasks, (item) => item.priority === 'high' && item.entityId === 'class_1', 'overdue class must create CRM task');
 assertHas(overdueClassPlan.patches, (item) => item.collection === 'clases' && item.docId === 'class_1' && item.data.needsAttendanceConfirmation === true, 'overdue class must patch class state');
 assertHas(overdueClassPlan.patches, (item) => item.collection === 'clases' && item.data.trustPenaltyEvents?.class_unmarked_teacher?.points === -2, 'overdue class must penalize teacher responsibility');
-assertHas(overdueClassPlan.patches, (item) => item.collection === 'clases' && item.data.trustPenaltyEvents?.class_unmarked_family?.points === -2, 'overdue class must penalize family responsibility');
+assert.ok(!overdueClassPlan.patches.some((item) => item.data.trustPenaltyEvents?.class_unmarked_family), 'family must not be penalized before the teacher marks attendance');
 assertOnlySupportedJobs(overdueClassPlan);
 
 const completedClassPlan = buildAutomationPlan({
