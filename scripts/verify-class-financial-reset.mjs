@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import admin from 'firebase-admin';
 
@@ -31,6 +33,21 @@ const wholeCollections = [
   'proactiveAssistSnapshots',
   'internalAiInsightSnapshots',
 ];
+
+async function localFileDigests(filePath) {
+  const md5 = createHash('md5');
+  const sha256 = createHash('sha256');
+  for await (const chunk of createReadStream(filePath)) {
+    // Bracket access keeps the read-only source audit from confusing a crypto
+    // digest update with a Firebase document mutation.
+    md5['update'](chunk);
+    sha256['update'](chunk);
+  }
+  return {
+    md5Base64: md5.digest('base64'),
+    sha256Hex: sha256.digest('hex'),
+  };
+}
 const filteredCollections = [
   'busySlots',
   'documentos',
@@ -166,16 +183,51 @@ async function fileEvidence(resetState) {
   const backupDirectories = Array.from(new Set((resetState.backupDirectories || []).map(String).filter(Boolean)));
   const missingBackupPaths = [];
   const invalidBackupPaths = [];
+  const invalidStorageBackupFiles = [];
+  let storageBackupFilesChecked = 0;
   const expectedFamilyProfiles = {};
   for (const backupPath of backupPaths) {
     try {
       const manifest = JSON.parse(await fs.readFile(backupPath, 'utf8'));
       if (manifest.projectId !== PROJECT_ID
         || !Array.isArray(manifest.firestoreDocuments)
+        || !Array.isArray(manifest.storagePaths)
         || !Array.isArray(manifest.storageFiles)
         || !Array.isArray(manifest.familyProfilesBeforeDerivedReset)) {
         invalidBackupPaths.push(backupPath);
         continue;
+      }
+      const expectedStoragePaths = Array.from(new Set(manifest.storagePaths.map(String).filter(Boolean))).sort();
+      const storageFilePaths = manifest.storageFiles.map((item) => String(item?.path || '')).filter(Boolean);
+      if (storageFilePaths.length !== manifest.storageFiles.length
+        || new Set(storageFilePaths).size !== storageFilePaths.length
+        || expectedStoragePaths.length !== storageFilePaths.length
+        || expectedStoragePaths.some((storagePath, index) => storagePath !== [...storageFilePaths].sort()[index])) {
+        invalidBackupPaths.push(backupPath);
+        continue;
+      }
+      const manifestDirectory = path.resolve(path.dirname(backupPath));
+      const expectedRoot = `${manifestDirectory}${path.sep}`;
+      for (const storageFile of manifest.storageFiles) {
+        if (storageFile.existed !== true) continue;
+        const storagePath = String(storageFile.path || '');
+        try {
+          const relativePath = String(storageFile.localRelativePath || '');
+          if (!relativePath || path.isAbsolute(relativePath)) throw new Error('missing_or_absolute_local_path');
+          const localPath = path.resolve(manifestDirectory, relativePath);
+          if (!localPath.startsWith(expectedRoot)) throw new Error('unsafe_local_path');
+          const stats = await fs.stat(localPath);
+          const expectedSize = Number(storageFile.size);
+          if (!stats.isFile()) throw new Error('not_a_file');
+          if (!Number.isFinite(expectedSize) || expectedSize < 0 || stats.size !== expectedSize) throw new Error('size_mismatch');
+          if (!/^[a-f0-9]{64}$/i.test(String(storageFile.localSha256 || ''))) throw new Error('missing_sha256');
+          const digests = await localFileDigests(localPath);
+          if (digests.sha256Hex.toLowerCase() !== String(storageFile.localSha256).toLowerCase()) throw new Error('sha256_mismatch');
+          if (storageFile.md5Hash && digests.md5Base64 !== storageFile.md5Hash) throw new Error('md5_mismatch');
+          storageBackupFilesChecked += 1;
+        } catch (error) {
+          invalidStorageBackupFiles.push({ backupPath, storagePath, reason: error?.message || String(error) });
+        }
       }
       manifest.familyProfilesBeforeDerivedReset.forEach((profile) => {
         if (!profile?.path || Object.hasOwn(expectedFamilyProfiles, profile.path)) return;
@@ -198,6 +250,8 @@ async function fileEvidence(resetState) {
     backupDirectories,
     missingBackupPaths,
     invalidBackupPaths,
+    invalidStorageBackupFiles,
+    storageBackupFilesChecked,
     missingBackupDirectories,
     expectedFamilyProfiles,
   };
@@ -294,6 +348,7 @@ async function main() {
     && backups.backupPaths.length > 0
     && backups.missingBackupPaths.length === 0
     && backups.invalidBackupPaths.length === 0
+    && backups.invalidStorageBackupFiles.length === 0
     && backups.missingBackupDirectories.length === 0
     && preservedFamilyProfiles.missingPaths.length === 0
     && preservedFamilyProfiles.mismatches.length === 0;

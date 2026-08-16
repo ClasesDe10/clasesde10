@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import fs from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import admin from 'firebase-admin';
@@ -38,6 +40,19 @@ const wholeCollections = [
   'proactiveAssistSnapshots',
   'internalAiInsightSnapshots',
 ];
+
+async function localFileDigests(filePath) {
+  const md5 = createHash('md5');
+  const sha256 = createHash('sha256');
+  for await (const chunk of createReadStream(filePath)) {
+    md5.update(chunk);
+    sha256.update(chunk);
+  }
+  return {
+    md5Base64: md5.digest('base64'),
+    sha256Hex: sha256.digest('hex'),
+  };
+}
 const filteredCollections = [
   'busySlots',
   'documentos',
@@ -339,13 +354,23 @@ async function writeBackup(bucket, targets, storagePaths, chatDocs, familyDocs, 
     await fs.mkdir(path.dirname(destination), { recursive: true });
     await file.download({ destination });
     const [metadata] = await file.getMetadata();
+    const stats = await fs.stat(destination);
+    const expectedSize = Number(metadata.size || 0);
+    if (!stats.isFile() || stats.size !== expectedSize) {
+      throw new Error(`Storage backup size mismatch for ${storagePath}: expected ${expectedSize}, got ${stats.size}.`);
+    }
+    const digests = await localFileDigests(destination);
+    if (metadata.md5Hash && digests.md5Base64 !== metadata.md5Hash) {
+      throw new Error(`Storage backup MD5 mismatch for ${storagePath}.`);
+    }
     storageFiles.push({
       path: storagePath,
       existed: true,
       localRelativePath: path.relative(backupDirectory, destination),
-      size: Number(metadata.size || 0),
+      size: expectedSize,
       contentType: metadata.contentType || '',
       md5Hash: metadata.md5Hash || '',
+      localSha256: digests.sha256Hex,
     });
   }
   const payload = {
@@ -360,6 +385,12 @@ async function writeBackup(bucket, targets, storagePaths, chatDocs, familyDocs, 
     professorProfilesBeforeDerivedReset: professorDocs.map((doc) => ({ path: doc.ref.path, data: stable(doc.data()) })),
   };
   await fs.writeFile(backupPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  const writtenManifest = JSON.parse(await fs.readFile(backupPath, 'utf8'));
+  if (writtenManifest.projectId !== PROJECT_ID
+    || writtenManifest.firestoreDocuments.length !== payload.firestoreDocuments.length
+    || writtenManifest.storageFiles.length !== payload.storageFiles.length) {
+    throw new Error(`Backup manifest verification failed: ${backupPath}`);
+  }
   return {
     backupPath,
     backupDirectory,

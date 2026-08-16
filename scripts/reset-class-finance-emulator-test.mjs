@@ -351,6 +351,9 @@ async function assertReset(db, bucket, result, manifests) {
     'pagos/family_1/receipt.txt',
     'receipts/historical-proof.txt',
   ]);
+  manifests.flatMap((manifest) => manifest.storageFiles.filter((item) => item.existed)).forEach((item) => {
+    assert.match(item.localSha256, /^[a-f0-9]{64}$/i, `${item.path} must include a verified local SHA-256.`);
+  });
   assert(manifests.some((manifest) => manifest.familyProfilesBeforeDerivedReset[0].data.crmStatus === 'seguimiento'));
 }
 
@@ -432,6 +435,27 @@ try {
   assert.equal(independentResult.preservedFamilyProfiles.preservedCount, 1);
   assert.deepEqual(independentResult.preservedFamilyProfiles.missingPaths, []);
   assert.deepEqual(independentResult.preservedFamilyProfiles.mismatches, []);
+  assert(independentResult.backups.storageBackupFilesChecked >= 3);
+  assert.deepEqual(independentResult.backups.invalidStorageBackupFiles, []);
+
+  const corruptibleManifestPath = result.backupPaths.find((backupPath) => {
+    const manifest = manifests[result.backupPaths.indexOf(backupPath)];
+    return manifest.storageFiles.some((item) => item.existed);
+  });
+  const corruptibleManifest = manifests[result.backupPaths.indexOf(corruptibleManifestPath)];
+  const corruptibleEntry = corruptibleManifest.storageFiles.find((item) => item.existed);
+  const corruptibleLocalPath = path.resolve(path.dirname(corruptibleManifestPath), corruptibleEntry.localRelativePath);
+  const originalBackupBytes = await fs.readFile(corruptibleLocalPath);
+  await fs.appendFile(corruptibleLocalPath, 'corruption-test');
+  const corruptedVerification = runIndependentVerification();
+  assert.notEqual(corruptedVerification.status, 0, 'Independent verification must reject a corrupted Storage backup.');
+  const corruptedResult = JSON.parse(corruptedVerification.stdout.trim());
+  assert.equal(corruptedResult.clean, false);
+  assert(corruptedResult.backups.invalidStorageBackupFiles.some((item) => item.storagePath === corruptibleEntry.path));
+  await fs.writeFile(corruptibleLocalPath, originalBackupBytes);
+  const restoredVerification = runIndependentVerification();
+  assert.equal(restoredVerification.status, 0, `Restored backup verification failed.\n${restoredVerification.stderr}`);
+  assert.equal(JSON.parse(restoredVerification.stdout.trim()).clean, true);
   const idempotent = runReset();
   assert.equal(idempotent.status, 0, `Completed reset verification failed.\n${idempotent.stderr}`);
   const idempotentResult = JSON.parse(idempotent.stdout.trim());
@@ -455,6 +479,7 @@ try {
     resetAttempts: completedState.attempts,
     deletedFirestoreDocuments: result.deletedFirestoreDocuments,
     deletedStorageFiles: result.deletedStorageFiles,
+    corruptedBackupRejected: true,
     independentVerification: independentResult.clean,
     verification: result.verification,
   }, null, 2));

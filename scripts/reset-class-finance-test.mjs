@@ -13,6 +13,7 @@ function assert(condition, message) {
 
 const source = fs.readFileSync(new URL('./reset-class-financial-data.mjs', import.meta.url), 'utf8');
 const verifierSource = fs.readFileSync(new URL('./verify-class-financial-reset.mjs', import.meta.url), 'utf8');
+const emulatorSource = fs.readFileSync(new URL('./reset-class-finance-emulator-test.mjs', import.meta.url), 'utf8');
 const authWrapperSource = fs.readFileSync(new URL('./run-with-firebase-cli-adc.mjs', import.meta.url), 'utf8');
 const automationWorkflow = fs.readFileSync(new URL('../.github/workflows/firebase-automation.yml', import.meta.url), 'utf8');
 
@@ -84,6 +85,9 @@ for (const mutation of ['.delete(', '.update(', '.set(', '.add(']) {
 }
 assert(verifierSource.includes('remainingTargetPaths') && verifierSource.includes('remainingPaymentStoragePaths'), 'The independent verifier must recheck every planned Firestore and Storage target.');
 assert(verifierSource.includes('familyProfilesBeforeDerivedReset') && verifierSource.includes('preservedFamilyProfiles'), 'The independent verifier must compare preserved family CRM profiles with the pre-reset backup.');
+assert(source.includes("createHash('sha256')") && source.includes('localSha256'), 'Storage receipts must be hashed and verified before production deletion.');
+assert(verifierSource.includes('invalidStorageBackupFiles') && verifierSource.includes('sha256_mismatch') && verifierSource.includes('md5_mismatch'), 'The independent verifier must reject a missing or corrupted Storage backup.');
+assert(emulatorSource.includes("fs.appendFile(corruptibleLocalPath, 'corruption-test')") && emulatorSource.includes('Independent verification must reject a corrupted Storage backup.'), 'The destructive emulator must prove that backup corruption is rejected.');
 assert(verifierSource.includes("!key.startsWith('trust')") && verifierSource.includes('familyResetFields'), 'The family CRM comparison may ignore only reset-owned trust/payment fields.');
 assert(authWrapperSource.includes('try {') && authWrapperSource.includes('finally {') && authWrapperSource.includes('fs.rmSync(adcPath, { force: true })'), 'Temporary Firebase credentials must always be removed.');
 assert(!authWrapperSource.includes('process.exit(exitCode)'), 'The credential cleanup must run before the child exit code is propagated.');
