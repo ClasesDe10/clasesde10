@@ -648,7 +648,16 @@ async function main() {
   if (!verification.clean) process.exitCode = 2;
 }
 
-export { derivedSearchText, derivedWords, normalizeStoragePath, paymentDocument, storagePathsFromData };
+export {
+  derivedSearchText,
+  derivedWords,
+  isMissingStorageBucket,
+  listStorageFiles,
+  normalizeStoragePath,
+  paymentDocument,
+  storageFileExists,
+  storagePathsFromData,
+};
 
 const launchedDirectly = Boolean(process.argv[1])
   && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;

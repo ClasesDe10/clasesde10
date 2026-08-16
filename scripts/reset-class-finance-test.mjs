@@ -2,8 +2,11 @@ import fs from 'node:fs';
 import {
   derivedSearchText,
   derivedWords,
+  isMissingStorageBucket,
+  listStorageFiles,
   normalizeStoragePath,
   paymentDocument,
+  storageFileExists,
   storagePathsFromData,
 } from './reset-class-financial-data.mjs';
 
@@ -117,5 +120,11 @@ assert(derivedWords.test(derivedSearchText({ eventType: 'overdue_payments', mont
 assert(derivedWords.test(derivedSearchText({ type: 'weekly_schedule', proposalStatus: 'accepted' })) === true, 'Technical chat scheduling identifiers must be detected.');
 assert(derivedWords.test(derivedSearchText({ eventType: 'profile_completed', section: 'contact_details' })) === false, 'Unrelated profile events must remain outside the reset.');
 assert(derivedWords.test(derivedSearchText({ analyticsVersion: 'analytics-v1', eventName: 'page.view', category: 'navigation' })) === false, 'Anonymous page telemetry must not be mistaken for class or financial statistics.');
+
+const missingBucketError = { code: 404, message: 'The specified bucket does not exist.' };
+assert(isMissingStorageBucket(missingBucketError), 'A missing Firebase Storage bucket must be recognized explicitly.');
+assert(!isMissingStorageBucket({ code: 403, message: 'Forbidden' }), 'Storage authorization errors must never be mistaken for an absent bucket.');
+assert((await listStorageFiles({ getFiles: async () => { throw missingBucketError; } }, { prefix: 'pagos/' })).length === 0, 'An absent bucket must behave as an empty Storage inventory.');
+assert(await storageFileExists({ exists: async () => { throw missingBucketError; } }) === false, 'An absent bucket must prove that an explicit receipt path does not exist.');
 
 console.log('Class and finance reset safety validation passed.');
