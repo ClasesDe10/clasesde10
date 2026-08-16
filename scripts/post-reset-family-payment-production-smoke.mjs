@@ -69,6 +69,41 @@ function initializeFirebase() {
   });
 }
 
+function isMissingStorageBucket(error) {
+  return Number(error?.code) === 404
+    && /(?:specified )?bucket does not exist/i.test(String(error?.message || ''));
+}
+
+async function listStorageFiles(bucket, options) {
+  try {
+    const [files] = await bucket.getFiles(options);
+    return files;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return [];
+    throw error;
+  }
+}
+
+async function storageFileExists(file) {
+  try {
+    const [exists] = await file.exists();
+    return exists;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return false;
+    throw error;
+  }
+}
+
+async function deleteStorageFile(file) {
+  try {
+    await file.delete({ ignoreNotFound: true });
+    return true;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return false;
+    throw error;
+  }
+}
+
 async function readJson(filePath) {
   return JSON.parse(await fs.readFile(filePath, 'utf8'));
 }
@@ -207,18 +242,16 @@ async function cleanupAcceptanceArtifacts(db, bucket, fixture = {}) {
   let deletedStorageFiles = 0;
   for (const uid of fixtureUids) {
     const prefix = `pagos/${uid}/`;
-    const [files] = await bucket.getFiles({ prefix });
+    const files = await listStorageFiles(bucket, { prefix });
     for (const file of files) {
-      await file.delete({ ignoreNotFound: true });
-      deletedStorageFiles += 1;
+      if (await deleteStorageFile(file)) deletedStorageFiles += 1;
     }
   }
   for (const storagePath of explicitStoragePaths) {
     const file = bucket.file(storagePath);
-    const [exists] = await file.exists();
+    const exists = await storageFileExists(file);
     if (!exists) continue;
-    await file.delete({ ignoreNotFound: true });
-    deletedStorageFiles += 1;
+    if (await deleteStorageFile(file)) deletedStorageFiles += 1;
   }
 
   for (let index = 0; index < authUsers.length; index += 1000) {

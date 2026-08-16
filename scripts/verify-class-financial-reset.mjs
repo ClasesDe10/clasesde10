@@ -103,6 +103,31 @@ function initFirebase() {
   });
 }
 
+function isMissingStorageBucket(error) {
+  return Number(error?.code) === 404
+    && /(?:specified )?bucket does not exist/i.test(String(error?.message || ''));
+}
+
+async function listStorageFiles(bucket, options) {
+  try {
+    const [files] = await bucket.getFiles(options);
+    return files;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return [];
+    throw error;
+  }
+}
+
+async function storageFileExists(file) {
+  try {
+    const [exists] = await file.exists();
+    return exists;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return false;
+    throw error;
+  }
+}
+
 function jsonText(value) {
   return JSON.stringify(value ?? {}).slice(0, 200000);
 }
@@ -172,7 +197,7 @@ async function remainingPlannedTargets(db, targetPaths = []) {
 async function existingStoragePaths(bucket, storagePaths = []) {
   const existing = [];
   for (const storagePath of Array.from(new Set(storagePaths.map(String).filter(Boolean))).sort()) {
-    const [exists] = await bucket.file(storagePath).exists();
+    const exists = await storageFileExists(bucket.file(storagePath));
     if (exists) existing.push(storagePath);
   }
   return existing;
@@ -325,7 +350,7 @@ async function main() {
   const remainingLockedFamilies = lockedFamilies.docs.map((doc) => doc.ref.path).sort();
 
   const remainingTargetPaths = await remainingPlannedTargets(db, resetState.targetPaths || []);
-  const [paymentPrefixFiles] = await bucket.getFiles({ prefix: 'pagos/' });
+  const paymentPrefixFiles = await listStorageFiles(bucket, { prefix: 'pagos/' });
   const explicitStoragePaths = await existingStoragePaths(bucket, resetState.storagePaths || []);
   const remainingPaymentStoragePaths = Array.from(new Set([
     ...paymentPrefixFiles.map((file) => file.name),

@@ -107,6 +107,31 @@ function initFirebase() {
   });
 }
 
+function isMissingStorageBucket(error) {
+  return Number(error?.code) === 404
+    && /(?:specified )?bucket does not exist/i.test(String(error?.message || ''));
+}
+
+async function listStorageFiles(bucket, options) {
+  try {
+    const [files] = await bucket.getFiles(options);
+    return files;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return [];
+    throw error;
+  }
+}
+
+async function storageFileExists(file) {
+  try {
+    const [exists] = await file.exists();
+    return exists;
+  } catch (error) {
+    if (isMissingStorageBucket(error)) return false;
+    throw error;
+  }
+}
+
 function stable(value) {
   if (value === undefined) return null;
   if (value === null || typeof value !== 'object') return value;
@@ -328,7 +353,7 @@ async function collectTargets(db, seedContext = {}) {
 
 async function storageTargets(bucket, explicitPaths) {
   const paths = new Set(explicitPaths);
-  const [files] = await bucket.getFiles({ prefix: 'pagos/' });
+  const files = await listStorageFiles(bucket, { prefix: 'pagos/' });
   files.forEach((file) => paths.add(file.name));
   return Array.from(paths).filter(Boolean).sort();
 }
@@ -346,7 +371,7 @@ async function writeBackup(bucket, targets, storagePaths, chatDocs, familyDocs, 
     const expectedRoot = `${path.resolve(storageBackupDirectory)}${path.sep}`;
     if (!destination.startsWith(expectedRoot)) throw new Error(`Unsafe Storage backup path: ${storagePath}`);
     const file = bucket.file(storagePath);
-    const [exists] = await file.exists();
+    const exists = await storageFileExists(file);
     if (!exists) {
       storageFiles.push({ path: storagePath, existed: false });
       continue;
@@ -455,7 +480,11 @@ async function resetProfilesAndChats(db, chatDocs, familyDocs, professorDocs) {
 
 async function deleteStorageFiles(bucket, paths) {
   const results = await Promise.all(paths.map(async (filePath) => {
-    await bucket.file(filePath).delete({ ignoreNotFound: true });
+    try {
+      await bucket.file(filePath).delete({ ignoreNotFound: true });
+    } catch (error) {
+      if (!isMissingStorageBucket(error)) throw error;
+    }
     return filePath;
   }));
   return results.length;
@@ -477,10 +506,10 @@ async function verify(db, bucket, deletedStoragePaths = []) {
   });
   const remainingChatClassFinancePreviews = remainingChatDocs.filter((doc) => classFinanceMessageText(doc.data()?.lastMessage));
   const remainingLockedFamilies = (await listDocs(db, 'familias')).filter((doc) => doc.data()?.paymentAccessLocked === true);
-  const [remainingPaymentPrefixStorage] = await bucket.getFiles({ prefix: 'pagos/' });
+  const remainingPaymentPrefixStorage = await listStorageFiles(bucket, { prefix: 'pagos/' });
   const explicitlyRemainingStorage = [];
   for (const storagePath of deletedStoragePaths) {
-    const [exists] = await bucket.file(storagePath).exists();
+    const exists = await storageFileExists(bucket.file(storagePath));
     if (exists) explicitlyRemainingStorage.push(storagePath);
   }
   const remainingStoragePaths = Array.from(new Set([

@@ -30,7 +30,7 @@ assert(source.includes('preflightCleanup = await cleanupAcceptanceArtifacts(db, 
 assert(source.includes('finally {') && source.includes('cleanupAcceptanceArtifacts(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');
 assert(source.includes('listAcceptanceAuthUsers') && source.includes('admin.auth().deleteUsers') && source.includes('remainingAuthUsers.length, 0'), 'Cleanup must recover and remove temporary Firebase Auth accounts from prior attempts.');
 assert(source.indexOf('authUsers.forEach((user) => fixtureUids.add(user.uid))') < source.indexOf('for (const uid of fixtureUids)'), 'Auth UIDs must be recovered before proof-storage cleanup.');
-assert(source.includes("identity('delete'") && source.includes("bucket.getFiles({ prefix })"), 'Cleanup must remove temporary identities and proof files.');
+assert(source.includes("identity('delete'") && source.includes('listStorageFiles(bucket, { prefix })'), 'Cleanup must remove temporary identities and proof files, including when the project has no Storage bucket.');
 assert(source.includes('postCleanupVerification = runIndependentVerification()'), 'A second independent zero verification must run after cleanup.');
 
 console.log('Post-reset family payment acceptance safety validation passed.');
