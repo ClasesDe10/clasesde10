@@ -40,6 +40,7 @@ Este documento define la evidencia mínima para cerrar el objetivo. Un test loca
 - Su prueba aislada crea tareas programadas reales, confirma que elimina tanto la tarea normal como la propia, acepta la evidencia íntegra, descarta un éxito previo al fallar y rechaza tanto un calendario pagado sin verde como un marcador que omita la comparación CRM; el directorio temporal se valida antes de eliminarlo.
 - El ensayo destructivo corrompe deliberadamente uno de los tres binarios copiados: el verificador independiente devuelve estado no limpio y solo vuelve a aprobar después de restaurar exactamente los bytes originales.
 - Tras cinco fallos horarios confirmados por cuota agotada, el worker local queda en salida limpia sin Firebase desde las 02:30 hasta las 14:00 CEST del día 16; los días de contingencia 17 y 18 conservan la protección 08:45–14:00. Una ejecución real de la tarea a las 02:36 terminó con código `0` y registró la omisión protegida.
+- El directorio privado de copias desactiva la herencia de Windows y concede control únicamente a `migue`, `SYSTEM` y administradores; una creación y retirada real dentro de esa ruta confirmó que el usuario de la tarea conserva escritura sin exponer CRM o justificantes a los SID heredados.
 
 ## Secuencia obligatoria de cierre
 
