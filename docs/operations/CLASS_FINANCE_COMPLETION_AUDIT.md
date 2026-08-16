@@ -1,6 +1,6 @@
 # Auditoría de cierre: clases, finanzas y pagos familiares
 
-Fecha del punto de control: 2026-08-16 12:25 CEST.
+Fecha del punto de control: 2026-08-16 23:05 CEST.
 
 Este documento define la evidencia mínima para cerrar el objetivo. Un test local, un despliegue correcto o la ausencia de errores no sustituyen la verificación directa del estado productivo.
 
