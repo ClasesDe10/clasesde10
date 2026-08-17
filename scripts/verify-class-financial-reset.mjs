@@ -181,19 +181,6 @@ async function collectionGroupDocs(db, collectionName) {
   return snap.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, data: doc.data() || {} }));
 }
 
-async function remainingPlannedTargets(db, targetPaths = []) {
-  const remaining = [];
-  for (let index = 0; index < targetPaths.length; index += 200) {
-    const chunk = targetPaths.slice(index, index + 200).map((documentPath) => db.doc(documentPath));
-    if (!chunk.length) continue;
-    const snapshots = await db.getAll(...chunk);
-    snapshots.forEach((snapshot) => {
-      if (snapshot.exists) remaining.push(snapshot.ref.path);
-    });
-  }
-  return remaining.sort();
-}
-
 async function existingStoragePaths(bucket, storagePaths = []) {
   const existing = [];
   for (const storagePath of Array.from(new Set(storagePaths.map(String).filter(Boolean))).sort()) {
@@ -342,6 +329,7 @@ async function main() {
     .sort();
   const scheduleRows = await collectionGroupDocs(db, 'programaciones');
   const messageRows = await collectionGroupDocs(db, 'mensajes');
+  const reactionRows = await collectionGroupDocs(db, 'reacciones');
   const remainingClassFinanceMessages = messageRows
     .filter((item) => derivedWords.test(derivedSearchText(item.data)))
     .map((item) => item.path)
@@ -349,7 +337,25 @@ async function main() {
   const lockedFamilies = await db.collection('familias').where('paymentAccessLocked', '==', true).get();
   const remainingLockedFamilies = lockedFamilies.docs.map((doc) => doc.ref.path).sort();
 
-  const remainingTargetPaths = await remainingPlannedTargets(db, resetState.targetPaths || []);
+  // Every planned target already belongs to one of the collections inspected
+  // above. Reusing those snapshots proves exact target absence without billing
+  // a second read for each of the 15k+ paths in the durable reset plan.
+  const existingScannedPaths = new Set([
+    ...filteredRows,
+    ...scheduleRows,
+    ...messageRows,
+    ...reactionRows,
+  ].map((item) => item.path));
+  const wholeCollectionSet = new Set(wholeCollections);
+  const remainingTargetPaths = Array.from(new Set(resetState.targetPaths || []))
+    .filter((documentPath) => {
+      const rootCollection = String(documentPath).split('/')[0];
+      if (wholeCollectionSet.has(rootCollection)) {
+        return Number(remainingWholeCollections[rootCollection] || 0) > 0;
+      }
+      return existingScannedPaths.has(documentPath);
+    })
+    .sort();
   const paymentPrefixFiles = await listStorageFiles(bucket, { prefix: 'pagos/' });
   const explicitStoragePaths = await existingStoragePaths(bucket, resetState.storagePaths || []);
   const remainingPaymentStoragePaths = Array.from(new Set([
