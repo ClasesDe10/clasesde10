@@ -83,6 +83,9 @@ assert(source.includes('for (const collectionName of wholeCollections)'), 'The r
 assert(source.includes('if (!verification.clean) process.exitCode = 2'), 'Production reset must fail when final zero-state verification is not clean.');
 assert(verifierSource.includes("mode: 'read_only_independent_verification'"), 'The independent verifier must identify its read-only mode.');
 assert(verifierSource.includes("resetState.status !== 'completed'") && verifierSource.includes('resetState.verification?.clean !== true'), 'The independent verifier must refuse to run without a completed clean reset state.');
+assert(verifierSource.includes('isPostResetOperationalTelemetry(item, resetState.completedAt)'), 'Independent verification must distinguish new operational telemetry from pre-reset class and finance data.');
+assert(verifierSource.includes("data.eventName === 'page.view'") && verifierSource.includes("data.type === 'worker.heartbeat'"), 'Live navigation and maintenance heartbeats created after the reset must not be mistaken for calendar or finance records.');
+assert(verifierSource.includes('hasClassFinanceReference(data)'), 'Operational telemetry exemptions must still reject nested class or payment references.');
 for (const mutation of ['.delete(', '.update(', '.set(', '.add(']) {
   assert(!verifierSource.includes(mutation), `The independent verifier must never mutate Firebase (${mutation}).`);
 }

@@ -10,7 +10,9 @@ assert(source.includes("const APPLY_TOKEN = 'POST_RESET_FAMILY_PAYMENT_ACCEPTANC
 assert(source.includes("PROJECT_ID !== 'clasesde10-50add'"), 'Post-reset acceptance must be pinned to the production project.');
 assert(source.includes("['clasesde10.com', 'clasesde10-50add.web.app']"), 'Post-reset acceptance must restrict the production host.');
 assert(source.includes('resetMarkerPath') && source.includes('verificationMarkerPath') && source.includes('resetStatePath'), 'Post-reset acceptance must require all three reset evidence files.');
+assert(source.includes("text.replace(/^\\uFEFF/, '')"), 'Post-reset acceptance must read PowerShell JSON evidence that contains a UTF-8 BOM.');
 assert(source.includes("verificationMarker.verification?.mode, 'read_only_independent_verification'"), 'Post-reset acceptance must require the independent read-only verifier.');
+assert(source.includes('verificationCompletedMillis') && source.includes('2 * 60 * 60 * 1000'), 'Post-reset acceptance must reject an independent marker older than two hours.');
 assert(source.includes('paymentAccessLocked: true') && source.includes('paymentAccessDebtAmount: 25'), 'The fixture must cover the overdue access lock.');
 assert(source.includes('unmarkedClassId') && source.includes("selectOption('no_realizada')"), 'The flow must mark a past class as not given before payment.');
 assert(source.includes('teacherCalendarOnlyLockVerified') && source.includes('teacherAccessRestoredAfterMarking'), 'The flow must verify the five-day teacher calendar-only lock and immediate restoration.');
@@ -26,7 +28,10 @@ assert(source.includes('Admin debt card is missing the related child.') && sourc
 assert(source.includes('one grouped admin family debt notice') && source.includes('Admin debt notice exposes internal codes.'), 'The flow must verify one concise, human-readable admin debt notice.');
 assert(source.includes('adminDebtNoticeFullIdentityVerified') && source.includes('adminDebtNoticeResolvedAfterApproval'), 'The flow must verify notice identities and live removal after payment approval.');
 assert(source.includes('liveUnlockWithoutReload') && source.includes("classList.contains('payment-paid')"), 'The flow must verify live unlock and green paid calendar state.');
-assert(source.includes('preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket)') && source.includes('preFixtureVerification = runIndependentVerification()'), 'A retry must remove orphan fixtures and prove a clean pre-test state.');
+assert(source.includes('recoveredFixture = await readFixtureState()') && source.includes('preFixtureVerification = preconditions.verification'), 'A retry must recover its durable fixture while reusing the fresh independent marker before creating test data.');
+assert(source.includes('collectAcceptanceDocuments') && source.includes('FieldPath.documentId()') && !source.includes('db.collection(collectionName).get()'), 'Acceptance cleanup must use targeted marker queries instead of billing reads for every production document.');
+assert(source.includes('await writeFixtureState(fixture)') && source.includes('await removeFixtureState()'), 'Acceptance must preserve enough local fixture evidence for crash-safe cleanup and remove it afterwards.');
+assert(source.includes('...(fixture.classIds || [])'), 'Preflight cleanup must tolerate a retry before any fixture class IDs exist.');
 assert(source.includes('finally {') && source.includes('cleanupAcceptanceArtifacts(db, bucket, fixture)'), 'Fixture cleanup must run from finally.');
 assert(source.includes('listAcceptanceAuthUsers') && source.includes('admin.auth().deleteUsers') && source.includes('remainingAuthUsers.length, 0'), 'Cleanup must recover and remove temporary Firebase Auth accounts from prior attempts.');
 assert(source.indexOf('authUsers.forEach((user) => fixtureUids.add(user.uid))') < source.indexOf('for (const uid of fixtureUids)'), 'Auth UIDs must be recovered before proof-storage cleanup.');

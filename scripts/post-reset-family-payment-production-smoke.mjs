@@ -19,6 +19,7 @@ const privateRoot = path.resolve(workspace, '..', 'migration-private');
 const resetMarkerPath = path.join(privateRoot, 'scheduled-reset', 'completed.json');
 const verificationMarkerPath = path.join(privateRoot, 'scheduled-reset-verification', 'completed.json');
 const resetStatePath = path.join(privateRoot, 'backups', 'class-finance-reset-state.json');
+const fixtureStatePath = path.join(privateRoot, 'scheduled-post-reset-acceptance', 'fixture-state.json');
 const verifierPath = path.join(workspace, 'scripts', 'verify-class-financial-reset.mjs');
 const firebaseClientSource = await fs.readFile(path.join(workspace, 'js', 'firebase-client.js'), 'utf8');
 const apiKey = firebaseClientSource.match(/apiKey:\s*'([^']+)'/)?.[1];
@@ -105,7 +106,43 @@ async function deleteStorageFile(file) {
 }
 
 async function readJson(filePath) {
-  return JSON.parse(await fs.readFile(filePath, 'utf8'));
+  const text = await fs.readFile(filePath, 'utf8');
+  return JSON.parse(text.replace(/^\uFEFF/, ''));
+}
+
+async function readFixtureState() {
+  try {
+    return await readJson(fixtureStatePath);
+  } catch (error) {
+    if (error?.code === 'ENOENT') return {};
+    throw error;
+  }
+}
+
+async function writeFixtureState(fixture = {}) {
+  const account = (value) => (value?.localId ? { localId: value.localId, email: value.email || '' } : null);
+  const state = {
+    prefix: fixture.prefix || '',
+    familyEmail: fixture.familyEmail || '',
+    teacherEmail: fixture.teacherEmail || '',
+    adminEmail: fixture.adminEmail || '',
+    studentId: fixture.studentId || '',
+    assignmentId: fixture.assignmentId || '',
+    scheduleId: fixture.scheduleId || '',
+    classIds: Array.from(new Set(fixture.classIds || [])).filter(Boolean),
+    paymentId: fixture.paymentId || '',
+    documentId: fixture.documentId || '',
+    family: account(fixture.family),
+    teacher: account(fixture.teacher),
+    adminUser: account(fixture.adminUser),
+    updatedAt: new Date().toISOString(),
+  };
+  await fs.mkdir(path.dirname(fixtureStatePath), { recursive: true });
+  await fs.writeFile(fixtureStatePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+}
+
+async function removeFixtureState() {
+  await fs.rm(fixtureStatePath, { force: true });
 }
 
 async function assertResetPreconditions() {
@@ -121,12 +158,16 @@ async function assertResetPreconditions() {
   assert.equal(verificationMarker.projectId, PROJECT_ID, 'Independent verification belongs to another project.');
   assert.equal(verificationMarker.verification?.clean, true, 'Independent reset verification is not clean.');
   assert.equal(verificationMarker.verification?.mode, 'read_only_independent_verification');
+  const verificationCompletedMillis = Date.parse(String(verificationMarker.completedAt || ''));
+  assert.ok(Number.isFinite(verificationCompletedMillis), 'Independent verification has no valid completion time.');
+  assert.ok(Date.now() - verificationCompletedMillis <= 2 * 60 * 60 * 1000, 'Independent verification is more than two hours old.');
   assert.equal(resetState.status, 'completed', 'The durable reset state is not complete.');
   assert.equal(resetState.projectId, PROJECT_ID, 'The durable reset state belongs to another project.');
   assert.equal(resetState.verification?.clean, true, 'The durable reset state is not clean.');
   return {
     resetCompletedAt: resetMarker.completedAt || resetState.completedAt || '',
     independentlyVerifiedAt: verificationMarker.completedAt || verificationMarker.verification?.verifiedAt || '',
+    verification: verificationMarker.verification,
   };
 }
 
@@ -143,11 +184,6 @@ async function identity(method, payload) {
 
 function isoDateDaysAgo(days) {
   return new Date(Date.now() - days * DAY_MS).toISOString().slice(0, 10);
-}
-
-function containsFixtureMarker(data, markers) {
-  const text = JSON.stringify(data ?? {});
-  return text.includes(ACCEPTANCE_PREFIX) || markers.some((marker) => marker && text.includes(marker));
 }
 
 function storagePathsFromFixtureData(data = {}) {
@@ -197,6 +233,56 @@ async function listAcceptanceAuthUsers() {
   return matches;
 }
 
+const acceptanceMarkerFields = [
+  'testRun', 'id', 'calendarUid', 'familyUid', 'familia_id', 'teacherUid', 'profesor_id',
+  'studentId', 'alumno_id', 'assignmentId', 'asignacion_id', 'scheduleId', 'ownerUid',
+  'userUid', 'usuario_id', 'actorUid', 'createdByUid', 'classId', 'clase_id', 'paymentId',
+  'pago_id', 'documentId', 'documento_id', 'entityId', 'reference', 'email',
+];
+const acceptanceArrayMarkerFields = [
+  'classIds', 'clase_ids', 'relatedClassIds', 'paymentClassIds', 'participantUids',
+];
+
+function chunks(values, size = 30) {
+  const result = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
+}
+
+async function collectAcceptanceDocuments(db, collectionName, markerValues = []) {
+  const collection = db.collection(collectionName);
+  const documents = new Map();
+  const addSnapshot = async (query) => {
+    const snapshot = await query.get();
+    snapshot.docs.forEach((document) => documents.set(document.ref.path, document));
+  };
+  const prefixEnd = `${ACCEPTANCE_PREFIX}\uf8ff`;
+  await addSnapshot(collection
+    .orderBy(admin.firestore.FieldPath.documentId())
+    .startAt(ACCEPTANCE_PREFIX)
+    .endAt(prefixEnd));
+
+  const queryTasks = [];
+  for (const field of acceptanceMarkerFields) {
+    queryTasks.push(addSnapshot(collection.where(field, '>=', ACCEPTANCE_PREFIX).where(field, '<=', prefixEnd)));
+  }
+  queryTasks.push(addSnapshot(collection
+    .where('reference', '>=', `POST-RESET-${ACCEPTANCE_PREFIX}`)
+    .where('reference', '<=', `POST-RESET-${prefixEnd}`)));
+
+  const exactValues = Array.from(new Set(markerValues.map(String).filter(Boolean))).slice(0, 300);
+  for (const valueChunk of chunks(exactValues)) {
+    for (const field of acceptanceMarkerFields) {
+      queryTasks.push(addSnapshot(collection.where(field, 'in', valueChunk)));
+    }
+    for (const field of acceptanceArrayMarkerFields) {
+      queryTasks.push(addSnapshot(collection.where(field, 'array-contains-any', valueChunk)));
+    }
+  }
+  await Promise.all(queryTasks);
+  return Array.from(documents.values());
+}
+
 async function cleanupAcceptanceArtifacts(db, bucket, fixture = {}) {
   const currentMarkers = Array.from(new Set([
     fixture.prefix,
@@ -206,38 +292,47 @@ async function cleanupAcceptanceArtifacts(db, bucket, fixture = {}) {
     fixture.studentId,
     fixture.assignmentId,
     fixture.scheduleId,
-    ...fixture.classIds,
+    ...(fixture.classIds || []),
     fixture.paymentId,
     fixture.documentId,
+    fixture.familyEmail,
+    fixture.teacherEmail,
+    fixture.adminEmail,
   ].filter(Boolean)));
   const fixtureUids = new Set([fixture.family?.localId, fixture.teacher?.localId, fixture.adminUser?.localId].filter(Boolean));
-  const identityReferences = [];
-  for (const collectionName of identityCollections) {
-    const snapshot = await db.collection(collectionName).get();
-    snapshot.docs.forEach((document) => {
-      if (!document.id.startsWith(ACCEPTANCE_PREFIX) && !containsFixtureMarker(document.data(), currentMarkers)) return;
-      identityReferences.push(document.ref);
-      fixtureUids.add(document.id);
-      const data = document.data() || {};
-      [data.userUid, data.usuario_id, data.familyUid, data.familia_id].filter(Boolean).forEach((uid) => fixtureUids.add(String(uid)));
-    });
-  }
   const authUsers = await listAcceptanceAuthUsers();
   authUsers.forEach((user) => fixtureUids.add(user.uid));
-  const markers = Array.from(new Set([...currentMarkers, ...fixtureUids]));
-  let deletedDocuments = 0;
+  const markers = Array.from(new Set([
+    ...currentMarkers,
+    ...fixtureUids,
+    ...authUsers.map((user) => user.email).filter(Boolean),
+  ]));
+  const collections = Array.from(new Set([...identityCollections, ...cleanupCollections]));
+  const documents = new Map();
   const explicitStoragePaths = new Set();
-  for (const collectionName of cleanupCollections) {
-    const snapshot = await db.collection(collectionName).get();
-    const references = [];
-    snapshot.docs.forEach((document) => {
-      if (!document.id.startsWith(ACCEPTANCE_PREFIX) && !containsFixtureMarker(document.data(), markers)) return;
-      references.push(document.ref);
+  for (const collectionName of collections) {
+    const matches = await collectAcceptanceDocuments(db, collectionName, markers);
+    matches.forEach((document) => {
+      documents.set(document.ref.path, document);
       storagePathsFromFixtureData(document.data() || {}).forEach((storagePath) => explicitStoragePaths.add(storagePath));
     });
-    deletedDocuments += await deleteReferences(db, references);
   }
-  deletedDocuments += await deleteReferences(db, identityReferences);
+  const explicitReferences = [
+    ...Array.from(fixtureUids).flatMap((uid) => identityCollections.map((collectionName) => db.doc(`${collectionName}/${uid}`))),
+    fixture.studentId ? db.doc(`alumnos/${fixture.studentId}`) : null,
+    fixture.scheduleId ? db.doc(`paymentSchedules/${fixture.scheduleId}`) : null,
+    ...(fixture.classIds || []).map((classId) => db.doc(`clases/${classId}`)),
+    fixture.paymentId ? db.doc(`pagos/${fixture.paymentId}`) : null,
+    fixture.documentId ? db.doc(`documentos/${fixture.documentId}`) : null,
+  ].filter(Boolean);
+  if (explicitReferences.length) {
+    const snapshots = await db.getAll(...explicitReferences);
+    snapshots.filter((snapshot) => snapshot.exists).forEach((document) => {
+      documents.set(document.ref.path, document);
+      storagePathsFromFixtureData(document.data() || {}).forEach((storagePath) => explicitStoragePaths.add(storagePath));
+    });
+  }
+  const deletedDocuments = await deleteReferences(db, Array.from(documents.values()).map((document) => document.ref));
 
   let deletedStorageFiles = 0;
   for (const uid of fixtureUids) {
@@ -262,11 +357,18 @@ async function cleanupAcceptanceArtifacts(db, bucket, fixture = {}) {
   }
   const remainingAuthUsers = await listAcceptanceAuthUsers();
   assert.equal(remainingAuthUsers.length, 0, 'Temporary acceptance Auth users remain after cleanup.');
+  const remainingDocuments = [];
+  for (const collectionName of collections) {
+    const matches = await collectAcceptanceDocuments(db, collectionName, markers);
+    matches.forEach((document) => remainingDocuments.push(document.ref.path));
+  }
+  assert.deepEqual(remainingDocuments, [], 'Temporary acceptance Firestore documents remain after cleanup.');
   return {
     deletedDocuments,
     deletedStorageFiles,
     deletedAuthUsers: authUsers.length,
     remainingAuthUsers: remainingAuthUsers.length,
+    remainingDocuments: remainingDocuments.length,
     recoveredFixtureUids: fixtureUids.size,
   };
 }
@@ -326,6 +428,7 @@ async function seedFixture(db, fixture) {
   fixture.family = await identity('signUp', { email: fixture.familyEmail, password: fixture.password, returnSecureToken: true });
   fixture.teacher = await identity('signUp', { email: fixture.teacherEmail, password: fixture.password, returnSecureToken: true });
   fixture.adminUser = await identity('signUp', { email: fixture.adminEmail, password: fixture.password, returnSecureToken: true });
+  await writeFixtureState(fixture);
   const nowIso = new Date().toISOString();
   const currentDueAt = new Date(`${fixture.currentDate}T20:00:00`).toISOString();
   const oldDueAt = new Date(Date.now() - 40 * DAY_MS).toISOString();
@@ -742,6 +845,7 @@ async function submitExactFamilyPayment(page, fixture) {
   }, { timeoutMs: 45000 });
   fixture.paymentId = payment.id;
   fixture.documentId = payment.documentId || payment.documento_id || '';
+  await writeFixtureState(fixture);
   assert.equal(Number(payment.amount || payment.monto), 60);
   assert.deepEqual((payment.classIds || []).map(String).sort(), [fixture.currentClassId, fixture.oldClassId].sort());
   assert.equal(payment.status, 'pendiente');
@@ -882,8 +986,10 @@ const preconditions = await assertResetPreconditions();
 initializeFirebase();
 const db = admin.firestore();
 const bucket = admin.storage().bucket();
-const preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket);
-const preFixtureVerification = runIndependentVerification();
+const recoveredFixture = await readFixtureState();
+const preflightCleanup = await cleanupAcceptanceArtifacts(db, bucket, recoveredFixture);
+await removeFixtureState();
+const preFixtureVerification = preconditions.verification;
 const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const prefix = `${ACCEPTANCE_PREFIX}${suffix}`.replace(/[^a-zA-Z0-9_-]/g, '_');
 const fixture = {
@@ -913,6 +1019,7 @@ const fixture = {
   adminUser: null,
 };
 fixture.classIds = [fixture.oldClassId, fixture.currentClassId, fixture.unmarkedClassId, fixture.teacherOverdueClassId];
+await writeFixtureState(fixture);
 
 let browser = null;
 let familyContext = null;
@@ -976,6 +1083,7 @@ try {
   await browser?.close().catch(() => {});
   try {
     cleanup = await cleanupAcceptanceArtifacts(db, bucket, fixture);
+    await removeFixtureState();
     postCleanupVerification = runIndependentVerification();
   } catch (error) {
     flowError ||= error;

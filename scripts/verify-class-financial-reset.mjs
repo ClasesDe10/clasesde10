@@ -138,6 +138,60 @@ function derivedSearchText(value) {
     .replace(/[_./:\\-]+/g, ' ');
 }
 
+function timestampMillis(value) {
+  if (!value) return Number.NaN;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (Number.isFinite(value.seconds)) return Number(value.seconds) * 1000;
+  return Date.parse(String(value));
+}
+
+function hasClassFinanceReference(value) {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(hasClassFinanceReference);
+  return Object.entries(value).some(([key, item]) => {
+    const normalizedKey = key.replace(/[_-]/g, '').toLowerCase();
+    if (/^(?:class|clase|payment|pago)(?:id|ids)$/.test(normalizedKey)) {
+      return Array.isArray(item) ? item.length > 0 : item !== undefined && item !== null && item !== '';
+    }
+    return hasClassFinanceReference(item);
+  });
+}
+
+function isPostResetOperationalTelemetry(item, resetCompletedAt) {
+  const resetCompletedMillis = Date.parse(String(resetCompletedAt || ''));
+  const data = item.data || {};
+  const createdCandidates = [
+    timestampMillis(data.createdAt),
+    timestampMillis(data.created_at),
+  ].filter(Number.isFinite);
+  const createdMillis = createdCandidates.length ? Math.max(...createdCandidates) : Number.NaN;
+  if (!Number.isFinite(resetCompletedMillis)
+    || !Number.isFinite(createdMillis)
+    || createdMillis <= resetCompletedMillis) return false;
+
+  if (item.path.startsWith('analyticsEvents/')
+    && data.eventName === 'page.view'
+    && data.category === 'navigation'
+    && !data.entityType
+    && !data.entityId
+    && !hasClassFinanceReference(data)) return true;
+
+  const allowedHeartbeatStats = new Set([
+    'systemJobsSeen',
+    'selfSupervisionFindingsDetected',
+    'selfSupervisionCriticalFindings',
+    'selfSupervisionHighFindings',
+    'maintenanceHealthSnapshotsCreated',
+  ]);
+  const heartbeatStatKeys = Object.keys(data.stats || {});
+  return item.path.startsWith('automationEvents/')
+    && data.type === 'worker.heartbeat'
+    && String(data.version || '').startsWith('maintenance-health-')
+    && heartbeatStatKeys.every((key) => allowedHeartbeatStats.has(key))
+    && !hasClassFinanceReference(data);
+}
+
 function stable(value) {
   if (value === undefined) return null;
   if (value === null || typeof value !== 'object') return value;
@@ -316,6 +370,7 @@ async function main() {
     .map((item) => item.path)
     .sort();
   const remainingDerivedDocuments = filteredRows
+    .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt))
     .filter((item) => derivedWords.test(derivedSearchText(item.data)))
     .map((item) => item.path)
     .filter((documentPath) => !remainingPaymentDocuments.includes(documentPath))
