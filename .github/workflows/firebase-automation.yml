@@ -106,6 +106,12 @@ jobs:
                 exit 0
               fi
               ;;
+            2026-08-21|2026-08-22)
+              if [ "$REQUESTED_DRY_RUN" != "true" ]; then
+                echo "Skipping Firebase writes during the protected class/finance reset continuation window ($CURRENT_DATE $CURRENT_HOUR UTC)."
+                exit 0
+              fi
+              ;;
           esac
           MODE="$REQUESTED_MODE"
           if [ -z "$MODE" ]; then
