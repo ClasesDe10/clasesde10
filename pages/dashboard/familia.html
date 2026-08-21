@@ -259,7 +259,7 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Hijo/a</th><th>Materia</th><th>Nivel</th><th>Horario pref.</th><th>Búsqueda</th><th>Estado</th><th>Profesor asignado</th></tr>
+                <tr><th>Fecha</th><th>Hijo/a</th><th>Materia</th><th>Curso exacto</th><th>Horario pref.</th><th>Búsqueda</th><th>Estado</th><th>Profesor asignado</th></tr>
               </thead>
               <tbody id="tbody-solicitudes"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando...</td></tr></tbody>
             </table>
@@ -563,14 +563,36 @@
           <input class="form-control" type="text" id="sol-materia" placeholder="Ej: Matemáticas" required>
         </div>
         <div class="form-group">
-          <label class="form-label">Nivel</label>
-          <select class="form-control" id="sol-nivel">
-            <option value="">Seleccionar…</option>
-            <option>Primaria</option><option>ESO</option>
-            <option>Bachillerato</option><option>Selectividad</option>
-            <option>Universidad</option>
+          <label class="form-label" for="sol-curso">Curso exacto <span class="required">*</span></label>
+          <select class="form-control" id="sol-curso" required aria-describedby="sol-curso-hint">
+            <option value="">Seleccionar curso…</option>
+            <optgroup label="Primaria">
+              <option>1º Primaria</option><option>2º Primaria</option><option>3º Primaria</option>
+              <option>4º Primaria</option><option>5º Primaria</option><option>6º Primaria</option>
+            </optgroup>
+            <optgroup label="ESO">
+              <option>1º ESO</option><option>2º ESO</option><option>3º ESO</option><option>4º ESO</option>
+            </optgroup>
+            <optgroup label="Bachillerato y acceso a la universidad">
+              <option>1º Bachillerato</option><option>2º Bachillerato</option><option>Selectividad / EBAU</option>
+            </optgroup>
+            <optgroup label="Formación Profesional">
+              <option>1º FP Básica</option><option>2º FP Básica</option>
+              <option>1º FP Grado Medio</option><option>2º FP Grado Medio</option>
+              <option>1º FP Grado Superior</option><option>2º FP Grado Superior</option>
+            </optgroup>
+            <optgroup label="Universidad">
+              <option>1º Universidad</option><option>2º Universidad</option><option>3º Universidad</option>
+              <option>4º Universidad</option><option>5º Universidad</option><option>6º Universidad</option>
+            </optgroup>
+            <option value="__otro__">Otro curso o nivel…</option>
           </select>
+          <div class="form-hint" id="sol-curso-hint">Lo usaremos para buscar un profesor con experiencia en ese curso.</div>
         </div>
+      </div>
+      <div class="form-group" id="sol-curso-otro-group" hidden>
+        <label class="form-label" for="sol-curso-otro">Escribe el curso exacto <span class="required">*</span></label>
+        <input class="form-control" type="text" id="sol-curso-otro" maxlength="120" autocomplete="off" placeholder="Ej: 2º Conservatorio profesional" disabled>
       </div>
       <div class="form-group">
         <label class="form-label">Preferencia horaria</label>
@@ -806,7 +828,7 @@
 </div>
 
 <script type="module">
-import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
+import db from '../../js/firebase-data-client.js?v=20260821-exact-request-course';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { getDocumentUrl, uploadDocument } from '../../js/document-storage-provider.js?v=20260815-document-open';
 import { buildDocumentUploadRecord } from '../../js/document-center-engine.js?v=20260629-teacher-docs-expanded';
@@ -885,6 +907,12 @@ import {
   formatFechaCorta, formatHora, badgeEstado, getIniciales, sanitize, fechaHoy, initNotificacionesBadge
 } from '../../js/utils.js?v=20260809-profile-dialogs-2';
 import { Calendario } from '../../js/calendario.js?v=20260815-calendar-semantics';
+import {
+  CUSTOM_EDUCATION_COURSE_VALUE,
+  educationCourseFromStudent,
+  educationStageForCourse,
+  resolveEducationCourse,
+} from '../../js/education-course.js?v=20260821-exact-request-course';
 
 const usuario = await requireAuth(['familia']);
 if (!usuario) throw new Error('No autorizado');
@@ -962,6 +990,7 @@ let persistedPaymentAccessLocked = familiaData?.paymentAccessLocked === true;
 let familyUnlockedFeaturesInitialized = false;
 let oneOffPlannerChatsCache = [];
 let oneOffProposalRowsById = new Map();
+let solicitudStudentsById = new Map();
 const FAMILY_ONE_OFF_OVERRIDABLE_AVAILABILITY_REASONS = new Set([
   'counterparty_availability_missing',
   'outside_counterparty_availability',
@@ -4210,6 +4239,37 @@ function renderSolicitudDisponibilidadHint() {
   if (horario && !horario.value.trim()) horario.value = summary;
 }
 
+function toggleSolicitudCustomCourse({ focus = false } = {}) {
+  const select = document.getElementById('sol-curso');
+  const group = document.getElementById('sol-curso-otro-group');
+  const input = document.getElementById('sol-curso-otro');
+  if (!select || !group || !input) return;
+  const custom = select.value === CUSTOM_EDUCATION_COURSE_VALUE;
+  group.hidden = !custom;
+  input.disabled = !custom;
+  input.required = custom;
+  if (!custom) input.value = '';
+  if (custom && focus) setTimeout(() => input.focus(), 0);
+}
+
+function syncSolicitudCourseFromStudent() {
+  const studentId = document.getElementById('sol-alumno')?.value || '';
+  const select = document.getElementById('sol-curso');
+  const input = document.getElementById('sol-curso-otro');
+  if (!select || !input) return;
+  const suggestion = educationCourseFromStudent(solicitudStudentsById.get(String(studentId)) || {});
+  select.value = suggestion.selectValue;
+  input.value = suggestion.customValue;
+  toggleSolicitudCustomCourse();
+}
+
+function selectedSolicitudCourse() {
+  return resolveEducationCourse(
+    document.getElementById('sol-curso')?.value,
+    document.getElementById('sol-curso-otro')?.value,
+  );
+}
+
 async function cargarHijos() {
   if (!familiaId) return;
   const { data } = await db.from('alumnos').select('*, asignaciones(id,materia,subject,profesor_id,teacherUid,studentId,alumno_id,profesores(usuarios(nombre,apellidos)))')
@@ -4515,7 +4575,11 @@ document.getElementById('disp-hijo-lista').addEventListener('click', async (even
   }
 });
 
-document.getElementById('sol-alumno')?.addEventListener('change', renderSolicitudDisponibilidadHint);
+document.getElementById('sol-alumno')?.addEventListener('change', () => {
+  renderSolicitudDisponibilidadHint();
+  syncSolicitudCourseFromStudent();
+});
+document.getElementById('sol-curso')?.addEventListener('change', () => toggleSolicitudCustomCourse({ focus: true }));
 
 document.getElementById('btn-nuevo-hijo').addEventListener('click', () => {
   document.getElementById('hijo-id').value = '';
@@ -4562,6 +4626,7 @@ document.getElementById('btn-guardar-hijo').addEventListener('click', async () =
       await cargarSolicitudes();
       if (saved?.id) document.getElementById('sol-alumno').value = saved.id;
       renderSolicitudDisponibilidadHint();
+      syncSolicitudCourseFromStudent();
       document.getElementById('modal-solicitud').classList.add('open');
       showToast('Hijo/a añadido/a', 'Ahora indica materia y horario para pedir profesor.', 'success');
     } else {
@@ -4609,8 +4674,9 @@ function renderFamilyMatchingStatus(solicitud = {}) {
 async function cargarSolicitudes() {
   if (!familiaId) return;
   await cargarDisponibilidadHijos();
-  const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos').eq('familia_id', familiaId);
+  const { data: hijos } = await db.from('alumnos').select('id,nombre,apellidos,curso,course,nivel,nivel_educativo,educationStage').eq('familia_id', familiaId);
   const hijosLista = hijos || [];
+  solicitudStudentsById = new Map(hijosLista.map((hijo) => [String(hijo.id), hijo]));
   const hijosPorId = new Map(hijosLista.map((hijo) => [
     String(hijo.id),
     personDisplayName('Alumno', hijo.id, fullPersonName(hijo.nombre, hijo.apellidos)),
@@ -4622,8 +4688,10 @@ async function cargarSolicitudes() {
     return personDisplayName('Alumno', solicitud.studentId || solicitud.alumno_id, nested, direct, fromId, hijosLista.length === 1 ? hijosPorId.values().next().value : '');
   };
   const selSol = document.getElementById('sol-alumno');
+  const selectedStudentId = selSol.value;
   selSol.innerHTML = '<option value="">Seleccionar…</option>' +
     hijosLista.map(h => `<option value="${h.id}">${sanitize(h.nombre)} ${sanitize(h.apellidos)}</option>`).join('');
+  if (selectedStudentId && solicitudStudentsById.has(String(selectedStudentId))) selSol.value = selectedStudentId;
 
   renderSolicitudDisponibilidadHint();
 
@@ -4650,7 +4718,7 @@ async function cargarSolicitudes() {
     <td>${formatFechaCorta(s.created_at)}</td>
     <td>${sanitize(nombreAlumnoSolicitud(s))}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
-    <td>${sanitize(s.nivel||'—')}</td>
+    <td>${sanitize(s.course||s.curso||s.nivel||'—')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'—')}</td>
     <td>${renderFamilyMatchingStatus(s)}</td>
     <td>${badgeEstado(s.estado)}</td>
@@ -4661,7 +4729,10 @@ async function cargarSolicitudes() {
 // Nueva solicitud
 [document.getElementById('btn-nueva-solicitud'), document.getElementById('btn-nueva-solicitud-top')].forEach(btn => {
   btn?.addEventListener('click', () => {
-    cargarSolicitudes().then(renderSolicitudDisponibilidadHint);
+    cargarSolicitudes().then(() => {
+      renderSolicitudDisponibilidadHint();
+      syncSolicitudCourseFromStudent();
+    });
     document.getElementById('modal-solicitud').classList.add('open');
   });
 });
@@ -4671,14 +4742,17 @@ document.getElementById('btn-enviar-solicitud').addEventListener('click', async 
   if (!setActionBusy(button, 'Enviando...')) return;
   const alumnoId   = document.getElementById('sol-alumno').value;
   const materia    = document.getElementById('sol-materia').value.trim();
+  const curso      = selectedSolicitudCourse();
   try {
-  if (!alumnoId || !materia) { showToast('Atención','Selecciona un hijo/a e indica la materia.','warning'); return; }
+  if (!alumnoId || !materia || !curso) { showToast('Atención','Selecciona un hijo/a, indica la materia y el curso exacto.','warning'); return; }
 
   const { error } = await db.from('solicitudes').insert({
     familia_id:          familiaId,
     alumno_id:           alumnoId,
     materia,
-    nivel:               document.getElementById('sol-nivel').value,
+    curso,
+    nivel:               curso,
+    nivel_educativo:     educationStageForCourse(curso),
     preferencia_horario: document.getElementById('sol-horario').value.trim(),
     observaciones:       document.getElementById('sol-observaciones').value.trim(),
   });
@@ -4686,6 +4760,9 @@ document.getElementById('btn-enviar-solicitud').addEventListener('click', async 
   trackSolicitudProfesor(materia);
   document.getElementById('modal-solicitud').classList.remove('open');
   document.getElementById('sol-materia').value = '';
+  document.getElementById('sol-curso').value = '';
+  document.getElementById('sol-curso-otro').value = '';
+  toggleSolicitudCustomCourse();
   document.getElementById('sol-horario').value = '';
   document.getElementById('sol-observaciones').value = '';
   showToast('Solicitud enviada', 'Te avisaremos cuando encontremos un profesor compatible y puedas cerrar el horario.', 'success');

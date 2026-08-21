@@ -127,6 +127,7 @@
     "test:relationship-followup": "node scripts/relationship-followup-engine-test.mjs",
     "test:proactive-assist": "node scripts/proactive-assist-engine-test.mjs",
     "test:family-journey": "node scripts/family-journey-engine-test.mjs",
+    "test:family-request-course": "node scripts/family-request-course-test.mjs",
     "test:teacher-journey": "node scripts/teacher-journey-engine-test.mjs",
     "test:pwa-static": "node scripts/pwa-static-audit.mjs",
     "test:admin-control-center": "node scripts/admin-control-center-test.mjs",

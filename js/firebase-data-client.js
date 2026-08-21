@@ -34,7 +34,7 @@ import {
   COLLECTION_ALIASES as CANONICAL_COLLECTION_ALIASES,
   FIELD_ALIAS_GROUPS as CANONICAL_FIELD_ALIAS_GROUPS,
   normalizeEntityForWrite,
-} from './data-schema.js';
+} from './data-schema.js?v=20260821-exact-request-course';
 import { buildIdempotencyKey, buildQueryBudget, defaultReadLimit } from './scale-engine.js';
 import { buildIncidentCreatePayload, normalizeIncident } from './incident-engine.js?v=20260628-incidents';
 import { getConfigValue } from './platform-config.js?v=20260628-config';

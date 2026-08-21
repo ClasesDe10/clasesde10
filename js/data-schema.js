@@ -8,7 +8,7 @@
 
 import { collectionScalePolicy, scalePartitionKeys } from './scale-engine.js';
 
-export const DATA_SCHEMA_VERSION = 'data-schema-2026-08-15-assisted-onboarding';
+export const DATA_SCHEMA_VERSION = 'data-schema-2026-08-21-exact-request-course';
 
 export const DATA_COLLECTIONS = Object.freeze({
   users: 'users',
@@ -86,7 +86,7 @@ export const CANONICAL_FIELDS = Object.freeze({
   ],
   alumnos: ['familyUid', 'studentUid', 'nombre', 'apellidos', 'displayName', 'level', 'course', 'school', 'birthDate', 'active', 'createdAt', 'updatedAt'],
   solicitudes: [
-    'familyUid', 'studentId', 'subject', 'level', 'modality', 'zone', 'schedulePreference',
+    'familyUid', 'studentId', 'subject', 'course', 'educationStage', 'level', 'modality', 'zone', 'schedulePreference',
     'availabilitySlots', 'notes', 'status', 'matchStatus', 'matchingVersion', 'matchRunId',
     'matchComputedAt', 'matchDecision', 'matchQuality', 'matchConfidenceScore', 'matchNeedsReview',
     'activeMatchingPlan', 'activeMatchingStatus', 'activeMatchingPriority', 'activeMatchingFingerprint', 'activeMatchingUpdatedAt',
@@ -177,6 +177,8 @@ const COLLECTION_FIELD_ALIASES = Object.freeze({
     birthDate: ['fecha_nacimiento'],
   },
   solicitudes: {
+    course: ['curso'],
+    educationStage: ['nivel_educativo', 'etapa_educativa'],
     schedulePreference: ['preferencia_horario'],
     notes: ['observaciones'],
     modality: ['modalidad'],
@@ -448,10 +450,12 @@ function normalizeStudent(payload, options) {
 function normalizeRequest(payload, options) {
   const data = canonicalizeCommon('solicitudes', payload, options);
   data.subject = cleanText(data.subject || data.materia, 180);
-  data.level = cleanText(data.level || data.nivel, 120);
+  data.course = cleanText(data.course || data.curso || data.level || data.nivel, 120);
+  data.educationStage = cleanText(data.educationStage || data.nivel_educativo || data.etapa_educativa, 120);
+  data.level = cleanText(data.course || data.level || data.nivel, 120);
   setIfMissing(data, 'matchStatus', data.assignedTeacherUid ? 'assigned' : 'pending');
   setIfMissing(data, 'lifecycleStatus', data.assignedTeacherUid ? 'profesor_asignado' : 'solicitud_enviada');
-  data.searchKeywords = searchKeywords(data.subject, data.level, data.zone, data.schedulePreference, data.notes);
+  data.searchKeywords = searchKeywords(data.subject, data.course, data.educationStage, data.level, data.zone, data.schedulePreference, data.notes);
   return attachScaleFields('solicitudes', data, data.createdAt || data.created_at, `${data.familyUid || ''}:${data.studentId || ''}:${data.subject || ''}`);
 }
 

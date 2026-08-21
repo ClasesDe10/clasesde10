@@ -97,11 +97,19 @@ const request = normalizeEntityForWrite('solicitudes', {
   familia_id: 'family_1',
   alumno_id: 'student_1',
   materia: 'Piano',
+  curso: '3º ESO',
+  nivel_educativo: 'ESO',
   preferencia_horario: 'Tardes',
 });
 assert.equal(request.familyUid, 'family_1');
 assert.equal(request.studentId, 'student_1');
 assert.equal(request.subject, 'Piano');
+assert.equal(request.course, '3º ESO');
+assert.equal(request.curso, '3º ESO');
+assert.equal(request.level, '3º ESO');
+assert.equal(request.nivel, '3º ESO');
+assert.equal(request.educationStage, 'ESO');
+assert.equal(request.nivel_educativo, 'ESO');
 assert.equal(request.schedulePreference, 'Tardes');
 assert.equal(request.matchStatus, 'pending');
 assert.equal(request.lifecycleStatus, 'solicitud_enviada');

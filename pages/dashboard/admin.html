@@ -567,7 +567,7 @@
                   <th>Familia</th>
                   <th>Alumno</th>
                   <th>Materia</th>
-                  <th>Nivel</th>
+                  <th>Curso exacto</th>
                   <th>Horario pref.</th>
                   <th>Estado</th>
                   <th>Profesor asig.</th>
@@ -7168,7 +7168,7 @@ async function cargarSolicitudes() {
     <td>${renderAdminPerson(adminPersonOptions('familia', s, { compact: true }))}</td>
     <td>${renderAdminPerson(adminPersonOptions('alumno', s, { compact: true }))}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
-    <td>${sanitize(s.nivel||'-')}</td>
+    <td>${sanitize(s.course||s.curso||s.nivel||'-')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'-')}</td>
     <td>${badgeEstado(s.estado)}</td>
     <td>${s.profesor_asignado_id ? renderAdminPerson(adminPersonOptions('profesor', s, { compact: true })) : '-'}</td>
@@ -7199,7 +7199,7 @@ async function cargarSolicitudes() {
     <td>${renderAdminPerson(adminPersonOptions('familia', s, { compact: true }))}</td>
     <td>${renderAdminPerson(adminPersonOptions('alumno', s, { compact: true }))}</td>
     <td><strong>${sanitize(s.materia)}</strong></td>
-    <td>${sanitize(s.nivel||'—')}</td>
+    <td>${sanitize(s.course||s.curso||s.nivel||'—')}</td>
     <td style="font-size:.78rem">${sanitize(s.preferencia_horario||'—')}</td>
     <td>${badgeEstado(s.estado)}</td>
     <td>${s.profesor_asignado_id ? renderAdminPerson(adminPersonOptions('profesor', s, { compact: true })) : '—'}</td>

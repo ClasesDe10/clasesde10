@@ -473,7 +473,7 @@ export function getRequestProfile(request = {}) {
     familyUid: clean(request.familyUid || request.familia_id || request.familyId || metadata.familyUid || family.id || family.userUid || family.usuario_id, 180),
     studentId: clean(request.studentId || request.alumno_id || request.studentUid || metadata.studentId || student.id || student.studentId || student.alumno_id, 180),
     subject: clean(request.materia || request.subject || metadata.materia || metadata.materias || request.asunto, 180),
-    level: clean(request.nivel || request.nivel_educativo || request.curso || student.nivel || student.nivel_educativo || metadata.nivel || metadata.niveles, 120),
+    level: clean(request.course || request.curso || request.level || request.nivel || request.educationStage || request.nivel_educativo || student.course || student.curso || student.nivel || student.nivel_educativo || metadata.curso || metadata.nivel || metadata.niveles, 120),
     modality: clean(request.modalidad || request.modality || metadata.modalidad || metadata.formato, 120),
     zone: clean(request.zona || request.zone || metadata.zona || family.zona || family.city || family.ciudad, 180),
     city: clean(request.ciudad || metadata.ciudad || family.ciudad || family.city, 120),
