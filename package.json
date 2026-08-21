@@ -155,8 +155,10 @@
     "smoke:profiles-ui": "node scripts/profile-ui-smoke.mjs",
     "test:auth:functional": "node scripts/firebase-auth-functional-test.mjs",
     "test:auth:onboarding": "node --check js/auth-onboarding.js && node scripts/auth-onboarding-test.mjs",
-    "test:family:onboarding-assisted": "node scripts/assisted-family-onboarding-test.mjs",
-    "test:family:onboarding-assisted:production": "node scripts/run-with-firebase-cli-adc.mjs node scripts/assisted-family-production-smoke.mjs",
+    "test:family:onboarding-assisted": "node scripts/public-lead-metadata-test.mjs && node scripts/assisted-family-onboarding-test.mjs",
+    "test:family:onboarding-assisted:emulator": "npx firebase-tools emulators:exec --only auth,firestore,hosting --project clasesde10-50add \"node scripts/assisted-family-full-production-smoke.mjs\"",
+    "test:family:onboarding-assisted:production": "node scripts/run-with-firebase-cli-adc.mjs node scripts/assisted-family-full-production-smoke.mjs",
+    "smoke:family:public-request:production": "node scripts/public-family-request-production-smoke.mjs",
     "test:auth:linking:production": "node scripts/run-with-firebase-cli-adc.mjs node scripts/account-linking-production-smoke.mjs",
     "seo:generate": "node clases-particulares/_generar-paginas.js"
   },

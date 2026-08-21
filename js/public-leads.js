@@ -6,6 +6,7 @@
 import { addDoc, collection, serverTimestamp } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from './firebase-client.js';
 import { trackFormEvent } from './analytics-client.js?v=20260628-analytics';
+import { normalizePublicLeadMetadata } from './public-lead-metadata.js?v=20260821-family-permissions';
 
 function clean(value, max = 3000) {
   return String(value || '').trim().slice(0, max);
@@ -25,47 +26,15 @@ function isLikelySpam(lead) {
   return Boolean(clean(lead.website_url || lead.websiteUrl, 500));
 }
 
-function cleanMetadata(metadata = {}) {
-  const allowedKeys = [
-    'alumno',
-    'account_mode',
-    'anios',
-    'canal',
-    'consent_privacy',
-    'disponibilidad',
-    'frecuencia',
-    'inicio',
-    'materia',
-    'materias',
-    'modalidad',
-    'nivel',
-    'niveles',
-    'objetivo',
-    'origen',
-    'page_path',
-    'page_url',
-    'presupuesto',
-    'referrer',
-    'user_agent',
-    'utm_campaign',
-    'utm_content',
-    'utm_medium',
-    'utm_source',
-    'utm_term',
-    'verificacion',
-    'zona',
-  ];
-
-  return allowedKeys.reduce((acc, key) => {
-    if (!Object.prototype.hasOwnProperty.call(metadata, key)) return acc;
-    if (typeof metadata[key] === 'boolean') {
-      acc[key] = metadata[key];
-      return acc;
-    }
-    const value = clean(metadata[key], key === 'user_agent' || key === 'page_url' || key === 'referrer' ? 500 : 300);
-    if (value) acc[key] = value;
-    return acc;
-  }, {});
+function publicLeadWriteErrorMessage(error) {
+  const code = String(error?.code || '').toLowerCase();
+  if (['permission-denied', 'firestore/permission-denied'].includes(code)) {
+    return 'No hemos podido guardar la solicitud. Revisa los datos e inténtalo de nuevo.';
+  }
+  if (['resource-exhausted', 'firestore/resource-exhausted'].includes(code)) {
+    return 'El servicio está temporalmente ocupado. Inténtalo de nuevo dentro de unos minutos.';
+  }
+  return error?.message || 'No se pudo guardar el formulario.';
 }
 
 function getUtmMetadata() {
@@ -95,7 +64,7 @@ export async function submitLead(lead) {
     perfil: clean(lead.perfil, 80) || null,
     asunto: clean(lead.asunto, 180) || null,
     mensaje: clean(lead.mensaje, 3000) || null,
-    metadata: cleanMetadata({
+    metadata: normalizePublicLeadMetadata({
       ...(lead.metadata || {}),
       ...getUtmMetadata(),
       page_path: window.location.pathname,
@@ -150,7 +119,9 @@ export async function submitLead(lead) {
     });
     return {
       data: null,
-      error: { message: error?.message || 'No se pudo guardar el formulario.' },
+      error: {
+        message: publicLeadWriteErrorMessage(error),
+      },
     };
   }
 }

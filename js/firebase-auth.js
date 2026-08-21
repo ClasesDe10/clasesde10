@@ -178,6 +178,10 @@ function mapFirebaseError(error) {
     'auth/invalid-action-code': 'El enlace no es valido o ya fue utilizado.',
     'auth/provider-already-linked': 'Este metodo de acceso ya estaba vinculado a tu cuenta.',
     'auth/requires-recent-login': 'Por seguridad, vuelve a verificar tu acceso antes de cambiar la contrasena.',
+    'resource-exhausted': 'El servicio está temporalmente ocupado. Vuelve a abrir el enlace dentro de unos minutos.',
+    'firestore/resource-exhausted': 'El servicio está temporalmente ocupado. Vuelve a abrir el enlace dentro de unos minutos.',
+    'permission-denied': 'No se ha podido completar la activación. Solicita un nuevo enlace o contacta con soporte.',
+    'firestore/permission-denied': 'No se ha podido completar la activación. Solicita un nuevo enlace o contacta con soporte.',
   };
 
   if (!error) return null;

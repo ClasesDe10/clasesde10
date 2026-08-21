@@ -7,8 +7,8 @@
 
 import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-app.js';
 import { getAnalytics, isSupported as isAnalyticsSupported } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-analytics.js';
-import { getAuth } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
-import { getFirestore } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
+import { connectAuthEmulator, getAuth } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-auth.js';
+import { connectFirestoreEmulator, getFirestore } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-storage.js';
 
 export const firebaseConfig = {
@@ -25,6 +25,23 @@ export const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseC
 export const firebaseAuth = getAuth(firebaseApp);
 export const firebaseDb = getFirestore(firebaseApp);
 export const firebaseStorage = getStorage(firebaseApp);
+
+function useLocalFirebaseEmulators() {
+  const hostname = String(globalThis.location?.hostname || '').toLowerCase();
+  if (!['127.0.0.1', 'localhost'].includes(hostname)) return false;
+  try {
+    const requested = new URLSearchParams(globalThis.location?.search || '').get('firebase-emulator') === '1';
+    if (requested) globalThis.localStorage?.setItem('cd10_use_firebase_emulators', '1');
+    return requested || globalThis.localStorage?.getItem('cd10_use_firebase_emulators') === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+if (useLocalFirebaseEmulators()) {
+  connectAuthEmulator(firebaseAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(firebaseDb, '127.0.0.1', 8080);
+}
 
 let analyticsPromise;
 
