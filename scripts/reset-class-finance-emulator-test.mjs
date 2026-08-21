@@ -424,6 +424,40 @@ try {
   const completedState = JSON.parse(await fs.readFile(result.resetStatePath, 'utf8'));
   assert.equal(completedState.status, 'completed');
   assert.equal(completedState.verification.clean, true);
+  const postResetTimestamp = admin.firestore.Timestamp.now();
+  await setDocument(db, 'platformHealthChecks/health_1', {
+    schemaVersion: 'maintenance_health_v1',
+    version: 'maintenance-health-2026-07-01',
+    scope: 'maintenance',
+    source: 'github_actions_critical_worker',
+    status: 'operational',
+    createdAt: postResetTimestamp,
+  });
+  await setDocument(db, 'systemJobs/payment_job', {
+    type: 'metrics.snapshot',
+    payload: { source: 'assignment.created' },
+    status: 'queued',
+    source: 'github_actions.assignment.created',
+    version: 'platform-automation-2026-06-28',
+    createdAt: postResetTimestamp,
+  });
+  await setDocument(db, 'chats/crm-assignment-emulator', {
+    assignmentId: 'crm-assignment-emulator',
+    asignacion_id: 'crm-assignment-emulator',
+    source: 'assignment_automation',
+    relationshipStatus: 'active',
+    lastMessage: 'Usad este chat para acordar la primera clase y crearla en el calendario.',
+    assignmentIntroSentAt: postResetTimestamp,
+    createdAt: postResetTimestamp,
+  });
+  await setDocument(db, 'chats/crm-assignment-emulator/mensajes/system_assignment_intro', {
+    senderUid: 'system',
+    senderRole: 'system',
+    senderName: 'ClasesDe10',
+    body: 'Usad este chat para acordar la primera clase y crearla en el calendario.',
+    systemEventType: 'assignment_intro',
+    createdAt: postResetTimestamp,
+  });
   const independentVerification = runIndependentVerification();
   assert.equal(independentVerification.status, 0, `Independent verification failed.\nSTDOUT:\n${independentVerification.stdout}\nSTDERR:\n${independentVerification.stderr}`);
   const independentResult = JSON.parse(independentVerification.stdout.trim());
@@ -437,6 +471,24 @@ try {
   assert.deepEqual(independentResult.preservedFamilyProfiles.mismatches, []);
   assert(independentResult.backups.storageBackupFilesChecked >= 3);
   assert.deepEqual(independentResult.backups.invalidStorageBackupFiles, []);
+  assert.equal(independentResult.remainingWholeCollections.platformHealthChecks, 0);
+  assert.deepEqual(independentResult.remainingDerivedDocuments, []);
+  assert.deepEqual(independentResult.remainingChatClassFinancePreviews, []);
+  assert.deepEqual(independentResult.remainingClassFinanceMessages, []);
+
+  await setDocument(db, 'platformHealthChecks/maintenance_with_class_reference', {
+    schemaVersion: 'maintenance_health_v1',
+    version: 'maintenance-health-2026-07-01',
+    scope: 'maintenance',
+    source: 'github_actions_critical_worker',
+    classId: 'must_not_be_exempt',
+    createdAt: postResetTimestamp,
+  });
+  const referencedTelemetryVerification = runIndependentVerification();
+  assert.notEqual(referencedTelemetryVerification.status, 0, 'Operational telemetry with a class reference must not be exempted.');
+  const referencedTelemetryResult = JSON.parse(referencedTelemetryVerification.stdout.trim());
+  assert.equal(referencedTelemetryResult.remainingWholeCollections.platformHealthChecks, 1);
+  await db.doc('platformHealthChecks/maintenance_with_class_reference').delete();
 
   const corruptibleManifestPath = result.backupPaths.find((backupPath) => {
     const manifest = manifests[result.backupPaths.indexOf(backupPath)];
@@ -456,6 +508,12 @@ try {
   const restoredVerification = runIndependentVerification();
   assert.equal(restoredVerification.status, 0, `Restored backup verification failed.\n${restoredVerification.stderr}`);
   assert.equal(JSON.parse(restoredVerification.stdout.trim()).clean, true);
+  await Promise.all([
+    db.doc('platformHealthChecks/health_1').delete(),
+    db.doc('systemJobs/payment_job').delete(),
+    db.doc('chats/crm-assignment-emulator/mensajes/system_assignment_intro').delete(),
+    db.doc('chats/crm-assignment-emulator').delete(),
+  ]);
   const idempotent = runReset();
   assert.equal(idempotent.status, 0, `Completed reset verification failed.\n${idempotent.stderr}`);
   const idempotentResult = JSON.parse(idempotent.stdout.trim());
@@ -470,12 +528,20 @@ try {
   assert.equal(protectedRerun.status, 1);
   assert.match(protectedRerun.stderr, /refusing to delete data created afterwards/);
   assert.equal(await documentExists(db, 'clases/post_reset_class'), true);
+  const continuedReset = runReset(['--continue-after-completed']);
+  assert.equal(continuedReset.status, 0, `Protected continuation failed.\n${continuedReset.stderr}`);
+  const continuedResult = JSON.parse(continuedReset.stdout.trim());
+  assert.equal(continuedResult.continuedCompletedReset, true);
+  assert.equal(continuedResult.verification.clean, true);
+  assert.equal(await documentExists(db, 'clases/post_reset_class'), false);
+  assert(continuedResult.backupPaths.length > result.backupPaths.length);
   console.log(JSON.stringify({
     ok: true,
     checked: 'class_finance_reset_emulator',
     recoveredFromPreparedReset: result.recoveredFromPreparedReset,
     completedResetIsIdempotent: idempotentResult.alreadyCompleted,
     postResetClassProtected: true,
+    protectedContinuationCompleted: continuedResult.verification.clean,
     resetAttempts: completedState.attempts,
     deletedFirestoreDocuments: result.deletedFirestoreDocuments,
     deletedStorageFiles: result.deletedStorageFiles,

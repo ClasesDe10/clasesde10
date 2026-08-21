@@ -177,6 +177,40 @@ function isPostResetOperationalTelemetry(item, resetCompletedAt) {
     && !data.entityId
     && !hasClassFinanceReference(data)) return true;
 
+  if (item.path.startsWith('platformHealthChecks/')
+    && data.schemaVersion === 'maintenance_health_v1'
+    && String(data.version || '').startsWith('maintenance-health-')
+    && data.scope === 'maintenance'
+    && new Set([
+      'github_actions_worker',
+      'github_actions_full_worker',
+      'github_actions_critical_worker',
+      'github_actions_trust_worker',
+    ]).has(data.source)
+    && !hasClassFinanceReference(data)) return true;
+
+  if (item.path.startsWith('systemJobs/')
+    && data.type === 'metrics.snapshot'
+    && data.version === 'platform-automation-2026-06-28'
+    && String(data.source || '').startsWith('github_actions.')
+    && !hasClassFinanceReference(data)) return true;
+
+  if (item.path.startsWith('chats/')
+    && item.path.split('/').length === 2
+    && data.source === 'assignment_automation'
+    && data.relationshipStatus === 'active'
+    && data.assignmentId
+    && data.assignmentId === data.asignacion_id
+    && item.path.endsWith(`/${data.assignmentId}`)
+    && !hasClassFinanceReference(data)) return true;
+
+  if (item.path.startsWith('chats/')
+    && item.path.endsWith('/mensajes/system_assignment_intro')
+    && data.systemEventType === 'assignment_intro'
+    && data.senderUid === 'system'
+    && data.senderRole === 'system'
+    && !hasClassFinanceReference(data)) return true;
+
   const allowedHeartbeatStats = new Set([
     'systemJobsSeen',
     'selfSupervisionFindingsDetected',
@@ -359,18 +393,24 @@ async function main() {
   const db = admin.firestore();
   const bucket = admin.storage().bucket();
   const remainingWholeCollections = {};
+  const remainingWholeCollectionRows = [];
   for (const collectionName of wholeCollections) {
-    remainingWholeCollections[collectionName] = (await db.collection(collectionName).limit(1).get()).size;
+    const rows = await listDocs(db, collectionName);
+    const remainingRows = rows
+      .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt));
+    remainingWholeCollections[collectionName] = remainingRows.length;
+    remainingWholeCollectionRows.push(...remainingRows);
   }
 
   const filteredRows = (await Promise.all(filteredCollections.map((collectionName) => listDocs(db, collectionName))))
     .flat();
+  const nonOperationalFilteredRows = filteredRows
+    .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt));
   const remainingPaymentDocuments = filteredRows
     .filter((item) => item.path.startsWith('documentos/') && paymentDocument(item.data))
     .map((item) => item.path)
     .sort();
-  const remainingDerivedDocuments = filteredRows
-    .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt))
+  const remainingDerivedDocuments = nonOperationalFilteredRows
     .filter((item) => derivedWords.test(derivedSearchText(item.data)))
     .map((item) => item.path)
     .filter((documentPath) => !remainingPaymentDocuments.includes(documentPath))
@@ -379,6 +419,7 @@ async function main() {
   const chats = await listDocs(db, 'chats');
   const remainingChatClassState = chats.filter((item) => chatHasClassState(item.data)).map((item) => item.path).sort();
   const remainingChatClassFinancePreviews = chats
+    .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt))
     .filter((item) => derivedWords.test(derivedSearchText(item.data.lastMessage)))
     .map((item) => item.path)
     .sort();
@@ -386,6 +427,7 @@ async function main() {
   const messageRows = await collectionGroupDocs(db, 'mensajes');
   const reactionRows = await collectionGroupDocs(db, 'reacciones');
   const remainingClassFinanceMessages = messageRows
+    .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt))
     .filter((item) => derivedWords.test(derivedSearchText(item.data)))
     .map((item) => item.path)
     .sort();
@@ -396,20 +438,15 @@ async function main() {
   // above. Reusing those snapshots proves exact target absence without billing
   // a second read for each of the 15k+ paths in the durable reset plan.
   const existingScannedPaths = new Set([
-    ...filteredRows,
+    ...remainingWholeCollectionRows,
+    ...nonOperationalFilteredRows,
+    ...chats.filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt)),
     ...scheduleRows,
-    ...messageRows,
+    ...messageRows.filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt)),
     ...reactionRows,
   ].map((item) => item.path));
-  const wholeCollectionSet = new Set(wholeCollections);
   const remainingTargetPaths = Array.from(new Set(resetState.targetPaths || []))
-    .filter((documentPath) => {
-      const rootCollection = String(documentPath).split('/')[0];
-      if (wholeCollectionSet.has(rootCollection)) {
-        return Number(remainingWholeCollections[rootCollection] || 0) > 0;
-      }
-      return existingScannedPaths.has(documentPath);
-    })
+    .filter((documentPath) => existingScannedPaths.has(documentPath))
     .sort();
   const paymentPrefixFiles = await listStorageFiles(bucket, { prefix: 'pagos/' });
   const explicitStoragePaths = await existingStoragePaths(bucket, resetState.storagePaths || []);

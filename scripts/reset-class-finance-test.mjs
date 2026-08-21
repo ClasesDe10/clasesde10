@@ -81,6 +81,7 @@ assert(source.includes('data.attachment') && source.includes('storagePathsFromDa
 assert(source.includes('remainingDerivedTargets') && source.includes('remainingLockedFamilies'), 'Production reset must verify derived data and family locks are empty after deletion.');
 assert(source.includes('for (const collectionName of wholeCollections)'), 'The reset must verify every whole derived collection, including historical aliases.');
 assert(source.includes('if (!verification.clean) process.exitCode = 2'), 'Production reset must fail when final zero-state verification is not clean.');
+assert(source.includes("args.has('--continue-after-completed')") && source.includes('continuingCompletedState ? targets'), 'A completed reset may clean newly generated derived data only through the explicit protected continuation path.');
 assert(verifierSource.includes("mode: 'read_only_independent_verification'"), 'The independent verifier must identify its read-only mode.');
 assert(verifierSource.includes("resetState.status !== 'completed'") && verifierSource.includes('resetState.verification?.clean !== true'), 'The independent verifier must refuse to run without a completed clean reset state.');
 assert(verifierSource.includes('isPostResetOperationalTelemetry(item, resetState.completedAt)'), 'Independent verification must distinguish new operational telemetry from pre-reset class and finance data.');
@@ -96,6 +97,7 @@ assert(verifierSource.includes('familyProfilesBeforeDerivedReset') && verifierSo
 assert(source.includes("createHash('sha256')") && source.includes('localSha256'), 'Storage receipts must be hashed and verified before production deletion.');
 assert(verifierSource.includes('invalidStorageBackupFiles') && verifierSource.includes('sha256_mismatch') && verifierSource.includes('md5_mismatch'), 'The independent verifier must reject a missing or corrupted Storage backup.');
 assert(emulatorSource.includes("fs.appendFile(corruptibleLocalPath, 'corruption-test')") && emulatorSource.includes('Independent verification must reject a corrupted Storage backup.'), 'The destructive emulator must prove that backup corruption is rejected.');
+assert(emulatorSource.includes("runReset(['--continue-after-completed'])"), 'The destructive emulator must prove protected continuation after a completed reset.');
 assert(verifierSource.includes("!key.startsWith('trust')") && verifierSource.includes('familyResetFields'), 'The family CRM comparison may ignore only reset-owned trust/payment fields.');
 assert(authWrapperSource.includes('try {') && authWrapperSource.includes('finally {') && authWrapperSource.includes('fs.rmSync(adcPath, { force: true })'), 'Temporary Firebase credentials must always be removed.');
 assert(!authWrapperSource.includes('process.exit(exitCode)'), 'The credential cleanup must run before the child exit code is propagated.');

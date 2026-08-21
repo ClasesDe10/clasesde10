@@ -14,6 +14,7 @@ const args = new Set(process.argv.slice(2));
 const apply = args.has('--apply');
 const confirmed = process.argv.includes(`--confirm=${APPLY_TOKEN}`);
 const simulateFailureAfterCoreDelete = args.has('--simulate-failure-after-core-delete');
+const continueAfterCompleted = args.has('--continue-after-completed');
 const backupRoot = path.resolve(
   process.env.CLASS_FINANCE_BACKUP_ROOT
     || path.resolve(process.cwd(), '..', 'migration-private', 'backups'),
@@ -544,24 +545,29 @@ async function main() {
   const db = admin.firestore();
   const bucket = admin.storage().bucket();
   const existingState = apply ? await loadResetState() : null;
+  let continuingCompletedState = null;
   if (existingState?.status === 'completed') {
     const verification = await verify(db, bucket, existingState.storagePaths);
     if (!verification.clean) {
-      throw new Error('The class/finance reset was already completed; refusing to delete data created afterwards.');
+      if (!continueAfterCompleted) {
+        throw new Error('The class/finance reset was already completed; refusing to delete data created afterwards.');
+      }
+      continuingCompletedState = existingState;
+    } else {
+      console.log(JSON.stringify({
+        ok: true,
+        mode: 'apply',
+        projectId: PROJECT_ID,
+        alreadyCompleted: true,
+        resetStatePath,
+        backupPaths: existingState.backupPaths,
+        backupDirectories: existingState.backupDirectories,
+        verification,
+      }, null, 2));
+      return;
     }
-    console.log(JSON.stringify({
-      ok: true,
-      mode: 'apply',
-      projectId: PROJECT_ID,
-      alreadyCompleted: true,
-      resetStatePath,
-      backupPaths: existingState.backupPaths,
-      backupDirectories: existingState.backupDirectories,
-      verification,
-    }, null, 2));
-    return;
   }
-  const recoveryState = existingState?.status === 'prepared' ? existingState : null;
+  const recoveryState = existingState?.status === 'prepared' ? existingState : continuingCompletedState;
   const recoveredContext = resetContext(recoveryState?.context);
   (recoveryState?.storagePaths || []).forEach((storagePath) => recoveredContext.storagePaths.add(storagePath));
   const [{ targets, context }, chatDocs, familyDocs, professorDocs] = await Promise.all([
@@ -577,7 +583,11 @@ async function main() {
     plannedTargets.set(safePath, { ref: db.doc(safePath), data: () => ({}) });
   });
   targets.forEach((doc) => plannedTargets.set(doc.ref.path, doc));
-  const targetsToDelete = Array.from(plannedTargets.values());
+  // A completed reset may be continued only with the explicit protected flag.
+  // In that mode the durable plan retains all historical paths as evidence, but
+  // only documents that currently exist are deleted to avoid thousands of
+  // unnecessary writes against paths already proved absent by the prior reset.
+  const targetsToDelete = continuingCompletedState ? targets : Array.from(plannedTargets.values());
   const countsByCollection = targets.reduce((counts, doc) => {
     const collection = doc.ref.parent.id;
     counts[collection] = (counts[collection] || 0) + 1;
@@ -589,7 +599,8 @@ async function main() {
     projectId: PROJECT_ID,
     firestoreTargets: targets.length,
     plannedFirestoreTargets: targetsToDelete.length,
-    recoveredFromPreparedReset: Boolean(recoveryState),
+    recoveredFromPreparedReset: recoveryState?.status === 'prepared',
+    continuedCompletedReset: recoveryState?.status === 'completed',
     countsByCollection,
     paymentStorageTargets: storagePaths.length,
     chatsToReset: chatDocs.length,
