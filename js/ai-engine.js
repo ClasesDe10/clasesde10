@@ -13,10 +13,10 @@ import {
 import {
   buildMobilityEstimate,
   formatMobilityEstimate,
-} from './geo-distance-engine.js';
+} from './geo-distance-engine.js?v=20260821-google-routes-v2';
 import { buildTeacherTrustProfile } from './trust-engine.js';
 
-export const MATCHING_VERSION = 'professional_matching_v5_mobility';
+export const MATCHING_VERSION = 'professional_matching_v6_google_routes';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
 export const ACTIVE_MATCHING_VERSION = 'active_matching_v1';
 
@@ -391,6 +391,9 @@ export function getTeacherProfile(teacher = {}) {
     city: clean(teacher.ciudad || teacher.city || 'Madrid', 160),
     postalCode: clean(teacher.codigo_postal || teacher.postalCode, 20),
     zone: clean(teacher.zona || teacher.zone || teacher.barrio || teacher.city, 240),
+    lat: firstNumber(teacher.lat, teacher.latitude, teacher.locationLat, teacher.geo?.lat, teacher.location?.lat),
+    lng: firstNumber(teacher.lng, teacher.lon, teacher.longitude, teacher.locationLng, teacher.geo?.lng, teacher.location?.lng),
+    routeEstimate: teacher.routeEstimate || teacher.googleRoutesEstimate || teacher.mobilityRouteEstimate || null,
     modality: clean(teacher.modalidad || teacher.modality || teacher.tipo_clase || teacher.formato, 120),
     subjects,
     levels,
@@ -709,15 +712,12 @@ function scoreLocation(requestProfile, teacherProfile) {
   const estimate = estimateTravelForMatch(requestProfile, teacherProfile);
   if (estimate.available) {
     const ratio = Number.isFinite(Number(estimate.scoreRatio)) ? estimate.scoreRatio : 0.18;
-    const reasons = [`Desplazamiento calculado: ${estimate.detail}.`];
+    const reasons = [`Desplazamiento ${estimate.exact ? 'exacto con Google Maps' : 'estimado'}: ${estimate.detail}.`];
     const risks = [...(estimate.risks || [])];
-    if (estimate.hasCar === true) {
-      reasons.push(estimate.withinRecommendedRange
-        ? 'Tiene coche y queda dentro del limite operativo de 20 minutos.'
-        : 'Tiene coche, pero el desplazamiento supera el limite operativo.');
-    } else if (estimate.hasCar === false) {
-      reasons.push('Sin coche declarado: se prioriza transporte publico.');
-    }
+    const recommendedLabels = { walking: 'a pie', transit: 'en transporte publico', driving: 'en coche' };
+    if (estimate.recommendedMode) reasons.push(`Mejor opcion presencial: ${recommendedLabels[estimate.recommendedMode] || estimate.recommendedMode}.`);
+    if (estimate.hasCar === true) reasons.push('Tiene coche; se compara con caminar y transporte publico.');
+    else if (estimate.hasCar === false) reasons.push('Sin coche declarado: se comparan caminar y transporte publico.');
     return component('location', ratio, estimate.detail, reasons, risks, { locationEstimate: estimate });
   }
 
@@ -1051,13 +1051,13 @@ export function scoreTeacherForRequest(request, teacher) {
   if (components.find((part) => part.name === 'modality')?.points === 0) hardBlocks.push('Modalidad incompatible');
   const locationEstimate = components.find((part) => part.name === 'location')?.locationEstimate || null;
   if (modalitySet(requestProfile.modality).has('presencial') && locationEstimate?.hardDistanceRisk) {
-    hardBlocks.push('Desplazamiento en coche superior a 20 min');
+    hardBlocks.push('Ninguna ruta presencial dentro del limite recomendado');
   }
 
   let score = components.reduce((sum, part) => sum + part.points, 0);
   score = capScore(score, 45, hardBlocks.includes('Materia no compatible'));
   score = capScore(score, 55, hardBlocks.includes('Modalidad incompatible'));
-  score = capScore(score, 60, hardBlocks.includes('Desplazamiento en coche superior a 20 min'));
+  score = capScore(score, 60, hardBlocks.includes('Ninguna ruta presencial dentro del limite recomendado'));
   score = capScore(score, 58, components.find((part) => part.name === 'capacity')?.points === 0);
   score = capScore(score, 68, !['verificado', 'verified', 'activo', 'active'].includes(teacherProfile.status));
   score = capScore(score, 72, teacherQuality.score < 85);

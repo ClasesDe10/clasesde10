@@ -1358,7 +1358,7 @@ import {
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260706-teacher-profile-location-v1';
+import { MATCHING_VERSION, buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260821-google-routes-v2';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -7277,7 +7277,7 @@ window.abrirAsignar = async (solicitudId, materia, familia) => {
     const includeZeroScore = getConfigValue(platformConfig, 'matching.includeZeroScoreForAdmin', true) === true;
     const needsFreshReasoning = !(matches || []).length
       || (matches || []).some((match) => !match.scoreBreakdown?.fitConfidence)
-      || (matches || []).some((match) => !String(match.matchingVersion || match.source || '').includes('mobility'));
+      || (matches || []).some((match) => String(match.matchingVersion || match.source || '') !== MATCHING_VERSION);
     const aiMatches = !needsFreshReasoning
       ? matches
       : rankTeachersForRequest(requestForMatching, profsConSenales, {
@@ -7371,12 +7371,23 @@ function normalizeTravelDisplayOptions(estimate = {}) {
   const options = [];
   const hasCar = estimate.hasCar === true;
   const hasNoCar = estimate.hasCar === false;
+  const walkingMinutes = Number(estimate.walkingMinutes);
+  const walkingKm = Number(estimate.walkingKm ?? estimate.effectiveKm);
   const drivingMinutes = Number(estimate.drivingMinutes);
   const drivingKm = Number(estimate.drivingKm ?? estimate.effectiveKm);
   const transitMinutes = Number(estimate.transitMinutes);
   const transitKm = Number(estimate.transitKm ?? estimate.effectiveKm);
   const effectiveMinutes = Number(estimate.effectiveMinutes);
   const effectiveKm = Number(estimate.effectiveKm ?? estimate.straightKm);
+  if (Number.isFinite(walkingMinutes)) {
+    options.push({
+      mode: 'walking',
+      label: 'A pie',
+      km: Number.isFinite(walkingKm) ? walkingKm : '',
+      minutes: walkingMinutes,
+      withinLimit: walkingMinutes <= 30,
+    });
+  }
   if (hasCar && Number.isFinite(drivingMinutes)) {
     options.push({
       mode: 'driving',
@@ -7398,7 +7409,7 @@ function normalizeTravelDisplayOptions(estimate = {}) {
   if (!options.length && Number.isFinite(effectiveMinutes)) {
     options.push({
       mode: estimate.recommendedMode || 'route',
-      label: hasNoCar ? 'Transporte publico' : hasCar ? 'Coche' : 'Ruta',
+      label: estimate.recommendedMode === 'walking' ? 'A pie' : hasNoCar ? 'Transporte publico' : hasCar ? 'Coche' : 'Ruta',
       km: Number.isFinite(effectiveKm) ? effectiveKm : '',
       minutes: effectiveMinutes,
       withinLimit: estimate.withinRecommendedRange !== false,
@@ -7428,6 +7439,7 @@ function travelEstimateSummary(estimate = {}, options = []) {
     const minutesText = Number.isFinite(minutes) ? `${Math.round(minutes)} min` : 'min aprox.';
     const mode = option.mode === 'driving' ? 'en coche'
       : option.mode === 'transit' ? 'en transporte publico'
+        : option.mode === 'walking' ? 'a pie'
         : 'aprox.';
     return `${kmText} / ${minutesText} ${mode}`;
   }).join(' | ');
@@ -7468,10 +7480,15 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
     const travelText = travelEstimate?.available ? travelEstimateSummary(travelEstimate, travelOptions) : '';
     const travelBadges = travelOptions.map(renderTravelOptionBadge).join('');
     const mobilityMode = travelEstimate?.available
-      ? `<span class="badge badge-gray">${travelEstimate.hasCar === true ? 'Tiene coche' : travelEstimate.hasCar === false ? 'Sin coche: transporte publico' : 'Movilidad no indicada'}</span>`
+      ? `<span class="badge badge-gray">${travelEstimate.hasCar === true ? 'Tiene coche: se comparan 3 rutas' : travelEstimate.hasCar === false ? 'Sin coche: a pie / transporte publico' : 'Movilidad no indicada: coche excluido'}</span>`
       : '';
-    const travelConfidence = travelEstimate?.available && travelEstimate.confidence && travelEstimate.confidence !== 'coordinates'
-      ? '<span class="badge badge-warning">Estimado por zona/CP</span>'
+    const travelConfidence = travelEstimate?.available
+      ? travelEstimate.exact === true && travelEstimate.provider === 'google_routes'
+        ? '<span class="badge badge-success">Ruta exacta</span><span class="GMP-attribution" translate="no" style="font-family:Roboto,Arial,sans-serif;font-style:normal;font-weight:400;font-size:.75rem;letter-spacing:normal;white-space:nowrap;color:#5e5e5e">Google Maps</span>'
+        : '<span class="badge badge-warning">Ruta estimada · Maps pendiente</span>'
+      : '';
+    const walkingWarning = travelEstimate?.walkingRouteWarning
+      ? `<div style="margin-top:5px;color:var(--gray-mid);font-size:.75rem">${sanitize(travelEstimate.walkingRouteWarning)}</div>`
       : '';
     const notes = [travelText && `Desplazamiento: ${travelText}`, reasons, risks && `A revisar: ${risks}`, profileIssues && `Perfil: ${profileIssues}`].filter(Boolean).join(' ');
     const quote = profesor ? buildAssignmentPricingQuote(window.solicitudAsignacionActual || {}, profesor) : null;
@@ -7494,8 +7511,8 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
         return `<span class="badge badge-gray" title="${sanitize(value.detail || '')}">${labels[key] || key}: ${Math.round(Number(value.points))}/${Math.round(Number(value.max || 0))}</span>`;
       }).join(' ');
     const sourceLabel = String(m.aiMode || m.source || m.matchingVersion || '').includes('gemini')
-      ? 'IA Gemini + scoring'
-      : 'Scoring IA determinista';
+      ? `IA Gemini + scoring${travelEstimate?.exact ? ' + Google Maps' : ''}`
+      : `Scoring explicable${travelEstimate?.exact ? ' + Google Maps' : ''}`;
     return `
       <div data-ai-match="teacher" style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
@@ -7512,6 +7529,7 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
           ${travelBadges}
           ${travelConfidence}
         </div>` : ''}
+        ${walkingWarning}
         ${trust ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px">
           ${renderTrustBadge(trust.score, trust.level)}
           ${renderTrustBadges(trust.badges, 3)}

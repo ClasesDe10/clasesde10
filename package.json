@@ -81,6 +81,7 @@
     "test:availability": "node scripts/availability-engine-test.mjs",
     "test:data-schema": "node scripts/data-schema-test.mjs",
     "test:ai-engine": "node scripts/ai-engine-test.mjs",
+    "test:google-routes": "node scripts/google-routes-provider-test.mjs",
     "test:admin-ai": "node scripts/admin-ai-engine-test.mjs",
     "test:internal-ai-assistant": "node scripts/internal-ai-assistant-engine-test.mjs",
     "test:admin-ops": "node scripts/admin-ops-engine-test.mjs",
