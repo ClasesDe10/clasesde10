@@ -47,7 +47,7 @@
     "trailingSlash": false,
     "redirects": [
       {
-        "regex": "/clases-particulares/matematicas-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "regex": "/clases-particulares/matematicas-(barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
         "destination": "/clases-particulares/matematicas",
         "type": 301
       },
@@ -82,22 +82,22 @@
         "type": 301
       },
       {
-        "regex": "/clases-particulares/primaria-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "regex": "/clases-particulares/primaria-(barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
         "destination": "/clases-particulares/primaria",
         "type": 301
       },
       {
-        "regex": "/clases-particulares/eso-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "regex": "/clases-particulares/eso-(barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
         "destination": "/clases-particulares/eso",
         "type": 301
       },
       {
-        "regex": "/clases-particulares/bachillerato-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "regex": "/clases-particulares/bachillerato-(barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
         "destination": "/clases-particulares/bachillerato",
         "type": 301
       },
       {
-        "regex": "/clases-particulares/selectividad-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "regex": "/clases-particulares/selectividad-(barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
         "destination": "/clases-particulares/selectividad",
         "type": 301
       },
@@ -124,6 +124,11 @@
       {
         "regex": "/clases-particulares/padel-(madrid|barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
         "destination": "/clases-particulares/padel",
+        "type": 301
+      },
+      {
+        "regex": "/clases-particulares/(barcelona|valencia|sevilla|zaragoza|malaga|murcia|alicante|bilbao|valladolid)(\\.html)?$",
+        "destination": "/clases-particulares",
         "type": 301
       },
       {

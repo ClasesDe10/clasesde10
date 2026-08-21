@@ -275,7 +275,8 @@ function checkHtml(relative, html, sitemapSet, titleMap, descriptionMap, pageLin
     const organization = graph.find((item) => schemaHasType(item, 'Organization'));
     const website = graph.find((item) => schemaHasType(item, 'WebSite'));
     if (!organization || organization['@id'] !== `${DOMAIN}/#organization`) fail('Organization principal ausente o sin @id estable');
-    if (!website || website['@id'] !== `${DOMAIN}/#website` || !website.alternateName) fail('WebSite no define nombre y alternativa de marca');
+    if (!website || website['@id'] !== `${DOMAIN}/#website` || website.name !== 'ClasesDe10') fail('WebSite no define la marca principal con un @id estable');
+    if (!organization?.foundingLocation || !Array.isArray(organization?.areaServed)) fail('Organization no explica origen y cobertura real del servicio');
   }
 
   const links = new Set();
@@ -311,10 +312,21 @@ const firebaseConfig = JSON.parse(read('firebase.json'));
 const consolidationRedirects = (firebaseConfig.hosting?.redirects || []).filter((redirect) => (
   redirect.type === 301
   && redirect.regex?.startsWith('/clases-particulares/')
-  && redirect.destination?.startsWith('/clases-particulares/')
+  && (redirect.destination === '/clases-particulares' || redirect.destination?.startsWith('/clases-particulares/'))
 ));
-if (consolidationRedirects.length !== 16) {
+if (consolidationRedirects.length !== 17) {
   fail('faltan redirecciones 301 desde páginas combinadas antiguas', consolidationRedirects.length);
+}
+for (const pathname of [
+  '/clases-particulares/matematicas-madrid',
+  '/clases-particulares/primaria-madrid',
+  '/clases-particulares/eso-madrid',
+  '/clases-particulares/bachillerato-madrid',
+  '/clases-particulares/selectividad-madrid',
+]) {
+  if (consolidationRedirects.some((redirect) => new RegExp(redirect.regex).test(pathname))) {
+    fail('una landing prioritaria de Madrid queda interceptada por una redirección', pathname);
+  }
 }
 
 for (const relative of PRIVATE_HTML) {
@@ -333,7 +345,10 @@ if (!urls.includes(`${DOMAIN}/`)) fail('sitemap no incluye home');
 if (!urls.includes(`${DOMAIN}/clases-particulares`)) fail('sitemap no incluye el directorio principal de clases');
 if (urls.some((url) => url.endsWith('.html'))) fail('sitemap incluye URLs .html en vez de URLs limpias');
 if (urls.some((url) => /\/pages\/|\/offline|\/dashboard/.test(url))) fail('sitemap incluye URLs privadas o no indexables');
-if (urls.length !== 36) fail('sitemap no coincide con la arquitectura editorial prevista', `${urls.length} URLs`);
+if (urls.length !== 38) fail('sitemap no coincide con la arquitectura editorial prevista', `${urls.length} URLs`);
+if (!urls.includes(`${DOMAIN}/guias`) || !urls.includes(`${DOMAIN}/clases-particulares/matematicas-madrid`)) {
+  fail('sitemap no incluye los nuevos centros de autoridad editorial y local');
+}
 if (/<(?:changefreq|priority)>/i.test(read('sitemap.xml'))) warn('sitemap contiene señales que Google ignora');
 for (const entry of entries) {
   if (!entry.lastmod || !/^\d{4}-\d{2}-\d{2}$/.test(entry.lastmod)) fail('lastmod ausente o inválido', entry.loc);

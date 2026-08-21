@@ -70,7 +70,7 @@ Actualizado: 2026-06-16
 - [x] Autenticar y enlazar Netlify CLI al sitio `clasesde10`.
 - [ ] Completar propagacion DNS a Firebase Hosting.
 - [ ] Configurar IDs reales en `js/analytics.js` o migrar a variables inyectadas.
-- [ ] Revisar Search Console despues del nuevo sitemap.
+- [ ] Revisar Search Console después del nuevo sitemap. El 21/08/2026 la API respondió 403 porque la sesión de Firebase no incluye el alcance OAuth `webmasters`; repetir con una cuenta que tenga acceso a la propiedad y ejecutar `npm run seo:submit:sitemap`.
 - [ ] Medir conversion de formularios publicos.
 - [ ] Evaluar migrar CSS/JS inline de `js/nav.js` a clases CSS para endurecer CSP.
 - [ ] Eliminar `_gen.py` cuando el equipo confirme que solo usa Node para generar SEO.

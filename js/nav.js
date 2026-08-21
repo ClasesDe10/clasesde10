@@ -16,12 +16,8 @@
   // evita cadenas de redirecciones y refuerza una única URL canónica.
   function r(route) {
     const withoutExtension = String(route || '').replace(/\.html$/, '');
-    const consolidated = withoutExtension.replace(
-      /clases-particulares\/(matematicas|ingles|bachillerato|selectividad)-madrid$/,
-      'clases-particulares/$1',
-    );
-    if (consolidated === 'index') return '/';
-    return `/${consolidated.replace(/^\/+|\/+$/g, '')}`;
+    if (withoutExtension === 'index') return '/';
+    return `/${withoutExtension.replace(/^\/+|\/+$/g, '')}`;
   }
 
   // ── NAV HTML ──────────────────────────────────────────────────────
@@ -37,6 +33,7 @@
   <ul id="navLinks" class="nav-links" style="display:flex;align-items:center;gap:4px;list-style:none;margin:0;padding:0">
     <li><a href="${r('como-funciona.html')}"   style="text-decoration:none;color:rgba(255,255,255,.75);font-size:.84rem;font-weight:500;padding:8px 14px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s">Cómo funciona</a></li>
     <li><a href="${r('para-padres.html')}"     style="text-decoration:none;color:rgba(255,255,255,.75);font-size:.84rem;font-weight:500;padding:8px 14px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s">Para familias</a></li>
+    <li><a href="${r('guias/')}"              style="text-decoration:none;color:rgba(255,255,255,.75);font-size:.84rem;font-weight:500;padding:8px 14px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s">Guías</a></li>
     <li><a href="${r('para-profesores.html')}" style="text-decoration:none;color:rgba(255,255,255,.75);font-size:.84rem;font-weight:500;padding:8px 14px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s">Para profesores</a></li>
     <li><a href="${r('contacto.html')}"        style="text-decoration:none;color:rgba(255,255,255,.75);font-size:.84rem;font-weight:500;padding:8px 14px;border-bottom:1px solid transparent;transition:color .2s,border-color .2s">Contacto</a></li>
     <li><a href="${r('pages/login.html')}" class="nav-cta" style="display:inline-block;background:#e8a030;color:#0f1f3d;font-weight:700;font-size:.84rem;padding:8px 20px;border-radius:2px;text-decoration:none;transition:background .2s">Acceder</a></li>
@@ -51,6 +48,7 @@
 <div id="mobileMenu" class="mobile-menu" style="display:none;position:fixed;top:70px;left:0;right:0;bottom:0;z-index:300;background:#0f1f3d;flex-direction:column;padding:32px 5vw;gap:6px;overflow-y:auto">
   <a href="${r('como-funciona.html')}"   data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Cómo funciona</a>
   <a href="${r('para-padres.html')}"     data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para familias</a>
+  <a href="${r('guias/')}"              data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Guías</a>
   <a href="${r('para-profesores.html')}" data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Para profesores</a>
   <a href="${r('contacto.html')}"        data-mobile-close style="text-decoration:none;color:rgba(255,255,255,.8);font-size:1.05rem;font-weight:500;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.07);display:block">Contacto</a>
   <a href="${r('pages/login.html')}" class="m-cta" data-mobile-close style="display:inline-block;margin-top:12px;background:#e8a030;color:#0f1f3d;font-weight:700;font-size:1rem;padding:14px 20px;border-radius:2px;text-align:center;text-decoration:none">Acceder</a>
@@ -69,16 +67,17 @@
         </span>
       </div>
       <p style="font-size:.875rem;line-height:1.8;max-width:320px">
-        Conectamos familias y estudiantes con profesores particulares en España, con clases presenciales y online según disponibilidad.
+        Seleccionamos profesores particulares para clases presenciales en Madrid y clases online en toda España.
       </p>
     </div>
     <div>
       <h3 style="color:#fff;font-weight:700;margin-bottom:16px;font-size:.9rem;text-transform:uppercase;letter-spacing:.06em">Clases</h3>
       <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px">
-        <li><a href="${r('clases-particulares/matematicas-madrid.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Matemáticas</a></li>
-        <li><a href="${r('clases-particulares/ingles-madrid.html')}"       style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Inglés</a></li>
-        <li><a href="${r('clases-particulares/bachillerato-madrid.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Bachillerato</a></li>
-        <li><a href="${r('clases-particulares/selectividad-madrid.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Selectividad (EBAU)</a></li>
+        <li><a href="${r('clases-particulares/matematicas-madrid.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Matemáticas en Madrid</a></li>
+        <li><a href="${r('clases-particulares/ingles.html')}"             style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Inglés online</a></li>
+        <li><a href="${r('clases-particulares/bachillerato-madrid.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Bachillerato en Madrid</a></li>
+        <li><a href="${r('clases-particulares/selectividad-madrid.html')}" style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">EBAU en Madrid</a></li>
+        <li><a href="${r('guias/')}"                                     style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Guías para familias</a></li>
         <li><a href="${r('clases-particulares/')}"                         style="text-decoration:none;color:rgba(255,255,255,.65);font-size:.875rem;transition:color .2s">Ver todas →</a></li>
       </ul>
     </div>

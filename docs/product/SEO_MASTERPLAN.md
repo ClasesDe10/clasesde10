@@ -1,6 +1,6 @@
 # SEO_MASTERPLAN - ClasesDe10
 
-Actualizado: 2026-06-16
+Actualizado: 2026-08-21
 
 ## Tesis SEO
 
@@ -50,36 +50,39 @@ ClasesDe10 no debe competir de frente como marketplace nacional generico. Debe g
 - casos de mejora.
 - guias para padres.
 
-## Paginas programaticas candidatas
+## Arquitectura publicada
 
-Prioridad alta:
+Prioridad local alta:
 
-- `/clases-particulares/matematicas-eso-madrid.html`
-- `/clases-particulares/matematicas-bachillerato-madrid.html`
-- `/clases-particulares/ingles-primaria-madrid.html`
-- `/clases-particulares/fisica-bachillerato-madrid.html`
-- `/clases-particulares/quimica-bachillerato-madrid.html`
-- `/clases-particulares/selectividad-matematicas-madrid.html`
+- `/clases-particulares/madrid`
+- `/clases-particulares/matematicas-madrid`
+- `/clases-particulares/primaria-madrid`
+- `/clases-particulares/eso-madrid`
+- `/clases-particulares/bachillerato-madrid`
+- `/clases-particulares/selectividad-madrid`
+- `/clases-particulares/profesor-a-domicilio-madrid`
 
-Prioridad media:
+Autoridad editorial inicial:
 
-- Materia + barrio.
-- Etapa + barrio.
-- Materia + online.
-- Materia + domicilio.
+- Cómo elegir profesor particular.
+- Profesor a domicilio u online.
+- Cómo recuperar Matemáticas en ESO.
+- Cómo preparar EBAU con profesor particular.
+
+Se han consolidado las antiguas paginas de nueve ciudades sin oferta presencial demostrada. España se cubre online y Madrid presencialmente según zona y disponibilidad.
 
 ## Estrategia 12 meses
 
 1. Consolidar paginas actuales y medir indexacion.
-2. Crear 20 paginas de alta intencion materia+etapa.
-3. Crear 10 guias para padres con captacion.
-4. Crear paginas locales para 8 zonas de Madrid.
+2. Usar Search Console y demanda interna para elegir el siguiente cruce materia+etapa.
+3. Ampliar guias solo con preguntas reales de familias y revision humana.
+4. Crear paginas de barrios o municipios únicamente con oferta, demanda y contenido propios.
 5. Generar FAQ/schema por pagina.
 6. Medir conversion por cluster.
 
 ## Estrategia 36 meses
 
-1. Expandir a 150-300 paginas programaticas con control de calidad.
+1. Expandir el inventario editorial únicamente cuando cada URL responda una intención diferente y demostrada.
 2. Crear hub de recursos por curso.
 3. Crear perfiles publicos seleccionados de profesores verificados.
 4. Publicar casos reales anonimizados.
@@ -96,6 +99,8 @@ Prioridad media:
 
 - No generar paginas thin.
 - No crear paginas locales sin propuesta local.
+- No publicar cifras, reseñas, precios o disponibilidad sin una fuente propia verificable.
+- No abrir un nuevo cruce solo por volumen teorico: exigir demanda o impresiones reales.
 - No indexar dashboards/auth/offline.
 - Mantener canonical unico por URL.
 - Usar datos estructurados solo cuando representen contenido real.

@@ -55,6 +55,7 @@
     "audit:product-ux:command": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/product-ux-command-palette-smoke.playwright.js",
     "audit:product-ux:polish": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/product-ux-polish-smoke.playwright.js",
     "audit:seo:public": "node scripts/seo-production-audit.mjs",
+    "audit:seo:http": "node scripts/seo-http-production-audit.mjs",
     "audit:seo:vitals": "node scripts/seo-web-vitals-production.mjs",
     "audit:ux:admin": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/mobile-admin-login.playwright.js scripts/ux-flow-audit.playwright.js",
     "audit:ux:public": "node scripts/run-playwright-cli-function.mjs --url https://clasesde10.com scripts/ux-flow-audit.playwright.js",
@@ -162,7 +163,8 @@
     "test:family:onboarding-assisted:production": "node scripts/run-with-firebase-cli-adc.mjs node scripts/assisted-family-full-production-smoke.mjs",
     "smoke:family:public-request:production": "node scripts/public-family-request-production-smoke.mjs",
     "test:auth:linking:production": "node scripts/run-with-firebase-cli-adc.mjs node scripts/account-linking-production-smoke.mjs",
-    "seo:generate": "node clases-particulares/_generar-paginas.js"
+    "seo:generate": "node clases-particulares/_generar-paginas.js",
+    "seo:submit:sitemap": "node scripts/run-with-firebase-cli-adc.mjs node scripts/google-search-console-submit.mjs"
   },
   "dependencies": {
     "firebase-admin": "^13.10.0"
