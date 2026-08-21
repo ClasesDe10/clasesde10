@@ -84,6 +84,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-2.0-flash
           GOOGLE_MAPS_ROUTES_API_KEY: ${{ secrets.GOOGLE_MAPS_ROUTES_API_KEY }}
+          GEOAPIFY_API_KEY: ${{ secrets.GEOAPIFY_API_KEY }}
           ALLOW_QUOTA_EXHAUSTED: "true"
           SYSTEM_JOB_LIMIT: 25
           AUTOMATION_LIMIT: 25

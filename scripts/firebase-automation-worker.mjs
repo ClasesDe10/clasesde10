@@ -23,6 +23,7 @@ import {
   rankTeachersForRequest,
 } from '../js/ai-engine.js';
 import { computeGoogleRoutesForTeachers } from './google-routes-provider.mjs';
+import { computeBestFreeRoutesForTeachers } from './alternative-routes-provider.mjs';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -201,6 +202,7 @@ const PAYMENT_OVERDUE_ESCALATION_STEPS = Object.freeze([
 let automationRulesCache = { expiresAt: 0, rules: [] };
 let platformConfigCache = { expiresAt: 0, config: {} };
 let platformConfigRuntime = {};
+let googleRoutesCircuitStatus = '';
 let workerNotificationSettingsCache = { expiresAt: 0, settings: null };
 
 function clean(value, max = 500) {
@@ -2339,16 +2341,16 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     limit: 10,
     minScore: 25,
   });
-  const routeEnrichment = await enrichMatchingShortlistWithGoogleRoutes(
+  const routeEnrichment = await enrichMatchingShortlistWithRoutes(
     enrichedRequest,
     teachersWithSignals,
     preliminaryCandidates,
     stats,
   );
   const shortlistedIds = new Set(preliminaryCandidates.map((candidate) => clean(candidate.teacherUid, 180)));
-  const exactRankingPool = routeEnrichment.teachers.filter((teacher) => shortlistedIds.has(clean(teacher.teacherUid || teacher.id, 180)));
+  const routeRankingPool = routeEnrichment.teachers.filter((teacher) => shortlistedIds.has(clean(teacher.teacherUid || teacher.id, 180)));
   const baseCandidates = routeEnrichment.routing.available
-    ? rankTeachersForRequest(enrichedRequest, exactRankingPool, { limit: 10, minScore: 25 })
+    ? rankTeachersForRequest(enrichedRequest, routeRankingPool, { limit: 10, minScore: 25 })
     : preliminaryCandidates;
   const routing = routeEnrichment.routing;
 
@@ -2414,6 +2416,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
         source: candidate.source || MATCHING_VERSION,
         routingProvider: candidate.locationEstimate?.provider || routing.provider,
         routingExact: candidate.locationEstimate?.exact === true,
+        routingNetworkCalculated: candidate.locationEstimate?.networkCalculated === true,
         routingComputedAt: candidate.locationEstimate?.computedAt || routing.computedAt || '',
         aiAdjustment: candidate.aiAdjustment || 0,
         rank: index + 1,
@@ -2442,6 +2445,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       routingProvider: routing.provider,
       routingStatus: routing.status,
       routingExactCandidates: routing.exactCandidates,
+      routingCalculatedCandidates: routing.calculatedCandidates,
       matchDecision: decisionSupport,
       matchQuality: decisionSupport.quality,
       matchConfidenceScore: decisionSupport.confidenceScore,
@@ -2475,7 +2479,10 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     routingProvider: routing.provider,
     routingStatus: routing.status,
     routingExactCandidates: routing.exactCandidates,
+    routingCalculatedCandidates: routing.calculatedCandidates,
     routingBillableElements: routing.billableElements,
+    routingFreeCredits: routing.freeCredits,
+    routingFreeRequests: routing.freeRequests,
     activeMatchingStatus: activeMatchingPlan.status,
     activeMatchingPriority: activeMatchingPlan.priority,
   });
@@ -3999,7 +4006,7 @@ async function processUnmarkedClasses(db, stats) {
   }
 }
 
-async function enrichMatchingShortlistWithGoogleRoutes(enrichedRequest, teachers, preliminaryCandidates, stats) {
+async function enrichMatchingShortlistWithRoutes(enrichedRequest, teachers, preliminaryCandidates, stats) {
   const requestProfile = getMatchingRequestProfile(enrichedRequest);
   const requestModality = lower(requestProfile.modality);
   if (requestModality.includes('online') && !/(presencial|domicilio)/.test(requestModality)) {
@@ -4015,14 +4022,15 @@ async function enrichMatchingShortlistWithGoogleRoutes(enrichedRequest, teachers
       },
     };
   }
-  if (dryRun || runtimeBoolean('matching.googleRoutesEnabled', true) === false) {
+  if (dryRun) {
     return {
       teachers,
       routing: {
-        provider: 'google_routes',
-        status: dryRun ? 'dry_run_skipped' : 'disabled',
+        provider: 'route_cascade',
+        status: 'dry_run_skipped',
         available: false,
         exactCandidates: 0,
+        calculatedCandidates: 0,
         billableElements: 0,
         errors: [],
       },
@@ -4033,16 +4041,82 @@ async function enrichMatchingShortlistWithGoogleRoutes(enrichedRequest, teachers
     .map((candidate) => clean(candidate.teacherUid, 180))
     .filter(Boolean));
   const shortlist = teachers.filter((teacher) => shortlistIds.has(clean(teacher.teacherUid || teacher.id, 180)));
-  const result = await computeGoogleRoutesForTeachers({
-    origin: getMatchingRequestProfile(enrichedRequest),
-    teachers: shortlist,
-    credential: admin.app().options.credential,
-    apiKey: process.env.GOOGLE_MAPS_ROUTES_API_KEY || '',
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || DEFAULT_PROJECT_ID,
-    maxDestinations: runtimeNumber('matching.googleRoutesMaxCandidates', 10, 1, 25),
-  });
-  stats.googleRoutesElements = Number(stats.googleRoutesElements || 0) + Number(result.billableElements || 0);
-  stats.googleRoutesExactCandidates = Number(stats.googleRoutesExactCandidates || 0) + Number(result.byTeacher?.size || 0);
+  const maxDestinations = runtimeNumber('matching.googleRoutesMaxCandidates', 10, 1, 25);
+  const origin = getMatchingRequestProfile(enrichedRequest);
+  const googleEnabled = runtimeBoolean('matching.googleRoutesEnabled', true) !== false && !googleRoutesCircuitStatus;
+  const googleResult = googleEnabled
+    ? await computeGoogleRoutesForTeachers({
+      origin,
+      teachers: shortlist,
+      credential: admin.app().options.credential,
+      apiKey: process.env.GOOGLE_MAPS_ROUTES_API_KEY || '',
+      projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || DEFAULT_PROJECT_ID,
+      maxDestinations,
+    })
+    : {
+      available: false,
+      provider: 'google_routes',
+      status: googleRoutesCircuitStatus ? `circuit_open_${googleRoutesCircuitStatus}` : 'disabled',
+      errors: [],
+      byTeacher: new Map(),
+      billableElements: 0,
+    };
+  stats.googleRoutesElements = Number(stats.googleRoutesElements || 0) + Number(googleResult.billableElements || 0);
+  stats.googleRoutesExactCandidates = Number(stats.googleRoutesExactCandidates || 0) + Number(googleResult.byTeacher?.size || 0);
+  if (['configuration_required', 'credentials_unavailable'].includes(googleResult.status)) {
+    googleRoutesCircuitStatus = googleResult.status;
+  }
+
+  const googleIds = new Set(googleResult.byTeacher?.keys?.() || []);
+  const remainingTeachers = shortlist.filter((teacher) => !googleIds.has(clean(teacher.teacherUid || teacher.id, 180)));
+  const freeFallbackEnabled = runtimeBoolean('matching.freeRoutesFallbackEnabled', true) !== false;
+  const fallbackResult = freeFallbackEnabled && remainingTeachers.length
+    ? await computeBestFreeRoutesForTeachers({
+      origin,
+      teachers: remainingTeachers,
+      apiKey: process.env.GEOAPIFY_API_KEY || '',
+      maxDestinations,
+    })
+    : {
+      available: false,
+      provider: 'free_route_cascade',
+      status: freeFallbackEnabled ? 'not_required' : 'disabled',
+      errors: [],
+      byTeacher: new Map(),
+      credits: 0,
+      requests: 0,
+    };
+  stats.geoapifyCredits = Number(stats.geoapifyCredits || 0) + Number(fallbackResult.credits || 0);
+  stats.freeRoutesRequests = Number(stats.freeRoutesRequests || 0) + Number(fallbackResult.requests || 0);
+  stats.freeRoutesCandidates = Number(stats.freeRoutesCandidates || 0) + Number(fallbackResult.byTeacher?.size || 0);
+
+  const byTeacher = new Map(fallbackResult.byTeacher || []);
+  (googleResult.byTeacher || new Map()).forEach((value, key) => byTeacher.set(key, value));
+  const routeProviders = [...new Set([...byTeacher.values()].map((item) => clean(item.provider, 80)).filter(Boolean))];
+  const shortlistById = new Map(shortlist.map((teacher) => [clean(teacher.teacherUid || teacher.id, 180), teacher]));
+  const exactCandidates = [...byTeacher.entries()].filter(([teacherUid, item]) => {
+    const teacher = shortlistById.get(teacherUid) || {};
+    const carValue = lower(teacher.hasCar ?? teacher.tiene_coche ?? teacher.carAvailable ?? teacher.vehiculo_propio);
+    const hasCar = teacher.hasCar === true || teacher.tiene_coche === true || ['si', 'sí', 'true', '1'].includes(carValue);
+    return item.exact === true
+      && item.routes?.walking
+      && item.routes?.transit
+      && (!hasCar || item.routes?.driving);
+  }).length;
+  const result = {
+    available: byTeacher.size > 0,
+    provider: routeProviders.length > 1 ? 'route_cascade' : routeProviders[0] || 'route_cascade',
+    status: byTeacher.size
+      ? googleResult.available && fallbackResult.available ? 'ready_with_fallback'
+        : googleResult.available ? googleResult.status
+          : `free_fallback_${fallbackResult.status}`
+      : 'routes_unavailable',
+    byTeacher,
+    computedAt: googleResult.computedAt || fallbackResult.computedAt || '',
+    billableElements: Number(googleResult.billableElements || 0),
+    exactCandidates,
+    errors: [...(googleResult.errors || []), ...(fallbackResult.errors || [])].map((error) => clean(error, 300)).slice(0, 5),
+  };
   const enrichedTeachers = teachers.map((teacher) => {
     const teacherUid = clean(teacher.teacherUid || teacher.id, 180);
     const routeEstimate = result.byTeacher?.get(teacherUid);
@@ -4051,13 +4125,18 @@ async function enrichMatchingShortlistWithGoogleRoutes(enrichedRequest, teachers
   return {
     teachers: enrichedTeachers,
     routing: {
-      provider: 'google_routes',
+      provider: result.provider,
       status: result.status,
       available: result.available === true,
-      exactCandidates: Number(result.byTeacher?.size || 0),
+      providers: routeProviders,
+      exactCandidates: Number(result.exactCandidates || 0),
+      calculatedCandidates: Number(result.byTeacher?.size || 0),
       billableElements: Number(result.billableElements || 0),
+      freeCredits: Number(fallbackResult.credits || 0),
+      freeRequests: Number(fallbackResult.requests || 0),
       computedAt: result.computedAt || '',
-      errors: (result.errors || []).map((error) => clean(error, 300)).slice(0, 3),
+      fallbackFrom: googleResult.available ? '' : `${googleResult.provider}:${googleResult.status}`,
+      errors: (result.errors || []).map((error) => clean(error, 300)).slice(0, 5),
     },
   };
 }

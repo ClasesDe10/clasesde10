@@ -5,7 +5,7 @@ async (page) => {
   await page.addStyleTag({ url: `${origin}/css/dashboard.css?v=20260821-google-routes-v2` });
 
   const result = await page.evaluate(async () => {
-    const engine = await import('/js/ai-engine.js?v=20260821-google-routes-v2');
+    const engine = await import('/js/ai-engine.js?v=20260821-route-cascade-v3');
     const request = {
       materia: 'Matematicas',
       curso: '4º ESO',
@@ -72,16 +72,16 @@ async (page) => {
         <span class="section-eyebrow">Matching presencial</span>
         <h1>Comparación de desplazamiento</h1>
         <section class="card" style="margin-top:18px"><div class="card-body">
-          <h2 style="margin-top:0">Ruta exacta</h2>
+          <h2 style="margin-top:0">Ruta calculada</h2>
           <div style="display:flex;gap:7px;flex-wrap:wrap">${renderOptions(exact)}</div>
           <p><strong>Mejor opción:</strong> ${exact.recommendedMode}</p>
-          <span class="badge badge-success">Ruta exacta</span>
+          <span class="badge badge-success">Ruta calculada</span>
           <span translate="no" style="font-family:Roboto,Arial,sans-serif;font-weight:400;font-size:.75rem;color:#5e5e5e">Google Maps</span>
         </div></section>
         <section class="card" style="margin-top:18px"><div class="card-body">
           <h2 style="margin-top:0">Fallback transparente</h2>
           <div style="display:flex;gap:7px;flex-wrap:wrap">${renderOptions(estimated)}</div>
-          <span class="badge badge-warning">Ruta estimada · Maps pendiente</span>
+          <span class="badge badge-warning">Estimación geográfica · revisión manual</span>
         </div></section>
       </main>`;
     return {
@@ -93,18 +93,18 @@ async (page) => {
       noCarModes: noCar.displayOptions.map((option) => option.mode),
       estimatedExact: estimated.exact,
       estimatedModes: estimated.displayOptions.map((option) => option.mode),
-      adminMarkers: ['Ruta exacta', 'GMP-attribution', 'Ruta estimada · Maps pendiente', 'MATCHING_VERSION'].every((marker) => adminSource.includes(marker)),
-      pwaV100: serviceWorkerSource.includes('clasesde10-pwa-v100'),
+      adminMarkers: ['Ruta calculada', 'GMP-attribution', 'Red viaria por centro de CP', 'MATCHING_VERSION'].every((marker) => adminSource.includes(marker)),
+      pwaV107: serviceWorkerSource.includes('clasesde10-pwa-v107'),
     };
   });
 
-  if (result.version !== 'professional_matching_v6_google_routes') throw new Error(`Unexpected matching version: ${result.version}`);
+  if (result.version !== 'professional_matching_v7_route_cascade') throw new Error(`Unexpected matching version: ${result.version}`);
   if (!result.exact || result.provider !== 'google_routes') throw new Error('Exact Google route was not consumed by the matching engine.');
   if (result.recommendedMode !== 'walking') throw new Error(`Walking should win the close-route comparison, got ${result.recommendedMode}.`);
   if (result.exactModes.join(',') !== 'walking,transit,driving') throw new Error(`Unexpected exact modes: ${result.exactModes.join(',')}`);
   if (result.noCarModes.includes('driving')) throw new Error('Driving must be excluded when the teacher has no car.');
   if (result.estimatedExact || !result.estimatedModes.includes('walking')) throw new Error('Fallback must remain estimated and include walking.');
-  if (!result.adminMarkers || !result.pwaV100) throw new Error('Published admin/PWA markers are incomplete.');
+  if (!result.adminMarkers || !result.pwaV107) throw new Error('Published admin/PWA markers are incomplete.');
 
   const desktopScreenshot = 'output/playwright/google-routes-matching-production.png';
   await page.screenshot({ path: desktopScreenshot, scale: 'css', fullPage: true });

@@ -13,10 +13,10 @@ import {
 import {
   buildMobilityEstimate,
   formatMobilityEstimate,
-} from './geo-distance-engine.js?v=20260821-google-routes-v2';
+} from './geo-distance-engine.js?v=20260821-route-cascade-v3';
 import { buildTeacherTrustProfile } from './trust-engine.js';
 
-export const MATCHING_VERSION = 'professional_matching_v6_google_routes';
+export const MATCHING_VERSION = 'professional_matching_v7_route_cascade';
 export const AI_FEATURES_VERSION = 'impact_ai_v1';
 export const ACTIVE_MATCHING_VERSION = 'active_matching_v1';
 
@@ -712,7 +712,13 @@ function scoreLocation(requestProfile, teacherProfile) {
   const estimate = estimateTravelForMatch(requestProfile, teacherProfile);
   if (estimate.available) {
     const ratio = Number.isFinite(Number(estimate.scoreRatio)) ? estimate.scoreRatio : 0.18;
-    const reasons = [`Desplazamiento ${estimate.exact ? 'exacto con Google Maps' : 'estimado'}: ${estimate.detail}.`];
+    const source = estimate.providerLabel || (estimate.exact ? 'el proveedor de rutas' : 'estimacion geografica');
+    const precision = estimate.exact
+      ? `calculado con ${source}`
+      : estimate.networkCalculated
+        ? `calculado parcialmente con ${source}`
+        : 'estimado';
+    const reasons = [`Desplazamiento ${precision}: ${estimate.detail}.`];
     const risks = [...(estimate.risks || [])];
     const recommendedLabels = { walking: 'a pie', transit: 'en transporte publico', driving: 'en coche' };
     if (estimate.recommendedMode) reasons.push(`Mejor opcion presencial: ${recommendedLabels[estimate.recommendedMode] || estimate.recommendedMode}.`);

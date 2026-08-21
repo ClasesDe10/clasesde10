@@ -64,9 +64,11 @@ assert.ok(aiEngine.includes('formatTravelEstimateForDisplay'), 'Matching engine 
 assert.ok(adminDashboard.includes('formatTravelEstimateForDisplay'), 'Admin recommendations must display formatted mobility estimates');
 assert.ok(adminDashboard.includes('normalizeTravelDisplayOptions'), 'Admin recommendations must recover travel badges from legacy/partial estimates');
 assert.ok(adminDashboard.includes('normalizeMatchingRiskText'), 'Admin recommendations must normalize legacy route-risk copy');
-assert.ok(adminDashboard.includes('professional_matching_v6_google_routes') || adminDashboard.includes('MATCHING_VERSION'), 'Admin recommendations must recalculate stale pre-Google-Routes matches');
-assert.ok(adminDashboard.includes('Ruta estimada · Maps pendiente'), 'Admin recommendations must distinguish estimated routes from exact Google Maps data');
-assert.ok(adminDashboard.includes('GMP-attribution') && adminDashboard.includes('translate="no"'), 'Admin recommendations must attribute exact route content to Google Maps');
+assert.ok(adminDashboard.includes('professional_matching_v7_route_cascade') || adminDashboard.includes('MATCHING_VERSION'), 'Admin recommendations must recalculate stale pre-cascade matches');
+assert.ok(adminDashboard.includes('Estimación geográfica · revisión manual'), 'Admin recommendations must distinguish unverified geographic estimates');
+assert.ok(adminDashboard.includes('Red viaria por centro de CP · transporte público estimado'), 'Admin recommendations must identify the free OpenStreetMap fallback precision');
+assert.ok(adminDashboard.includes('openstreetmap.org/copyright') && adminDashboard.includes('openstreetmap.org/fixthemap'), 'OpenStreetMap route content must include attribution and a fix-map link');
+assert.ok(adminDashboard.includes('GMP-attribution') && adminDashboard.includes('translate="no"'), 'Admin recommendations must attribute Google route content');
 assert.ok(adminDashboard.includes('Tiene coche'), 'Admin recommendations must show car mobility state');
 assert.ok(adminDashboard.includes('Sin coche: a pie / transporte publico'), 'Admin recommendations must show walking/transit mobility without a car');
 

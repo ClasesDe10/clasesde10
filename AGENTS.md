@@ -23,6 +23,17 @@
 - Entregar siempre el resultado terminado y verificado. No trasladar al usuario pasos manuales, configuraciones o comprobaciones que el agente pueda realizar por sí mismo.
 - Si una herramienta o la plataforma muestra una autorización técnica obligatoria, solicitarla directamente mediante el mecanismo de la plataforma y continuar en cuanto esté disponible, sin convertirla en una pregunta de planificación ni pedir confirmación adicional en la conversación.
 
+# Costes, servicios externos y alternativas obligatorias
+
+- Cuando la solución ideal dependa de facturación, una suscripción, una tarjeta, créditos de pago, una cuota insuficiente, una API desactivada, credenciales no disponibles o una activación manual externa, no dejar nunca la funcionalidad simplemente «pendiente» si existe una alternativa segura y útil.
+- Antes de decidir, realizar un estudio actual, exhaustivo y profesional de las opciones razonables. Comparar como mínimo adecuación funcional, precisión, privacidad y protección de datos, términos y licencias, fiabilidad y SLA, límites y cuotas, coste presente y futuro, escalabilidad, mantenimiento, observabilidad y facilidad de sustitución.
+- Mantener preparada la integración ideal cuando aporte valor, pero implementar, probar y publicar en la misma tarea la mejor alternativa operativa disponible que se acerque al resultado solicitado. Una dependencia de pago o un bloqueo externo no constituye por sí solo un estado final válido.
+- Priorizar, por este orden: recursos ya contratados y sin coste incremental; planes gratuitos aptos para producción; proveedores abiertos o infraestructura propia proporcionada al volumen real; y, por último, un fallback determinista degradado. No iniciar cargos, contratar planes ni aceptar compromisos económicos sin autorización expresa para ese gasto concreto.
+- Diseñar una cascada automática entre proveedores cuando sea viable: usar la opción de mayor calidad disponible, detectar fallos de configuración, cuota o servicio, cambiar al siguiente proveedor sin interrumpir el flujo y conservar métricas suficientes para operar y auditar la decisión.
+- Si falta una credencial gratuita que el agente no puede obtener sin crear una cuenta externa, dejar su integración preparada, pero publicar además una capa que funcione sin esa credencial. No trasladar al usuario un paso manual como única solución.
+- Ser estricto con la precisión declarada: no llamar «exacto» a un cálculo aproximado, no atribuir datos a un proveedor que no los generó y exponer en el panel la fuente, el nivel de precisión y cualquier modalidad estimada. Un fallback incompleto debe permitir revisión manual y nunca descartar silenciosamente una opción por datos no comprobados.
+- Documentar el estudio, la alternativa elegida, sus límites, la ruta de mejora y las pruebas de conmutación. Añadir pruebas que demuestren tanto el proveedor principal como el fallback y verificar en producción que el flujo continúa cuando el servicio ideal no está disponible.
+
 # Continuidad, interrupciones y cola de trabajo
 
 - Una respuesta parcial o la finalización de una petición reciente no implica que haya terminado la cola completa del hilo. Antes de cerrar una tarea, revisar `docs/operations/WORK_QUEUE.md` y continuar con el siguiente elemento pendiente.

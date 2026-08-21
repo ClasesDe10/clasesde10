@@ -173,9 +173,9 @@ const farCarTeacher = {
   zona: 'Usera',
 };
 const farCarMatch = scoreTeacherForRequest(presencialRequest, farCarTeacher);
-assert.equal(farCarMatch.assignable, false);
-assert.ok(farCarMatch.hardBlocks.some((item) => item.includes('Ninguna ruta presencial')));
-assert.ok(farCarMatch.locationEstimate.hardDistanceRisk);
+assert.equal(farCarMatch.locationEstimate.hardDistanceRisk, false);
+assert.ok(!farCarMatch.hardBlocks.some((item) => item.includes('Ninguna ruta presencial')));
+assert.ok(farCarMatch.locationEstimate.risks.some((item) => item.includes('revision manual')), 'An unverified geographic estimate must never discard a teacher automatically.');
 
 const rawTravel = estimateTravelForMatch(presencialRequest, carTeacher);
 assert.equal(rawTravel.available, true);

@@ -15,7 +15,7 @@ const [auth, firebaseAuth, login, admin, professor, family, css, serviceWorker] 
 ]);
 
 for (const [role, dashboard] of [['admin', admin], ['profesor', professor], ['familia', family]]) {
-  assert.match(dashboard, /<button class="sidebar-logout" id="btn-logout">[\s\S]*?Cerrar sesión[\s\S]*?<\/button>/, `${role}: the logout button must remain visible and semantic.`);
+  assert.match(dashboard, /<button class="sidebar-logout" id="btn-logout"[^>]*>[\s\S]*?Cerrar sesión[\s\S]*?<\/button>/, `${role}: the logout button must remain visible and semantic, including when persistent panel-mode attributes are present.`);
   assert.match(dashboard, /auth-provider\.js\?v=20260815-logout-r1/, `${role}: the dashboard must load the hardened auth revision.`);
   assert.match(dashboard, /getElementById\('btn-logout'\)\.addEventListener\('click', async \(event\) => \{[\s\S]*?await logout\(event\);/, `${role}: the button must await the shared logout flow.`);
   assert.match(dashboard, /No se pudo cerrar la sesión/, `${role}: a failed sign-out must provide visible feedback.`);

@@ -1358,7 +1358,7 @@ import {
   writeBatch,
 } from 'https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js';
 import { firebaseDb } from '../../js/firebase-client.js?v=20260627-domain-auth';
-import { MATCHING_VERSION, buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260821-google-routes-v2';
+import { MATCHING_VERSION, buildActiveMatchingPlan, buildMatchingDecisionSupport, buildTeacherMatchingSignals, evaluateTeacherProfile, formatTravelEstimateForDisplay, rankTeachersForRequest, summarizeTeacherProfile } from '../../js/ai-engine.js?v=20260821-route-cascade-v3';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -7553,8 +7553,12 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
       : '';
     const travelConfidence = travelEstimate?.available
       ? travelEstimate.exact === true && travelEstimate.provider === 'google_routes'
-        ? '<span class="badge badge-success">Ruta exacta</span><span class="GMP-attribution" translate="no" style="font-family:Roboto,Arial,sans-serif;font-style:normal;font-weight:400;font-size:.75rem;letter-spacing:normal;white-space:nowrap;color:#5e5e5e">Google Maps</span>'
-        : '<span class="badge badge-warning">Ruta estimada · Maps pendiente</span>'
+        ? '<span class="badge badge-success">Ruta calculada</span><span class="GMP-attribution" translate="no" style="font-family:Roboto,Arial,sans-serif;font-style:normal;font-weight:400;font-size:.75rem;letter-spacing:normal;white-space:nowrap;color:#5e5e5e">Google Maps</span>'
+        : travelEstimate.exact === true
+          ? `<span class="badge badge-success">Ruta calculada</span><span class="badge badge-gray">${sanitize(travelEstimate.providerLabel || 'Proveedor de rutas')}</span>`
+          : travelEstimate.provider === 'openstreetmap_osrm'
+            ? '<span class="badge badge-warning">Red viaria por centro de CP · transporte público estimado</span><a href="https://www.openstreetmap.org/copyright" rel="noopener noreferrer" target="_blank" style="font-size:.75rem">© OpenStreetMap</a><a href="https://www.openstreetmap.org/fixthemap" rel="noopener noreferrer" target="_blank" style="font-size:.75rem">Corregir el mapa</a>'
+            : '<span class="badge badge-warning">Estimación geográfica · revisión manual</span>'
       : '';
     const walkingWarning = travelEstimate?.walkingRouteWarning
       ? `<div style="margin-top:5px;color:var(--gray-mid);font-size:.75rem">${sanitize(travelEstimate.walkingRouteWarning)}</div>`
@@ -7579,9 +7583,10 @@ function renderAsignarMatches(matches, error, decisionSupport = null, activeMatc
         };
         return `<span class="badge badge-gray" title="${sanitize(value.detail || '')}">${labels[key] || key}: ${Math.round(Number(value.points))}/${Math.round(Number(value.max || 0))}</span>`;
       }).join(' ');
+    const routeSourceLabel = travelEstimate?.providerLabel ? ` + ${travelEstimate.providerLabel}` : '';
     const sourceLabel = String(m.aiMode || m.source || m.matchingVersion || '').includes('gemini')
-      ? `IA Gemini + scoring${travelEstimate?.exact ? ' + Google Maps' : ''}`
-      : `Scoring explicable${travelEstimate?.exact ? ' + Google Maps' : ''}`;
+      ? `IA Gemini + scoring${routeSourceLabel}`
+      : `Scoring explicable${routeSourceLabel}`;
     return `
       <div data-ai-match="teacher" style="border-bottom:1px solid rgba(0,0,0,.08);padding:10px 0">
         <div style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap">
