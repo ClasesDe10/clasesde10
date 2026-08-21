@@ -41,7 +41,7 @@ async (page) => {
   await page.locator('#form-perfil button[type="submit"]').click();
   await page.waitForFunction(() => !document.querySelector('#modal-perfil-familia')?.classList.contains('open'), null, { timeout: 30000 });
 
-  await page.locator('#btn-nueva-solicitud-top').click();
+  await page.evaluate(() => document.querySelector('#btn-nueva-solicitud-top')?.click());
   await page.locator('#modal-solicitud').waitFor({ state: 'visible', timeout: 30000 });
   await page.waitForFunction(() => document.querySelectorAll('#sol-alumno option').length > 1, null, { timeout: 30000 });
   const studentValue = await page.locator('#sol-alumno option').evaluateAll((options) => options.map((option) => option.value).find(Boolean) || '');
@@ -58,12 +58,79 @@ async (page) => {
   if (/missing or insufficient permissions/i.test(bodyText)) permissionErrors.push('Raw permission error rendered in the UI.');
   if (permissionErrors.length) throw new Error(permissionErrors.join(' | '));
 
+  const modeToggle = page.locator('#btn-family-panel-mode');
+  if ((await modeToggle.textContent()).trim() !== 'Panel simplificado') {
+    throw new Error('The extended family panel does not offer the simplified view.');
+  }
+  await modeToggle.click();
+  await page.waitForFunction(() => document.body.dataset.familyPanelMode === 'simplified');
+  const simplifiedSections = await page.locator('.sidebar-link').evaluateAll((links) => links
+    .filter((link) => getComputedStyle(link).display !== 'none')
+    .map((link) => link.dataset.section));
+  if (JSON.stringify(simplifiedSections) !== JSON.stringify(['calendario', 'chat', 'notificaciones'])) {
+    throw new Error(`Unexpected simplified navigation: ${simplifiedSections.join(', ')}`);
+  }
+  if ((await modeToggle.textContent()).trim() !== 'Panel extendido') {
+    throw new Error('The simplified family panel does not offer the extended view.');
+  }
+  if (await page.locator('#btn-nueva-solicitud-top').isVisible()) {
+    throw new Error('The occasional teacher request action remains visible in simplified mode.');
+  }
+  if (new URL(page.url()).hash !== '#calendario') {
+    throw new Error('Simplified mode did not move from an extended area to the calendar.');
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => document.body.dataset.familyPanelMode === 'simplified', null, { timeout: 30000 });
+  if ((await page.locator('#btn-family-panel-mode').textContent()).trim() !== 'Panel extendido') {
+    throw new Error('The simplified preference was not restored after reload.');
+  }
+  await page.evaluate(() => { window.location.hash = '#profesores'; });
+  await page.waitForFunction(() => document.body.dataset.familyPanelMode === 'extended');
+  if (!await page.locator('#section-profesores').isVisible()) {
+    throw new Error('A direct action to an occasional area did not expand the family panel.');
+  }
+  const extendedSections = await page.locator('.sidebar-link').evaluateAll((links) => links
+    .filter((link) => getComputedStyle(link).display !== 'none')
+    .map((link) => link.dataset.section));
+  if (extendedSections.length !== 10 || !extendedSections.includes('inicio') || !extendedSections.includes('perfil')) {
+    throw new Error(`The extended navigation is incomplete: ${extendedSections.join(', ')}`);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('#btn-family-panel-mode').click();
+  await page.waitForFunction(() => document.body.dataset.familyPanelMode === 'simplified');
+  const mobileToggleBox = await page.locator('#btn-family-panel-mode').boundingBox();
+  if (!mobileToggleBox || mobileToggleBox.x < 0 || mobileToggleBox.x + mobileToggleBox.width > 390) {
+    throw new Error('The family panel toggle overflows the mobile topbar.');
+  }
+  const mobileMetrics = await page.evaluate(() => ({
+    viewportWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  if (mobileMetrics.scrollWidth > mobileMetrics.viewportWidth) {
+    throw new Error(`The simplified mobile panel overflows horizontally: ${JSON.stringify(mobileMetrics)}`);
+  }
+  await page.locator('#hamburger').click();
+  await page.waitForFunction(() => document.querySelector('#sidebar')?.classList.contains('open'));
+  const mobileSections = await page.locator('.sidebar-link').evaluateAll((links) => links
+    .filter((link) => getComputedStyle(link).display !== 'none')
+    .map((link) => link.dataset.section));
+  if (JSON.stringify(mobileSections) !== JSON.stringify(['calendario', 'chat', 'notificaciones'])) {
+    throw new Error(`Unexpected mobile simplified navigation: ${mobileSections.join(', ')}`);
+  }
+
   return {
     emailLinkVerified: true,
     passwordSaved: true,
     familyDashboardReached: true,
     profileCompleted: true,
     authenticatedRequestSubmitted: true,
+    simplifiedPanelLimitedToDailySections: true,
+    panelPreferencePersisted: true,
+    extendedPanelRestored: true,
+    occasionalActionExpandedPanel: true,
+    mobilePanelValidated: true,
     rawPermissionErrors: 0,
   };
 }

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { applicationDefault, deleteApp, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { chromium } from 'playwright';
 import { normalizePublicLeadMetadata } from '../js/public-lead-metadata.js';
 
 const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'clasesde10-50add';
@@ -163,26 +163,26 @@ try {
     ...(!usingEmulators ? { linkDomain: 'clasesde10.com' } : {}),
   });
 
-  const browser = spawnSync(process.execPath, [
-    'scripts/run-playwright-cli-function.mjs',
-    '--url',
-    smokeUrl,
-    '--session',
-    `cd10-assisted-${suffix}`,
-    'scripts/assisted-family-full-flow.playwright.js',
-  ], {
-    cwd: process.cwd(),
-    encoding: 'utf8',
-    timeout: 240000,
-    env: {
-      ...process.env,
-      ASSISTED_FAMILY_EMAIL: email,
-      ASSISTED_FAMILY_LINK: emailLink,
-      ASSISTED_FAMILY_PASSWORD: password,
-    },
-  });
-  const playwrightOutput = [browser.stdout, browser.stderr].filter(Boolean).join('\n').trim();
-  assert.equal(browser.status, 0, `El recorrido Playwright falló:\n${playwrightOutput}`);
+  process.env.ASSISTED_FAMILY_EMAIL = email;
+  process.env.ASSISTED_FAMILY_LINK = emailLink;
+  process.env.ASSISTED_FAMILY_PASSWORD = password;
+  const flowSource = fs.readFileSync(
+    new URL('./assisted-family-full-flow.playwright.js', import.meta.url),
+    'utf8',
+  ).trim();
+  const runFlow = Function(`"use strict"; return (${flowSource});`)();
+  const browser = await chromium.launch({ channel: 'chrome', headless: true })
+    .catch(() => chromium.launch({ headless: true }));
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
+  let playwrightResult;
+  try {
+    await page.goto(smokeUrl, { waitUntil: 'domcontentloaded' });
+    playwrightResult = await runFlow(page);
+  } finally {
+    await browser.close();
+  }
+  const playwrightOutput = JSON.stringify(playwrightResult);
   assert.doesNotMatch(playwrightOutput, /missing or insufficient permissions/i);
 
   const activatedLead = await db.doc(`leadsPublicos/${leadId}`).get();
@@ -237,6 +237,10 @@ try {
     userFamilyStudentAndInitialRequestCreated: true,
     familyProfileCompleted: true,
     authenticatedDashboardRequestCreated: true,
+    simplifiedPanelLimitedToDailySections: playwrightResult.simplifiedPanelLimitedToDailySections,
+    panelPreferencePersisted: playwrightResult.panelPreferencePersisted,
+    occasionalActionExpandedPanel: playwrightResult.occasionalActionExpandedPanel,
+    mobilePanelValidated: playwrightResult.mobilePanelValidated,
     temporaryDataCleaned: true,
   }, null, 2));
 } finally {

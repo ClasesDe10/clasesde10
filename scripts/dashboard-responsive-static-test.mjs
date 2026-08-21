@@ -6,7 +6,8 @@ import process from 'node:process';
 const root = process.cwd();
 const failures = [];
 const cssVersion = '20260816-teacher-attendance-lock';
-const familyTeacherCssVersion = '20260821-chat-teacher-photo';
+const familyCssVersion = '20260821-family-panel-mode';
+const teacherCssVersion = '20260821-chat-teacher-photo';
 const adminCssVersion = '20260815-admin-person-context';
 
 function read(file) {
@@ -120,7 +121,8 @@ for (const config of dashboards) {
   assert(html.includes('<meta name="viewport" content="width=device-width, initial-scale=1.0">'), `${config.role}: missing viewport meta.`);
   const expectedCssVersion = config.role === 'admin'
     ? adminCssVersion
-    : ['familia', 'profesor'].includes(config.role) ? familyTeacherCssVersion : cssVersion;
+    : config.role === 'familia' ? familyCssVersion
+      : config.role === 'profesor' ? teacherCssVersion : cssVersion;
   assert(html.includes(`dashboard.css?v=${expectedCssVersion}`), `${config.role}: dashboard CSS cache version is stale.`);
   assert(html.includes('<div class="dash-layout">'), `${config.role}: missing dashboard layout shell.`);
   assert(html.includes('class="main-content"'), `${config.role}: missing main content container.`);
