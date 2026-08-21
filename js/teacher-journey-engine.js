@@ -239,8 +239,8 @@ function stageCopy(stage, context = {}) {
     },
     schedule_needed: {
       title: 'Cierra el horario de la primera clase',
-      body: `Ya hay una relacion activa${suffix}. Entra al chat, proponed fecha y al aceptarla se creara la clase automaticamente.`,
-      primary: buildAction('open_chat', 'Abrir chat', 'Coordina el horario desde el chat.', 'chat'),
+      body: `Ya hay una relación activa${suffix}. Entra en Mis alumnos y responde la propuesta familiar; al aceptarla se crearán las clases automáticamente.`,
+      primary: buildAction('open_students', 'Mis alumnos', 'Responde el horario desde la asignación.', 'alumnos'),
     },
     class_scheduled: {
       title: 'Prepara tu proxima clase',
@@ -307,7 +307,7 @@ export function buildTeacherJourneyState(input = {}) {
   if (stage !== 'payout_needed' && !payoutReady) secondaryActions.push(buildAction('open_income', 'Dia de cobro', 'Fija cuando quieres cobrar.', 'ingresos', 'secondary'));
   if (stage !== 'documents_needed' && !documentReady) secondaryActions.push(buildAction('upload_documents', 'Documentos', 'Sube validaciones.', 'documentos', 'secondary'));
   if (stage !== 'availability_needed' && !availabilityReady) secondaryActions.push(buildAction('set_availability', 'Disponibilidad', 'Actualiza franjas reales.', 'disponibilidad', 'secondary'));
-  if (relationships.length && stage !== 'schedule_needed' && stage !== 'incident_open') secondaryActions.push(buildAction('open_chat', 'Chat', 'Mensajes y horarios.', 'chat', 'secondary'));
+  if (relationships.length && stage !== 'schedule_needed' && stage !== 'incident_open') secondaryActions.push(buildAction('open_chat', 'Chat', 'Mensajes con las familias.', 'chat', 'secondary'));
   if (hasSchedule(relationships) && stage !== 'class_scheduled') secondaryActions.push(buildAction('open_calendar', 'Calendario', 'Proximas clases.', 'calendario', 'secondary'));
   if (hasStage(relationships, PAYMENT_STAGES) && stage !== 'income_pending') secondaryActions.push(buildAction('open_income', 'Ingresos', 'Cobros y Bizum.', 'ingresos', 'secondary'));
 
@@ -318,8 +318,8 @@ export function buildTeacherJourneyState(input = {}) {
     checklistItem('documents', 'Documentacion subida', documentReady, 'upload_documents'),
     checklistItem('verification', 'Verificación del perfil', verified, documentReady ? 'upload_documents' : 'upload_documents'),
     checklistItem('availability', 'Disponibilidad real definida', availabilityReady, 'set_availability'),
-    checklistItem('students', 'Alumno asignado', hasAssignedStudent(relationships), 'open_chat'),
-    checklistItem('schedule', 'Primera clase programada', hasSchedule(relationships), 'open_calendar'),
+    checklistItem('students', 'Alumno asignado', hasAssignedStudent(relationships), 'open_students'),
+    checklistItem('schedule', 'Primera clase programada', hasSchedule(relationships), 'open_students'),
     checklistItem('closure', 'Clases confirmadas y cobros controlados', hasClassHistory(relationships) && !hasStage(relationships, CONFIRMATION_STAGES) && !hasStage(relationships, PAYMENT_STAGES), 'confirm_class'),
   ];
   const completed = checklist.filter((item) => item.done).length;

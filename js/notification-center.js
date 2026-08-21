@@ -151,7 +151,9 @@ function sectionAction(notification = {}, role = '') {
 
   if (['schedule_proposed', 'schedule_rejected'].includes(type)) {
     if (role === 'alumno') return { section: 'calendario', label: 'Ver horario' };
-    return { section: role === 'admin' ? 'chats' : 'chat', label: 'Responder propuesta' };
+    if (role === 'familia') return { section: 'profesores', label: 'Responder horario', assignmentId: clean(payload.assignmentId || payload.chatId, 180), proposalId: clean(payload.proposalId, 180), url: `/pages/dashboard/familia.html?assignment=${encodeURIComponent(payload.assignmentId || payload.chatId || '')}#profesores` };
+    if (role === 'profesor') return { section: 'alumnos', label: 'Responder horario', assignmentId: clean(payload.assignmentId || payload.chatId, 180), proposalId: clean(payload.proposalId, 180), url: `/pages/dashboard/profesor.html?assignment=${encodeURIComponent(payload.assignmentId || payload.chatId || '')}#alumnos` };
+    return { section: 'chats', label: 'Revisar horario', assignmentId: clean(payload.assignmentId || payload.chatId, 180), proposalId: clean(payload.proposalId, 180) };
   }
   if (type === 'schedule_accepted') return { section: 'calendario', label: 'Ver horario' };
 
@@ -178,7 +180,8 @@ function sectionAction(notification = {}, role = '') {
 
   if (payload.requestId || type.startsWith('request_') || type.startsWith('matching_') || type === 'assignment_created') {
     if (role === 'admin') return { section: 'solicitudes', label: 'Gestionar solicitud' };
-    if (role === 'profesor') return { section: 'alumnos', label: 'Ver asignación' };
+    if (role === 'profesor') return { section: 'alumnos', label: 'Ver asignación', assignmentId: clean(payload.assignmentId, 180), url: `/pages/dashboard/profesor.html?assignment=${encodeURIComponent(payload.assignmentId || '')}#alumnos` };
+    if (role === 'familia' && type === 'assignment_created') return { section: 'profesores', label: 'Proponer horario', assignmentId: clean(payload.assignmentId, 180), url: `/pages/dashboard/familia.html?assignment=${encodeURIComponent(payload.assignmentId || '')}#profesores` };
     if (role === 'familia') return { section: 'solicitudes', label: 'Ver solicitud' };
     return { section: 'profesor', label: 'Ver profesor' };
   }

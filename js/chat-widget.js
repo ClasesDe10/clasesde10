@@ -1628,7 +1628,7 @@ function renderAvailabilitySummary(availability = {}, role = '') {
     </div>`;
 }
 
-function renderShell(container, role, showNotifications = true) {
+function renderShell(container, role, showNotifications = true, schedulingEnabled = false) {
   container.innerHTML = `
     <div class="chat-layout" data-chat-layout>
       <aside class="chat-list-panel">
@@ -1673,7 +1673,7 @@ function renderShell(container, role, showNotifications = true) {
         </div>
         <div class="chat-messages" data-chat-messages></div>
         <div class="chat-typing-indicator" data-chat-typing-indicator hidden aria-live="polite"></div>
-        <section class="chat-schedule-panel" data-chat-schedule-panel style="display:none"></section>
+        ${schedulingEnabled ? '<section class="chat-schedule-panel" data-chat-schedule-panel style="display:none"></section>' : ''}
         <form class="chat-compose" data-chat-form style="display:none">
           <input type="file" data-chat-file-input hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.jpg,.jpeg,.png,.webp,.gif">
           <input type="file" data-chat-image-input hidden accept="image/jpeg,image/png,image/webp,image/gif">
@@ -1766,7 +1766,7 @@ function renderSchedulePanelLegacy(container, chat, proposals, role, currentActo
   const activeProposal = proposals.find((proposal) => proposal.status === 'propuesta');
   const accepted = proposals.find((proposal) => proposal.status === 'aceptada');
   const roleAvailability = availabilityForRole(role, availability);
-  const proposalDisabled = role !== 'admin' && (availability.loading || !roleAvailability.targetSlots.length);
+  const proposalDisabled = role !== 'admin' && availability.loading;
   const disabledAttr = proposalDisabled ? 'disabled' : '';
   const proposalRows = proposals.length
     ? proposals.map((proposal) => {
@@ -1797,7 +1797,7 @@ function renderSchedulePanelLegacy(container, chat, proposals, role, currentActo
     <div class="chat-schedule-header">
       <div>
         <div class="chat-thread-title">Coordinar primera clase</div>
-        <div class="chat-thread-subtitle">${accepted ? 'Ya hay una clase creada desde el chat.' : activeProposal ? 'Hay una propuesta pendiente de respuesta.' : 'Propón fecha y hora para convertir el acuerdo en clase programada.'}</div>
+        <div class="chat-thread-subtitle">${accepted ? 'Ya hay una clase creada a partir del acuerdo.' : activeProposal ? 'Hay una propuesta pendiente de respuesta.' : 'Propón fecha y hora para convertir el acuerdo en clase programada.'}</div>
       </div>
     </div>
     ${renderAvailabilitySummary(availability, role)}
@@ -1842,8 +1842,12 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
   const accepted = proposals.find((proposal) => proposal.status === 'aceptada');
   const acceptedRecurring = proposals.find((proposal) => proposal.status === 'aceptada' && isWeeklyRecurringProposal(proposal));
   const pendingRecurring = proposals.find((proposal) => proposal.status === 'propuesta' && isWeeklyRecurringProposal(proposal));
+  const teacherWaitingFirstFamilyProposal = container.dataset.requireFamilyFirstProposal === 'true'
+    && role === 'profesor'
+    && !pendingRecurring
+    && !acceptedRecurring;
   const roleAvailability = availabilityForRole(role, availability);
-  const proposalDisabled = role !== 'admin' && (availability.loading || !roleAvailability.targetSlots.length);
+  const proposalDisabled = role !== 'admin' && availability.loading;
   const disabledAttr = proposalDisabled ? 'disabled' : '';
   const isMine = (proposal) => currentActorIds.has(clean(proposal.proposedByUid, 180)) || (role !== 'admin' && proposal.proposedByRole === role);
   const proposalRows = proposals.length
@@ -1853,6 +1857,7 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
       const statusLabel = proposal.status === 'aceptada' ? 'Aceptada'
         : proposal.status === 'rechazada' ? 'Rechazada'
           : proposal.status === 'cancelada' ? 'Cancelada'
+            : ['sustituida', 'reemplazada'].includes(proposal.status) ? 'Sustituida'
             : 'Pendiente';
       return `
         <article class="schedule-proposal ${proposal.status === 'propuesta' ? 'active' : ''}" data-schedule-proposal-id="${escapeHtml(proposal.id)}">
@@ -1864,17 +1869,19 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             <span class="badge ${proposal.status === 'aceptada' ? 'badge-success' : proposal.status === 'rechazada' ? 'badge-danger' : 'badge-warning'}">${statusLabel}</span>
-            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-cd10-ux="off" data-accept-schedule>Aceptar y crear clase</button><button class="btn btn-ghost btn-sm" type="button" data-cd10-ux="off" data-reject-schedule>Rechazar</button>' : ''}
+            ${canRespond ? '<button class="btn btn-primary btn-sm" type="button" data-cd10-ux="off" data-accept-schedule>Aceptar horario</button><button class="btn btn-outline btn-sm" type="button" data-counter-schedule>Proponer otro</button><button class="btn btn-ghost btn-sm" type="button" data-cd10-ux="off" data-reject-schedule>Rechazar</button>' : ''}
             ${proposal.status === 'propuesta' && mine ? '<span class="badge badge-info">Esperando respuesta</span>' : ''}
           </div>
         </article>`;
     }).join('')
     : '<div class="chat-empty-state">Aun no hay horarios propuestos.</div>';
 
-  const summary = acceptedRecurring
-    ? escapeHtml(scheduleProposalDisplayLabel(acceptedRecurring))
+  const summary = teacherWaitingFirstFamilyProposal
+    ? 'La familia debe enviar la primera propuesta. Después podrás aceptarla o proponer una alternativa.'
     : pendingRecurring
       ? 'Horario semanal pendiente de respuesta.'
+      : acceptedRecurring
+        ? escapeHtml(scheduleProposalDisplayLabel(acceptedRecurring))
       : accepted
         ? 'Hay una clase puntual creada desde el acuerdo.'
       : activeProposal
@@ -1882,9 +1889,12 @@ function renderSchedulePanel(container, chat, proposals, role, currentActorIds =
         : 'Acordad un horario semanal fijo y usad clases puntuales solo como excepcion.';
   const activeProposalMine = activeProposal ? isMine(activeProposal) : false;
   const canRespondActiveProposal = activeProposal && (role === 'admin' || !activeProposalMine);
-  const summaryActions = canRespondActiveProposal
+  const summaryActions = teacherWaitingFirstFamilyProposal
+    ? '<span class="badge badge-info">Esperando a la familia</span>'
+    : canRespondActiveProposal
     ? `
-        <button class="btn btn-primary btn-sm" type="button" data-focus-active-proposal>Responder propuesta</button>`
+        <button class="btn btn-primary btn-sm" type="button" data-focus-active-proposal>Responder propuesta</button>
+        <button class="btn btn-outline btn-sm" type="button" data-counter-schedule>Proponer otra hora</button>`
     : proposalDisabled && !plannerOpen
       ? `<button class="btn btn-primary btn-sm" type="button" data-open-schedule-planner="${SCHEDULE_KIND_WEEKLY}">Ver disponibilidad</button>`
       : `
@@ -1995,7 +2005,7 @@ function renderThreadHeader(container, chat, role, preference = {}, renderPerson
       ${renderChatCallActions(chat, role)}
       <button class="chat-icon-btn chat-header-utility" type="button" data-chat-toggle-thread-search title="Buscar mensajes" aria-label="Buscar en esta conversación">${chatIcon('search')}</button>
       <button class="chat-icon-btn chat-header-utility" type="button" data-chat-toggle-starred title="Mensajes destacados" aria-label="Mostrar mensajes destacados">★</button>
-      <button class="chat-icon-btn chat-header-secondary" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>
+      ${container.dataset.schedulingEnabled === 'true' ? `<button class="chat-icon-btn chat-header-secondary" type="button" data-chat-toggle-schedule title="Horario" aria-label="Horario">${chatIcon('calendar')}</button>` : ''}
       <button class="chat-icon-btn chat-alias-toggle chat-header-secondary" type="button" data-edit-chat-name title="Nombre del chat" aria-label="Nombre del chat">${chatIcon('edit')}</button>
     </div>`;
 }
@@ -2279,7 +2289,11 @@ function notificationDisplayItems(notifications = []) {
 function dashboardSectionForNotification(notification, role = '') {
   const type = clean(notification.type, 80);
   const payload = notification.payload || {};
-  if (payload.chatId || ['chat_message', 'schedule_proposed', 'schedule_accepted', 'schedule_rejected'].includes(type)) {
+  if (['schedule_proposed', 'schedule_rejected'].includes(type)) {
+    if (role === 'familia') return { section: 'profesores', assignmentId: clean(payload.assignmentId || payload.chatId, 180), proposalId: clean(payload.proposalId, 180), label: 'Responder horario' };
+    if (role === 'profesor') return { section: 'alumnos', assignmentId: clean(payload.assignmentId || payload.chatId, 180), proposalId: clean(payload.proposalId, 180), label: 'Responder horario' };
+  }
+  if (payload.chatId || ['chat_message', 'schedule_accepted'].includes(type)) {
     return { section: 'chat', panel: 'chats', chatId: clean(payload.chatId, 180), label: 'Abrir chat' };
   }
   if (payload.classId || type.startsWith('class_')) {
@@ -2293,7 +2307,8 @@ function dashboardSectionForNotification(notification, role = '') {
     return { section: 'documentos', label: 'Ver documentos' };
   }
   if (payload.requestId || type.startsWith('request_') || type === 'assignment_created') {
-    return { section: role === 'profesor' ? 'alumnos' : 'solicitudes', label: role === 'profesor' ? 'Ver alumnos' : 'Ver solicitud' };
+    if (type === 'assignment_created' && role === 'familia') return { section: 'profesores', assignmentId: clean(payload.assignmentId, 180), label: 'Proponer horario' };
+    return { section: role === 'profesor' ? 'alumnos' : 'solicitudes', assignmentId: clean(payload.assignmentId, 180), label: role === 'profesor' ? 'Ver alumnos' : 'Ver solicitud' };
   }
   if (payload.incidentId || type.includes('incident')) {
     return { section: role === 'admin' ? 'incidencias' : 'chat', panel: role === 'admin' ? '' : 'notificaciones', label: role === 'admin' ? 'Arreglar incidencia' : 'Ver aviso' };
@@ -2406,10 +2421,19 @@ export async function initChatWidget({
   showToast = () => {},
   showNotifications = true,
   renderPerson = null,
+  schedulingEnabled = false,
+  scheduleOnly = false,
+  requireFamilyFirstProposal = true,
+  scheduleMessagesEnabled = false,
 }) {
   if (!container) return;
-  renderShell(container, role, showNotifications);
+  renderShell(container, role, showNotifications, schedulingEnabled);
   container.dataset.chatRole = role;
+  container.dataset.schedulingEnabled = schedulingEnabled ? 'true' : 'false';
+  container.dataset.scheduleOnly = scheduleOnly ? 'true' : 'false';
+  container.dataset.requireFamilyFirstProposal = requireFamilyFirstProposal ? 'true' : 'false';
+  container.dataset.scheduleMessagesEnabled = scheduleMessagesEnabled ? 'true' : 'false';
+  container.classList.toggle('chat-schedule-workspace', scheduleOnly);
 
   const state = {
     chats: [],
@@ -4144,7 +4168,8 @@ export async function initChatWidget({
       if (!isCurrentSessionActive()) return;
       state.scheduleProposals = snap.docs
         .map((item) => ({ id: item.id, ...item.data() }))
-        .filter((proposal) => !isAcceptedScheduleProposal(proposal) || isAfterClassReset(proposal));
+        .filter((proposal) => !isAcceptedScheduleProposal(proposal) || isAfterClassReset(proposal))
+        .filter((proposal) => container.dataset.scheduleOnly !== 'true' || isWeeklyRecurringProposal(proposal));
       renderSchedulePanelWithActions(container, chat, state.scheduleProposals, role, currentActorIds, state.availabilityByChat[chat.id] || { loading: true });
     }, (error) => {
       handleRealtimeError('No se pudieron abrir propuestas de horario', 'Horarios no disponibles', 'No se pudieron abrir las propuestas.', error);
@@ -4239,7 +4264,7 @@ export async function initChatWidget({
           proposalId: proposalNode?.dataset.scheduleProposalId || '',
           chatId: state.selectedChat?.id || '',
         });
-        showToast('Horario no disponible', 'Recarga el chat e intentalo de nuevo.', 'warning');
+        showToast('Horario no disponible', 'Recarga este apartado e inténtalo de nuevo.', 'warning');
         return true;
       }
       if (accept) {
@@ -4624,6 +4649,24 @@ export async function initChatWidget({
       return;
     }
 
+    const counterSchedule = event.target.closest('[data-counter-schedule]');
+    if (counterSchedule && state.selectedChat) {
+      const panel = container.querySelector('[data-chat-schedule-panel]');
+      if (panel) {
+        panel.dataset.scheduleVisible = 'true';
+        panel.dataset.schedulePlannerOpen = 'true';
+        panel.dataset.scheduleKind = SCHEDULE_KIND_WEEKLY;
+        panel.dataset.counterProposalId = clean(
+          counterSchedule.closest('[data-schedule-proposal-id]')?.dataset.scheduleProposalId
+          || state.scheduleProposals?.find((proposal) => proposal.status === 'propuesta')?.id,
+          180,
+        );
+        renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
+        focusSchedulePrimaryField(panel);
+      }
+      return;
+    }
+
     const closeSchedulePlanner = event.target.closest('[data-close-schedule-planner]');
     if (closeSchedulePlanner) {
       const panel = container.querySelector('[data-chat-schedule-panel]');
@@ -4714,6 +4757,15 @@ export async function initChatWidget({
   });
 
   window.addEventListener('cd10:open-chat-planner', (event) => {
+    if (container.dataset.schedulingEnabled !== 'true') return;
+    const requestedId = clean(event.detail?.assignmentId || event.detail?.chatId, 180);
+    if (requestedId) {
+      const requestedChat = state.chats.find((chat) => (
+        chat.id === requestedId
+        || clean(chat.assignmentId || chat.asignacion_id, 180) === requestedId
+      ));
+      if (requestedChat && state.selectedChat?.id !== requestedChat.id) selectChat(requestedChat.id);
+    }
     if (!state.selectedChat) return;
     setPanel('chats');
     const panel = container.querySelector('[data-chat-schedule-panel]');
@@ -4723,6 +4775,19 @@ export async function initChatWidget({
     panel.dataset.scheduleKind = SCHEDULE_KIND_WEEKLY;
     renderSchedulePanelWithActions(container, state.selectedChat, state.scheduleProposals || [], role, currentActorIds, state.availabilityByChat[state.selectedChat.id] || {});
     setTimeout(() => focusSchedulePrimaryField(panel), 50);
+  });
+
+  window.addEventListener('cd10:open-chat-relation', (event) => {
+    if (container.dataset.scheduleOnly === 'true') return;
+    const requestedId = clean(event.detail?.assignmentId || event.detail?.chatId, 180);
+    if (!requestedId) return;
+    const requestedChat = state.chats.find((chat) => (
+      chat.id === requestedId
+      || clean(chat.assignmentId || chat.asignacion_id, 180) === requestedId
+    ));
+    if (!requestedChat) return;
+    setPanel('chats');
+    selectChat(requestedChat.id);
   });
 
   container.addEventListener('change', async (event) => {
@@ -4770,6 +4835,24 @@ export async function initChatWidget({
     event.preventDefault();
     if (!state.selectedChat) return;
     const scheduleKind = normalizeScheduleKind(scheduleForm.querySelector('[data-schedule-kind]')?.value);
+    const pendingFamilyWeeklyProposal = (state.scheduleProposals || []).some((proposal) => (
+      proposal.status === 'propuesta'
+      && proposal.proposedByRole === 'familia'
+      && isWeeklyRecurringProposal(proposal)
+    ));
+    const acceptedWeeklyProposal = (state.scheduleProposals || []).some((proposal) => (
+      proposal.status === 'aceptada' && isWeeklyRecurringProposal(proposal)
+    ));
+    if (
+      container.dataset.requireFamilyFirstProposal === 'true'
+      && role === 'profesor'
+      && scheduleKind === SCHEDULE_KIND_WEEKLY
+      && !pendingFamilyWeeklyProposal
+      && !acceptedWeeklyProposal
+    ) {
+      showToast('Esperando a la familia', 'La familia debe enviar la primera propuesta semanal. Después podrás modificarla.', 'info');
+      return;
+    }
     const selectedWeekday = normalizeScheduleWeekdayIndex(scheduleForm.querySelector('[data-schedule-weekday]')?.value);
     const horaInicio = clean(scheduleForm.querySelector('[data-schedule-start]')?.value, 8);
     const horaFin = clean(scheduleForm.querySelector('[data-schedule-end]')?.value, 8);
@@ -4804,7 +4887,8 @@ export async function initChatWidget({
       teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
       studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
     });
-    if (!availabilityValidation.valid) {
+    const provisionalWithoutCounterpartyAvailability = availabilityValidation.reason === 'counterparty_availability_missing';
+    if (!availabilityValidation.valid && !provisionalWithoutCounterpartyAvailability) {
       showToast(
         availabilityValidation.reason === 'time_conflict' ? 'Horario ocupado' : 'Fuera de disponibilidad',
         availabilityValidation.message || 'El horario no encaja con las franjas marcadas.',
@@ -4859,8 +4943,28 @@ export async function initChatWidget({
         };
         proposal.recurrenceLabel = recurrenceLabelFromFields(selectedWeekday, horaInicio, horaFin);
       }
-      await addDoc(collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones'), proposal);
-      await updateDoc(doc(firebaseDb, 'chats', state.selectedChat.id), {
+      const activeProposals = (state.scheduleProposals || []).filter((item) => item.status === 'propuesta' && isWeeklyRecurringProposal(item));
+      const counterProposalId = clean(
+        scheduleForm.closest('[data-chat-schedule-panel]')?.dataset.counterProposalId
+        || activeProposals[0]?.id,
+        180,
+      );
+      if (counterProposalId) proposal.supersedesProposalId = counterProposalId;
+      const proposalRef = doc(collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones'));
+      const proposalBatch = writeBatch(firebaseDb);
+      const supersededProposal = activeProposals.find((item) => item.id === counterProposalId) || null;
+      if (supersededProposal) {
+        proposalBatch.update(doc(firebaseDb, 'chats', state.selectedChat.id, 'programaciones', supersededProposal.id), {
+          status: 'sustituida',
+          supersededByProposalId: proposalRef.id,
+          respondedByUid: currentUid,
+          respondedByRole: role,
+          respondedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      proposalBatch.set(proposalRef, proposal);
+      proposalBatch.update(doc(firebaseDb, 'chats', state.selectedChat.id), {
         schedulingStatus: 'horario_propuesto',
         relationshipStage: 'horario_propuesto',
         relationshipStatus: 'active',
@@ -4868,11 +4972,19 @@ export async function initChatWidget({
         relationshipUpdatedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      await proposalBatch.commit();
       scheduleForm.reset();
-      await addSystemChatMessage(state.selectedChat, `${scheduleKindLabel(scheduleKind)} propuesto: ${scheduleKind === SCHEDULE_KIND_WEEKLY ? recurrenceLabelFromFields(selectedWeekday, horaInicio, horaFin) : `${formatDate(fecha)} de ${horaInicio} a ${horaFin}`}.`);
+      const schedulePanel = scheduleForm.closest('[data-chat-schedule-panel]');
+      if (schedulePanel) delete schedulePanel.dataset.counterProposalId;
+      if (container.dataset.scheduleMessagesEnabled === 'true') {
+        await addSystemChatMessage(state.selectedChat, `${scheduleKindLabel(scheduleKind)} propuesto: ${scheduleKind === SCHEDULE_KIND_WEEKLY ? recurrenceLabelFromFields(selectedWeekday, horaInicio, horaFin) : `${formatDate(fecha)} de ${horaInicio} a ${horaFin}`}.`);
+      }
+      window.dispatchEvent(new CustomEvent('cd10:schedule-updated', {
+        detail: { assignmentId: state.selectedChat.id, proposalId: proposalRef.id, status: 'propuesta', role },
+      }));
       showToast('Horario propuesto', scheduleKind === SCHEDULE_KIND_WEEKLY ? 'La otra parte puede aceptar el horario semanal fijo.' : 'La otra parte puede aceptar la clase puntual.', 'success');
     } catch (error) {
-      showToast('No se pudo proponer', error.message || 'Revisa permisos de chat.', 'error');
+      showToast('No se pudo proponer', error.message || 'Revisa la conexión y vuelve a intentarlo.', 'error');
     } finally {
       button.disabled = false;
     }
@@ -4895,7 +5007,12 @@ export async function initChatWidget({
       relationshipUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
-    await addSystemChatMessage(state.selectedChat, `Horario rechazado: ${scheduleProposalDisplayLabel(proposal)}.`);
+    if (container.dataset.scheduleMessagesEnabled === 'true') {
+      await addSystemChatMessage(state.selectedChat, `Horario rechazado: ${scheduleProposalDisplayLabel(proposal)}.`);
+    }
+    window.dispatchEvent(new CustomEvent('cd10:schedule-updated', {
+      detail: { assignmentId: state.selectedChat.id, proposalId: proposal.id, status: 'rechazada', role },
+    }));
     showToast('Horario rechazado', 'Podéis proponer otra alternativa.', 'info');
   }
 
@@ -4956,8 +5073,12 @@ export async function initChatWidget({
       teacherUid: state.selectedChat.teacherUid || state.selectedChat.profesor_id,
       studentId: state.selectedChat.studentId || state.selectedChat.alumno_id,
     });
-    const acceptanceOverrideOwnAvailability = availabilityValidation.reason === 'outside_own_availability';
-    if (!availabilityValidation.valid && !acceptanceOverrideOwnAvailability) {
+    const acceptanceOverrideAvailability = [
+      'outside_own_availability',
+      'outside_counterparty_availability',
+      'counterparty_availability_missing',
+    ].includes(availabilityValidation.reason);
+    if (!availabilityValidation.valid && !acceptanceOverrideAvailability) {
       const details = '';
       throw new Error(`${availabilityValidation.message || 'Ese horario ya no esta disponible.'}${details}`);
     }
@@ -5143,7 +5264,12 @@ export async function initChatWidget({
       ? `Horario semanal aceptado (${scheduleProposalDisplayLabel(proposal)}). Se han creado ${classIds.length} clases hasta el ${formatDate(firstOccurrence?.seriesEndDate)}. Primera clase: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`
       : `Clase puntual aceptada y creada: ${formatDate(proposal.fecha)} de ${proposal.hora_inicio} a ${proposal.hora_fin}.`;
     setActionStage('Avisando a la otra parte...');
-    await withTimeoutReject(addSystemChatMessage(state.selectedChat, scheduleText), 12000, 'Mensaje de sistema');
+    if (container.dataset.scheduleMessagesEnabled === 'true') {
+      await withTimeoutReject(addSystemChatMessage(state.selectedChat, scheduleText), 12000, 'Mensaje de sistema');
+    }
+    window.dispatchEvent(new CustomEvent('cd10:schedule-updated', {
+      detail: { assignmentId: state.selectedChat.id, proposalId: proposal.id, status: 'aceptada', role },
+    }));
     showToast(isWeeklyRecurringProposal(proposal) ? 'Horario semanal guardado' : 'Clase creada', 'La clase ya aparece en el calendario de familia y profesor.', 'success');
     } finally {
       if (actionButton?.isConnected) {

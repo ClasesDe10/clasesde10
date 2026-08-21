@@ -239,8 +239,8 @@ function buildScheduleNeededAction(relationship, options, nowMs) {
     description: 'La relacion ya existe, pero todavia no hay una primera clase programada.',
     reason: `Lleva ${Math.round(age)} horas sin horario cerrado desde la ultima actividad relevante.`,
     expectedOutcome: 'Familia y profesor proponen o aceptan una franja y la clase aparece en calendario.',
-    recommendedAction: 'Abrir el chat y acordar la primera clase desde las franjas disponibles.',
-    section: 'chat',
+    recommendedAction: 'Abrir la asignación y acordar la primera clase desde las franjas disponibles.',
+    section: 'profesores',
     cooldownHours: options.userNotificationCooldownHours,
     familyUid: family,
     teacherUid: teacher,
@@ -249,8 +249,8 @@ function buildScheduleNeededAction(relationship, options, nowMs) {
     relationshipTitle: title,
     createAdminTask: age >= options.adminEscalationHours,
     recipients: [
-      buildRecipient('familia', family, 'Falta cerrar la primera clase', `Ya tienes profesor para ${title}. Acordad el horario desde el chat.`, 'Abrir chat', 'chat', 'normal'),
-      buildRecipient('profesor', teacher, 'Falta cerrar la primera clase', `La familia de ${title} ya esta asignada. Propon una hora desde el chat.`, 'Abrir chat', 'chat', 'normal'),
+      buildRecipient('familia', family, 'Falta cerrar la primera clase', `Ya tienes profesor para ${title}. Propón el horario desde Mis profesores.`, 'Proponer horario', 'profesores', 'normal'),
+      buildRecipient('profesor', teacher, 'Falta cerrar la primera clase', `La familia de ${title} ya está asignada. Espera su primera propuesta en Mis alumnos.`, 'Ver asignación', 'alumnos', 'normal'),
     ].filter(Boolean),
   });
 }
@@ -273,8 +273,8 @@ function buildProposalPendingAction(relationship, options, nowMs) {
     description: 'Hay una propuesta de clase pendiente y conviene cerrarla antes de que se enfrie la relacion.',
     reason: `La propuesta lleva ${Math.round(age)} horas sin cierre visible.`,
     expectedOutcome: 'Una parte acepta o propone alternativa y se evita bloqueo.',
-    recommendedAction: 'Responder la propuesta en el chat.',
-    section: 'chat',
+    recommendedAction: 'Responder la propuesta desde la asignación.',
+    section: 'profesores',
     cooldownHours: options.userNotificationCooldownHours,
     familyUid: family,
     teacherUid: teacher,
@@ -283,8 +283,8 @@ function buildProposalPendingAction(relationship, options, nowMs) {
     relationshipTitle: title,
     createAdminTask: age >= options.adminEscalationHours,
     recipients: [
-      buildRecipient('familia', family, 'Hay una propuesta de horario pendiente', `Revisa el chat de ${title} y acepta o propon otra hora.`, 'Responder horario', 'chat', 'normal'),
-      buildRecipient('profesor', teacher, 'Hay una propuesta de horario pendiente', `Revisa el chat de ${title} para cerrar la clase.`, 'Responder horario', 'chat', 'normal'),
+      buildRecipient('familia', family, 'Hay una propuesta de horario pendiente', `Revisa Mis profesores para ${title} y acepta o propón otra hora.`, 'Responder horario', 'profesores', 'normal'),
+      buildRecipient('profesor', teacher, 'Hay una propuesta de horario pendiente', `Revisa Mis alumnos para ${title} y acepta o propón otra hora.`, 'Responder horario', 'alumnos', 'normal'),
     ].filter(Boolean),
   });
 }
@@ -381,8 +381,8 @@ function buildActiveSilenceAction(relationship, options, nowMs) {
     description: 'La relacion tuvo clases, pero no hay futuras sesiones programadas.',
     reason: `Han pasado ${Math.round(inactiveDays)} dias sin clase futura ni actividad suficiente.`,
     expectedOutcome: 'Se acuerda una clase puntual o una rutina semanal recurrente.',
-    recommendedAction: 'Usar el chat para dejar cerrada la siguiente clase o una franja semanal fija.',
-    section: 'chat',
+    recommendedAction: 'Cerrar la siguiente clase o la rutina semanal desde el apartado de profesores o alumnos.',
+    section: 'calendar',
     cooldownHours: Math.max(options.userNotificationCooldownHours, 72),
     familyUid: family,
     teacherUid: teacher,
@@ -391,8 +391,8 @@ function buildActiveSilenceAction(relationship, options, nowMs) {
     relationshipTitle: title,
     createAdminTask: inactiveDays >= options.adminEscalationDays || inactiveDays >= options.teacherActivityDropDays,
     recipients: [
-      buildRecipient('familia', family, 'Seguimos con la proxima clase', `No hay nuevas clases de ${title} programadas. Si vais a continuar, dejad una hora cerrada en el chat.`, 'Abrir chat', 'chat', 'normal'),
-      buildRecipient('profesor', teacher, 'Planifica la proxima clase', `No hay proximas clases de ${title}. Propon una franja si vais a seguir.`, 'Abrir chat', 'chat', 'normal'),
+      buildRecipient('familia', family, 'Seguimos con la proxima clase', `No hay nuevas clases de ${title} programadas. Si vais a continuar, revisa el horario con tu profesor.`, 'Mis profesores', 'profesores', 'normal'),
+      buildRecipient('profesor', teacher, 'Planifica la proxima clase', `No hay proximas clases de ${title}. Revisa la franja semanal si vais a seguir.`, 'Mis alumnos', 'alumnos', 'normal'),
     ].filter(Boolean),
   });
 }
@@ -418,7 +418,7 @@ function buildFirstClassCheckinAction(relationship, options, nowMs) {
     description: 'La primera clase ya termino y conviene comprobar si ambas partes saben como continuar.',
     reason: `Han pasado ${Math.round(age)} horas desde la primera clase completada.`,
     expectedOutcome: 'Familia y profesor corrigen cualquier ajuste temprano y dejan clara la siguiente clase.',
-    recommendedAction: 'Abrir el chat solo si hay que ajustar horarios, expectativas o material.',
+    recommendedAction: 'Modificar el horario desde el apartado de profesores o alumnos; usar el chat para expectativas o material.',
     section: 'chat',
     cooldownHours: 24 * 365,
     familyUid: family,
@@ -428,7 +428,7 @@ function buildFirstClassCheckinAction(relationship, options, nowMs) {
     relationshipTitle: title,
     recipients: [
       buildRecipient('familia', family, 'Como fue la primera clase', `Si hay algo que ajustar en ${title}, deja un mensaje en el chat. Si todo va bien, programa la siguiente clase.`, 'Abrir chat', 'chat', 'low'),
-      buildRecipient('profesor', teacher, 'Seguimiento de primera clase', `Si necesitas ajustar algo de ${title}, dejalo cerrado en el chat antes de la siguiente clase.`, 'Abrir chat', 'chat', 'low'),
+      buildRecipient('profesor', teacher, 'Seguimiento de primera clase', `Si necesitas ajustar algo de ${title}, usa Mis alumnos para el horario o el chat para comentar expectativas y material.`, 'Mis alumnos', 'alumnos', 'low'),
     ].filter(Boolean),
   });
 }

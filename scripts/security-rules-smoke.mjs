@@ -18,6 +18,8 @@ const apiKey = firebaseClientSource.match(/apiKey:\s*'([^']+)'/)?.[1];
 const projectId = firebaseClientSource.match(/projectId:\s*'([^']+)'/)?.[1] || 'clasesde10-50add';
 const database = '(default)';
 const smokeUrl = process.env.CD10_SMOKE_URL || 'https://clasesde10.com';
+const FIREBASE_CLI_CLIENT_ID = '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com';
+const FIREBASE_CLI_CLIENT_SECRET = 'j9iVZfS8kkCEFUPaAeJV0sAi';
 
 if (!apiKey) {
   console.error('ERROR: Firebase apiKey not found in js/firebase-client.js.');
@@ -37,15 +39,30 @@ async function identity(method, payload) {
   return body;
 }
 
-function readFirebaseCliToken() {
+async function readFirebaseCliToken() {
   const configPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
   if (!fs.existsSync(configPath)) return null;
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  const refreshToken = config?.tokens?.refresh_token;
+  if (refreshToken) {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: FIREBASE_CLI_CLIENT_ID,
+        client_secret: FIREBASE_CLI_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+    const refreshed = await response.json().catch(() => ({}));
+    if (response.ok && refreshed.access_token) return refreshed.access_token;
+  }
   return config?.tokens?.access_token || null;
 }
 
 async function firestoreDeleteWithCliToken(collection, id) {
-  const token = readFirebaseCliToken();
+  const token = await readFirebaseCliToken();
   if (!token) return { ok: false, error: 'Firebase CLI OAuth token unavailable.' };
 
   const response = await fetch(

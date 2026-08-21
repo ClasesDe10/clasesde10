@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260816-teacher-attendance-lock">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260821-family-teachers">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -221,6 +221,7 @@
 
       <!-- ══ MIS ALUMNOS ══ -->
       <section id="section-alumnos" class="dash-section" style="display:none">
+        <div id="teacher-schedule-pending-alert" hidden></div>
         <div class="student-workbench-summary" id="alumnos-profesor-summary"></div>
         <div class="card">
           <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -511,6 +512,11 @@
                 <div class="form-group">
                   <label class="form-label">Teléfono</label>
                   <input class="form-control" type="tel" id="p-telefono">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Fecha de nacimiento</label>
+                  <input class="form-control" type="date" id="p-fecha-nacimiento">
+                  <div class="form-hint">Las familias solo verán tu edad, nunca la fecha de nacimiento.</div>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Foto de perfil</label>
@@ -810,7 +816,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" data-close-modal="modal-alumno-detalle">Cerrar</button>
-      <button class="btn btn-primary" data-section="chat" data-close-modal="modal-alumno-detalle">Abrir chat</button>
+      <button class="btn btn-primary" id="btn-chat-alumno-detalle" data-action="abrir-chat-relacion-profesor" data-close-modal="modal-alumno-detalle">Abrir chat</button>
     </div>
   </div>
 </div>
@@ -909,6 +915,23 @@
   </div>
 </div>
 
+<div class="modal-overlay weekly-schedule-modal" id="modal-horario-semanal-profesor">
+  <div class="modal weekly-schedule-modal-card" role="dialog" aria-modal="true" aria-labelledby="teacher-weekly-schedule-title">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title" id="teacher-weekly-schedule-title">Clases y horario semanal</span>
+        <p class="modal-subtitle" id="teacher-weekly-schedule-subtitle">Responde o propón una alternativa.</p>
+      </div>
+      <button class="modal-close" type="button" data-close-modal="modal-horario-semanal-profesor" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body weekly-schedule-modal-body">
+      <div id="teacher-weekly-schedule-widget" class="weekly-schedule-widget">
+        <div class="weekly-schedule-loading">Preparando el horario...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import db from '../../js/firebase-data-client.js?v=20260815-document-writes';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
@@ -945,8 +968,9 @@ import {
   previousPayoutDateFor,
   teacherPayoutFrequencyLabel,
 } from '../../js/teacher-payout-schedule.js?v=20260809-teacher-calendar';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260815-clear-notices';
-import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-debt-summary';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260821-family-teachers';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260821-family-teachers';
+import { buildWeeklyScheduleState } from '../../js/weekly-schedule-engine.js?v=20260821-family-teachers';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260808-copy-cleanup';
@@ -1117,6 +1141,9 @@ let oneOffProposalRowsById = new Map();
 let clasesBizumPendientes = [];
 let incomeInsightsModel = null;
 let alumnosProfesorCache = new Map();
+let teacherScheduleWidgetPromise = null;
+let teacherScheduleStateByAssignment = new Map();
+let teacherAutoOpenedScheduleAssignment = '';
 
 function normalizeDisplayName(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ');
@@ -1740,7 +1767,7 @@ document.addEventListener('click', (e) => {
   irA(sectionTrigger.dataset.section);
 });
 initSidebar();
-['modal-perfil-profesor', 'modal-documento-profesor', 'modal-dia-cobro-profesor'].forEach((id) => {
+['modal-perfil-profesor', 'modal-documento-profesor', 'modal-dia-cobro-profesor', 'modal-horario-semanal-profesor'].forEach((id) => {
   const overlay = document.getElementById(id);
   if (overlay?.parentElement !== document.body) document.body.appendChild(overlay);
 });
@@ -1751,7 +1778,13 @@ initNotificationCenter({
   usuario,
   role: 'profesor',
   showToast,
-  navigateSection: (section) => { irA(section); return true; },
+  navigateSection: (section, action = {}) => {
+    irA(section);
+    if (section === 'alumnos' && action.assignmentId) {
+      setTimeout(() => abrirHorarioSemanalProfesor(action.assignmentId), 80);
+    }
+    return true;
+  },
 });
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-close-modal]');
@@ -1790,6 +1823,7 @@ function handleTeacherJourneyAction(action) {
     open_profile: () => irA('perfil'),
     upload_documents: () => irA('documentos'),
     set_availability: () => irA('disponibilidad'),
+    open_students: () => irA('alumnos'),
     open_chat: () => irA('chat'),
     open_calendar: () => irA('calendario'),
     confirm_class: () => irA('clases'),
@@ -2235,7 +2269,7 @@ async function responderPropuestaPuntualProfesor(button, accepted) {
       await addTeacherOneOffResponseSystemMessage(row, false, reason).catch((error) => {
         console.warn('No se pudo anadir mensaje de rechazo puntual', error);
       });
-      showToast('Propuesta rechazada', 'La familia lo vera en el chat.', 'success');
+      showToast('Propuesta rechazada', 'La familia verá el cambio en su apartado de clases.', 'success');
     }
     await Promise.allSettled([cargarInicio(), cargarMisClases(), cargarBizumProfesor(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
   } catch (error) {
@@ -2788,7 +2822,7 @@ async function iniciarCalendario() {
           cont.innerHTML = renderEmptyState({
             icon: '📅',
             title: 'Sin clases este día',
-            description: 'Usa el chat para cerrar horarios con las familias asignadas.',
+            description: 'Responde los horarios desde Mis alumnos; usa el chat solo para conversar con la familia.',
             actions: [emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary')],
             compact: true,
           });
@@ -2954,7 +2988,7 @@ async function cargarMisClases() {
     tbody.innerHTML = renderTableEmptyState(4, {
       icon: '📅',
       title: 'No hay clases con estos filtros',
-      description: 'Si tienes una familia asignada, coordinad el horario desde el chat. Si no, mantén perfil y disponibilidad completos para recibir alumnos.',
+      description: 'Si tienes una familia asignada, responde el horario desde Mis alumnos. Si no, mantén perfil y disponibilidad completos para recibir alumnos.',
       actions: [
         emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
         emptyAction('Mi disponibilidad', { 'data-section': 'disponibilidad' }, 'ghost'),
@@ -3071,25 +3105,50 @@ document.getElementById('btn-confirmar-registro').addEventListener('click', asyn
 });
 
 // ── MIS ALUMNOS ──────────────────────────────────────────────────
+async function cargarEstadosHorarioProfesor(chats = []) {
+  const entries = await Promise.all((chats || []).filter((chat) => chat?.id).map(async (chat) => {
+    try {
+      const snap = await getDocs(firestoreCollection(firebaseDb, 'chats', chat.id, 'programaciones'));
+      const proposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+      return [chat.id, buildWeeklyScheduleState(proposals, 'profesor')];
+    } catch (error) {
+      if (!isExpectedPermissionFallback(error)) console.warn('No se pudo cargar el horario del alumno', { chatId: chat.id, error });
+      return [chat.id, buildWeeklyScheduleState([], 'profesor')];
+    }
+  }));
+  return new Map(entries);
+}
+
 async function cargarMisAlumnos() {
   if (!profesorId) return;
-  const [data, firestoreRows, clasesMes] = await Promise.all([
+  const [data, firestoreRows, clasesMes, chats] = await Promise.all([
     cargarAsignacionesLegacyProfesor(),
     cargarAsignacionesFirestoreProfesor(),
     cargarClasesMesProfesor(),
+    cargarChatsUsuarioActual(),
   ]);
+  teacherScheduleStateByAssignment = await cargarEstadosHorarioProfesor(chats);
+  const chatByAssignment = new Map((chats || []).map((chat) => [String(chat.assignmentId || chat.asignacion_id || chat.id), chat]));
   const alumnos = mergeAssignedStudentRows([
     ...(data || []).map(normalizeLegacyAssignedStudent),
     ...(firestoreRows || []),
     ...buildAssignedStudentsFromClasses(clasesMes),
-  ]).map((item) => ({
-    ...item,
-    clasesMes: countMonthlyClassesForStudent(clasesMes, item),
-    horarioSemanal: recurringSchedulesForStudent(clasesMes, item),
-    proximaClase: nextClassForStudent(clasesMes, item),
-  }));
+  ]).map((item) => {
+    const scheduleChat = chatByAssignment.get(String(item.assignmentId || '')) || null;
+    return {
+      ...item,
+      clasesMes: countMonthlyClassesForStudent(clasesMes, item),
+      horarioSemanal: recurringSchedulesForStudent(clasesMes, item),
+      proximaClase: nextClassForStudent(clasesMes, item),
+      scheduleChat,
+      scheduleState: scheduleChat
+        ? teacherScheduleStateByAssignment.get(String(scheduleChat.id || '')) || buildWeeklyScheduleState([], 'profesor')
+        : null,
+    };
+  });
   alumnosProfesorCache = new Map(alumnos.map((item) => [item.cacheId, item]));
   renderTeacherStudentsSummary(alumnos);
+  renderTeacherSchedulePendingAlert(alumnos);
   const tbody = document.getElementById('tbody-mis-alumnos');
   if (!alumnos.length) {
     tbody.innerHTML = renderTableEmptyState(6, {
@@ -3125,8 +3184,14 @@ async function cargarMisAlumnos() {
     </td>
     <td>${renderStudentScheduleCell(alumno)}</td>
     <td><strong>${sanitize(String(alumno.clasesMes || 0))}</strong></td>
-    <td><button class="btn btn-ghost btn-sm" data-action="ver-alumno-profesor" data-student-cache-id="${sanitize(alumno.cacheId)}">Ver ficha</button></td>
+    <td><div class="student-row-actions">${alumno.scheduleChat ? `<button class="btn btn-primary btn-sm" data-action="gestionar-horario-profesor" data-assignment-id="${sanitize(alumno.assignmentId)}">Horario</button>` : ''}<button class="btn btn-ghost btn-sm" data-action="ver-alumno-profesor" data-student-cache-id="${sanitize(alumno.cacheId)}">Ver ficha</button></div></td>
   </tr>`).join('');
+
+  const requestedAssignment = new URLSearchParams(window.location.search).get('assignment') || '';
+  if (requestedAssignment && requestedAssignment !== teacherAutoOpenedScheduleAssignment && alumnos.some((item) => item.scheduleChat && String(item.assignmentId) === requestedAssignment)) {
+    teacherAutoOpenedScheduleAssignment = requestedAssignment;
+    setTimeout(() => abrirHorarioSemanalProfesor(requestedAssignment), 60);
+  }
 }
 
 async function cargarAsignacionesLegacyProfesor() {
@@ -3353,14 +3418,77 @@ function nextClassForStudent(clases = [], alumno = {}) {
 function renderStudentScheduleCell(alumno = {}) {
   const notes = shortStudentNote(alumno);
   const schedule = alumno.horarioSemanal || [];
+  const scheduleState = alumno.scheduleState;
   const next = alumno.proximaClase
     ? `${formatFechaCorta(alumno.proximaClase.fecha || alumno.proximaClase.date)} ${firstText(alumno.proximaClase.hora_inicio, alumno.proximaClase.startTime)}`
     : '';
   return `<div class="student-note-snippet">
     <span>${sanitize(notes)}</span>
+    ${scheduleState ? `<div class="student-weekly-status schedule-tone-${sanitize(scheduleState.tone)}"><strong>${sanitize(scheduleState.title)}</strong><small>${sanitize(scheduleState.detail)}</small></div>` : '<div class="student-weekly-status schedule-tone-neutral"><strong>Horario no disponible todavía</strong><small>La relación se está terminando de preparar.</small></div>'}
     ${schedule.length ? `<div class="student-schedule-list">${schedule.map((item) => `<span>${sanitize(item)}</span>`).join('')}</div>` : ''}
     ${next ? `<small>Proxima clase: ${sanitize(next)}</small>` : ''}
   </div>`;
+}
+
+function renderTeacherSchedulePendingAlert(alumnos = []) {
+  const container = document.getElementById('teacher-schedule-pending-alert');
+  if (!container) return;
+  const pending = (alumnos || []).filter((item) => item.scheduleChat && item.scheduleState?.pendingForRole);
+  if (!pending.length) {
+    container.hidden = true;
+    container.innerHTML = '';
+    return;
+  }
+  const first = pending[0];
+  container.hidden = false;
+  container.innerHTML = `
+    <section class="family-assignment-alert teacher-schedule-alert" role="status">
+      <div class="family-assignment-alert-icon" aria-hidden="true">!</div>
+      <div>
+        <span>Horario pendiente</span>
+        <strong>${sanitize(first.scheduleState.title)}</strong>
+        <p>${sanitize(personDisplayName('Alumno', first.studentId, first.displayName, first.nombreCompleto))}: ${sanitize(first.scheduleState.detail)}</p>
+      </div>
+      <button class="btn btn-primary" type="button" data-action="gestionar-horario-profesor" data-assignment-id="${sanitize(first.assignmentId)}">Responder horario</button>
+    </section>`;
+}
+
+async function ensureTeacherScheduleWidget() {
+  if (!teacherScheduleWidgetPromise) {
+    teacherScheduleWidgetPromise = initChatWidget({
+      container: document.getElementById('teacher-weekly-schedule-widget'),
+      db,
+      usuario,
+      role: 'profesor',
+      profileId: profesorId,
+      showToast,
+      showNotifications: false,
+      schedulingEnabled: true,
+      scheduleOnly: true,
+      requireFamilyFirstProposal: true,
+      scheduleMessagesEnabled: false,
+    });
+  }
+  return teacherScheduleWidgetPromise;
+}
+
+async function abrirHorarioSemanalProfesor(assignmentId = '') {
+  const id = String(assignmentId || '').trim();
+  if (!id) return;
+  const alumno = [...alumnosProfesorCache.values()].find((item) => String(item.assignmentId || '') === id);
+  const subtitle = document.getElementById('teacher-weekly-schedule-subtitle');
+  if (subtitle && alumno) {
+    subtitle.textContent = `${personDisplayName('Alumno', alumno.studentId, alumno.displayName, alumno.nombreCompleto)} · ${alumno.materia || 'Clase semanal'}`;
+  }
+  openModal('modal-horario-semanal-profesor');
+  await ensureTeacherScheduleWidget();
+  window.dispatchEvent(new CustomEvent('cd10:open-chat-planner', { detail: { assignmentId: id } }));
+}
+
+async function abrirChatRelacionProfesor(assignmentId = '') {
+  irA('chat');
+  await cargarChat();
+  window.dispatchEvent(new CustomEvent('cd10:open-chat-relation', { detail: { assignmentId } }));
 }
 
 function renderTeacherStudentsSummary(alumnos = []) {
@@ -3474,13 +3602,33 @@ function abrirFichaAlumnoProfesor(cacheId) {
     return;
   }
   document.getElementById('alumno-detalle-body').innerHTML = renderStudentDetail(alumno);
+  document.getElementById('btn-chat-alumno-detalle').dataset.assignmentId = alumno.assignmentId || '';
   document.getElementById('modal-alumno-detalle').classList.add('open');
 }
 
 document.addEventListener('click', (event) => {
+  const scheduleButton = event.target.closest('[data-action="gestionar-horario-profesor"]');
+  if (scheduleButton) {
+    event.preventDefault();
+    irA('alumnos');
+    abrirHorarioSemanalProfesor(scheduleButton.dataset.assignmentId);
+    return;
+  }
+  const chatButton = event.target.closest('[data-action="abrir-chat-relacion-profesor"]');
+  if (chatButton) {
+    event.preventDefault();
+    abrirChatRelacionProfesor(chatButton.dataset.assignmentId);
+    return;
+  }
   const btn = event.target.closest('[data-action="ver-alumno-profesor"]');
   if (!btn) return;
   abrirFichaAlumnoProfesor(btn.dataset.studentCacheId);
+});
+
+window.addEventListener('cd10:schedule-updated', (event) => {
+  if (event.detail?.role !== 'profesor') return;
+  cargarMisAlumnos().catch((error) => console.warn('No se pudo refrescar el horario de alumnos', error));
+  cargarInicio().catch((error) => console.warn('No se pudo refrescar el inicio del profesor', error));
 });
 
 // ── INGRESOS ─────────────────────────────────────────────────────
@@ -4401,6 +4549,12 @@ function renderTeacherProfileOverview() {
   const levels = nivelesActuales.length ? nivelesActuales : (perfil.niveles_educativos || perfil.levels || []);
   const experienceRaw = perfil.experiencia_anios ?? perfil.experienceYears ?? '';
   const experienceLabel = experienceRaw !== '' && Number.isFinite(Number(experienceRaw)) ? `${Number(experienceRaw)} anos` : '';
+  const birthDateValue = String(perfil.fecha_nacimiento || perfil.birthDate || perfil.birth_date || '').slice(0, 10);
+  const birth = birthDateValue ? new Date(`${birthDateValue}T12:00:00`) : null;
+  const today = new Date();
+  let visibleAge = birth && !Number.isNaN(birth.getTime()) ? today.getFullYear() - birth.getFullYear() : null;
+  if (visibleAge !== null && (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate()))) visibleAge -= 1;
+  const ageLabel = visibleAge !== null && visibleAge >= 16 && visibleAge <= 90 ? `${visibleAge} anos` : '';
 
   document.getElementById('teacher-profile-name').textContent = name;
   document.getElementById('teacher-profile-caption').textContent = perfil.bio
@@ -4426,6 +4580,7 @@ function renderTeacherProfileOverview() {
       <dl>
         ${row('Correo', usuario.email || perfil.email)}
         ${row('Telefono', phone)}
+        ${row('Edad visible a familias', ageLabel)}
         ${row('Direccion', cityLine)}
         ${row('Coche', carDeclared)}
       </dl>
@@ -4467,6 +4622,7 @@ async function cargarPerfil() {
   document.getElementById('p-nombre').value      = usuario.nombre || perfil.nombre || '';
   document.getElementById('p-apellidos').value   = usuario.apellidos || perfil.apellidos || '';
   document.getElementById('p-telefono').value    = usuario.telefono || perfil.telefono || '';
+  document.getElementById('p-fecha-nacimiento').value = String(perfil.fecha_nacimiento || perfil.birthDate || perfil.birth_date || '').slice(0, 10);
   setFotoPreview(perfil.foto_url || perfil.photoUrl || '');
   document.getElementById('p-direccion').value   = perfil.direccion || perfil.address || '';
   document.getElementById('p-ciudad').value      = perfil.ciudad || 'Madrid';
@@ -4841,6 +4997,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const nombre = document.getElementById('p-nombre').value.trim();
   const apellidos = document.getElementById('p-apellidos').value.trim();
   const telefono = document.getElementById('p-telefono').value.trim();
+  const fechaNacimiento = document.getElementById('p-fecha-nacimiento').value.trim();
   const fotoUrl = fotoPerfilDataUrl;
   const direccion = document.getElementById('p-direccion').value.trim();
   const ciudad = document.getElementById('p-ciudad').value.trim();
@@ -4864,6 +5021,11 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   const phoneCheck = validatePhone(telefono);
   const postalCheck = validatePostalCode(codigoPostal);
   const notasValidas = isValidGrade(notaBachillerato) && isValidGrade(notaUniversidad);
+  const nacimiento = fechaNacimiento ? new Date(`${fechaNacimiento}T12:00:00`) : null;
+  const hoy = new Date();
+  let edad = nacimiento && !Number.isNaN(nacimiento.getTime()) ? hoy.getFullYear() - nacimiento.getFullYear() : null;
+  if (edad !== null && (hoy.getMonth() < nacimiento.getMonth() || (hoy.getMonth() === nacimiento.getMonth() && hoy.getDate() < nacimiento.getDate()))) edad -= 1;
+  const nacimientoValido = !fechaNacimiento || (edad !== null && edad >= 16 && edad <= 90);
   syncTeachingSelectionsFromState();
   const teachingScopesPayload = buildTeachingScopesPayload();
   materiasActuales = uniqueProfileItems(materiasActuales);
@@ -4872,7 +5034,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
   if (!nombre || !apellidos || !phoneCheck.valid || !fotoUrl || !direccion || !ciudad || !postalCheck.valid ||
       !estudioExacto || !colegioEstudios || !centroEstudios || !notasValidas ||
       !materiasActuales.length || !nivelesActuales.length || !disponibilidad || bio.length < 40 || !aceptaBizum || !movilidadDeclarada ||
-      !Number.isFinite(experiencia) || experiencia < 0 || experiencia > 60) {
+      !nacimientoValido || !Number.isFinite(experiencia) || experiencia < 0 || experiencia > 60) {
     showToast('Perfil incompleto', 'Completa nombre, apellidos, foto, telefono valido, direccion, ciudad, CP de 5 digitos, colegio, universidad/centro superior, grado o titulacion, notas, materias/actividades, niveles, disponibilidad, movilidad, Bizum y presentacion.', 'warning');
     return;
   }
@@ -4883,6 +5045,8 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     nombre,
     apellidos,
     telefono,
+    fecha_nacimiento: fechaNacimiento || null,
+    birthDate: fechaNacimiento || null,
     foto_url: fotoUrl,
     photoUrl: fotoUrl,
     direccion,
@@ -4932,6 +5096,7 @@ document.getElementById('form-perfil').addEventListener('submit', async (e) => {
     nombre,
     apellidos,
     telefono,
+    fecha_nacimiento: fechaNacimiento || null,
     active: perfilActivo,
     foto_url: fotoUrl,
     direccion,
@@ -5403,6 +5568,6 @@ if (!teacherAttendanceAccessLocked) cargarChat().catch((error) => console.warn('
 irA(sectionFromHash(teacherAttendanceAccessLocked ? 'calendario' : 'inicio'), { fromHash: true });
 window.setInterval(() => refreshTeacherAttendanceAccessState({ silent: true }), 5 * 60 * 1000);
 </script>
-<script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
+<script src="/js/pwa.js?v=20260821-family-teachers" defer></script>
 </body>
 </html>

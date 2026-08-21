@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260816-teacher-attendance-lock">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260821-family-teachers">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -48,6 +48,10 @@
       <button class="sidebar-link" data-section="clases">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         Clases
+      </button>
+      <button class="sidebar-link" data-section="profesores">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14a4 4 0 100-8 4 4 0 000 8zm-7 7a7 7 0 0114 0M18 8h4m-2-2v4"/></svg>
+        Mis profesores
       </button>
       <div class="sidebar-section-title">Gestión</div>
       <button class="sidebar-link" data-section="alumnos">
@@ -123,6 +127,7 @@
       <section id="section-inicio" class="dash-section">
         <div id="family-journey-panel" hidden></div>
         <div id="family-relationship-digest" hidden></div>
+        <div id="family-teacher-assignment-alert" hidden></div>
 
         <div class="family-home-layout">
           <section class="family-home-hero">
@@ -131,7 +136,7 @@
             <p id="family-home-summary">Calendario, chat y pagos en un sitio claro.</p>
             <div class="family-home-actions">
               <button class="btn btn-primary" type="button" data-section="calendario">Ver calendario</button>
-              <button class="btn btn-ghost" type="button" data-section="chat">Abrir chat</button>
+              <button class="btn btn-ghost" type="button" data-section="profesores">Mis profesores</button>
             </div>
           </section>
 
@@ -239,6 +244,30 @@
               <tbody id="tbody-clases"><tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray-mid)">Cargando…</td></tr></tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- ══ MIS PROFESORES ══ -->
+      <section id="section-profesores" class="dash-section" style="display:none">
+        <div class="family-teachers-header">
+          <div>
+            <span class="family-teachers-kicker">Relaciones activas</span>
+            <h2>Mis profesores</h2>
+            <p>Consulta la información útil de cada profesor, abre el chat o gestiona el horario semanal desde aquí.</p>
+          </div>
+        </div>
+        <div class="family-device-setup" id="family-device-setup" aria-live="polite">
+          <div>
+            <strong>Recibe los cambios importantes en el móvil</strong>
+            <span id="family-device-setup-status">Activa los avisos y añade ClasesDe10 a la pantalla de inicio para llegar directo a cada tarea.</span>
+          </div>
+          <div class="family-device-setup-actions">
+            <button class="btn btn-primary btn-sm" type="button" data-action="activar-avisos-movil">Activar avisos en el móvil</button>
+            <button class="btn btn-outline btn-sm" type="button" data-action="instalar-panel-movil">Instalar en el móvil</button>
+          </div>
+        </div>
+        <div id="family-teachers-grid" class="family-teachers-grid" aria-live="polite">
+          <div class="card"><div class="card-body">Cargando profesores...</div></div>
         </div>
       </section>
 
@@ -827,6 +856,23 @@
   </div>
 </div>
 
+<div class="modal-overlay weekly-schedule-modal" id="modal-horario-semanal-familia">
+  <div class="modal weekly-schedule-modal-card" role="dialog" aria-modal="true" aria-labelledby="family-weekly-schedule-title">
+    <div class="modal-header">
+      <div>
+        <span class="modal-title" id="family-weekly-schedule-title">Clases y horario semanal</span>
+        <p class="modal-subtitle" id="family-weekly-schedule-subtitle">Propón un horario o responde al profesor.</p>
+      </div>
+      <button class="modal-close" type="button" data-close-modal="modal-horario-semanal-familia" aria-label="Cerrar">×</button>
+    </div>
+    <div class="modal-body weekly-schedule-modal-body">
+      <div id="family-weekly-schedule-widget" class="weekly-schedule-widget">
+        <div class="weekly-schedule-loading">Preparando el horario...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import db from '../../js/firebase-data-client.js?v=20260821-exact-request-course';
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
@@ -866,8 +912,14 @@ import {
   samePaymentRelation,
 } from '../../js/payment-engine.js?v=20260815-family-all-due';
 import { trackSolicitudProfesor } from '../../js/analytics.js';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260815-clear-notices';
-import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-debt-summary';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260821-family-teachers';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260821-family-teachers';
+import { requestBrowserNotificationPermission } from '../../js/notifications-provider.js?v=20260815-clear-notices';
+import { registerPushNotifications } from '../../js/push-notifications.js?v=20260821-family-teachers';
+import {
+  buildWeeklyScheduleState,
+  weeklyScheduleDashboardRoute,
+} from '../../js/weekly-schedule-engine.js?v=20260821-family-teachers';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-family-finance-privacy';
 import { buildFamilyJourneyState } from '../../js/family-journey-engine.js?v=20260808-copy-cleanup';
 import { emptyAction, renderEmptyState, renderTableEmptyState } from '../../js/dashboard-empty-state.js?v=20260629-ux-empty-states';
@@ -968,7 +1020,7 @@ function clearActionBusy(button) {
 }
 
 // ── NAVEGACIÓN ───────────────────────────────────────────────────
-const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases',
+const TITULOS = { inicio:'Mi panel', calendario:'Calendario', clases:'Clases', profesores:'Mis profesores',
                   alumnos:'Mis hijos', solicitudes:'Solicitudes', pagos:'Justificantes', chat:'Chat', notificaciones:'Centro de avisos', perfil:'Mi perfil' };
 let chatInicializado = false;
 let documentosFamiliaPerfilCache = [];
@@ -991,6 +1043,11 @@ let familyUnlockedFeaturesInitialized = false;
 let oneOffPlannerChatsCache = [];
 let oneOffProposalRowsById = new Map();
 let solicitudStudentsById = new Map();
+let familyScheduleWidgetPromise = null;
+let familyTeacherScheduleStateByAssignment = new Map();
+let familyTeachersLoadingPromise = null;
+let familyTeacherRelationsByAssignment = new Map();
+let familyAutoOpenedScheduleAssignment = '';
 const FAMILY_ONE_OFF_OVERRIDABLE_AVAILABILITY_REASONS = new Set([
   'counterparty_availability_missing',
   'outside_counterparty_availability',
@@ -1573,7 +1630,7 @@ function irA(sec, options = {}) {
   document.getElementById('topbar-title').textContent = TITULOS[sec] || sec;
   if (!options.fromHash && window.location.hash !== `#${sec}`) history.replaceState(null, '', `#${sec}`);
   const loaders = { inicio: cargarInicio, calendario: iniciarCalendario, clases: cargarClases,
-                    alumnos: cargarHijos, solicitudes: cargarSolicitudes, pagos: cargarPagos, chat: cargarChat, perfil: cargarPerfil };
+                    profesores: cargarMisProfesores, alumnos: cargarHijos, solicitudes: cargarSolicitudes, pagos: cargarPagos, chat: cargarChat, perfil: cargarPerfil };
   loaders[sec]?.();
 }
 
@@ -1593,7 +1650,7 @@ document.addEventListener('click', (e) => {
   irA(sectionTrigger.dataset.section);
 });
 initSidebar();
-['modal-perfil-familia', 'modal-documentos-familia'].forEach((id) => {
+['modal-perfil-familia', 'modal-documentos-familia', 'modal-horario-semanal-familia'].forEach((id) => {
   const overlay = document.getElementById(id);
   if (overlay?.parentElement !== document.body) document.body.appendChild(overlay);
 });
@@ -1607,7 +1664,13 @@ function initFamilyUnlockedFeatures() {
     usuario,
     role: 'familia',
     showToast,
-    navigateSection: (section) => { irA(section); return true; },
+    navigateSection: (section, action = {}) => {
+      irA(section);
+      if (section === 'profesores' && action.assignmentId) {
+        setTimeout(() => abrirHorarioSemanalFamilia(action.assignmentId), 80);
+      }
+      return true;
+    },
   });
   cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
 }
@@ -1627,6 +1690,38 @@ function abrirPanelNotificaciones() {
   irA('notificaciones');
 }
 document.getElementById('btn-notificaciones')?.addEventListener('click', abrirPanelNotificaciones);
+
+document.addEventListener('click', (event) => {
+  const scheduleButton = event.target.closest('[data-action="gestionar-horario-familia"]');
+  if (scheduleButton) {
+    event.preventDefault();
+    irA('profesores');
+    abrirHorarioSemanalFamilia(scheduleButton.dataset.assignmentId);
+    return;
+  }
+  const chatButton = event.target.closest('[data-action="abrir-chat-relacion-familia"]');
+  if (chatButton) {
+    event.preventDefault();
+    abrirChatRelacionFamilia(chatButton.dataset.assignmentId);
+    return;
+  }
+  if (event.target.closest('[data-action="activar-avisos-movil"]')) {
+    event.preventDefault();
+    activarAvisosMovilFamilia();
+    return;
+  }
+  if (event.target.closest('[data-action="instalar-panel-movil"]')) {
+    event.preventDefault();
+    window.dispatchEvent(new CustomEvent('cd10:request-install'));
+  }
+});
+
+window.addEventListener('cd10:schedule-updated', (event) => {
+  if (event.detail?.role !== 'familia') return;
+  familyTeachersLoadingPromise = null;
+  cargarMisProfesores().catch((error) => console.warn('No se pudo refrescar Mis profesores', error));
+  cargarInicio().catch((error) => console.warn('No se pudo refrescar el inicio familiar', error));
+});
 
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-action="abrir-planificador-puntual"]');
@@ -1664,6 +1759,7 @@ function handleFamilyJourneyAction(action) {
     add_student: abrirModalNuevoHijo,
     request_teacher: abrirModalNuevaSolicitud,
     open_requests: () => irA('solicitudes'),
+    open_teachers: () => irA('profesores'),
     open_chat: () => irA('chat'),
     open_calendar: () => irA('calendario'),
     open_classes: () => irA('clases'),
@@ -2213,7 +2309,7 @@ async function responderPropuestaPuntualFamilia(button, accepted) {
       await addFamilyOneOffResponseSystemMessage(row, false, reason).catch((error) => {
         console.warn('No se pudo anadir mensaje de rechazo puntual', error);
       });
-      showToast('Propuesta rechazada', 'El profesor lo vera en el chat.', 'success');
+      showToast('Propuesta rechazada', 'El profesor verá el cambio en su apartado de clases.', 'success');
     }
     await Promise.allSettled([cargarInicio(), cargarClases(), cal ? cargarClasesCalendario(cal.anio, cal.mes) : Promise.resolve()]);
   } catch (error) {
@@ -2566,11 +2662,11 @@ function renderFamilyHomeStatus({ pagosPend = 0, profCount = 0, nextClass = null
       actionText: pagosPend > 0 ? 'Revisar' : 'Ver',
     },
     {
-      title: profCount > 0 ? `Chat listo con ${profCount} profesor${profCount === 1 ? '' : 'es'}` : 'Sin profesor asignado',
-      detail: profCount > 0 ? 'Puedes escribirle desde el chat.' : 'Crea una solicitud cuando quieras.',
-      badge: profCount > 0 ? 'Chat' : 'Solicitud',
+      title: profCount > 0 ? `${profCount} profesor${profCount === 1 ? '' : 'es'} asignado${profCount === 1 ? '' : 's'}` : 'Sin profesor asignado',
+      detail: profCount > 0 ? 'Ficha, horario y chat en Mis profesores.' : 'Crea una solicitud cuando quieras.',
+      badge: profCount > 0 ? 'Profesor' : 'Solicitud',
       badgeClass: profCount > 0 ? 'badge-info' : 'badge-gold',
-      action: profCount > 0 ? 'data-section="chat"' : 'data-action="abrir-modal-solicitud"',
+      action: profCount > 0 ? 'data-section="profesores"' : 'data-action="abrir-modal-solicitud"',
       actionText: profCount > 0 ? 'Abrir' : 'Pedir',
     },
     {
@@ -2598,7 +2694,7 @@ function renderFamilyHomeStatus({ pagosPend = 0, profCount = 0, nextClass = null
   `).join('')}</div>`;
 }
 
-function renderFamilyHomeHeadline({ hijos = [], proximas = [], pagosPend = 0, profCount = 0, solicitudes = [] } = {}) {
+function renderFamilyHomeHeadline({ hijos = [], proximas = [], pagosPend = 0, profCount = 0, solicitudes = [], scheduleAttentionCount = 0 } = {}) {
   const title = document.getElementById('family-home-title');
   const summary = document.getElementById('family-home-summary');
   const nextClass = proximas[0] || null;
@@ -2608,6 +2704,9 @@ function renderFamilyHomeHeadline({ hijos = [], proximas = [], pagosPend = 0, pr
   if (!hijos.length) {
     headline = 'Anade al alumno y seguimos';
     text = 'Despues pediras profesor sin repetir datos.';
+  } else if (scheduleAttentionCount > 0) {
+    headline = 'Ya tienes profesor: falta cerrar el horario';
+    text = 'Entra en Mis profesores y envía la propuesta semanal.';
   } else if (nextClass) {
     const dateLabel = formatFechaCorta(classDateIso(nextClass));
     const timeLabel = formatHora(nextClass.hora_inicio || nextClass.startTime || '');
@@ -2620,8 +2719,8 @@ function renderFamilyHomeHeadline({ hijos = [], proximas = [], pagosPend = 0, pr
     headline = 'Tienes pagos por revisar';
     text = 'Sube el justificante para dejarlo al dia.';
   } else if (profCount > 0) {
-    headline = 'Todo listo para cerrar horario';
-    text = 'Abre el chat si falta acordar la proxima clase.';
+    headline = 'Tus profesores están aquí';
+    text = 'Consulta su ficha, horario semanal y acceso directo al chat.';
   } else if ((solicitudes || []).length) {
     headline = 'Solicitud en revision';
     text = 'Te avisaremos cuando haya profesor asignado.';
@@ -2672,6 +2771,10 @@ async function cargarInicio() {
     const profUnicos = [...new Set((asig||[]).map(a => a.profesor_id))];
     document.getElementById('stat-profesores').textContent = profUnicos.length;
     let profesoresRelacion = [];
+    const scheduleStates = await cargarEstadosHorarioSemanal(chatsRelacion || [], 'familia');
+    const scheduleAttentionCount = [...scheduleStates.values()].filter((state) => ['family_must_propose', 'pending_for_me'].includes(state.key)).length;
+    familyTeacherScheduleStateByAssignment = scheduleStates;
+    renderFamilyTeacherAssignmentAlert(chatsRelacion || [], scheduleStates);
 
     // Próximas clases
     const proximas = clasesFamilia
@@ -2684,6 +2787,7 @@ async function cargarInicio() {
       pagosPend,
       profCount: profUnicos.length,
       solicitudes: solicitudesRelacion || [],
+      scheduleAttentionCount,
     });
     const contP = document.getElementById('lista-proximas-inicio');
     contP.innerHTML = proximas?.length ? proximas.map((c) => {
@@ -2704,7 +2808,7 @@ async function cargarInicio() {
         title: 'Sin clases proximas',
         description: 'Cuando acordeis horario, apareceran aqui las siguientes clases.',
         actions: [
-          emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
+          emptyAction('Mis profesores', { 'data-section': 'profesores' }, 'primary'),
           emptyAction('Ver solicitudes', { 'data-section': 'solicitudes' }, 'ghost'),
         ],
       });
@@ -2712,7 +2816,7 @@ async function cargarInicio() {
     // Profesores asignados
     if (profUnicos.length) {
       const { data: profs } = await db.from('profesores')
-        .select('id, bio, materias, trustScore, trustLevel, trustBadges, publicTrustStats, reputationMetrics, usuarios(nombre,apellidos,telefono)')
+        .select('id, bio, materias, trustScore, trustLevel, trustBadges, publicTrustStats, reputationMetrics, usuarios(nombre,apellidos)')
         .in('id', profUnicos);
       profesoresRelacion = profs || [];
       document.getElementById('lista-profesores-inicio').innerHTML = (profs||[]).slice(0, 3).map((p) => {
@@ -2759,6 +2863,7 @@ async function cargarInicio() {
     document.getElementById('stat-clases-mes').textContent = 0;
     document.getElementById('stat-profesores').textContent = 0;
     renderFamilyHomeHeadline({ hijos: [], proximas: [], pagosPend, profCount: 0, solicitudes: [] });
+    renderFamilyTeacherAssignmentAlert([], new Map());
     document.getElementById('lista-proximas-inicio').innerHTML = renderEmptyState({
       icon: '+',
       title: 'Sin clases todavia',
@@ -2774,6 +2879,270 @@ async function cargarInicio() {
     const relationships = renderFamilyRelationshipDigest();
     renderFamilyJourney({ hijos: [], relationships, solicitudes: [], pagos: [], documentos: [] });
   }
+}
+
+function renderFamilyTeacherAssignmentAlert(chats = [], states = new Map()) {
+  const container = document.getElementById('family-teacher-assignment-alert');
+  if (!container) return;
+  const actionable = (chats || []).filter((chat) => {
+    const state = states.get(chat.id);
+    return state && ['family_must_propose', 'pending_for_me'].includes(state.key);
+  });
+  if (!actionable.length) {
+    container.hidden = true;
+    container.innerHTML = '';
+    return;
+  }
+  const first = actionable[0];
+  const state = states.get(first.id);
+  const teacher = familyOneOffTeacherName(first);
+  const student = familyOneOffStudentName(first);
+  container.hidden = false;
+  container.innerHTML = `
+    <section class="family-assignment-alert" role="status">
+      <div class="family-assignment-alert-icon" aria-hidden="true">✓</div>
+      <div>
+        <span>Profesor asignado</span>
+        <strong>${sanitize(state?.title || 'Falta proponer el horario semanal')}</strong>
+        <p>${sanitize(teacher)} ya está asignado para ${sanitize(student)}. El siguiente paso se resuelve en Mis profesores.</p>
+      </div>
+      <button class="btn btn-primary" type="button" data-action="gestionar-horario-familia" data-assignment-id="${sanitize(first.id)}">${sanitize(state?.actionLabel || 'Proponer horario')}</button>
+    </section>`;
+}
+
+function teacherAge(profile = {}) {
+  const raw = profile.fecha_nacimiento || profile.birthDate || profile.birth_date || '';
+  if (!raw) return null;
+  const date = typeof raw?.toDate === 'function' ? raw.toDate() : new Date(String(raw).slice(0, 10));
+  if (Number.isNaN(date.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  const beforeBirthday = today.getMonth() < date.getMonth()
+    || (today.getMonth() === date.getMonth() && today.getDate() < date.getDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 16 && age <= 90 ? age : null;
+}
+
+function familyTeacherCompletedHours(classes = [], teacherUid = '', assignmentId = '') {
+  const minutes = (classes || []).filter((clase) => {
+    const status = classStatusForBadge(clase);
+    if (!['realizada', 'pagada'].includes(status)) return false;
+    const sameAssignment = assignmentId && String(clase.assignmentId || clase.asignacion_id || '') === String(assignmentId);
+    const sameTeacher = teacherUid && String(clase.teacherUid || clase.profesor_id || '') === String(teacherUid);
+    return sameAssignment || sameTeacher;
+  }).reduce((sum, clase) => sum + classDurationMinutes(clase), 0);
+  return Math.round((minutes / 60) * 10) / 10;
+}
+
+function familyTeacherProfileStats(profile = {}, completedHours = 0) {
+  const trust = profile.publicTrustStats || {};
+  const reputation = profile.reputationMetrics || {};
+  const hours = completedHours || Number(reputation.completedHours ?? trust.completedHours ?? 0) || 0;
+  const experience = Number(profile.experiencia_anios ?? profile.experienceYears);
+  return {
+    hours: Number.isFinite(hours) ? Math.round(hours * 10) / 10 : 0,
+    experience: Number.isFinite(experience) && experience >= 0 ? experience : null,
+    studies: String(profile.estudio_exacto || profile.exactStudy || profile.titulacion || '').trim(),
+    studyCenter: String(profile.centro_estudios || profile.studyCenter || profile.universidad || '').trim(),
+    age: teacherAge(profile),
+  };
+}
+
+function renderFamilyTeacherCard(relation = {}) {
+  const { chat, profile, scheduleState, completedHours } = relation;
+  const teacherUid = chat.teacherUid || chat.profesor_id || '';
+  const stats = familyTeacherProfileStats(profile, completedHours);
+  const teacherName = personDisplayName(
+    'Profesor',
+    teacherUid,
+    fullPersonName(profile.usuarios?.nombre || profile.nombre, profile.usuarios?.apellidos || profile.apellidos),
+    profile.displayName,
+    chat.teacherName,
+    chat.profesor_nombre,
+  );
+  const photo = profile.foto_url || profile.photoUrl || profile.avatarUrl || chat.teacherPhotoUrl || '';
+  const studentName = familyOneOffStudentName(chat);
+  const subject = String(chat.materia || chat.subject || 'Materia por confirmar').trim();
+  const info = [
+    stats.hours > 0 ? `${stats.hours} h impartidas` : 'Sin horas registradas todavía',
+    stats.experience !== null ? `${stats.experience} años de experiencia` : 'Experiencia por completar',
+    stats.age ? `${stats.age} años` : 'Edad no indicada',
+  ];
+  const studies = [stats.studies, stats.studyCenter].filter(Boolean).join(' · ') || 'Estudios por completar';
+  return `
+    <article class="family-teacher-card" data-assignment-card="${sanitize(chat.id)}">
+      <header class="family-teacher-card-header">
+        <div class="family-teacher-avatar">
+          ${photo ? `<img src="${sanitize(photo)}" alt="" loading="lazy">` : sanitize(getIniciales(profile.usuarios?.nombre || profile.nombre || teacherName, profile.usuarios?.apellidos || profile.apellidos))}
+        </div>
+        <div>
+          <span>Profesor asignado</span>
+          <h3>${sanitize(teacherName)}</h3>
+          <p>${sanitize(subject)} · ${sanitize(studentName)}</p>
+        </div>
+      </header>
+      <div class="family-teacher-safe-note">Solo mostramos información académica y de experiencia. Los datos de contacto permanecen protegidos.</div>
+      <div class="family-teacher-facts">
+        ${info.map((item) => `<span>${sanitize(item)}</span>`).join('')}
+      </div>
+      <div class="family-teacher-studies">
+        <span>Qué estudia o ha estudiado</span>
+        <strong>${sanitize(studies)}</strong>
+      </div>
+      <section class="family-teacher-schedule schedule-tone-${sanitize(scheduleState.tone)}">
+        <div>
+          <span>Clases y horario</span>
+          <strong>${sanitize(scheduleState.title)}</strong>
+          <p>${sanitize(scheduleState.detail)}</p>
+        </div>
+        <button class="btn btn-primary btn-sm" type="button" data-action="gestionar-horario-familia" data-assignment-id="${sanitize(chat.id)}">${sanitize(scheduleState.actionLabel)}</button>
+      </section>
+      <footer class="family-teacher-card-actions">
+        <button class="btn btn-outline btn-sm" type="button" data-action="abrir-chat-relacion-familia" data-assignment-id="${sanitize(chat.id)}">Abrir chat</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-section="calendario">Ver calendario</button>
+      </footer>
+    </article>`;
+}
+
+async function loadFamilyTeacherProfiles(teacherIds = []) {
+  const uniqueIds = [...new Set(teacherIds.filter(Boolean).map(String))];
+  const legacyPromise = uniqueIds.length
+    ? (async () => {
+        try {
+          const { data } = await db.from('profesores').select('*,usuarios(nombre,apellidos)').in('id', uniqueIds);
+          return data || [];
+        } catch (_) {
+          return [];
+        }
+      })()
+    : Promise.resolve([]);
+  const firestorePromise = Promise.all(uniqueIds.map(async (id) => {
+    const snap = await getDoc(firestoreDoc(firebaseDb, 'profesores', id)).catch(() => null);
+    return snap?.exists() ? { id: snap.id, ...snap.data() } : null;
+  }));
+  const [legacy, firestore] = await Promise.all([legacyPromise, firestorePromise]);
+  const byId = new Map();
+  legacy.forEach((item) => byId.set(String(item.id), item));
+  firestore.filter(Boolean).forEach((item) => byId.set(String(item.id), { ...(byId.get(String(item.id)) || {}), ...item }));
+  return byId;
+}
+
+async function cargarMisProfesores() {
+  if (familyTeachersLoadingPromise) return familyTeachersLoadingPromise;
+  familyTeachersLoadingPromise = (async () => {
+    const grid = document.getElementById('family-teachers-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div class="card"><div class="card-body">Cargando profesores...</div></div>';
+    const [{ data: hijos }, chats] = await Promise.all([
+      db.from('alumnos').select('*').eq('familia_id', familiaId).eq('activo', true),
+      cargarChatsUsuarioActual(),
+    ]);
+    const relations = normalizeOneOffChatRows(chats);
+    if (!relations.length) {
+      familyTeacherRelationsByAssignment = new Map();
+      familyTeacherScheduleStateByAssignment = new Map();
+      renderFamilyTeacherAssignmentAlert([], new Map());
+      grid.innerHTML = renderEmptyState({
+        icon: '+',
+        title: 'Aún no tienes profesor asignado',
+        description: 'Cuando el equipo complete una asignación, verás aquí la ficha, el horario semanal y el acceso al chat.',
+        actions: [emptyAction('Solicitar profesor', { 'data-action': 'abrir-modal-solicitud' }, 'gold')],
+      });
+      updateFamilyDeviceSetupStatus();
+      return;
+    }
+    const teacherIds = relations.map((chat) => chat.teacherUid || chat.profesor_id).filter(Boolean);
+    const hijosPorId = new Map((hijos || []).map((hijo) => [
+      hijo.id,
+      personDisplayName('Alumno', hijo.id, fullPersonName(hijo.nombre, hijo.apellidos)),
+    ]));
+    const [profiles, scheduleStates, classes] = await Promise.all([
+      loadFamilyTeacherProfiles(teacherIds),
+      cargarEstadosHorarioSemanal(relations, 'familia'),
+      cargarClasesFamilia({ hijos: hijos || [], ids: (hijos || []).map((hijo) => hijo.id), hijosPorId, limit: 1400 }),
+    ]);
+    familyTeacherScheduleStateByAssignment = scheduleStates;
+    const relationRows = relations.map((chat) => {
+      const teacherUid = String(chat.teacherUid || chat.profesor_id || '');
+      return {
+        chat,
+        profile: profiles.get(teacherUid) || {},
+        scheduleState: scheduleStates.get(chat.id) || buildWeeklyScheduleState([], 'familia'),
+        completedHours: familyTeacherCompletedHours(classes, teacherUid, chat.id),
+      };
+    });
+    familyTeacherRelationsByAssignment = new Map(relationRows.map((row) => [String(row.chat.id), row]));
+    grid.innerHTML = relationRows.map(renderFamilyTeacherCard).join('');
+    renderFamilyTeacherAssignmentAlert(relations, scheduleStates);
+    updateFamilyDeviceSetupStatus();
+
+    const requestedAssignment = new URLSearchParams(window.location.search).get('assignment') || '';
+    if (requestedAssignment && requestedAssignment !== familyAutoOpenedScheduleAssignment && familyTeacherRelationsByAssignment.has(requestedAssignment)) {
+      familyAutoOpenedScheduleAssignment = requestedAssignment;
+      setTimeout(() => abrirHorarioSemanalFamilia(requestedAssignment), 60);
+    }
+  })().finally(() => { familyTeachersLoadingPromise = null; });
+  return familyTeachersLoadingPromise;
+}
+
+async function ensureFamilyScheduleWidget() {
+  if (!familyScheduleWidgetPromise) {
+    familyScheduleWidgetPromise = initChatWidget({
+      container: document.getElementById('family-weekly-schedule-widget'),
+      db,
+      usuario,
+      role: 'familia',
+      profileId: familiaId,
+      showToast,
+      showNotifications: false,
+      schedulingEnabled: true,
+      scheduleOnly: true,
+      requireFamilyFirstProposal: true,
+      scheduleMessagesEnabled: false,
+    });
+  }
+  return familyScheduleWidgetPromise;
+}
+
+async function abrirHorarioSemanalFamilia(assignmentId = '') {
+  const id = String(assignmentId || '').trim();
+  if (!id) return;
+  const relation = familyTeacherRelationsByAssignment.get(id);
+  const subtitle = document.getElementById('family-weekly-schedule-subtitle');
+  if (subtitle && relation) {
+    subtitle.textContent = `${familyOneOffStudentName(relation.chat)} · ${relation.chat.materia || relation.chat.subject || 'Clase semanal'}`;
+  }
+  openModal('modal-horario-semanal-familia');
+  await ensureFamilyScheduleWidget();
+  window.dispatchEvent(new CustomEvent('cd10:open-chat-planner', { detail: { assignmentId: id } }));
+}
+
+async function abrirChatRelacionFamilia(assignmentId = '') {
+  irA('chat');
+  await cargarChat();
+  window.dispatchEvent(new CustomEvent('cd10:open-chat-relation', { detail: { assignmentId } }));
+}
+
+function updateFamilyDeviceSetupStatus() {
+  const status = document.getElementById('family-device-setup-status');
+  if (!status) return;
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const permission = typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+  if (standalone && permission === 'granted') status.textContent = 'Todo listo: panel instalado y avisos del móvil activados.';
+  else if (permission === 'granted') status.textContent = 'Avisos activados. Instala el panel para abrir cada tarea desde el icono del móvil.';
+  else if (standalone) status.textContent = 'Panel instalado. Activa los avisos para recibir propuestas y cambios de horario.';
+}
+
+async function activarAvisosMovilFamilia() {
+  const permission = await requestBrowserNotificationPermission();
+  if (permission !== 'granted') {
+    showToast('Avisos no activados', permission === 'denied' ? 'Permítelos desde los ajustes del navegador.' : 'Este navegador no admite avisos.', 'warning');
+    updateFamilyDeviceSetupStatus();
+    return;
+  }
+  const result = await registerPushNotifications({ userUid: ownerUid(), role: 'familia' }).catch((error) => ({ ok: false, status: error.message }));
+  showToast(result.ok ? 'Avisos activados' : 'Avisos del navegador activados', result.ok ? 'Las propuestas y cambios llegarán también con el panel cerrado.' : 'Recibirás avisos mientras el panel esté abierto.', result.ok ? 'success' : 'info');
+  updateFamilyDeviceSetupStatus();
 }
 
 // ── CALENDARIO ───────────────────────────────────────────────────
@@ -2970,8 +3339,8 @@ async function iniciarCalendario() {
           cont.innerHTML = renderEmptyState({
             icon: '📅',
             title: 'Sin actividad este dia',
-            description: 'Cuando cerreis un horario en el chat, la clase aparecera automaticamente en el calendario.',
-            actions: [emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary')],
+            description: 'Cuando aceptéis el horario en Mis profesores, las clases aparecerán automáticamente en el calendario.',
+            actions: [emptyAction('Mis profesores', { 'data-section': 'profesores' }, 'primary')],
             compact: true,
           });
           return;
@@ -3114,9 +3483,9 @@ async function cargarClases() {
     tbody.innerHTML = renderTableEmptyState(9, {
       icon: '📅',
       title: 'No hay clases con estos filtros',
-      description: 'Si ya tienes profesor, coordinad el horario desde el chat. Si aún no lo tienes, solicita uno y te avisaremos.',
+      description: 'Si ya tienes profesor, gestiona el horario desde Mis profesores. Si aún no lo tienes, solicita uno y te avisaremos.',
       actions: [
-        emptyAction('Abrir chat', { 'data-section': 'chat' }, 'primary'),
+        emptyAction('Mis profesores', { 'data-section': 'profesores' }, 'primary'),
         emptyAction('Nueva solicitud', { 'data-action': 'abrir-modal-solicitud' }, 'gold'),
       ],
     });
@@ -3788,6 +4157,20 @@ function mergedPaymentGroupForScheduleDate(schedule = {}, dateIso = '', groups =
     teacherName: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, sourceGroups[0]?.teacherName, sourceGroups[0]?.profesor_nombre),
     profesor_nombre: personDisplayName('Profesor', schedule.teacherUid || schedule.profesor_id, schedule.teacherName, schedule.profesor_nombre, sourceGroups[0]?.teacherName, sourceGroups[0]?.profesor_nombre),
   };
+}
+
+async function cargarEstadosHorarioSemanal(chats = [], role = 'familia') {
+  const entries = await Promise.all((chats || []).filter((chat) => chat?.id).map(async (chat) => {
+    try {
+      const snap = await getDocs(firestoreCollection(firebaseDb, 'chats', chat.id, 'programaciones'));
+      const proposals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+      return [chat.id, buildWeeklyScheduleState(proposals, role)];
+    } catch (error) {
+      if (!isExpectedPermissionFallback(error)) console.warn('No se pudo cargar el horario semanal', { chatId: chat.id, error });
+      return [chat.id, buildWeeklyScheduleState([], role)];
+    }
+  }));
+  return new Map(entries);
 }
 
 function familyPaymentWorkbenchGroups(groups = [], nowMs = Date.now()) {
@@ -4648,7 +5031,7 @@ function renderFamilyMatchingStatus(solicitud = {}) {
   const confidence = Number(solicitud.matchConfidenceScore || decision.confidenceScore || 0);
   const assigned = Boolean(solicitud.profesor_asignado_id || solicitud.assignedTeacherUid);
   const copy = assigned
-    ? { label: 'Profesor asignado', tone: 'success', desc: 'Ya puedes coordinar el horario desde el chat.' }
+    ? { label: 'Profesor asignado', tone: 'success', desc: 'Ya puedes proponer el horario desde Mis profesores.' }
     : quality === 'listo_para_asignar'
       ? { label: 'Candidato claro', tone: 'success', desc: 'Estamos validando el mejor profesor disponible.' }
       : quality === 'revisar_antes_de_asignar'
@@ -5863,6 +6246,6 @@ onSnapshot(firestoreDoc(firebaseDb, 'familias', familiaFirestoreId), async (snap
   }
 }, (error) => console.warn('No se pudo observar el bloqueo de pagos de la familia', error));
 </script>
-<script src="/js/pwa.js?v=20260808-copy-cleanup" defer></script>
+<script src="/js/pwa.js?v=20260821-family-teachers" defer></script>
 </body>
 </html>

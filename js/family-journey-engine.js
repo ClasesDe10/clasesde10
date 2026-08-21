@@ -241,14 +241,14 @@ function stageCopy(stage, context = {}) {
       primary: buildAction('open_requests', 'Ver solicitud', 'Comprueba el estado sin perder el hilo.', 'solicitudes', 'secondary'),
     },
     chat_needed: {
-      title: 'Abre el chat y acuerda el primer horario',
-      body: `Ya hay profesor asignado${relationshipContext.assignedText}. El siguiente paso es concretar la primera clase desde el chat.`,
-      primary: buildAction('open_chat', 'Abrir chat', 'Es el punto unico para mensajes, horarios y avisos.', 'chat'),
+      title: 'Revisa tu profesor y propón el horario',
+      body: `Ya hay profesor asignado${relationshipContext.assignedText}. El siguiente paso es enviar la propuesta semanal desde Mis profesores.`,
+      primary: buildAction('open_teachers', 'Mis profesores', 'Ficha, horario semanal y acceso al chat.', 'profesores'),
     },
     schedule_needed: {
       title: 'Falta cerrar la hora de la clase',
-      body: `Usa el chat${relationshipContext.chatTarget} para proponer o confirmar el horario. En cuanto se cierre, aparecera en calendario.`,
-      primary: buildAction('open_chat', 'Coordinar horario', 'Abre el chat con el profesor.', 'chat'),
+      body: 'Usa Mis profesores para proponer o confirmar el horario. En cuanto se cierre, aparecerá en calendario.',
+      primary: buildAction('open_teachers', 'Coordinar horario', 'Abre la ficha del profesor.', 'profesores'),
     },
     class_scheduled: {
       title: 'La clase ya esta programada',
@@ -317,9 +317,9 @@ export function buildFamilyJourneyState(input = {}) {
     checklistItem('profile', 'Datos basicos completos', profileReady, 'complete_profile'),
     checklistItem('student', 'Alumno registrado', hasStudents, 'add_student'),
     checklistItem('request', 'Solicitud enviada', requested, 'request_teacher'),
-    checklistItem('assignment', 'Profesor asignado', assigned, 'open_requests'),
+    checklistItem('assignment', 'Profesor asignado', assigned, 'open_teachers'),
     checklistItem('chat', 'Chat abierto', chatReady, 'open_chat'),
-    checklistItem('schedule', 'Primera clase programada', scheduleReady || classReady, 'open_calendar'),
+    checklistItem('schedule', 'Primera clase programada', scheduleReady || classReady, 'open_teachers'),
     checklistItem('closure', 'Clase confirmada y seguimiento al dia', completedClass && !paymentRisk && !confirmationPending, paymentRisk ? 'open_payments' : 'open_classes'),
   ];
   const completed = checklist.filter((item) => item.done).length;

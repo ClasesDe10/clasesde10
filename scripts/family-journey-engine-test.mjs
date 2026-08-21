@@ -30,15 +30,15 @@ const chatNeeded = state({
   relationships: [{ id: 'r1', stage: 'profesor_asignado', assignment: { id: 'as1' }, counts: {} }],
 });
 assert.equal(chatNeeded.stage, 'chat_needed');
-assert.equal(chatNeeded.primaryAction.id, 'open_chat');
+assert.equal(chatNeeded.primaryAction.id, 'open_teachers');
 
 const scheduleNeeded = state({
   students: [{ id: 'a1', activo: true }],
   relationships: [{ id: 'r1', stage: 'pendiente_horario', title: 'G', subject: 'Matematicas', assignment: { id: 'as1' }, chat: { id: 'c1' }, modules: { chat: true }, counts: {} }],
 });
 assert.equal(scheduleNeeded.stage, 'schedule_needed');
-assert.equal(scheduleNeeded.primaryAction.id, 'open_chat');
-assert.match(scheduleNeeded.body, /chat de Matematicas/);
+assert.equal(scheduleNeeded.primaryAction.id, 'open_teachers');
+assert.match(scheduleNeeded.body, /Mis profesores/);
 assert.doesNotMatch(scheduleNeeded.body, /para G/);
 
 const paymentDue = state({

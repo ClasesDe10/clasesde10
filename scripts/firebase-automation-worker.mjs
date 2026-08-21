@@ -518,6 +518,11 @@ async function notifyUserOnce(db, userUid, title, body, payload = {}, key = '', 
     key,
     nowIso: isoNow(),
   });
+  if (type === 'assignment_created' && payload.assignmentId) {
+    const immediateId = notificationId('assignment_created', payload.assignmentId, role, targetUid);
+    const immediate = await db.collection('notificaciones').doc(immediateId).get();
+    if (immediate.exists) return false;
+  }
   const id = notificationId('auto', policyKey || key || payload.type || 'notification', targetUid);
   const ref = db.collection('notificaciones').doc(id);
   const existing = await ref.get();
@@ -615,6 +620,23 @@ function notificationNeedsPush(notification = {}) {
   return Boolean(clean(notification.userUid || notification.usuario_id, 180));
 }
 
+function actionableNotificationUrl(notification = {}) {
+  const type = clean(notification.type || notification.payload?.type || '', 80);
+  const role = clean(notification.role || notification.targetRole || '', 40).toLowerCase();
+  const payload = notification.payload || {};
+  const assignmentId = clean(payload.assignmentId || payload.chatId, 180);
+  const proposalId = clean(payload.proposalId, 180);
+  if (type === 'assignment_created' || type === 'schedule_proposed' || type === 'schedule_rejected') {
+    const params = new URLSearchParams();
+    if (assignmentId) params.set('assignment', assignmentId);
+    if (proposalId) params.set('proposal', proposalId);
+    const query = params.size ? `?${params.toString()}` : '';
+    if (role === 'familia') return `/pages/dashboard/familia.html${query}#profesores`;
+    if (role === 'profesor') return `/pages/dashboard/profesor.html${query}#alumnos`;
+  }
+  return notification.actionUrl || payload.url || '/pages/login.html';
+}
+
 async function sendPushForNotificationWorker(db, notificationId, notification, stats = {}) {
   const userUid = clean(notification.userUid || notification.usuario_id, 180);
   if (!userUid) return { sent: 0, failed: 0, skipped: 'missing_user' };
@@ -647,7 +669,7 @@ async function sendPushForNotificationWorker(db, notificationId, notification, s
     return { sent: 0, failed: 0, skipped: 'no_tokens' };
   }
 
-  const actionUrl = safeInternalActionUrl(notification.actionUrl || notification.payload?.url || '/pages/login.html');
+  const actionUrl = safeInternalActionUrl(actionableNotificationUrl(notification));
   const message = {
     tokens: tokens.map((item) => item.token),
     notification: {
@@ -3519,7 +3541,7 @@ async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automat
     studentProfile.data.email,
   );
   const subject = clean(assignment.materia || assignment.subject, 180);
-  const introBody = `${teacherName} ya esta asignado. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const introBody = `${teacherName} ya esta asignado. Podéis usar este chat para hablar. El horario semanal se propone y responde desde Mis profesores o Mis alumnos.`;
   const chatRef = db.collection('chats').doc(id);
   const chatSnap = await chatRef.get();
   const chatData = chatSnap.exists ? chatSnap.data() : {};

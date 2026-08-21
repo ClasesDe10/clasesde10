@@ -27,11 +27,14 @@ assert(admin.includes('prepararFlujoAsignacion'), 'Admin assignment must prepare
 assert(admin.includes("schedulingStatus: 'pendiente_horario'"), 'Assignments must start as pending scheduling.');
 assert(admin.includes('buildAssignmentPricingQuote'), 'Admin assignment must attach pricing to matching decisions.');
 assert(admin.includes('renderPricingQuoteLine'), 'Admin matching must display family price, teacher amount and margin.');
-assert(admin.includes('Profesor asignado, chat creado'), 'Admin must confirm chat creation after assignment.');
+assert(admin.includes('La familia ya puede proponer el horario desde Mis profesores'), 'Admin must confirm the family scheduling next step after assignment.');
 assert(!admin.includes('assignment_ready_for_scheduling'), 'Admin must not write duplicate scheduling automation events from the browser.');
-assert(!admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Assignment notifications must be centralized in the automation worker.');
+assert(admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Manual assignment must notify both participants immediately.');
 
 assert(chat.includes('data-schedule-form'), 'Chat widget must render schedule proposal form.');
+assert(chat.includes('schedulingEnabled = false'), 'Regular chat must hide scheduling by default.');
+assert(chat.includes('scheduleOnly = false'), 'Scheduling must be available only in the dedicated workspace mode.');
+assert(chat.includes("scheduleMessagesEnabled = false"), 'Schedule movements must not add messages to chat by default.');
 assert(chat.includes('availability-engine.js'), 'Chat widget must use the shared availability engine.');
 assert(chat.includes('loadChatAvailability'), 'Chat widget must load teacher and student availability.');
 assert(chat.includes('validateScheduleAvailability'), 'Chat widget must validate proposals against availability slots.');
@@ -40,7 +43,7 @@ assert(chat.includes('busySlotsForChatValidation'), 'Chat widget must combine pe
 assert(chat.includes('findBusySlotConflict'), 'Accepted proposals must be rechecked against occupied slots before class creation.');
 assert(chat.includes('persistBusySlotsForClass'), 'Accepted proposal classes must materialize occupied slots for future scheduling.');
 assert(chat.includes('repairBusySlotsFromVisibleClasses'), 'Chat widget must self-heal busy slots from visible existing classes when Functions are not available.');
-assert(chat.includes("availabilityValidation.reason === 'outside_own_availability'"), 'Acceptance must allow the accepting user to override their own availability while preserving counterparty/busy checks.');
+assert(chat.includes("'outside_own_availability'"), 'Acceptance must allow the accepting user to override their own availability while preserving busy checks.');
 assert(chat.includes('availabilityStatus'), 'Schedule proposals must store availability validation status.');
 assert(chat.includes("collection(firebaseDb, 'chats', state.selectedChat.id, 'programaciones')"), 'Chat widget must persist schedule proposals.');
 assert(chat.includes('acceptScheduleProposal'), 'Chat widget must support accepting schedule proposals.');

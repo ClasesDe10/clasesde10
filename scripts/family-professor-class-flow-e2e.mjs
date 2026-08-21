@@ -449,74 +449,30 @@ async function main() {
     await createSmokeRelationship(familyUser.uid, teacherUser.uid, adminUser.uid);
 
     await login(credentials.familyEmail, credentials.familyPassword, 'familia');
-    const chatId = await openChatById(smokeId);
+    await openSection('chat', '#chat-familia [data-chat-layout]');
+    if (await page.locator('#chat-familia [data-chat-toggle-schedule], #chat-familia [data-chat-schedule-panel]').count()) throw new Error('El horario sigue apareciendo en el chat normal de la familia.');
+    await openSection('profesores', '#family-teachers-grid');
+    const familyTeacherCard = page.locator(`[data-assignment-card="${smokeId}"]`).first();
+    await familyTeacherCard.waitFor({ state: 'visible', timeout: 30000 });
+    await familyTeacherCard.locator('[data-action="gestionar-horario-familia"]').click();
+    await page.waitForSelector('#modal-horario-semanal-familia.open [data-chat-schedule-panel]', { timeout: 30000 });
+    const familySchedulePanel = page.locator('#modal-horario-semanal-familia [data-chat-schedule-panel]');
+    await familySchedulePanel.locator('[data-open-schedule-planner]').click();
+    const familyScheduleForm = familySchedulePanel.locator('[data-schedule-form]');
+    await familyScheduleForm.locator('[data-schedule-weekday]').selectOption('1');
+    await familyScheduleForm.locator('[data-schedule-start]').fill('21:00');
+    await familyScheduleForm.locator('[data-schedule-end]').fill('22:00');
+    await familyScheduleForm.locator('[data-schedule-modality]').selectOption('online');
+    await familyScheduleForm.locator('[data-schedule-notes]').fill(`Prueba automatica Codex ${Date.now()}`);
+    await familyScheduleForm.locator('button[type="submit"]').click();
+    const familyProposalCard = familySchedulePanel.locator('[data-schedule-proposal-id].active').first();
+    await familyProposalCard.waitFor({ state: 'visible', timeout: 30000 });
+    const proposal = {
+      proposalId: await familyProposalCard.getAttribute('data-schedule-proposal-id'),
+      materia: 'Matematicas E2E',
+    };
+    const chatId = smokeId;
     debug.chatId = chatId;
-    const date = nextWeekdayDate(2, 49);
-    const proposal = await page.evaluate(async ({ chatId: currentChatId, date: classDate }) => {
-      const {
-        addDoc,
-        collection,
-        doc,
-        getDoc,
-        serverTimestamp,
-        updateDoc,
-      } = await import('https://www.gstatic.com/firebasejs/12.14.0/firebase-firestore.js');
-      const { firebaseAuth, firebaseDb } = await import('/js/firebase-client.js');
-      const chatRef = doc(firebaseDb, 'chats', currentChatId);
-      const chatSnap = await getDoc(chatRef);
-      if (!chatSnap.exists()) throw new Error(`Chat no encontrado: ${currentChatId}`);
-      const chat = chatSnap.data();
-      const dayOfWeek = (new Date(`${classDate}T00:00:00`).getDay() + 6) % 7;
-      const weekdayLabels = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
-      const proposalRef = await addDoc(collection(chatRef, 'programaciones'), {
-        assignmentId: currentChatId,
-        familyUid: chat.familyUid || chat.familia_id,
-        teacherUid: chat.teacherUid || chat.profesor_id,
-        studentId: chat.studentId || chat.alumno_id,
-        materia: chat.materia || 'Prueba automatica',
-        kind: 'weekly_recurring',
-        scheduleKind: 'weekly_recurring',
-        firstClassDate: classDate,
-        fecha: classDate,
-        hora_inicio: '21:00',
-        hora_fin: '22:00',
-        durationMinutes: 60,
-        modalidad: 'online',
-        notas: `Prueba automatica Codex ${Date.now()}`,
-        recurrence: {
-          frequency: 'weekly',
-          dayOfWeek,
-          startTime: '21:00',
-          endTime: '22:00',
-          timezone: 'Europe/Madrid',
-        },
-        recurrenceLabel: `Todos los ${weekdayLabels[dayOfWeek]} 21:00-22:00`,
-        status: 'propuesta',
-        availabilityStatus: 'smoke_test',
-        availabilityValidation: {
-          checkedByRole: 'familia',
-          checkedAt: new Date().toISOString(),
-          requiredScope: 'smoke',
-        },
-        proposedByUid: firebaseAuth.currentUser.uid,
-        proposedByRole: 'familia',
-        proposedAt: serverTimestamp(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      await updateDoc(chatRef, {
-        schedulingStatus: 'horario_propuesto',
-        relationshipStage: 'horario_propuesto',
-        relationshipStatus: 'active',
-        lastRelationshipEvent: 'schedule_proposed',
-        relationshipUpdatedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      return {
-        proposalId: proposalRef.id,
-        materia: chat.materia || 'Prueba automatica',
-      };
-    }, { chatId, date });
 
     const classId = classIdFromProposal(chatId, proposal.proposalId);
     debug.proposalId = proposal.proposalId;
@@ -525,12 +481,14 @@ async function main() {
     cleanupTargets.classId = classId;
 
     await login(credentials.teacherEmail, credentials.teacherPassword, 'profesor');
-    await page.locator('[data-section="chat"], [data-section="chats"]').first().click();
-    await page.waitForSelector('[data-chat-id]', { timeout: 25000 });
-    const teacherChat = page.locator(`[data-chat-id="${chatId}"]`).first();
-    if (!(await teacherChat.count())) throw new Error(`El profesor no ve el chat ${chatId}.`);
-    await teacherChat.click();
-    const proposalCard = page.locator(`[data-schedule-proposal-id="${proposal.proposalId}"]`).first();
+    await openSection('chat', '#chat-profesor [data-chat-layout]');
+    if (await page.locator('#chat-profesor [data-chat-toggle-schedule], #chat-profesor [data-chat-schedule-panel]').count()) throw new Error('El horario sigue apareciendo en el chat normal del profesor.');
+    await openSection('alumnos', '#tbody-mis-alumnos');
+    const teacherStudentRow = page.locator('#tbody-mis-alumnos tr').filter({ hasText: 'Matematicas E2E' }).first();
+    await teacherStudentRow.waitFor({ state: 'visible', timeout: 30000 });
+    await teacherStudentRow.locator('[data-action="gestionar-horario-profesor"]').click();
+    await page.waitForSelector('#modal-horario-semanal-profesor.open [data-chat-schedule-panel]', { timeout: 30000 });
+    const proposalCard = page.locator(`#modal-horario-semanal-profesor [data-schedule-proposal-id="${proposal.proposalId}"]`).first();
     await proposalCard.waitFor({ state: 'visible', timeout: 25000 });
     await proposalCard.locator('[data-accept-schedule]').click();
     const acceptDeadline = Date.now() + 80000;

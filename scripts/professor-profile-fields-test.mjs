@@ -9,6 +9,7 @@ const publicTeacherPage = fs.readFileSync('para-profesores.html', 'utf8');
 
 for (const id of [
   'p-foto-file',
+  'p-fecha-nacimiento',
   'p-estudio-exacto',
   'p-colegio',
   'p-centro-estudios',
@@ -48,6 +49,7 @@ assert.ok(professorDashboard.includes('certificado_formacion_especializada'), 'T
 assert.ok(professorDashboard.includes('referencia_academica_profesional'), 'Teacher documents must allow academic/professional references');
 assert.ok(professorDashboard.includes('Curriculum opcional'), 'Teacher documents must keep CV optional');
 assert.ok(professorDashboard.includes('Coche para desplazamientos'), 'Teacher profile must ask for car availability');
+assert.ok(professorDashboard.includes('Las familias solo verán tu edad'), 'Teacher birth date must remain private while exposing only age to families');
 assert.ok(professorDashboard.includes('Dia de cobro'), 'Teacher income section must include payout day settings');
 assert.ok(professorDashboard.includes('Una vez guardado no se puede cambiar desde el panel'), 'Teacher payout day must clearly explain the lock after saving');
 assert.ok(professorDashboard.includes('guardarDiaCobroProfesor'), 'Teacher payout day must save independently from profile edits');
@@ -96,6 +98,7 @@ for (const removed of [
 
 for (const field of [
   'estudio_exacto',
+  'fecha_nacimiento',
   'colegio',
   'schoolName',
   'centro_estudios',

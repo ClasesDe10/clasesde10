@@ -10873,3 +10873,243 @@ tbody tr:hover {
     width: 100%;
   }
 }
+/* Assigned teachers and weekly schedule workspace */
+.family-teachers-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.family-teachers-header h2 {
+  margin: 3px 0 6px;
+  color: var(--navy);
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+}
+
+.family-teachers-header p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--gray-mid);
+  line-height: 1.55;
+}
+
+.family-teachers-kicker {
+  color: var(--gold-dark, #9a6700);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.family-device-setup {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  border: 1px solid rgba(37, 99, 235, .16);
+  border-radius: 10px;
+  background: #f7faff;
+}
+
+.family-device-setup > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.family-device-setup strong { color: var(--navy); }
+.family-device-setup span { color: var(--gray-mid); font-size: .86rem; line-height: 1.45; }
+.family-device-setup-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+
+.family-teachers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 18px;
+}
+
+.family-teacher-card {
+  display: grid;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid rgba(15, 31, 61, .1);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.family-teacher-card-header {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.family-teacher-card-header > div:last-child { min-width: 0; }
+.family-teacher-card-header span,
+.family-teacher-studies span,
+.family-teacher-schedule span {
+  display: block;
+  color: var(--gray-mid);
+  font-size: .7rem;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.family-teacher-card-header h3 {
+  margin: 2px 0 3px;
+  color: var(--navy);
+  font-size: 1.15rem;
+}
+
+.family-teacher-card-header p { margin: 0; color: var(--gray-mid); font-size: .84rem; }
+
+.family-teacher-avatar {
+  width: 54px;
+  height: 54px;
+  flex: 0 0 54px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--navy);
+  color: #fff;
+  font-weight: 900;
+}
+
+.family-teacher-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.family-teacher-safe-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 31, 61, .045);
+  color: #5d6678;
+  font-size: .76rem;
+  line-height: 1.45;
+}
+
+.family-teacher-facts { display: flex; flex-wrap: wrap; gap: 7px; }
+.family-teacher-facts span {
+  padding: 7px 9px;
+  border: 1px solid rgba(15, 31, 61, .09);
+  border-radius: 999px;
+  color: #31405d;
+  background: #f8fafc;
+  font-size: .76rem;
+  font-weight: 750;
+}
+
+.family-teacher-studies { display: grid; gap: 4px; }
+.family-teacher-studies strong { color: var(--navy); font-size: .9rem; line-height: 1.4; }
+
+.family-teacher-schedule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(217, 119, 6, .18);
+  border-radius: 12px;
+  background: rgba(255, 247, 223, .72);
+}
+
+.family-teacher-schedule > div { min-width: 0; }
+.family-teacher-schedule strong { display: block; margin-top: 3px; color: var(--navy); font-size: .9rem; }
+.family-teacher-schedule p { margin: 3px 0 0; color: #6f695f; font-size: .78rem; line-height: 1.4; }
+.family-teacher-schedule.schedule-tone-success,
+.student-weekly-status.schedule-tone-success { border-color: rgba(22, 163, 74, .2); background: rgba(22, 163, 74, .07); }
+.family-teacher-schedule.schedule-tone-info,
+.student-weekly-status.schedule-tone-info { border-color: rgba(37, 99, 235, .18); background: rgba(37, 99, 235, .06); }
+.family-teacher-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.family-assignment-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 18px;
+  padding: 17px 18px;
+  border: 1px solid rgba(232, 160, 48, .34);
+  border-radius: 10px;
+  background: #fff9e9;
+}
+
+.family-assignment-alert-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gold, #e8a030);
+  color: var(--navy);
+  font-weight: 950;
+}
+
+.family-assignment-alert span { display: block; color: #8a650d; font-size: .7rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
+.family-assignment-alert strong { display: block; margin-top: 2px; color: var(--navy); font-size: 1rem; }
+.family-assignment-alert p { margin: 4px 0 0; color: #5d6678; font-size: .83rem; line-height: 1.42; }
+
+.student-weekly-status {
+  display: grid;
+  gap: 3px;
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(217, 119, 6, .18);
+  border-radius: 9px;
+  background: rgba(255, 247, 223, .72);
+}
+
+.student-weekly-status strong { color: var(--navy); font-size: .76rem; }
+.student-weekly-status small { color: #6f695f; font-size: .7rem; line-height: 1.35; }
+.student-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.weekly-schedule-modal-card { width: min(920px, calc(100vw - 24px)); max-width: 920px; }
+.weekly-schedule-modal-body { padding: 0 !important; overflow: hidden; }
+.weekly-schedule-loading { padding: 28px; color: var(--gray-mid); text-align: center; }
+
+.weekly-schedule-widget.chat-schedule-workspace .chat-layout {
+  display: block;
+  min-height: 0;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.weekly-schedule-widget.chat-schedule-workspace .chat-list-panel,
+.weekly-schedule-widget.chat-schedule-workspace .chat-thread-header,
+.weekly-schedule-widget.chat-schedule-workspace .chat-voice-call-bar,
+.weekly-schedule-widget.chat-schedule-workspace .chat-video-call-stage,
+.weekly-schedule-widget.chat-schedule-workspace .chat-thread-search,
+.weekly-schedule-widget.chat-schedule-workspace .chat-messages,
+.weekly-schedule-widget.chat-schedule-workspace .chat-typing-indicator,
+.weekly-schedule-widget.chat-schedule-workspace .chat-compose,
+.weekly-schedule-widget.chat-schedule-workspace .notifications-panel {
+  display: none !important;
+}
+
+.weekly-schedule-widget.chat-schedule-workspace .chat-thread-panel:not(.notifications-panel) {
+  display: block !important;
+  min-width: 0;
+}
+
+.weekly-schedule-widget.chat-schedule-workspace .chat-schedule-panel {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+  padding: 20px;
+  border: 0;
+  background: #fff;
+}
+
+@media (max-width: 720px) {
+  .family-teachers-header,
+  .family-device-setup,
+  .family-teacher-schedule { align-items: stretch; flex-direction: column; }
+  .family-device-setup-actions { justify-content: stretch; }
+  .family-device-setup-actions .btn,
+  .family-teacher-schedule .btn { width: 100%; }
+  .family-assignment-alert { grid-template-columns: auto minmax(0, 1fr); }
+  .family-assignment-alert .btn { grid-column: 1 / -1; width: 100%; }
+  .weekly-schedule-widget.chat-schedule-workspace .chat-schedule-panel { padding: 14px; max-height: 72vh; }
+}

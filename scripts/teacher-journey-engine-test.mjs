@@ -57,7 +57,7 @@ const scheduleNeeded = state({
   relationships: [{ id: 'r1', stage: 'pendiente_horario', title: 'G', subject: 'Matematicas', assignment: { id: 'as1' }, chat: { id: 'as1' }, counts: {} }],
 });
 assert.equal(scheduleNeeded.stage, 'schedule_needed');
-assert.equal(scheduleNeeded.primaryAction.id, 'open_chat');
+assert.equal(scheduleNeeded.primaryAction.id, 'open_students');
 assert.match(scheduleNeeded.body, /Matematicas/);
 assert.doesNotMatch(scheduleNeeded.body, /para G/);
 
@@ -83,7 +83,7 @@ assert.equal(incidentDominates.stage, 'incident_open');
 
 const html = renderTeacherJourneyPanel(scheduleNeeded);
 assert.match(html, /data-teacher-journey-stage="schedule_needed"/);
-assert.match(html, /data-teacher-journey-action="open_chat"/);
+assert.match(html, /data-teacher-journey-action="open_students"/);
 assert.match(html, /Tu centro de trabajo/);
 
 const professorDashboard = readFileSync(new URL('../pages/dashboard/profesor.html', import.meta.url), 'utf8');

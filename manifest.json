@@ -1,7 +1,7 @@
 {
   "name": "ClasesDe10 Panel",
   "short_name": "CD10 Panel",
-  "description": "Accede a tu panel de clases, chat, calendario y pagos.",
+  "description": "Accede a profesores, horarios, clases, chat, calendario y pagos.",
   "id": "/pages/login.html",
   "start_url": "/pages/login.html?source=pwa",
   "scope": "/",

@@ -1109,9 +1109,10 @@
       ],
       familia: [
         { id: 'familia:next', label: 'Hacer mi siguiente paso', hint: 'La guia decide que toca ahora', category: 'Recomendado', section: 'inicio', selector: '.family-journey-card [data-family-journey-action]', priority: 1, recommended: true, keywords: 'siguiente paso guia hijo solicitud profesor chat pago' },
+        { id: 'familia:teachers', label: 'Mis profesores y horarios', hint: 'Fichas, propuestas y respuestas pendientes', category: 'Clases', section: 'profesores', priority: 4, recommended: true, keywords: 'profesor horario propuesta semanal pendiente' },
         { id: 'familia:add-student', label: 'Anadir hijo/a', hint: 'Registrar alumno y continuar con solicitud', category: 'Familia', section: 'alumnos', selector: '#btn-nuevo-hijo, [data-family-journey-action="add_student"]', priority: 5, keywords: 'alumno hijo estudiante' },
         { id: 'familia:request', label: 'Solicitar profesor', hint: 'Materia, nivel y horario preferido', category: 'Familia', section: 'solicitudes', selector: '#btn-nueva-solicitud, #btn-nueva-solicitud-top, [data-family-journey-action="request_teacher"]', priority: 6, keywords: 'profesor matching materia solicitud' },
-        { id: 'familia:chat', label: 'Abrir chat y notificaciones', hint: 'Mensajes, horarios y avisos', category: 'Comunicacion', section: 'chat', priority: 8, keywords: 'mensaje notificacion profesor horario' },
+        { id: 'familia:chat', label: 'Abrir chat y notificaciones', hint: 'Mensajes y avisos', category: 'Comunicacion', section: 'chat', priority: 8, keywords: 'mensaje notificacion profesor' },
         { id: 'familia:calendar', label: 'Ver calendario de clases', hint: 'Fechas, asistencia y confirmaciones', category: 'Clases', section: 'calendario', priority: 11, keywords: 'clase fecha hora confirmar' },
         { id: 'familia:payments', label: 'Ver justificantes', hint: 'Estado de justificantes pendientes', category: 'Justificantes', section: 'pagos', priority: 12, keywords: 'justificante comprobante pendiente' },
         { id: 'familia:profile', label: 'Completar perfil familiar', hint: 'Datos para asignaciones mas precisas', category: 'Confianza', section: 'perfil', priority: 15, keywords: 'direccion telefono zona perfil' },
@@ -1119,10 +1120,11 @@
       profesor: [
         { id: 'profesor:next', label: 'Hacer mi siguiente paso', hint: 'La guia decide que toca ahora', category: 'Recomendado', section: 'inicio', selector: '.teacher-journey-card [data-teacher-journey-action]', priority: 1, recommended: true, keywords: 'siguiente paso profesor perfil documentos chat clase cobro' },
         { id: 'profesor:profile', label: 'Completar perfil profesional', hint: 'Foto, estudios, materias y confianza', category: 'Confianza', section: 'perfil', priority: 3, recommended: true, keywords: 'perfil foto estudios colegio notas materias idiomas' },
+        { id: 'profesor:students', label: 'Mis alumnos y horarios', hint: 'Asignaciones y propuestas pendientes', category: 'Alumnos', section: 'alumnos', priority: 4, recommended: true, keywords: 'alumno horario propuesta semanal pendiente' },
         { id: 'profesor:availability', label: 'Actualizar disponibilidad', hint: 'Franjas reales para recibir propuestas', category: 'Alumnos', section: 'disponibilidad', selector: '#btn-add-disponibilidad', priority: 5, keywords: 'horario disponibilidad calendario' },
         { id: 'profesor:documents', label: 'Subir documentos', hint: 'DNI, notas, certificados y curriculum opcional', category: 'Confianza', section: 'documentos', selector: '#btn-subir-doc', priority: 7, keywords: 'dni notas expediente curriculum certificado idiomas documentos verificacion' },
         { id: 'profesor:classes', label: 'Ver mis clases', hint: 'Registrar asistencia e incidencias', category: 'Clases', section: 'clases', priority: 9, keywords: 'clases asistencia realizada cancelar' },
-        { id: 'profesor:chat', label: 'Abrir chat y notificaciones', hint: 'Familias, horarios y avisos', category: 'Comunicacion', section: 'chat', priority: 10, keywords: 'mensaje familia alumno horario' },
+        { id: 'profesor:chat', label: 'Abrir chat y notificaciones', hint: 'Mensajes y avisos', category: 'Comunicacion', section: 'chat', priority: 10, keywords: 'mensaje familia alumno' },
         { id: 'profesor:income', label: 'Revisar ingresos', hint: 'Cobros, Bizum y liquidaciones', category: 'Pagos', section: 'ingresos', priority: 12, keywords: 'dinero pagos bizum ingresos' },
       ],
       alumno: [
@@ -1864,8 +1866,8 @@
     }
   }
 
-  function showInstallCard(mode) {
-    if (!canShow() || installCard || document.getElementById(INSTALL_ID)) return;
+  function showInstallCard(mode, options = {}) {
+    if ((!options.force && !canShow()) || isStandalone() || installCard || document.getElementById(INSTALL_ID)) return;
 
     injectStyles();
     installCard = document.createElement('aside');
@@ -1877,7 +1879,9 @@
 
     const iosSteps = mode === 'ios'
       ? '<div class="cd10-install-card__steps">En iPhone: pulsa Compartir y despues "Anadir a pantalla de inicio".</div>'
-      : '';
+      : mode === 'manual'
+        ? '<div class="cd10-install-card__steps">Abre el menú del navegador y elige "Instalar aplicación" o "Añadir a pantalla de inicio".</div>'
+        : '';
 
     installCard.innerHTML = `
       <div class="cd10-install-card__top">
@@ -1889,7 +1893,7 @@
         </div>
       </div>
       <div class="cd10-install-card__actions">
-        <button class="cd10-install-card__primary" type="button" data-pwa-install>${mode === 'ios' ? 'Como instalar' : 'Instalar panel'}</button>
+        <button class="cd10-install-card__primary" type="button" data-pwa-install>${mode === 'ios' || mode === 'manual' ? 'Cómo instalar' : 'Instalar panel'}</button>
         <button class="cd10-install-card__secondary" type="button" data-pwa-dismiss>Ahora no</button>
       </div>
     `;
@@ -1912,11 +1916,37 @@
       if (mode === 'ios') {
         installCard.querySelector('.cd10-install-card__steps').textContent =
           'Abre el menu Compartir de Safari y elige "Anadir a pantalla de inicio". El acceso abrira tu login/panel.';
+      } else if (mode === 'manual') {
+        installCard.querySelector('.cd10-install-card__steps').textContent =
+          'En el menú de Chrome o Edge, elige "Instalar aplicación" o "Añadir a pantalla de inicio".';
       }
     });
 
     document.body.appendChild(installCard);
   }
+
+  async function requestPanelInstall() {
+    if (isStandalone()) {
+      window.dispatchEvent(new CustomEvent('cd10:pwa-status', { detail: { type: 'already-installed' } }));
+      return { status: 'already-installed' };
+    }
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const choice = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      if (choice?.outcome === 'accepted') hideInstallCard(true);
+      return { status: choice?.outcome || 'dismissed' };
+    }
+    showInstallCard(isIos() ? 'ios' : 'manual', { force: true });
+    return { status: isIos() ? 'ios-instructions' : 'manual-instructions' };
+  }
+
+  window.CD10PWA = {
+    ...(window.CD10PWA || {}),
+    requestInstall: requestPanelInstall,
+    isInstalled: isStandalone,
+  };
+  window.addEventListener('cd10:request-install', () => { requestPanelInstall(); });
 
   function bindServiceWorkerUpdates(registration) {
     const notifyReady = (detail) => {

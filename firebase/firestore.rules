@@ -709,6 +709,8 @@ service cloud.firestore {
           'nombre',
           'apellidos',
           'telefono',
+          'fecha_nacimiento',
+          'birthDate',
           'foto_url',
           'photoUrl',
           'direccion',
@@ -1863,9 +1865,11 @@ service cloud.firestore {
     }
 
     function validClassScheduleProposalCreate(chatId) {
+      let chatPath = /databases/$(database)/documents/chats/$(chatId);
+      let chatData = get(chatPath).data;
       return signedIn()
-        && exists(/databases/$(database)/documents/chats/$(chatId))
-        && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
+        && exists(chatPath)
+        && isChatParticipant(chatData)
         && request.resource.data.keys().hasOnly([
           'assignmentId',
           'asignacion_id',
@@ -1890,6 +1894,7 @@ service cloud.firestore {
           'recurrence',
           'recurrenceLabel',
           'status',
+          'supersedesProposalId',
           'availabilityStatus',
           'availabilityValidation',
           'availabilityOverrideRequested',
@@ -1905,13 +1910,14 @@ service cloud.firestore {
         ])
         && request.resource.data.assignmentId == chatId
         && (!request.resource.data.keys().hasAny(['asignacion_id']) || request.resource.data.asignacion_id == chatId)
-        && request.resource.data.familyUid == chatFamilyUid(get(/databases/$(database)/documents/chats/$(chatId)).data)
-        && (!request.resource.data.keys().hasAny(['familia_id']) || request.resource.data.familia_id == chatFamilyUid(get(/databases/$(database)/documents/chats/$(chatId)).data))
-        && request.resource.data.teacherUid == chatTeacherUid(get(/databases/$(database)/documents/chats/$(chatId)).data)
-        && (!request.resource.data.keys().hasAny(['profesor_id']) || request.resource.data.profesor_id == chatTeacherUid(get(/databases/$(database)/documents/chats/$(chatId)).data))
-        && (!request.resource.data.keys().hasAny(['studentId']) || request.resource.data.studentId == chatStudentId(get(/databases/$(database)/documents/chats/$(chatId)).data))
-        && (!request.resource.data.keys().hasAny(['alumno_id']) || request.resource.data.alumno_id == chatStudentId(get(/databases/$(database)/documents/chats/$(chatId)).data))
+        && request.resource.data.familyUid == chatFamilyUid(chatData)
+        && (!request.resource.data.keys().hasAny(['familia_id']) || request.resource.data.familia_id == chatFamilyUid(chatData))
+        && request.resource.data.teacherUid == chatTeacherUid(chatData)
+        && (!request.resource.data.keys().hasAny(['profesor_id']) || request.resource.data.profesor_id == chatTeacherUid(chatData))
+        && (!request.resource.data.keys().hasAny(['studentId']) || request.resource.data.studentId == chatStudentId(chatData))
+        && (!request.resource.data.keys().hasAny(['alumno_id']) || request.resource.data.alumno_id == chatStudentId(chatData))
         && request.resource.data.status == 'propuesta'
+        && (!request.resource.data.keys().hasAny(['supersedesProposalId']) || request.resource.data.supersedesProposalId is string)
         && (!request.resource.data.keys().hasAny(['kind']) || request.resource.data.kind in ['weekly_recurring', 'one_off'])
         && (!request.resource.data.keys().hasAny(['scheduleKind']) || request.resource.data.scheduleKind == request.resource.data.kind)
         && (!request.resource.data.keys().hasAny(['firstClassDate']) || request.resource.data.firstClassDate == request.resource.data.fecha)
@@ -1920,6 +1926,31 @@ service cloud.firestore {
         && validScheduleRecurrence(request.resource.data)
         && request.resource.data.proposedByUid == request.auth.uid
         && request.resource.data.proposedByRole in ['familia', 'profesor', 'admin']
+        && (
+          isAdmin()
+          || (request.resource.data.proposedByRole == 'familia' && hasRole('familia'))
+          || (request.resource.data.proposedByRole == 'profesor' && hasRole('profesor'))
+        )
+        && (
+          !request.resource.data.keys().hasAny(['kind'])
+          || request.resource.data.kind != 'weekly_recurring'
+          || request.resource.data.proposedByRole != 'profesor'
+          || (
+            request.resource.data.keys().hasAny(['supersedesProposalId'])
+            && exists(/databases/$(database)/documents/chats/$(chatId)/programaciones/$(request.resource.data.supersedesProposalId))
+            && get(/databases/$(database)/documents/chats/$(chatId)/programaciones/$(request.resource.data.supersedesProposalId)).data.status == 'propuesta'
+            && get(/databases/$(database)/documents/chats/$(chatId)/programaciones/$(request.resource.data.supersedesProposalId)).data.proposedByRole == 'familia'
+          )
+          || (
+            chatData.keys().hasAny(['activeClassId'])
+            && chatData.activeClassId is string
+            && exists(/databases/$(database)/documents/clases/$(chatData.activeClassId))
+            && (
+              get(/databases/$(database)/documents/clases/$(chatData.activeClassId)).data.assignmentId == chatId
+              || get(/databases/$(database)/documents/clases/$(chatData.activeClassId)).data.asignacion_id == chatId
+            )
+          )
+        )
         && request.resource.data.fecha is string
         && request.resource.data.fecha.size() == 10
         && request.resource.data.hora_inicio is string
@@ -1972,7 +2003,7 @@ service cloud.firestore {
         );
     }
 
-    function validClassScheduleProposalUpdate(chatId) {
+    function validClassScheduleProposalUpdate(chatId, proposalId) {
       return signedIn()
         && exists(/databases/$(database)/documents/chats/$(chatId))
         && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
@@ -1988,17 +2019,18 @@ service cloud.firestore {
           'respondedByRole',
           'respondedAt',
           'rejectionReason',
+          'supersededByProposalId',
           'classResetGeneration',
           'createdAfterClassReset',
           'classResetCutoffIso',
           'updatedAt'
         ])
-        && request.resource.data.status in ['aceptada', 'rechazada', 'cancelada']
+        && request.resource.data.status in ['aceptada', 'rechazada', 'cancelada', 'sustituida']
         && request.resource.data.respondedByUid == request.auth.uid
         && request.resource.data.respondedByRole in ['familia', 'profesor', 'admin']
         && (
           isAdmin()
-          || request.resource.data.status == 'cancelada'
+          || request.resource.data.status in ['cancelada', 'sustituida']
           || canRespondToScheduleProposal(resource.data)
         )
         && (!request.resource.data.keys().hasAny(['classId']) || request.resource.data.classId is string)
@@ -2006,6 +2038,16 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['classCount']) || request.resource.data.classCount is number)
         && (!request.resource.data.keys().hasAny(['classSeriesId']) || request.resource.data.classSeriesId == null || request.resource.data.classSeriesId is string)
         && (!request.resource.data.keys().hasAny(['seriesEndDate']) || request.resource.data.seriesEndDate is string)
+        && (!request.resource.data.keys().hasAny(['supersededByProposalId']) || request.resource.data.supersededByProposalId is string)
+        && (
+          request.resource.data.status != 'sustituida'
+          || (
+            request.resource.data.keys().hasAll(['supersededByProposalId'])
+            && existsAfter(/databases/$(database)/documents/chats/$(chatId)/programaciones/$(request.resource.data.supersededByProposalId))
+            && getAfter(/databases/$(database)/documents/chats/$(chatId)/programaciones/$(request.resource.data.supersededByProposalId)).data.status == 'propuesta'
+            && getAfter(/databases/$(database)/documents/chats/$(chatId)/programaciones/$(request.resource.data.supersededByProposalId)).data.supersedesProposalId == proposalId
+          )
+        )
         && validClassResetMarkers(request.resource.data)
         && optionalString('rejectionReason', 300)
         && request.resource.data.respondedAt == request.time
@@ -3175,7 +3217,7 @@ service cloud.firestore {
             && isChatParticipant(get(/databases/$(database)/documents/chats/$(chatId)).data)
           );
         allow create: if validClassScheduleProposalCreate(chatId);
-        allow update: if validClassScheduleProposalUpdate(chatId);
+        allow update: if validClassScheduleProposalUpdate(chatId, proposalId);
         allow delete: if isAdmin();
       }
     }

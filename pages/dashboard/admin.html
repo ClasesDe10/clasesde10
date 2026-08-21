@@ -1327,7 +1327,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260815-admin-person-context';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260821-family-teachers';
 import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-debt-summary';
 import {
   NOTIFICATION_EVENTS,
@@ -6309,7 +6309,7 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, pric
   const teacherName = nombreProfesor(profesor);
   const studentName = nombreAlumnoSolicitud(solicitud);
   const quote = pricingQuote || buildAssignmentPricingQuote(solicitud, profesor);
-  const introBody = `Profesor asignado: ${teacherName}. Usad este chat para acordar fecha y hora de la primera clase. Cuando una parte proponga un horario, la otra podra aceptarlo y se creara automaticamente la clase en el calendario.`;
+  const introBody = `Profesor asignado: ${teacherName}. Podéis usar este chat para hablar. El horario semanal se propone y responde desde Mis profesores o Mis alumnos.`;
   const chatRef = firestoreDoc(firebaseDb, 'chats', asignacionId);
   const existing = await getDoc(chatRef);
   const introAlreadySent = existing.exists() && existing.data()?.assignmentIntroSentAt;
@@ -6369,6 +6369,70 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, pric
     relationshipStatus: 'active',
     updatedAt: serverTimestamp(),
   }, { merge: true });
+}
+
+async function notifyAssignmentParticipants({ asignacionId, solicitud = {}, profesor = {} } = {}) {
+  const familyProfileId = adminPlainText(solicitud.familia_id || solicitud.familyUid, 180);
+  const teacherProfileId = adminPlainText(profesor.id || solicitud.profesor_asignado_id || solicitud.assignedTeacherUid, 180);
+  const familyDirectUid = adminPlainText(solicitud.familyUserUid || solicitud.familia_user_uid || solicitud.firebase_uid || solicitud.usuario_id, 180);
+  const teacherDirectUid = adminPlainText(profesor.userUid || profesor.firebase_uid || profesor.usuario_id || profesor.user_id || profesor.usuarios?.firebase_uid || profesor.usuarios?.id, 180);
+  const subject = adminPlainText(solicitud.materia || solicitud.subject || 'la asignatura', 180);
+  const requestId = adminPlainText(solicitud.id || solicitud.requestId || solicitud.solicitud_id, 180);
+  const [familyProfile, teacherProfile] = await Promise.all([
+    familyProfileId ? getDoc(firestoreDoc(firebaseDb, 'familias', familyProfileId)).catch(() => null) : null,
+    teacherProfileId ? getDoc(firestoreDoc(firebaseDb, 'profesores', teacherProfileId)).catch(() => null) : null,
+  ]);
+  const familyUid = adminPlainText(familyDirectUid || familyProfile?.data?.()?.userUid || familyProfile?.data?.()?.firebase_uid || familyProfileId, 180);
+  const teacherUid = adminPlainText(teacherDirectUid || teacherProfile?.data?.()?.userUid || teacherProfile?.data?.()?.firebase_uid || teacherProfileId, 180);
+  const nowIso = new Date().toISOString();
+  const notifications = [
+    familyUid ? {
+      userUid: familyUid,
+      role: 'familia',
+      title: 'Profesor asignado',
+      body: `Ya tienes profesor para ${subject}. Entra en Mis profesores y propón el horario semanal.`,
+      url: `/pages/dashboard/familia.html?assignment=${encodeURIComponent(asignacionId)}#profesores`,
+      actionLabel: 'Proponer horario',
+    } : null,
+    teacherUid ? {
+      userUid: teacherUid,
+      role: 'profesor',
+      title: 'Nuevo alumno asignado',
+      body: `Tienes un nuevo alumno de ${subject}. La familia enviará la primera propuesta de horario.`,
+      url: `/pages/dashboard/profesor.html?assignment=${encodeURIComponent(asignacionId)}#alumnos`,
+      actionLabel: 'Ver asignación',
+    } : null,
+  ].filter(Boolean);
+  await Promise.all(notifications.map(async (item) => {
+    const id = `assignment_created__${asignacionId}__${item.role}__${item.userUid}`
+      .toLowerCase().replace(/[^a-z0-9_-]+/g, '_').slice(0, 900);
+    await setDoc(firestoreDoc(firebaseDb, 'notificaciones', id), {
+      ...buildNotificationDocument({
+        userUid: item.userUid,
+        role: item.role,
+        title: item.title,
+        body: item.body,
+        type: NOTIFICATION_EVENTS.ASSIGNMENT_CREATED,
+        priority: 'high',
+        category: 'asignaciones',
+        source: 'admin',
+        createdByUid: usuario.uid || usuario.id,
+        payload: {
+          assignmentId: asignacionId,
+          requestId,
+          subject,
+          url: item.url,
+          actionLabel: item.actionLabel,
+        },
+      }),
+      idempotencyKey: id,
+      notificationKey: id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      created_at: nowIso,
+      updated_at: nowIso,
+    }, { merge: true });
+  }));
 }
 
 async function cargarSolicitudMatchesFirestore(solicitudId) {
@@ -7679,6 +7743,19 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       pricingQuote,
       notas,
     });
+    await notifyAssignmentParticipants({
+      asignacionId,
+      solicitud: {
+        ...solicitud,
+        id,
+        familia_id: familiaId,
+        alumno_id: alumnoId,
+        profesor_asignado_id: profId,
+      },
+      profesor,
+    }).catch((notificationError) => {
+      console.warn('La asignación quedó creada; el aviso inmediato se reintentará por automatización.', notificationError);
+    });
 
     await recordAdminAudit('assignment.manual_created', {
       module: 'matching',
@@ -7712,7 +7789,7 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
   }
 
   closeModal('modal-asignar');
-  showToast('Asignado', 'Profesor asignado, chat creado y coordinacion de horario activada.', 'success');
+  showToast('Asignado', 'Profesor asignado. La familia ya puede proponer el horario desde Mis profesores.', 'success');
   cargarSolicitudes();
 });
 
