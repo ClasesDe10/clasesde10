@@ -7,7 +7,7 @@ const root = process.cwd();
 const failures = [];
 const cssVersion = '20260816-teacher-attendance-lock';
 const familyCssVersion = '20260821-family-panel-mode';
-const teacherCssVersion = '20260821-chat-teacher-photo';
+const teacherCssVersion = '20260821-teacher-panel-mode';
 const adminCssVersion = '20260815-admin-person-context';
 
 function read(file) {

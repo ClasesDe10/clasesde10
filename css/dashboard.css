@@ -878,6 +878,18 @@ body[data-family-panel-mode="simplified"] [data-family-panel="simplified"] {
 .family-panel-daily-title {
   color: rgba(255,255,255,.52);
 }
+[data-professor-panel="simplified"] {
+  display: none;
+}
+body[data-professor-panel-mode="simplified"] [data-professor-panel="extended"] {
+  display: none !important;
+}
+body[data-professor-panel-mode="simplified"] [data-professor-panel="simplified"] {
+  display: block;
+}
+.professor-panel-daily-title {
+  color: rgba(255,255,255,.52);
+}
 .sidebar-link {
   display: flex;
   align-items: center;
@@ -1045,6 +1057,22 @@ body[data-family-panel-mode="simplified"] [data-family-panel="simplified"] {
   background: #fffaf0;
 }
 body[data-family-panel-mode="simplified"] .family-panel-mode-toggle {
+  border-color: rgba(232,160,48,.52);
+  background: #fffaf0;
+}
+.professor-panel-mode-toggle {
+  min-height: 38px;
+  border-color: rgba(15,31,61,.18);
+  background: var(--white);
+  color: var(--navy);
+  font-weight: 750;
+  white-space: nowrap;
+}
+.professor-panel-mode-toggle:hover {
+  border-color: var(--gold);
+  background: #fffaf0;
+}
+body[data-professor-panel-mode="simplified"] .professor-panel-mode-toggle {
   border-color: rgba(232,160,48,.52);
   background: #fffaf0;
 }
@@ -8558,6 +8586,13 @@ textarea.form-control { resize: vertical; min-height: 90px; }
   .family-panel-mode-toggle {
     max-width: 122px;
     white-space: normal;
+  }
+  .professor-panel-mode-toggle {
+    max-width: 122px;
+    white-space: normal;
+  }
+  #verificacion-banner {
+    display: none !important;
   }
   #btn-nueva-solicitud-top {
     display: none;

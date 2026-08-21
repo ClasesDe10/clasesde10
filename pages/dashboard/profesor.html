@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260821-chat-teacher-photo">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260821-teacher-panel-mode">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -36,8 +36,9 @@
       </div>
     </div>
     <nav class="sidebar-nav">
-      <div class="sidebar-section-title">Mi panel</div>
-      <button class="sidebar-link active" data-section="inicio">
+      <div class="sidebar-section-title" data-professor-panel="extended">Mi panel</div>
+      <div class="sidebar-section-title professor-panel-daily-title" data-professor-panel="simplified">Uso diario</div>
+      <button class="sidebar-link active" data-section="inicio" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
         Inicio
       </button>
@@ -45,15 +46,15 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         Calendario
       </button>
-      <button class="sidebar-link" data-section="clases">
+      <button class="sidebar-link" data-section="clases" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
         Mis clases
       </button>
-      <button class="sidebar-link" data-section="alumnos">
+      <button class="sidebar-link" data-section="alumnos" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 7l-9-5 9-5 9 5-9 5z"/></svg>
         Mis alumnos
       </button>
-      <button class="sidebar-link" data-section="ingresos">
+      <button class="sidebar-link" data-section="ingresos" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         Ingresos
       </button>
@@ -65,22 +66,22 @@
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 00-12 0v3.2a2 2 0 01-.6 1.4L4 17h11zm0 0a3 3 0 11-6 0"/></svg>
         Avisos
       </button>
-      <div class="sidebar-section-title">Mi cuenta</div>
-      <button class="sidebar-link" data-section="perfil">
+      <div class="sidebar-section-title" data-professor-panel="extended">Mi cuenta</div>
+      <button class="sidebar-link" data-section="perfil" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
         Mi perfil
       </button>
-      <button class="sidebar-link" data-section="documentos">
+      <button class="sidebar-link" data-section="documentos" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         Documentos
       </button>
-      <button class="sidebar-link" data-section="disponibilidad">
+      <button class="sidebar-link" data-section="disponibilidad" data-professor-panel="extended">
         <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         Disponibilidad
       </button>
     </nav>
     <div class="sidebar-footer">
-      <button class="sidebar-logout" id="btn-logout">
+      <button class="sidebar-logout" id="btn-logout" data-panel-persistent="true">
         <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
         Cerrar sesión
       </button>
@@ -93,11 +94,14 @@
       <button class="hamburger-btn" id="hamburger"><span></span><span></span><span></span></button>
       <h1 class="topbar-title" id="topbar-title">Inicio</h1>
       <div class="topbar-actions">
+        <button class="btn btn-outline btn-sm professor-panel-mode-toggle" id="btn-professor-panel-mode" type="button" aria-pressed="false">
+          Panel simplificado
+        </button>
         <button class="topbar-btn" id="btn-notificaciones" title="Notificaciones">
           <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
           <span class="topbar-notification-badge" id="notif-badge" style="display:none"></span>
         </button>
-        <div id="verificacion-banner" style="display:none;font-size:.8rem;padding:6px 14px;border-radius:100px;font-weight:600"></div>
+        <div id="verificacion-banner" data-professor-panel="extended" style="display:none;font-size:.8rem;padding:6px 14px;border-radius:100px;font-weight:600"></div>
       </div>
     </header>
 
@@ -1047,6 +1051,9 @@ let perfil = perfilFirestoreSnap?.exists()
       status: 'pendiente_perfil',
     });
 const profesorId = perfilLegacy?.id || perfil?.id || profesorFirestoreId;
+const PROFESSOR_PANEL_MODE_STORAGE_KEY = `cd10_professor_panel_mode_${profesorFirestoreId}`;
+const PROFESSOR_SIMPLIFIED_SECTIONS = new Set(['calendario', 'chat', 'notificaciones']);
+let professorPanelMode = 'extended';
 const TEACHER_ATTENDANCE_ALLOWED_SECTIONS = new Set(['calendario']);
 let teacherAttendanceAccess = {
   locked: perfil?.attendanceAccessLocked === true,
@@ -1724,9 +1731,68 @@ function renderTeacherClassAction(clase) {
   `;
 }
 
+function savedProfessorPanelMode() {
+  try {
+    return window.localStorage.getItem(PROFESSOR_PANEL_MODE_STORAGE_KEY) === 'simplified'
+      ? 'simplified'
+      : 'extended';
+  } catch (_) {
+    return 'extended';
+  }
+}
+
+function activeProfessorPanelSection() {
+  return document.querySelector('.sidebar-link.active')?.dataset.section
+    || sectionFromHash('inicio');
+}
+
+function renderProfessorPanelMode() {
+  const simplified = professorPanelMode === 'simplified';
+  document.body.dataset.professorPanelMode = professorPanelMode;
+  const toggle = document.getElementById('btn-professor-panel-mode');
+  if (toggle) {
+    toggle.textContent = simplified ? 'Panel extendido' : 'Panel simplificado';
+    toggle.setAttribute('aria-pressed', simplified ? 'true' : 'false');
+    toggle.setAttribute(
+      'aria-label',
+      simplified ? 'Cambiar al panel extendido' : 'Cambiar al panel simplificado',
+    );
+    toggle.title = simplified
+      ? 'Mostrar todas las áreas del panel del profesor'
+      : 'Dejar visibles Calendario, Chat y Avisos';
+  }
+}
+
+function setProfessorPanelMode(mode, { navigate = true, persist = true, announce = false } = {}) {
+  professorPanelMode = mode === 'simplified' ? 'simplified' : 'extended';
+  if (persist) {
+    try { window.localStorage.setItem(PROFESSOR_PANEL_MODE_STORAGE_KEY, professorPanelMode); } catch (_) {}
+  }
+  renderProfessorPanelMode();
+
+  if (navigate && professorPanelMode === 'simplified' && !PROFESSOR_SIMPLIFIED_SECTIONS.has(activeProfessorPanelSection())) {
+    irA('calendario');
+  }
+  if (announce) {
+    showToast(
+      professorPanelMode === 'simplified' ? 'Panel simplificado' : 'Panel extendido',
+      professorPanelMode === 'simplified'
+        ? 'Ahora solo verás Calendario, Chat y Avisos. Puedes ampliar el panel cuando lo necesites.'
+        : 'Ya tienes disponibles todas las áreas de gestión del profesor.',
+      'success',
+    );
+  }
+  window.dispatchEvent(new CustomEvent('cd10:professor-panel-mode', {
+    detail: { mode: professorPanelMode },
+  }));
+}
+
 function irA(sec, options = {}) {
   if (teacherAttendanceAccessLocked && !TEACHER_ATTENDANCE_ALLOWED_SECTIONS.has(sec)) sec = 'calendario';
   if (!TITULOS[sec] || !document.getElementById(`section-${sec}`)) sec = 'inicio';
+  if (professorPanelMode === 'simplified' && !PROFESSOR_SIMPLIFIED_SECTIONS.has(sec)) {
+    setProfessorPanelMode('extended', { navigate: false, announce: false });
+  }
   document.querySelectorAll('.dash-section').forEach((s) => {
     s.style.display = 'none';
     s.classList.remove('dashboard-anchor-offset');
@@ -1755,6 +1821,11 @@ function sectionFromHash(defaultSection = 'inicio') {
   const sec = decodeURIComponent(window.location.hash.replace(/^#/, '')).trim();
   return TITULOS[sec] && document.getElementById(`section-${sec}`) ? sec : defaultSection;
 }
+
+setProfessorPanelMode(savedProfessorPanelMode(), { navigate: false, persist: false });
+document.getElementById('btn-professor-panel-mode')?.addEventListener('click', () => {
+  setProfessorPanelMode(professorPanelMode === 'simplified' ? 'extended' : 'simplified', { announce: true });
+});
 
 window.addEventListener('hashchange', () => irA(sectionFromHash(), { fromHash: true }));
 
@@ -5565,7 +5636,9 @@ window.eliminarDisponibilidad = async (id, button = null) => {
 syncTeacherPayoutSettings();
 await refreshTeacherAttendanceAccessState();
 if (!teacherAttendanceAccessLocked) cargarChat().catch((error) => console.warn('No se pudo iniciar el contador de mensajes', error));
-irA(sectionFromHash(teacherAttendanceAccessLocked ? 'calendario' : 'inicio'), { fromHash: true });
+irA(sectionFromHash(
+  teacherAttendanceAccessLocked || professorPanelMode === 'simplified' ? 'calendario' : 'inicio',
+), { fromHash: true });
 window.setInterval(() => refreshTeacherAttendanceAccessState({ silent: true }), 5 * 60 * 1000);
 </script>
 <script src="/js/pwa.js?v=20260821-chat-teacher-photo" defer></script>
