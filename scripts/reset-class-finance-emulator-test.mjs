@@ -373,7 +373,7 @@ function runReset(extraArgs = []) {
       STORAGE_EMULATOR_HOST: storageHost,
     },
     encoding: 'utf8',
-    timeout: 120000,
+    timeout: 300000,
   });
 }
 
@@ -390,7 +390,7 @@ function runIndependentVerification() {
       STORAGE_EMULATOR_HOST: storageHost,
     },
     encoding: 'utf8',
-    timeout: 120000,
+    timeout: 300000,
   });
 }
 

@@ -264,9 +264,26 @@ async function listDocs(db, collectionName) {
   return snap.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, data: doc.data() || {} }));
 }
 
-async function collectionGroupDocs(db, collectionName) {
-  const snap = await db.collectionGroup(collectionName).get();
-  return snap.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, data: doc.data() || {} }));
+async function existingDocsAtPaths(db, documentPaths = []) {
+  const existing = [];
+  const paths = Array.from(new Set(documentPaths.map(String).filter(Boolean))).sort();
+  for (let index = 0; index < paths.length; index += 200) {
+    const chunk = paths.slice(index, index + 200);
+    const snapshots = await db.getAll(...chunk.map((documentPath) => db.doc(documentPath)));
+    snapshots.forEach((snapshot) => {
+      if (snapshot.exists) existing.push({
+        id: snapshot.id,
+        path: snapshot.ref.path,
+        data: snapshot.data() || {},
+      });
+    });
+  }
+  return existing;
+}
+
+function belongsToCollection(item, collectionName) {
+  const segments = String(item.path || '').split('/');
+  return segments.length >= 2 && segments[segments.length - 2] === collectionName;
 }
 
 async function existingStoragePaths(bucket, storagePaths = []) {
@@ -392,18 +409,24 @@ async function main() {
   initFirebase();
   const db = admin.firestore();
   const bucket = admin.storage().bucket();
+  const plannedTargetPaths = Array.from(new Set((resetState.targetPaths || []).map(String).filter(Boolean))).sort();
+  const existingTargetRows = await existingDocsAtPaths(db, plannedTargetPaths);
+  const nonOperationalTargetRows = existingTargetRows
+    .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt));
   const remainingWholeCollections = {};
-  const remainingWholeCollectionRows = [];
   for (const collectionName of wholeCollections) {
-    const rows = await listDocs(db, collectionName);
+    const rows = collectionName === 'platformHealthChecks'
+      ? await listDocs(db, collectionName)
+      : (await db.collection(collectionName).limit(1).get()).docs
+        .map((doc) => ({ id: doc.id, path: doc.ref.path, data: doc.data() || {} }));
     const remainingRows = rows
       .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt));
     remainingWholeCollections[collectionName] = remainingRows.length;
-    remainingWholeCollectionRows.push(...remainingRows);
   }
 
-  const filteredRows = (await Promise.all(filteredCollections.map((collectionName) => listDocs(db, collectionName))))
-    .flat();
+  const filteredCollectionSet = new Set(filteredCollections);
+  const filteredRows = existingTargetRows
+    .filter((item) => filteredCollectionSet.has(item.path.split('/')[0]));
   const nonOperationalFilteredRows = filteredRows
     .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt));
   const remainingPaymentDocuments = filteredRows
@@ -423,9 +446,9 @@ async function main() {
     .filter((item) => derivedWords.test(derivedSearchText(item.data.lastMessage)))
     .map((item) => item.path)
     .sort();
-  const scheduleRows = await collectionGroupDocs(db, 'programaciones');
-  const messageRows = await collectionGroupDocs(db, 'mensajes');
-  const reactionRows = await collectionGroupDocs(db, 'reacciones');
+  const scheduleRows = nonOperationalTargetRows.filter((item) => belongsToCollection(item, 'programaciones'));
+  const messageRows = existingTargetRows.filter((item) => belongsToCollection(item, 'mensajes'));
+  const reactionRows = nonOperationalTargetRows.filter((item) => belongsToCollection(item, 'reacciones'));
   const remainingClassFinanceMessages = messageRows
     .filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt))
     .filter((item) => derivedWords.test(derivedSearchText(item.data)))
@@ -434,19 +457,11 @@ async function main() {
   const lockedFamilies = await db.collection('familias').where('paymentAccessLocked', '==', true).get();
   const remainingLockedFamilies = lockedFamilies.docs.map((doc) => doc.ref.path).sort();
 
-  // Every planned target already belongs to one of the collections inspected
-  // above. Reusing those snapshots proves exact target absence without billing
-  // a second read for each of the 15k+ paths in the durable reset plan.
-  const existingScannedPaths = new Set([
-    ...remainingWholeCollectionRows,
-    ...nonOperationalFilteredRows,
-    ...chats.filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt)),
-    ...scheduleRows,
-    ...messageRows.filter((item) => !isPostResetOperationalTelemetry(item, resetState.completedAt)),
-    ...reactionRows,
-  ].map((item) => item.path));
-  const remainingTargetPaths = Array.from(new Set(resetState.targetPaths || []))
-    .filter((documentPath) => existingScannedPaths.has(documentPath))
+  // The durable plan is the exact deletion set. Batch-getting only those paths
+  // avoids rereading unrelated operational collections while independently
+  // proving that every planned target is absent.
+  const remainingTargetPaths = nonOperationalTargetRows
+    .map((item) => item.path)
     .sort();
   const paymentPrefixFiles = await listStorageFiles(bucket, { prefix: 'pagos/' });
   const explicitStoragePaths = await existingStoragePaths(bucket, resetState.storagePaths || []);
@@ -484,6 +499,7 @@ async function main() {
     resetStatePath,
     resetCompletedAt: resetState.completedAt || '',
     resetAttempts: Number(resetState.attempts || 0),
+    plannedTargetPathsChecked: plannedTargetPaths.length,
     remainingWholeCollections,
     remainingPaymentDocuments,
     remainingDerivedDocuments,

@@ -91,8 +91,8 @@ for (const mutation of ['.delete(', '.update(', '.set(', '.add(']) {
   assert(!verifierSource.includes(mutation), `The independent verifier must never mutate Firebase (${mutation}).`);
 }
 assert(verifierSource.includes('remainingTargetPaths') && verifierSource.includes('remainingPaymentStoragePaths'), 'The independent verifier must recheck every planned Firestore and Storage target.');
-assert(verifierSource.includes('existingScannedPaths') && verifierSource.includes("collectionGroupDocs(db, 'reacciones')"), 'The independent verifier must reuse complete collection snapshots, including reactions, when proving planned targets are absent.');
-assert(!verifierSource.includes('db.getAll(...chunk)'), 'The independent verifier must not spend a second billed read on every already-inspected reset target.');
+assert(verifierSource.includes('existingDocsAtPaths') && verifierSource.includes('plannedTargetPathsChecked'), 'The independent verifier must batch-check every exact path in the durable deletion plan.');
+assert(verifierSource.includes('db.getAll(...chunk.map') && !verifierSource.includes("filteredCollections.map((collectionName) => listDocs"), 'The independent verifier must prefer exact planned paths over rereading unrelated operational collections.');
 assert(verifierSource.includes('familyProfilesBeforeDerivedReset') && verifierSource.includes('preservedFamilyProfiles'), 'The independent verifier must compare preserved family CRM profiles with the pre-reset backup.');
 assert(source.includes("createHash('sha256')") && source.includes('localSha256'), 'Storage receipts must be hashed and verified before production deletion.');
 assert(verifierSource.includes('invalidStorageBackupFiles') && verifierSource.includes('sha256_mismatch') && verifierSource.includes('md5_mismatch'), 'The independent verifier must reject a missing or corrupted Storage backup.');
