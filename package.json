@@ -13,6 +13,8 @@
     "audit:security-rules": "node scripts/security-rules-smoke.mjs",
     "smoke:one-off-class": "node scripts/one-off-class-production-smoke.mjs",
     "smoke:weekly-schedule-rules": "node scripts/run-with-firebase-cli-adc.mjs node scripts/weekly-schedule-rules-production-smoke.mjs",
+    "backfill:chat-teacher-photos": "node scripts/run-with-firebase-cli-adc.mjs node scripts/backfill-chat-teacher-photos.mjs",
+    "backfill:chat-teacher-photos:apply": "node scripts/run-with-firebase-cli-adc.mjs node scripts/backfill-chat-teacher-photos.mjs --apply --confirm=BACKFILL_CHAT_TEACHER_PHOTOS",
     "smoke:professor-availability": "node scripts/run-with-firebase-cli-adc.mjs node scripts/professor-availability-production-smoke.mjs",
     "smoke:professor-documents": "node scripts/run-with-firebase-cli-adc.mjs node scripts/professor-documents-production-smoke.mjs",
     "smoke:teacher-payout-calendar": "node scripts/run-with-firebase-cli-adc.mjs node scripts/teacher-payout-calendar-production-smoke.mjs",

@@ -9,7 +9,7 @@
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" type="image/png" href="/assets/img/logo-192.png">
-<link rel="stylesheet" href="../../css/dashboard.css?v=20260821-family-teachers">
+<link rel="stylesheet" href="../../css/dashboard.css?v=20260821-chat-teacher-photo">
 <link rel="stylesheet" href="../../css/calendar-indicators.css?v=20260815-calendar-semantics">
 <link rel="stylesheet" href="../../css/calendar-fit.css?v=20260706-calendar-time-fit">
 <meta name="theme-color" content="#0f1f3d">
@@ -968,9 +968,9 @@ import {
   previousPayoutDateFor,
   teacherPayoutFrequencyLabel,
 } from '../../js/teacher-payout-schedule.js?v=20260809-teacher-calendar';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260821-family-teachers';
-import { initNotificationCenter } from '../../js/notification-center.js?v=20260821-family-teachers';
-import { buildWeeklyScheduleState } from '../../js/weekly-schedule-engine.js?v=20260821-family-teachers';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260821-chat-teacher-photo';
+import { initNotificationCenter } from '../../js/notification-center.js?v=20260821-chat-teacher-photo';
+import { buildWeeklyScheduleState } from '../../js/weekly-schedule-engine.js?v=20260821-chat-teacher-photo';
 import { buildRelationshipsFromCollections } from '../../js/relationship-engine.js?v=20260629-relations';
 import { renderRelationshipDigest } from '../../js/relationship-ui.js?v=20260629-relations';
 import { buildTeacherJourneyState } from '../../js/teacher-journey-engine.js?v=20260808-copy-cleanup';
@@ -5568,6 +5568,6 @@ if (!teacherAttendanceAccessLocked) cargarChat().catch((error) => console.warn('
 irA(sectionFromHash(teacherAttendanceAccessLocked ? 'calendario' : 'inicio'), { fromHash: true });
 window.setInterval(() => refreshTeacherAttendanceAccessState({ silent: true }), 5 * 60 * 1000);
 </script>
-<script src="/js/pwa.js?v=20260821-family-teachers" defer></script>
+<script src="/js/pwa.js?v=20260821-chat-teacher-photo" defer></script>
 </body>
 </html>

@@ -19,6 +19,9 @@ const executable = source
       currentChatSenderName,
       chatParticipantDisplayName,
       typingCounterpartDisplayName,
+      hydrateChatNames,
+      chatCounterpartPhotoUrl,
+      renderChatCounterpartAvatar,
     };
   `);
 
@@ -39,6 +42,14 @@ assert.equal(identity.chatParticipantDisplayName({ teacherName: 'Marcos Ortega' 
 assert.equal(identity.typingCounterpartDisplayName({}, 'familia', { displayNameOverride: 'Profe de mates' }, 'marcos@example.com'), 'Profe de mates');
 assert.equal(identity.typingCounterpartDisplayName({ teacherName: 'Marcos Ortega' }, 'familia', {}, 'Marcos Ortega'), 'Marcos');
 assert.equal(identity.typingCounterpartDisplayName({ teacherName: 'Marcos Ortega' }, 'familia', {}, 'marcos@example.com'), 'Marcos');
+
+const hydratedPhotoChat = identity.hydrateChatNames(
+  { teacherName: 'Marcos Ortega' },
+  { teacherPhotoUrl: 'https://cdn.example.com/profesores/marcos.jpg' },
+);
+assert.equal(hydratedPhotoChat.teacherPhotoUrl, 'https://cdn.example.com/profesores/marcos.jpg');
+assert.equal(identity.chatCounterpartPhotoUrl(hydratedPhotoChat, 'familia'), 'https://cdn.example.com/profesores/marcos.jpg');
+assert.match(identity.renderChatCounterpartAvatar(hydratedPhotoChat, 'familia'), /<img[^>]+marcos\.jpg/);
 
 for (const value of [
   identity.currentChatSenderName({ displayName: 'lucia@example.com' }, 'familia'),

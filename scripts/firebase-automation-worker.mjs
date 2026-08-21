@@ -3546,6 +3546,21 @@ async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automat
   const chatSnap = await chatRef.get();
   const chatData = chatSnap.exists ? chatSnap.data() : {};
   const introAlreadySent = Boolean(chatSnap.exists && chatData.assignmentIntroSentAt);
+  const teacherPhotoUrl = clean(
+    assignment.teacherPhotoUrl
+    || assignment.profesor_foto_url
+    || teacherProfile.data.foto_url
+    || teacherProfile.data.photoUrl
+    || teacherProfile.data.profilePhotoUrl
+    || teacherProfile.data.avatarUrl
+    || teacherProfile.data.photoURL
+    || teacherUser.data.foto_url
+    || teacherUser.data.photoUrl
+    || teacherUser.data.photoURL
+    || chatData.teacherPhotoUrl
+    || chatData.profesor_foto_url,
+    300000,
+  );
 
   await writeDoc(db.collection('chats'), id, {
     assignmentId: id,
@@ -3562,6 +3577,10 @@ async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automat
     subject,
     familyName,
     teacherName,
+    ...(teacherPhotoUrl ? {
+      teacherPhotoUrl,
+      profesor_foto_url: teacherPhotoUrl,
+    } : {}),
     studentName,
     participantUids: participantMap([familyProfileId, teacherProfileId, familyUserUid, teacherUserUid]),
     active: true,
@@ -3605,6 +3624,10 @@ async function ensureChatForAssignmentWorker(db, assignmentId, reason = 'automat
     relationshipStage: 'pendiente_horario',
     teacherUserUid,
     familyUserUid,
+    ...(teacherPhotoUrl ? {
+      teacherPhotoUrl,
+      profesor_foto_url: teacherPhotoUrl,
+    } : {}),
     updatedAt: now(),
   });
 

@@ -48,7 +48,7 @@ assert.match(teacherSource, /teacher-schedule-pending-alert/);
 assert.match(teacherSource, /modal-horario-semanal-profesor/);
 assert.match(chatSource, /schedulingEnabled = false/);
 assert.match(chatSource, /scheduleOnly = false/);
-assert.match(swSource, /clasesde10-pwa-v101/);
+assert.match(swSource, /clasesde10-pwa-v102/);
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const screenshots = [];

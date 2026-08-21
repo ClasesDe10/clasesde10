@@ -30,6 +30,7 @@ assert(admin.includes('renderPricingQuoteLine'), 'Admin matching must display fa
 assert(admin.includes('La familia ya puede proponer el horario desde Mis profesores'), 'Admin must confirm the family scheduling next step after assignment.');
 assert(!admin.includes('assignment_ready_for_scheduling'), 'Admin must not write duplicate scheduling automation events from the browser.');
 assert(admin.includes('NOTIFICATION_EVENTS.ASSIGNMENT_CREATED'), 'Manual assignment must notify both participants immediately.');
+assert(admin.includes('teacherPhotoUrl') && admin.includes('profesor_foto_url'), 'Admin assignment must snapshot the teacher photo into both the assignment and its chat.');
 
 assert(chat.includes('data-schedule-form'), 'Chat widget must render schedule proposal form.');
 assert(chat.includes('schedulingEnabled = false'), 'Regular chat must hide scheduling by default.');
@@ -132,6 +133,7 @@ assert(!chat.includes("collection(firebaseDb, 'notificaciones')"), 'Chat widget 
 assert(automationEngine.includes('schedule.proposed.core'), 'Automation rules must cover schedule proposals.');
 assert(automationEngine.includes('assignment.created.core'), 'Automation rules must cover assignment creation.');
 assert(automationWorker.includes('ensureChatForAssignmentWorker'), 'Worker must be able to repair assignment chats without deployed Functions.');
+assert(automationWorker.includes('teacherProfile.data.foto_url') && automationWorker.includes('chatData.teacherPhotoUrl'), 'Worker must backfill the teacher photo from the canonical profile without erasing an existing chat photo.');
 assert(automationWorker.includes("'relationship.ensure_chat'"), 'Worker must dispatch relationship.ensure_chat system jobs.');
 assert(automationWorker.includes('createPaymentRequestForClassWorker'), 'Worker must be able to create payment requests from completed classes.');
 assert(automationWorker.includes("'payment.request_for_class'"), 'Worker must dispatch payment.request_for_class system jobs.');

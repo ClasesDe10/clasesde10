@@ -1327,7 +1327,7 @@ import { getConfigValue, loadPlatformConfig, normalizePlatformConfig } from '../
 import { requireAuth, logout } from '../../js/auth-provider.js?v=20260815-logout-r1';
 import { recordAdminAudit } from '../../js/audit-client.js?v=20260628-audit';
 import { getDocumentUrl } from '../../js/document-storage-provider.js?v=20260815-document-open';
-import { initChatWidget } from '../../js/chat-widget.js?v=20260821-family-teachers';
+import { initChatWidget } from '../../js/chat-widget.js?v=20260821-chat-teacher-photo';
 import { initNotificationCenter } from '../../js/notification-center.js?v=20260815-debt-summary';
 import {
   NOTIFICATION_EVENTS,
@@ -6307,6 +6307,7 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, pric
   const materia = adminPlainText(solicitud?.materia || solicitud?.subject || '', 180);
   const familyName = nombreFamiliaSolicitud(solicitud);
   const teacherName = nombreProfesor(profesor);
+  const teacherPhotoUrl = String(adminPhotoUrl(profesor) || '').trim().slice(0, 300000);
   const studentName = nombreAlumnoSolicitud(solicitud);
   const quote = pricingQuote || buildAssignmentPricingQuote(solicitud, profesor);
   const introBody = `Profesor asignado: ${teacherName}. Podéis usar este chat para hablar. El horario semanal se propone y responde desde Mis profesores o Mis alumnos.`;
@@ -6326,6 +6327,10 @@ async function prepararFlujoAsignacion({ asignacionId, solicitud, profesor, pric
     ...quote,
     familyName,
     teacherName,
+    ...(teacherPhotoUrl ? {
+      teacherPhotoUrl,
+      profesor_foto_url: teacherPhotoUrl,
+    } : {}),
     studentName,
     participantUids: adminParticipantMap([
       familyUid,
@@ -7711,6 +7716,10 @@ document.getElementById('btn-confirmar-asignar').addEventListener('click', async
       materia: solicitud?.materia || solicitud?.subject || '',
       subject: solicitud?.materia || solicitud?.subject || '',
       nivel: solicitud?.nivel || '',
+      ...(adminPhotoUrl(profesor) ? {
+        teacherPhotoUrl: String(adminPhotoUrl(profesor)).trim().slice(0, 300000),
+        profesor_foto_url: String(adminPhotoUrl(profesor)).trim().slice(0, 300000),
+      } : {}),
       ...pricingQuote,
       activa: true,
       active: true,

@@ -6,7 +6,7 @@ import process from 'node:process';
 const root = process.cwd();
 const failures = [];
 const cssVersion = '20260816-teacher-attendance-lock';
-const familyTeacherCssVersion = '20260821-family-teachers';
+const familyTeacherCssVersion = '20260821-chat-teacher-photo';
 const adminCssVersion = '20260815-admin-person-context';
 
 function read(file) {
