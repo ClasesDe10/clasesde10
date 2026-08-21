@@ -67,6 +67,7 @@ jobs:
       - name: Syntax guard
         run: |
           node --check scripts/firebase-automation-worker.mjs
+          node --check scripts/google-routes-provider.mjs
           node --check functions/platform-automation-engine.js
           node --check js/payment-engine.js
           node --check js/calendar-engine.js
@@ -82,6 +83,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_BASE64: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BASE64 }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-2.0-flash
+          GOOGLE_MAPS_ROUTES_API_KEY: ${{ secrets.GOOGLE_MAPS_ROUTES_API_KEY }}
           ALLOW_QUOTA_EXHAUSTED: "true"
           SYSTEM_JOB_LIMIT: 25
           AUTOMATION_LIMIT: 25

@@ -1,15 +1,22 @@
 /**
- * Mobility estimates for matching.
+ * Explainable mobility scoring for teacher matching.
  *
- * The engine is deterministic and free by default. It estimates travel from
- * coordinates when present and falls back to postal code/zone signals. A real
- * route provider can later feed the same output shape without changing the
- * matching algorithm or admin UI.
+ * Exact route data is produced server-side by Google Routes API and injected
+ * through `destination.routeEstimate`. If the provider is unavailable, this
+ * module keeps a clearly labelled geographic estimate so matching can continue
+ * without presenting heuristic numbers as Google Maps data.
  */
 
-export const MOBILITY_MATCHING_VERSION = 'mobility_matching_v1';
+export const MOBILITY_MATCHING_VERSION = 'mobility_matching_v2_google_routes';
+export const DEFAULT_WALK_MAX_MINUTES = 30;
 export const DEFAULT_CAR_MAX_MINUTES = 20;
 export const DEFAULT_TRANSIT_REVIEW_MINUTES = 35;
+
+const MODE_META = Object.freeze({
+  walking: { label: 'A pie' },
+  transit: { label: 'Transporte publico' },
+  driving: { label: 'Coche' },
+});
 
 function clean(value, max = 1000) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, max);
@@ -63,26 +70,8 @@ function booleanOrNull(...values) {
 
 function coordinatePair(entity = {}) {
   const source = entity.location || entity.coordinates || entity.geo || {};
-  const lat = firstNumber(
-    entity.lat,
-    entity.latitude,
-    entity.locationLat,
-    entity.geoLat,
-    source.lat,
-    source.latitude,
-  );
-  const lng = firstNumber(
-    entity.lng,
-    entity.lon,
-    entity.long,
-    entity.longitude,
-    entity.locationLng,
-    entity.geoLng,
-    source.lng,
-    source.lon,
-    source.long,
-    source.longitude,
-  );
+  const lat = firstNumber(entity.lat, entity.latitude, entity.locationLat, entity.geoLat, source.lat, source.latitude);
+  const lng = firstNumber(entity.lng, entity.lon, entity.long, entity.longitude, entity.locationLng, entity.geoLng, source.lng, source.lon, source.long, source.longitude);
   if (lat === null || lng === null) return null;
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   return { lat, lng };
@@ -97,9 +86,7 @@ function firstText(entity = {}, fields = []) {
 }
 
 function tokenize(value) {
-  return normalizeText(value)
-    .split(/[^a-z0-9]+/)
-    .filter((item) => item.length > 2);
+  return normalizeText(value).split(/[^a-z0-9]+/).filter((item) => item.length > 2);
 }
 
 function overlapCount(a, b) {
@@ -174,25 +161,50 @@ function estimateStraightKm(origin = {}, destination = {}) {
   if (originZone && destinationZone && overlapCount(new Set(tokenize(originZone)), new Set(tokenize(destinationZone))) > 0) {
     return { km: 6.5, confidence: 'zone_partial' };
   }
-
   return { km: null, confidence: 'none' };
+}
+
+function modeLimit(mode, options = {}) {
+  if (mode === 'walking') return Number(options.walkMaxMinutes || DEFAULT_WALK_MAX_MINUTES);
+  if (mode === 'driving') return Number(options.carMaxMinutes || DEFAULT_CAR_MAX_MINUTES);
+  return Number(options.transitReviewMinutes || DEFAULT_TRANSIT_REVIEW_MINUTES);
+}
+
+function optionDetail(option, exact = false) {
+  const suffix = option.mode === 'walking'
+    ? 'a pie'
+    : option.mode === 'driving'
+      ? 'en coche'
+      : 'en transporte publico';
+  return `${option.km} km / ${option.minutes} min ${suffix}${exact ? ' (ruta exacta)' : ' (estimado)'}`;
+}
+
+function makeOption(mode, km, minutes, options = {}, exact = false) {
+  const limitMinutes = modeLimit(mode, options);
+  const option = {
+    mode,
+    label: MODE_META[mode].label,
+    km: round(km, 1),
+    minutes: Math.max(1, Math.round(minutes)),
+    limitMinutes,
+    withinLimit: Number(minutes) <= limitMinutes,
+    exact,
+    provider: exact ? 'google_routes' : 'geographic_estimate',
+  };
+  option.detail = optionDetail(option, exact);
+  return option;
+}
+
+function estimateWalkingOption(straightKm, options = {}) {
+  const routeKm = round(Math.max(0.2, straightKm * 1.22), 1);
+  return makeOption('walking', routeKm, Math.max(3, (routeKm / 4.7) * 60), options, false);
 }
 
 function estimateDrivingOption(straightKm, options = {}) {
   const routeKm = round(Math.max(0.8, straightKm * 1.35), 1);
   const speedKmh = routeKm <= 3 ? 16 : routeKm <= 8 ? 20 : routeKm <= 15 ? 24 : routeKm <= 25 ? 30 : 38;
   const parkingMinutes = routeKm <= 3 ? 4 : routeKm <= 12 ? 6 : routeKm <= 25 ? 8 : 10;
-  const minutes = Math.max(5, Math.round((routeKm / speedKmh) * 60 + parkingMinutes));
-  const limitMinutes = Number(options.carMaxMinutes || DEFAULT_CAR_MAX_MINUTES);
-  return {
-    mode: 'driving',
-    label: 'Coche',
-    km: routeKm,
-    minutes,
-    limitMinutes,
-    withinLimit: minutes <= limitMinutes,
-    detail: `${routeKm} km / ${minutes} min en coche`,
-  };
+  return makeOption('driving', routeKm, Math.max(5, (routeKm / speedKmh) * 60 + parkingMinutes), options, false);
 }
 
 function estimateTransitOption(straightKm, options = {}) {
@@ -200,121 +212,183 @@ function estimateTransitOption(straightKm, options = {}) {
   const speedKmh = routeKm <= 4 ? 12 : routeKm <= 10 ? 16 : routeKm <= 25 ? 20 : 24;
   const accessMinutes = routeKm <= 2 ? 5 : routeKm <= 8 ? 8 : 11;
   const transferMinutes = routeKm <= 4 ? 4 : routeKm <= 15 ? 8 : 12;
-  const minutes = Math.max(10, Math.round((routeKm / speedKmh) * 60 + accessMinutes + transferMinutes));
-  const reviewMinutes = Number(options.transitReviewMinutes || DEFAULT_TRANSIT_REVIEW_MINUTES);
-  return {
-    mode: 'transit',
-    label: 'Transporte publico',
-    km: routeKm,
-    minutes,
-    reviewMinutes,
-    withinLimit: minutes <= reviewMinutes,
-    detail: `${routeKm} km / ${minutes} min en transporte publico`,
-  };
+  return makeOption('transit', routeKm, Math.max(10, (routeKm / speedKmh) * 60 + accessMinutes + transferMinutes), options, false);
 }
 
-function mobilityScoreForOption(option, hasCar) {
+function durationSeconds(value) {
+  const direct = firstNumber(value?.durationSeconds, value?.seconds);
+  if (direct !== null) return direct;
+  const duration = clean(value?.duration, 40);
+  const match = duration.match(/^(\d+(?:\.\d+)?)s$/);
+  return match ? Number(match[1]) : null;
+}
+
+function normalizeExactOption(mode, raw, options = {}) {
+  if (!raw || raw.available === false) return null;
+  const seconds = durationSeconds(raw);
+  const minutes = firstNumber(raw.minutes, seconds === null ? null : seconds / 60);
+  const meters = firstNumber(raw.distanceMeters, raw.meters);
+  const km = firstNumber(raw.km, meters === null ? null : meters / 1000);
+  if (minutes === null || km === null) return null;
+  return makeOption(mode, km, minutes, options, true);
+}
+
+function mobilityScoreForOption(option) {
   if (!option) return 0.18;
   const minutes = Number(option.minutes || 0);
-  if (option.mode === 'driving' && hasCar === true) {
+  if (option.mode === 'walking') {
     if (minutes <= 10) return 1;
-    if (minutes <= 15) return 0.86;
-    if (minutes <= 20) return 0.68;
-    if (minutes <= 25) return 0.34;
+    if (minutes <= 20) return 0.9;
+    if (minutes <= 30) return 0.72;
+    if (minutes <= 40) return 0.42;
+    return 0.1;
+  }
+  if (option.mode === 'driving') {
+    if (minutes <= 10) return 1;
+    if (minutes <= 15) return 0.9;
+    if (minutes <= 20) return 0.75;
+    if (minutes <= 25) return 0.42;
     if (minutes <= 35) return 0.18;
-    return 0.08;
+    return 0.06;
   }
-  if (option.mode === 'transit') {
-    if (minutes <= 15) return 1;
-    if (minutes <= 25) return 0.82;
-    if (minutes <= 35) return 0.58;
-    if (minutes <= 45) return 0.32;
-    return 0.12;
-  }
-  return 0.25;
+  if (minutes <= 15) return 1;
+  if (minutes <= 25) return 0.88;
+  if (minutes <= 35) return 0.7;
+  if (minutes <= 45) return 0.4;
+  if (minutes <= 60) return 0.18;
+  return 0.07;
 }
 
-export function buildMobilityEstimate(origin = {}, destination = {}, options = {}) {
-  const hasCar = booleanOrNull(
-    destination.hasCar,
-    destination.tiene_coche,
-    destination.carAvailable,
-    destination.vehiculo_propio,
-    destination.coche,
-  );
-  const straight = estimateStraightKm(origin, destination);
-  if (straight.km === null) {
-    return {
-      version: MOBILITY_MATCHING_VERSION,
-      available: false,
-      confidence: straight.confidence,
-      hasCar,
-      needsCar: true,
-      recommendedMode: hasCar === false ? 'transit' : hasCar === true ? 'driving' : 'review',
-      scoreRatio: 0.18,
-      detail: 'Sin datos suficientes para estimar km/tiempo.',
-      displayText: 'Sin datos suficientes para calcular desplazamiento.',
-      displayOptions: [],
-      mobilityOptions: { driving: null, transit: null },
-      risks: ['Faltan direccion, codigo postal o coordenadas para calcular cercania.'],
-    };
-  }
+function chooseRecommended(options = []) {
+  if (!options.length) return null;
+  const within = options.filter((option) => option.withinLimit);
+  const pool = within.length ? within : options;
+  const fastest = [...pool].sort((a, b) => a.minutes - b.minutes)[0];
+  const walking = pool.find((option) => option.mode === 'walking');
+  if (walking && walking.minutes <= 25 && walking.minutes <= fastest.minutes + 5) return walking;
+  const transit = pool.find((option) => option.mode === 'transit');
+  if (transit && transit.minutes <= fastest.minutes + 4) return transit;
+  return fastest;
+}
 
-  const driving = estimateDrivingOption(straight.km, options);
-  const transit = estimateTransitOption(straight.km, options);
-  const recommended = hasCar === true ? driving : transit;
-  const needsCar = driving.km > 5;
-  const visibleOptions = hasCar === true ? [driving, transit] : [transit];
-  const scoreRatio = hasCar === true
-    ? mobilityScoreForOption(driving, true)
-    : hasCar === false
-      ? mobilityScoreForOption(transit, false)
-      : Math.max(mobilityScoreForOption(driving, true) * 0.82, mobilityScoreForOption(transit, false) * 0.9);
+function routePayloadFrom(destination = {}, options = {}) {
+  return options.routeEstimate
+    || destination.routeEstimate
+    || destination.googleRoutesEstimate
+    || destination.mobilityRouteEstimate
+    || null;
+}
 
+function buildResult({ hasCar, straight, routePayload = null, walking, transit, driving, exact }) {
+  const visibleOptions = [walking, transit, hasCar === true ? driving : null].filter(Boolean);
+  const recommended = chooseRecommended(visibleOptions);
+  if (!recommended) return null;
+  const withinRecommendedRange = visibleOptions.some((option) => option.withinLimit);
+  const routeErrors = exact && Array.isArray(routePayload?.errors) ? routePayload.errors.slice(0, 3) : [];
+  const incompleteProviderCheck = routeErrors.some((error) => String(error).includes('provider_error'));
   const risks = [];
-  if (straight.confidence !== 'coordinates') {
-    risks.push('Estimacion por codigo postal o zona; revisar direccion si hay dudas.');
+  if (exact && walking) {
+    risks.push('La ruta a pie de Google puede no reflejar siempre aceras o pasos peatonales; revisarla antes de confirmar.');
   }
-  if (hasCar === true && !driving.withinLimit) {
-    risks.push(`Supera el limite de ${driving.limitMinutes} min en coche.`);
+  if (!exact && straight.confidence !== 'coordinates') {
+    risks.push('Estimacion por codigo postal o zona; falta una ruta exacta de Google Maps.');
+  } else if (!exact) {
+    risks.push('Tiempo estimado desde coordenadas; falta una ruta exacta de Google Maps.');
   }
-  if (hasCar === false && !transit.withinLimit) {
-    risks.push('Transporte publico largo para clases presenciales.');
+  if (!withinRecommendedRange && !incompleteProviderCheck) {
+    risks.push('Ninguna opcion presencial queda dentro de los limites operativos recomendados.');
   }
-  if (hasCar === null) {
-    risks.push('El profesor no ha indicado si tiene coche.');
-  }
+  if (incompleteProviderCheck) risks.push('Google Maps no pudo comprobar todos los modos; requiere revision manual antes de descartar al profesor.');
+  if (hasCar === null) risks.push('El profesor no ha indicado si tiene coche; el coche no se ha considerado.');
 
   const detail = visibleOptions.map((item) => item.detail).join(' | ');
   return {
     version: MOBILITY_MATCHING_VERSION,
     available: true,
-    confidence: straight.confidence,
+    exact,
+    provider: exact ? 'google_routes' : 'geographic_estimate',
+    providerLabel: exact ? 'Google Maps' : 'Estimacion geografica',
+    confidence: exact ? clean(routePayload?.confidence || 'google_routes', 80) : straight.confidence,
+    computedAt: exact ? clean(routePayload?.computedAt, 80) : '',
     hasCar,
-    needsCar,
-    straightKm: round(straight.km, 1),
-    drivingKm: driving.km,
-    drivingMinutes: driving.minutes,
-    transitKm: transit.km,
-    transitMinutes: transit.minutes,
+    needsCar: ![walking, transit].filter(Boolean).some((option) => option.withinLimit),
+    straightKm: straight.km === null ? null : round(straight.km, 1),
+    walkingKm: walking?.km ?? null,
+    walkingMinutes: walking?.minutes ?? null,
+    drivingKm: driving?.km ?? null,
+    drivingMinutes: driving?.minutes ?? null,
+    transitKm: transit?.km ?? null,
+    transitMinutes: transit?.minutes ?? null,
     effectiveKm: recommended.km,
     effectiveMinutes: recommended.minutes,
     recommendedMode: recommended.mode,
-    withinRecommendedRange: recommended.withinLimit,
-    hardDistanceRisk: hasCar === true && !driving.withinLimit,
-    scoreRatio: clamp(scoreRatio),
+    withinRecommendedRange,
+    hardDistanceRisk: !withinRecommendedRange && !incompleteProviderCheck,
+    scoreRatio: clamp(mobilityScoreForOption(recommended)),
     detail,
     displayText: detail,
     displayOptions: visibleOptions,
-    mobilityOptions: { driving, transit },
+    mobilityOptions: { walking, transit, driving: hasCar === true ? driving : null },
+    routeErrors,
+    walkingRouteWarning: exact && walking
+      ? 'Las rutas a pie de Google pueden no incluir siempre aceras o pasos peatonales claros.'
+      : '',
     risks,
   };
+}
+
+export function buildMobilityEstimate(origin = {}, destination = {}, options = {}) {
+  const hasCar = booleanOrNull(destination.hasCar, destination.tiene_coche, destination.carAvailable, destination.vehiculo_propio, destination.coche);
+  const straight = estimateStraightKm(origin, destination);
+  const routePayload = routePayloadFrom(destination, options);
+  const routeOptions = routePayload?.routes || routePayload?.mobilityOptions || routePayload || {};
+  const exactResult = routePayload?.provider === 'google_routes' || routePayload?.exact === true
+    ? buildResult({
+      hasCar,
+      straight,
+      routePayload,
+      walking: normalizeExactOption('walking', routeOptions.walking, options),
+      transit: normalizeExactOption('transit', routeOptions.transit, options),
+      driving: hasCar === true ? normalizeExactOption('driving', routeOptions.driving, options) : null,
+      exact: true,
+    })
+    : null;
+  if (exactResult) return exactResult;
+
+  if (straight.km === null) {
+    return {
+      version: MOBILITY_MATCHING_VERSION,
+      available: false,
+      exact: false,
+      provider: 'unavailable',
+      confidence: straight.confidence,
+      hasCar,
+      needsCar: true,
+      recommendedMode: 'review',
+      hardDistanceRisk: false,
+      scoreRatio: 0.18,
+      detail: 'Sin datos suficientes para calcular rutas.',
+      displayText: 'Sin datos suficientes para calcular desplazamiento.',
+      displayOptions: [],
+      mobilityOptions: { walking: null, driving: null, transit: null },
+      risks: ['Faltan direccion, codigo postal o coordenadas para calcular cercania.'],
+    };
+  }
+
+  return buildResult({
+    hasCar,
+    straight,
+    walking: estimateWalkingOption(straight.km, options),
+    transit: estimateTransitOption(straight.km, options),
+    driving: hasCar === true ? estimateDrivingOption(straight.km, options) : null,
+    exact: false,
+  });
 }
 
 export function formatMobilityEstimate(estimate = {}) {
   if (!estimate.available) return estimate.displayText || 'Sin desplazamiento calculado.';
   const options = Array.isArray(estimate.displayOptions) && estimate.displayOptions.length
     ? estimate.displayOptions
-    : [estimate.mobilityOptions?.driving, estimate.mobilityOptions?.transit].filter(Boolean);
+    : [estimate.mobilityOptions?.walking, estimate.mobilityOptions?.transit, estimate.mobilityOptions?.driving].filter(Boolean);
   return options.map((item) => item.detail).join(' | ');
 }

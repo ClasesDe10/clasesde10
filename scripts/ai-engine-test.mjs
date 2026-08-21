@@ -135,7 +135,7 @@ assert.equal(presencialRanking[0].teacherUid, 'teacher_local');
 assert.ok(presencialRanking[0].scoreBreakdown.location.points > presencialRanking[1].scoreBreakdown.location.points);
 assert.ok(presencialRanking[0].scoreBreakdown.availability.points > presencialRanking[1].scoreBreakdown.availability.points);
 assert.ok(presencialRanking[0].locationEstimate.drivingMinutes > 0);
-assert.ok(presencialRanking[0].reasons.some((reason) => reason.includes('Desplazamiento calculado')));
+assert.ok(presencialRanking[0].reasons.some((reason) => reason.includes('Desplazamiento estimado')));
 
 const noCarTeacher = {
   ...completeTeacher,
@@ -157,11 +157,12 @@ const carTeacher = {
 const travelRanking = rankTeachersForRequest(presencialRequest, [noCarTeacher, carTeacher], { limit: 2, includeZeroScore: true });
 assert.equal(travelRanking[0].teacherUid, 'teacher_with_car');
 assert.ok(travelRanking[0].scoreBreakdown.location.points > travelRanking[1].scoreBreakdown.location.points);
-assert.equal(travelRanking[0].locationEstimate.displayOptions.length, 2);
+assert.equal(travelRanking[0].locationEstimate.displayOptions.length, 3);
+assert.ok(formatTravelEstimateForDisplay(travelRanking[0].locationEstimate).includes('a pie'));
 assert.ok(formatTravelEstimateForDisplay(travelRanking[0].locationEstimate).includes('coche'));
 assert.ok(formatTravelEstimateForDisplay(travelRanking[0].locationEstimate).includes('transporte publico'));
-assert.equal(travelRanking[1].locationEstimate.displayOptions.length, 1);
-assert.equal(travelRanking[1].locationEstimate.displayOptions[0].mode, 'transit');
+assert.equal(travelRanking[1].locationEstimate.displayOptions.length, 2);
+assert.equal(travelRanking[1].locationEstimate.displayOptions[0].mode, 'walking');
 assert.ok(formatTravelEstimateForDisplay(travelRanking[1].locationEstimate).includes('transporte publico'));
 
 const farCarTeacher = {
@@ -173,13 +174,40 @@ const farCarTeacher = {
 };
 const farCarMatch = scoreTeacherForRequest(presencialRequest, farCarTeacher);
 assert.equal(farCarMatch.assignable, false);
-assert.ok(farCarMatch.hardBlocks.some((item) => item.includes('20 min')));
+assert.ok(farCarMatch.hardBlocks.some((item) => item.includes('Ninguna ruta presencial')));
 assert.ok(farCarMatch.locationEstimate.hardDistanceRisk);
 
 const rawTravel = estimateTravelForMatch(presencialRequest, carTeacher);
 assert.equal(rawTravel.available, true);
 assert.ok(rawTravel.mobilityOptions.driving.minutes > 0);
 assert.ok(rawTravel.mobilityOptions.transit.minutes > 0);
+assert.ok(rawTravel.mobilityOptions.walking.minutes > 0);
+
+const exactGoogleTeacher = {
+  ...localTeacher,
+  id: 'teacher_google_routes',
+  teacherUid: 'teacher_google_routes',
+  routeEstimate: {
+    provider: 'google_routes',
+    exact: true,
+    computedAt: '2026-08-21T12:00:00.000Z',
+    confidence: 'google_routes_full_address',
+    routes: {
+      walking: { distanceMeters: 850, durationSeconds: 480 },
+      transit: { distanceMeters: 1600, durationSeconds: 720 },
+      driving: { distanceMeters: 1300, durationSeconds: 300 },
+    },
+  },
+};
+const exactGoogleMatch = scoreTeacherForRequest({
+  ...presencialRequest,
+  direccion: 'Calle Serrano 1',
+}, exactGoogleTeacher);
+assert.equal(exactGoogleMatch.locationEstimate.exact, true);
+assert.equal(exactGoogleMatch.locationEstimate.provider, 'google_routes');
+assert.equal(exactGoogleMatch.locationEstimate.recommendedMode, 'walking');
+assert.equal(exactGoogleMatch.locationEstimate.walkingMinutes, 8);
+assert.ok(exactGoogleMatch.reasons.some((reason) => reason.includes('Google Maps')));
 
 const structuredRequest = {
   ...presencialRequest,

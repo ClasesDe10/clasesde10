@@ -22,6 +22,7 @@ import {
   moderateContent,
   rankTeachersForRequest,
 } from '../js/ai-engine.js';
+import { computeGoogleRoutesForTeachers } from './google-routes-provider.mjs';
 import {
   buildFamilyTrustProfile,
   buildTeacherTrustProfile,
@@ -2008,6 +2009,14 @@ async function loadTeachers(db) {
         levels: asArray(data.levels || data.niveles_educativos || data.niveles || data.nivel),
         modalidad: clean(data.modalidad || data.tipo_clase || data.formato),
         modality: clean(data.modality || data.modalidad || data.tipo_clase || data.formato),
+        direccion: clean(data.direccion || data.address || user.direccion || user.address, 240),
+        address: clean(data.address || data.direccion || user.address || user.direccion, 240),
+        ciudad: clean(data.ciudad || data.city || user.ciudad || user.city || 'Madrid', 160),
+        city: clean(data.city || data.ciudad || user.city || user.ciudad || 'Madrid', 160),
+        codigo_postal: clean(data.codigo_postal || data.postalCode || user.codigo_postal || user.postalCode, 20),
+        postalCode: clean(data.postalCode || data.codigo_postal || user.postalCode || user.codigo_postal, 20),
+        lat: firstNumber(data.lat, data.latitude, data.locationLat, user.lat, user.latitude),
+        lng: firstNumber(data.lng, data.lon, data.longitude, data.locationLng, user.lng, user.lon, user.longitude),
         zona: clean(data.zona || data.ciudad || data.barrio),
         zone: clean(data.zone || data.zona || data.ciudad || data.barrio),
         bio: clean(data.bio || data.experiencia, 1000),
@@ -2304,10 +2313,22 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     ...teacher,
     ...buildTeacherMatchingSignals(teacher, enrichedRequest, matchingContext),
   }));
-  const baseCandidates = rankTeachersForRequest(enrichedRequest, teachersWithSignals, {
+  const preliminaryCandidates = rankTeachersForRequest(enrichedRequest, teachersWithSignals, {
     limit: 10,
     minScore: 25,
   });
+  const routeEnrichment = await enrichMatchingShortlistWithGoogleRoutes(
+    enrichedRequest,
+    teachersWithSignals,
+    preliminaryCandidates,
+    stats,
+  );
+  const shortlistedIds = new Set(preliminaryCandidates.map((candidate) => clean(candidate.teacherUid, 180)));
+  const exactRankingPool = routeEnrichment.teachers.filter((teacher) => shortlistedIds.has(clean(teacher.teacherUid || teacher.id, 180)));
+  const baseCandidates = routeEnrichment.routing.available
+    ? rankTeachersForRequest(enrichedRequest, exactRankingPool, { limit: 10, minScore: 25 })
+    : preliminaryCandidates;
+  const routing = routeEnrichment.routing;
 
   let aiResult = null;
   let aiError = null;
@@ -2341,6 +2362,7 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       activeMatchingPriority: activeMatchingPlan.priority,
       candidatesCount: candidates.length,
       matchingVersion: MATCHING_VERSION,
+      routing,
       aiUsed,
       aiMode,
       aiError,
@@ -2368,6 +2390,9 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
         assignable: candidate.assignable === true,
         matchingVersion: candidate.matchingVersion || MATCHING_VERSION,
         source: candidate.source || MATCHING_VERSION,
+        routingProvider: candidate.locationEstimate?.provider || routing.provider,
+        routingExact: candidate.locationEstimate?.exact === true,
+        routingComputedAt: candidate.locationEstimate?.computedAt || routing.computedAt || '',
         aiAdjustment: candidate.aiAdjustment || 0,
         rank: index + 1,
         reasons: candidate.aiReason ? [candidate.aiReason, ...candidate.reasons] : candidate.reasons,
@@ -2391,6 +2416,10 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
       matchingVersion: MATCHING_VERSION,
       matchRunId: runRef.id,
       matchComputedAt: now(),
+      routing,
+      routingProvider: routing.provider,
+      routingStatus: routing.status,
+      routingExactCandidates: routing.exactCandidates,
       matchDecision: decisionSupport,
       matchQuality: decisionSupport.quality,
       matchConfidenceScore: decisionSupport.confidenceScore,
@@ -2421,6 +2450,10 @@ async function generateMatchesForRequest(db, requestId, request, stats, reason =
     aiMode,
     aiError,
     matchingVersion: MATCHING_VERSION,
+    routingProvider: routing.provider,
+    routingStatus: routing.status,
+    routingExactCandidates: routing.exactCandidates,
+    routingBillableElements: routing.billableElements,
     activeMatchingStatus: activeMatchingPlan.status,
     activeMatchingPriority: activeMatchingPlan.priority,
   });
@@ -3919,6 +3952,69 @@ async function processUnmarkedClasses(db, stats) {
     }
     stats.classesChecked += 1;
   }
+}
+
+async function enrichMatchingShortlistWithGoogleRoutes(enrichedRequest, teachers, preliminaryCandidates, stats) {
+  const requestProfile = getMatchingRequestProfile(enrichedRequest);
+  const requestModality = lower(requestProfile.modality);
+  if (requestModality.includes('online') && !/(presencial|domicilio)/.test(requestModality)) {
+    return {
+      teachers,
+      routing: {
+        provider: 'google_routes',
+        status: 'not_required_online',
+        available: false,
+        exactCandidates: 0,
+        billableElements: 0,
+        errors: [],
+      },
+    };
+  }
+  if (dryRun || runtimeBoolean('matching.googleRoutesEnabled', true) === false) {
+    return {
+      teachers,
+      routing: {
+        provider: 'google_routes',
+        status: dryRun ? 'dry_run_skipped' : 'disabled',
+        available: false,
+        exactCandidates: 0,
+        billableElements: 0,
+        errors: [],
+      },
+    };
+  }
+  const shortlistIds = new Set(preliminaryCandidates
+    .filter((candidate) => !(candidate.hardBlocks || []).some((block) => ['Materia no compatible', 'Modalidad incompatible', 'Profesor inactivo'].includes(block)))
+    .map((candidate) => clean(candidate.teacherUid, 180))
+    .filter(Boolean));
+  const shortlist = teachers.filter((teacher) => shortlistIds.has(clean(teacher.teacherUid || teacher.id, 180)));
+  const result = await computeGoogleRoutesForTeachers({
+    origin: getMatchingRequestProfile(enrichedRequest),
+    teachers: shortlist,
+    credential: admin.app().options.credential,
+    apiKey: process.env.GOOGLE_MAPS_ROUTES_API_KEY || '',
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT || DEFAULT_PROJECT_ID,
+    maxDestinations: runtimeNumber('matching.googleRoutesMaxCandidates', 10, 1, 25),
+  });
+  stats.googleRoutesElements = Number(stats.googleRoutesElements || 0) + Number(result.billableElements || 0);
+  stats.googleRoutesExactCandidates = Number(stats.googleRoutesExactCandidates || 0) + Number(result.byTeacher?.size || 0);
+  const enrichedTeachers = teachers.map((teacher) => {
+    const teacherUid = clean(teacher.teacherUid || teacher.id, 180);
+    const routeEstimate = result.byTeacher?.get(teacherUid);
+    return routeEstimate ? { ...teacher, routeEstimate } : teacher;
+  });
+  return {
+    teachers: enrichedTeachers,
+    routing: {
+      provider: 'google_routes',
+      status: result.status,
+      available: result.available === true,
+      exactCandidates: Number(result.byTeacher?.size || 0),
+      billableElements: Number(result.billableElements || 0),
+      computedAt: result.computedAt || '',
+      errors: (result.errors || []).map((error) => clean(error, 300)).slice(0, 3),
+    },
+  };
 }
 
 async function processTeacherAttendanceAccessSweep(db, stats) {
